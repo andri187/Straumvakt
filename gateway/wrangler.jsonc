@@ -1,0 +1,60 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "straumvakt-ocpp",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-04-18",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // Per-identity durable state. DO key = ocpp_identities.id (UUID).
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "IDENTITY_DO",
+        "class_name": "IdentityDurableObject"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["IdentityDurableObject"]
+    }
+  ],
+
+  // Service Binding to the main app for auth lookups + event ingest. The
+  // binding name 'MAIN_APP' maps to the 'hlada' Worker on the same account.
+  "services": [
+    {
+      "binding": "MAIN_APP",
+      "service": "hlada"
+    }
+  ],
+
+  "observability": {
+    "enabled": true
+  },
+
+  // Hibernation API is the recommended pattern for long-lived charger
+  // connections — WebSockets don't hold the Worker in memory between
+  // frames. Secrets (OCPP_INGEST_SECRET — shared with main app) live in
+  // the Cloudflare dashboard, never here.
+  "env": {
+    "staging": {
+      "name": "straumvakt-ocpp-staging",
+      "durable_objects": {
+        "bindings": [
+          {
+            "name": "IDENTITY_DO",
+            "class_name": "IdentityDurableObject"
+          }
+        ]
+      },
+      "services": [
+        {
+          "binding": "MAIN_APP",
+          "service": "hlada-staging"
+        }
+      ]
+    }
+  }
+}
