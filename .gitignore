@@ -1,0 +1,52 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Next.js
+.next/
+out/
+next-env.d.ts
+
+# Production
+build/
+dist/
+
+# Env files — NEVER commit real secrets
+.env
+.env.local
+.dev.vars
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editors / OS
+.DS_Store
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+
+# Backup files
+*.bak
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Cloudflare / OpenNext build output
+.open-next/
+.wrangler/
+
+# Logs
+logs/
+*.log
+
+# Test artefacts
+/playwright-report/
+/test-results/

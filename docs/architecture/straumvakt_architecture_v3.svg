@@ -1,0 +1,477 @@
+<svg viewBox="0 0 1800 1240" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0a1628"/>
+      <stop offset="100%" stop-color="#06101e"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0f1f3a" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#0a1628" stop-opacity="0.2"/>
+    </linearGradient>
+    <linearGradient id="bus" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#14b8a6" stop-opacity="0.15"/>
+      <stop offset="50%" stop-color="#2dd4bf" stop-opacity="0.45"/>
+      <stop offset="100%" stop-color="#14b8a6" stop-opacity="0.15"/>
+    </linearGradient>
+    <marker id="ar-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#3b82f6" opacity="0.7"/>
+    </marker>
+    <marker id="ar-teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2dd4bf" opacity="0.7"/>
+    </marker>
+    <marker id="ar-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#475569" opacity="0.7"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1800" height="1240" fill="url(#bg)"/>
+
+  <!-- ============================================================ -->
+  <!-- HEADER                                                        -->
+  <!-- ============================================================ -->
+  <text x="900" y="56" text-anchor="middle" font-size="11" font-weight="600" fill="#3b82f6" letter-spacing="6">STRAUMVAKT</text>
+  <text x="900" y="92" text-anchor="middle" font-size="28" font-weight="500" fill="#f8fafc" letter-spacing="-0.4">Platform Architecture · V3</text>
+  <text x="900" y="118" text-anchor="middle" font-size="13" font-weight="300" fill="#64748b" letter-spacing="0.5">Charging operating platform · OCPP + Vendor APIs + OCPI roaming · operations intelligence over event log</text>
+
+  <!-- Header divider -->
+  <line x1="60" y1="148" x2="1740" y2="148" stroke="#1e3a5f" stroke-width="1" opacity="0.4"/>
+
+  <!-- ============================================================ -->
+  <!-- LEFT/CENTER: MAIN ARCHITECTURE — 6 horizontal lanes           -->
+  <!-- x: 60 to 1230 (1170 wide)                                     -->
+  <!-- y: 160 to 1100                                                -->
+  <!-- ============================================================ -->
+
+  <!-- Lane label column (vertical text labels) at x = 60..130 -->
+
+  <!-- ===== Lane 1: CLIENTS  (y 165..255) ===== -->
+  <text x="80" y="184" font-size="9" font-weight="700" fill="#3b82f6" letter-spacing="2">CLIENTS</text>
+  <text x="80" y="198" font-size="8" font-weight="300" fill="#475569">edge entities</text>
+
+  <rect x="150" y="170" width="170" height="74" rx="6" fill="#0f2547" stroke="#2563eb" stroke-width="1"/>
+  <text x="165" y="192" font-size="12" font-weight="500" fill="#f8fafc">Chargers (AC + DC)</text>
+  <text x="165" y="210" font-size="10" font-weight="300" fill="#94a3b8">OCPP 1.6J / 2.0.1</text>
+  <text x="165" y="226" font-size="10" font-weight="300" fill="#94a3b8">multiple identities per</text>
+  <text x="165" y="240" font-size="10" font-weight="300" fill="#94a3b8">charger possible</text>
+
+  <rect x="332" y="170" width="170" height="74" rx="6" fill="#0f2547" stroke="#2563eb" stroke-width="1"/>
+  <text x="347" y="192" font-size="12" font-weight="500" fill="#f8fafc">Vendor Backends</text>
+  <text x="347" y="210" font-size="10" font-weight="300" fill="#94a3b8">Zaptec · Easee ·</text>
+  <text x="347" y="226" font-size="10" font-weight="300" fill="#94a3b8">Kempower · Tritium</text>
+  <text x="347" y="240" font-size="10" font-weight="300" fill="#2dd4bf">vendor-managed onboarding</text>
+
+  <rect x="514" y="170" width="170" height="74" rx="6" fill="#0f2547" stroke="#2563eb" stroke-width="1"/>
+  <text x="529" y="192" font-size="12" font-weight="500" fill="#f8fafc">OCPI Partners</text>
+  <text x="529" y="210" font-size="10" font-weight="300" fill="#94a3b8">Hubject · Gireve · direct</text>
+  <text x="529" y="226" font-size="10" font-weight="300" fill="#94a3b8">CPOs &amp; eMSPs</text>
+  <text x="529" y="240" font-size="10" font-weight="300" fill="#2dd4bf">dual-role: CPO + eMSP</text>
+
+  <rect x="696" y="170" width="160" height="74" rx="6" fill="#0f2547" stroke="#2563eb" stroke-width="1"/>
+  <text x="711" y="192" font-size="12" font-weight="500" fill="#f8fafc">Driver App</text>
+  <text x="711" y="210" font-size="10" font-weight="300" fill="#94a3b8">PWA · iOS · Android</text>
+  <text x="711" y="226" font-size="10" font-weight="300" fill="#94a3b8">QR / NFC / push</text>
+  <text x="711" y="240" font-size="10" font-weight="300" fill="#94a3b8">family + employer reim.</text>
+
+  <rect x="868" y="170" width="170" height="74" rx="6" fill="#0f2547" stroke="#2563eb" stroke-width="1"/>
+  <text x="883" y="192" font-size="12" font-weight="500" fill="#f8fafc">Operator Console</text>
+  <text x="883" y="210" font-size="10" font-weight="300" fill="#94a3b8">Next.js · bilingual</text>
+  <text x="883" y="226" font-size="10" font-weight="300" fill="#94a3b8">helper · operator · admin</text>
+  <text x="883" y="240" font-size="10" font-weight="300" fill="#94a3b8">eats own dogfood (API)</text>
+
+  <rect x="1050" y="170" width="170" height="74" rx="6" fill="#0f2547" stroke="#2563eb" stroke-width="1"/>
+  <text x="1065" y="192" font-size="12" font-weight="500" fill="#f8fafc">Partner APIs</text>
+  <text x="1065" y="210" font-size="10" font-weight="300" fill="#94a3b8">enterprise / fleet ERP /</text>
+  <text x="1065" y="226" font-size="10" font-weight="300" fill="#94a3b8">CRM · MCP-friendly</text>
+  <text x="1065" y="240" font-size="10" font-weight="300" fill="#94a3b8">scoped API keys + OIDC</text>
+
+  <!-- arrows down to edge -->
+  <line x1="235" y1="244" x2="235" y2="278" stroke="#3b82f6" stroke-width="1" opacity="0.4" marker-end="url(#ar-blue)"/>
+  <line x1="417" y1="244" x2="417" y2="278" stroke="#3b82f6" stroke-width="1" opacity="0.4" marker-end="url(#ar-blue)"/>
+  <line x1="599" y1="244" x2="599" y2="278" stroke="#3b82f6" stroke-width="1" opacity="0.4" marker-end="url(#ar-blue)"/>
+  <line x1="776" y1="244" x2="776" y2="278" stroke="#3b82f6" stroke-width="1" opacity="0.4" marker-end="url(#ar-blue)"/>
+  <line x1="953" y1="244" x2="953" y2="278" stroke="#3b82f6" stroke-width="1" opacity="0.4" marker-end="url(#ar-blue)"/>
+  <line x1="1135" y1="244" x2="1135" y2="278" stroke="#3b82f6" stroke-width="1" opacity="0.4" marker-end="url(#ar-blue)"/>
+
+  <!-- ===== Lane 2: EDGE  (y 280..380) ===== -->
+  <text x="80" y="298" font-size="9" font-weight="700" fill="#3b82f6" letter-spacing="2">EDGE</text>
+  <text x="80" y="312" font-size="8" font-weight="300" fill="#475569">cloudflare workers</text>
+
+  <rect x="150" y="280" width="370" height="86" rx="6" fill="#0a1f3a" stroke="#3b82f6" stroke-width="1.2"/>
+  <text x="165" y="302" font-size="13" font-weight="500" fill="#f8fafc">OCPP Gateway Worker</text>
+  <text x="165" y="320" font-size="10" font-weight="300" fill="#94a3b8">Cloudflare Worker · WebSocket upgrade router</text>
+  <text x="165" y="336" font-size="10" font-weight="300" fill="#94a3b8">Durable Object per OCPP Identity (sticky, stateful)</text>
+  <text x="165" y="352" font-size="10" font-weight="300" fill="#94a3b8">WebSocket Hibernation · EU location hint</text>
+
+  <rect x="532" y="280" width="370" height="86" rx="6" fill="#0a1f3a" stroke="#3b82f6" stroke-width="1.2"/>
+  <text x="547" y="302" font-size="13" font-weight="500" fill="#f8fafc">API Gateway (main app — hlada)</text>
+  <text x="547" y="320" font-size="10" font-weight="300" fill="#94a3b8">Next.js / OpenNext · /v1/* surface · OIDC + API keys</text>
+  <text x="547" y="336" font-size="10" font-weight="300" fill="#94a3b8">rate limit · audit · fair-use envelopes (no surprise billing)</text>
+  <text x="547" y="352" font-size="10" font-weight="300" fill="#94a3b8">all UI flows pass through the same API surface</text>
+
+  <rect x="914" y="280" width="306" height="86" rx="6" fill="#0a1f3a" stroke="#3b82f6" stroke-width="1.2"/>
+  <text x="929" y="302" font-size="13" font-weight="500" fill="#f8fafc">Push API · Webhook Delivery</text>
+  <text x="929" y="320" font-size="10" font-weight="300" fill="#94a3b8">transaction.started / updated / stopped / billed (CDR)</text>
+  <text x="929" y="336" font-size="10" font-weight="300" fill="#94a3b8">connector.status · charger.added · card.authorize</text>
+  <text x="929" y="352" font-size="10" font-weight="300" fill="#94a3b8">durable retry · signed envelopes · subscriber registry</text>
+
+  <!-- arrows down to integration -->
+  <line x1="335" y1="366" x2="335" y2="400" stroke="#2dd4bf" stroke-width="1" opacity="0.5" marker-end="url(#ar-teal)"/>
+  <line x1="717" y1="366" x2="717" y2="400" stroke="#2dd4bf" stroke-width="1" opacity="0.5" marker-end="url(#ar-teal)"/>
+  <line x1="1067" y1="366" x2="1067" y2="400" stroke="#2dd4bf" stroke-width="1" opacity="0.5" marker-end="url(#ar-teal)"/>
+
+  <!-- ===== Lane 3: INTEGRATION TRACKS (y 400..640) — 3 columns ===== -->
+  <text x="80" y="418" font-size="9" font-weight="700" fill="#3b82f6" letter-spacing="2">INTEGRATION</text>
+  <text x="80" y="432" font-size="8" font-weight="300" fill="#475569">three parallel tracks</text>
+  <text x="80" y="446" font-size="8" font-weight="300" fill="#475569">domain events out</text>
+
+  <!-- OCPP TRACK -->
+  <rect x="150" y="400" width="350" height="232" rx="6" fill="url(#panel)" stroke="#1e3a5f" stroke-width="1"/>
+  <text x="165" y="422" font-size="10" font-weight="700" fill="#3b82f6" letter-spacing="2">OCPP TRACK</text>
+  <text x="165" y="438" font-size="10" font-weight="300" fill="#64748b">protocol → domain events</text>
+
+  <rect x="165" y="450" width="155" height="56" rx="4" fill="#0f2547" stroke="#3b82f6" stroke-width="0.8"/>
+  <text x="178" y="470" font-size="11" font-weight="500" fill="#f8fafc">protocol/1.6 · 2.0.1</text>
+  <text x="178" y="486" font-size="9" font-weight="300" fill="#94a3b8">Zod schemas</text>
+  <text x="178" y="498" font-size="9" font-weight="300" fill="#94a3b8">per-version adapters</text>
+
+  <rect x="330" y="450" width="155" height="56" rx="4" fill="#0f2547" stroke="#3b82f6" stroke-width="0.8"/>
+  <text x="343" y="470" font-size="11" font-weight="500" fill="#f8fafc">translator</text>
+  <text x="343" y="486" font-size="9" font-weight="300" fill="#94a3b8">OCPP msg → domain</text>
+  <text x="343" y="498" font-size="9" font-weight="300" fill="#94a3b8">event (only place)</text>
+
+  <rect x="165" y="514" width="155" height="56" rx="4" fill="#0f2547" stroke="#3b82f6" stroke-width="0.8"/>
+  <text x="178" y="534" font-size="11" font-weight="500" fill="#f8fafc">state machine</text>
+  <text x="178" y="550" font-size="9" font-weight="300" fill="#94a3b8">Available → Charging</text>
+  <text x="178" y="562" font-size="9" font-weight="300" fill="#94a3b8">→ Faulted (etc.)</text>
+
+  <rect x="330" y="514" width="155" height="56" rx="4" fill="#0f2547" stroke="#3b82f6" stroke-width="0.8"/>
+  <text x="343" y="534" font-size="11" font-weight="500" fill="#f8fafc">outbound commands</text>
+  <text x="343" y="550" font-size="9" font-weight="300" fill="#94a3b8">outbox + cron worker</text>
+  <text x="343" y="562" font-size="9" font-weight="300" fill="#94a3b8">retry · correlation id</text>
+
+  <rect x="165" y="578" width="320" height="44" rx="4" fill="#0a1628" stroke="#3b82f6" stroke-width="0.6" stroke-dasharray="3,2"/>
+  <text x="178" y="598" font-size="11" font-weight="500" fill="#f8fafc">routing policy (per identity)</text>
+  <text x="178" y="612" font-size="9" font-weight="300" fill="#2dd4bf">prevents split-brain · OCPP vs vendor per control domain</text>
+
+  <!-- VENDOR TRACK -->
+  <rect x="510" y="400" width="350" height="232" rx="6" fill="url(#panel)" stroke="#1e3a5f" stroke-width="1"/>
+  <text x="525" y="422" font-size="10" font-weight="700" fill="#3b82f6" letter-spacing="2">VENDOR ADAPTER TRACK</text>
+  <text x="525" y="438" font-size="10" font-weight="300" fill="#64748b">vendor APIs → domain events</text>
+
+  <rect x="525" y="450" width="100" height="56" rx="4" fill="#0f2547" stroke="#3b82f6" stroke-width="0.8"/>
+  <text x="535" y="470" font-size="11" font-weight="500" fill="#f8fafc">zaptec</text>
+  <text x="535" y="486" font-size="9" font-weight="300" fill="#94a3b8">portal-managed</text>
+  <text x="535" y="498" font-size="9" font-weight="300" fill="#94a3b8">primary control</text>
+
+  <rect x="635" y="450" width="100" height="56" rx="4" fill="#0f2547" stroke="#3b82f6" stroke-width="0.8"/>
+  <text x="645" y="470" font-size="11" font-weight="500" fill="#f8fafc">easee</text>
+  <text x="645" y="486" font-size="9" font-weight="300" fill="#94a3b8">portal-managed</text>
+  <text x="645" y="498" font-size="9" font-weight="300" fill="#94a3b8">primary control</text>
+
+  <rect x="745" y="450" width="100" height="56" rx="4" fill="#0f2547" stroke="#3b82f6" stroke-width="0.8" stroke-dasharray="3,2"/>
+  <text x="755" y="470" font-size="11" font-weight="500" fill="#f8fafc">kempower</text>
+  <text x="755" y="486" font-size="9" font-weight="300" fill="#94a3b8">DC enrich (Ph 4)</text>
+  <text x="755" y="498" font-size="9" font-weight="300" fill="#94a3b8">diag · firmware</text>
+
+  <rect x="525" y="514" width="155" height="56" rx="4" fill="#0f2547" stroke="#3b82f6" stroke-width="0.8"/>
+  <text x="538" y="534" font-size="11" font-weight="500" fill="#f8fafc">capability registry</text>
+  <text x="538" y="550" font-size="9" font-weight="300" fill="#94a3b8">what asset can do</text>
+  <text x="538" y="562" font-size="9" font-weight="300" fill="#94a3b8">JSONB on identity</text>
+
+  <rect x="690" y="514" width="155" height="56" rx="4" fill="#0f2547" stroke="#3b82f6" stroke-width="0.8"/>
+  <text x="703" y="534" font-size="11" font-weight="500" fill="#f8fafc">health scoring</text>
+  <text x="703" y="550" font-size="9" font-weight="300" fill="#94a3b8">latency · errors ·</text>
+  <text x="703" y="562" font-size="9" font-weight="300" fill="#94a3b8">staleness · fallback</text>
+
+  <rect x="525" y="578" width="320" height="44" rx="4" fill="#0a1628" stroke="#3b82f6" stroke-width="0.6"/>
+  <text x="538" y="598" font-size="11" font-weight="500" fill="#f8fafc">vendor onboarding flow</text>
+  <text x="538" y="612" font-size="9" font-weight="300" fill="#2dd4bf">enter portal credentials → discover assets → set routing</text>
+
+  <!-- OCPI TRACK -->
+  <rect x="870" y="400" width="350" height="232" rx="6" fill="url(#panel)" stroke="#2dd4bf" stroke-width="1.2"/>
+  <text x="885" y="422" font-size="10" font-weight="700" fill="#2dd4bf" letter-spacing="2">OCPI ROAMING TRACK</text>
+  <text x="885" y="438" font-size="10" font-weight="300" fill="#64748b">dual-role · CPO + eMSP · OCPI 2.2.1</text>
+
+  <rect x="885" y="450" width="155" height="56" rx="4" fill="#0f2547" stroke="#2dd4bf" stroke-width="0.8"/>
+  <text x="898" y="470" font-size="11" font-weight="500" fill="#f8fafc">CPO endpoints</text>
+  <text x="898" y="486" font-size="9" font-weight="300" fill="#94a3b8">locations · sessions ·</text>
+  <text x="898" y="498" font-size="9" font-weight="300" fill="#94a3b8">CDRs · tariffs publish</text>
+
+  <rect x="1050" y="450" width="155" height="56" rx="4" fill="#0f2547" stroke="#2dd4bf" stroke-width="0.8"/>
+  <text x="1063" y="470" font-size="11" font-weight="500" fill="#f8fafc">eMSP endpoints</text>
+  <text x="1063" y="486" font-size="9" font-weight="300" fill="#94a3b8">tokens push · CDR pull</text>
+  <text x="1063" y="498" font-size="9" font-weight="300" fill="#94a3b8">our drivers roam</text>
+
+  <rect x="885" y="514" width="155" height="56" rx="4" fill="#0f2547" stroke="#2dd4bf" stroke-width="0.8"/>
+  <text x="898" y="534" font-size="11" font-weight="500" fill="#f8fafc">token translator</text>
+  <text x="898" y="550" font-size="9" font-weight="300" fill="#94a3b8">RFID UID ↔ OCPI</text>
+  <text x="898" y="562" font-size="9" font-weight="300" fill="#94a3b8">token ↔ user</text>
+
+  <rect x="1050" y="514" width="155" height="56" rx="4" fill="#0f2547" stroke="#2dd4bf" stroke-width="0.8"/>
+  <text x="1063" y="534" font-size="11" font-weight="500" fill="#f8fafc">hub connectors</text>
+  <text x="1063" y="550" font-size="9" font-weight="300" fill="#94a3b8">Hubject · Gireve</text>
+  <text x="1063" y="562" font-size="9" font-weight="300" fill="#94a3b8">+ direct peers</text>
+
+  <rect x="885" y="578" width="320" height="44" rx="4" fill="#0a1628" stroke="#2dd4bf" stroke-width="0.6"/>
+  <text x="898" y="598" font-size="11" font-weight="500" fill="#f8fafc">external Properties / Sites</text>
+  <text x="898" y="612" font-size="9" font-weight="300" fill="#2dd4bf">shadow records for partner locations · same model</text>
+
+  <!-- arrows down to event bus -->
+  <line x1="325" y1="632" x2="325" y2="670" stroke="#2dd4bf" stroke-width="1.2" opacity="0.7" marker-end="url(#ar-teal)"/>
+  <line x1="685" y1="632" x2="685" y2="670" stroke="#2dd4bf" stroke-width="1.2" opacity="0.7" marker-end="url(#ar-teal)"/>
+  <line x1="1045" y1="632" x2="1045" y2="670" stroke="#2dd4bf" stroke-width="1.2" opacity="0.7" marker-end="url(#ar-teal)"/>
+
+  <!-- ===== Lane 4: EVENT BUS (y 672..718) ===== -->
+  <text x="80" y="688" font-size="9" font-weight="700" fill="#2dd4bf" letter-spacing="2">EVENT BUS</text>
+  <text x="80" y="702" font-size="8" font-weight="300" fill="#475569">tiered event log</text>
+  <text x="80" y="715" font-size="8" font-weight="300" fill="#475569">source of truth</text>
+
+  <rect x="150" y="672" width="1070" height="46" rx="4" fill="url(#bus)" stroke="#2dd4bf" stroke-width="1.2"/>
+  <text x="685" y="691" text-anchor="middle" font-size="11" font-weight="500" fill="#f8fafc" letter-spacing="1.5">EVENT LOG · APPEND-ONLY · IDEMPOTENT · CORRELATION-IDS · MULTI-TENANT</text>
+  <text x="685" y="708" text-anchor="middle" font-size="9" font-weight="300" fill="#2dd4bf">retention classes: financial · operational · raw_protocol · aggregate · issue_history</text>
+
+  <!-- arrows down to domain modules -->
+  <line x1="240" y1="718" x2="240" y2="746" stroke="#2dd4bf" stroke-width="1" opacity="0.5" marker-end="url(#ar-teal)"/>
+  <line x1="498" y1="718" x2="498" y2="746" stroke="#2dd4bf" stroke-width="1" opacity="0.5" marker-end="url(#ar-teal)"/>
+  <line x1="756" y1="718" x2="756" y2="746" stroke="#2dd4bf" stroke-width="1" opacity="0.5" marker-end="url(#ar-teal)"/>
+  <line x1="1014" y1="718" x2="1014" y2="746" stroke="#2dd4bf" stroke-width="1" opacity="0.5" marker-end="url(#ar-teal)"/>
+
+  <!-- ===== Lane 5: DOMAIN MODULES (y 748..954) — 2 rows × 4 cols ===== -->
+  <text x="80" y="766" font-size="9" font-weight="700" fill="#3b82f6" letter-spacing="2">DOMAIN</text>
+  <text x="80" y="780" font-size="8" font-weight="300" fill="#475569">bounded contexts</text>
+  <text x="80" y="793" font-size="8" font-weight="300" fill="#475569">postgres schemas</text>
+  <text x="80" y="806" font-size="8" font-weight="300" fill="#475569">cross only via events</text>
+
+  <!-- Row 1 -->
+  <rect x="150" y="748" width="252" height="92" rx="6" fill="#0f2547" stroke="#3b82f6" stroke-width="1"/>
+  <text x="165" y="770" font-size="12" font-weight="500" fill="#f8fafc">Identity &amp; Tenancy</text>
+  <text x="165" y="788" font-size="10" font-weight="300" fill="#94a3b8">orgs (CPOs) · users · auth</text>
+  <text x="165" y="804" font-size="10" font-weight="300" fill="#94a3b8">memberships · roles</text>
+  <text x="165" y="820" font-size="10" font-weight="300" fill="#94a3b8">helper · operator · driver</text>
+  <text x="165" y="834" font-size="10" font-weight="300" fill="#2dd4bf">family groups · accounts</text>
+
+  <rect x="412" y="748" width="252" height="92" rx="6" fill="#0f2547" stroke="#3b82f6" stroke-width="1"/>
+  <text x="427" y="770" font-size="12" font-weight="500" fill="#f8fafc">Hosts · Properties · Sites</text>
+  <text x="427" y="788" font-size="10" font-weight="300" fill="#94a3b8">Charger Host (workplace,</text>
+  <text x="427" y="804" font-size="10" font-weight="300" fill="#94a3b8">MDU, hotel chain, fleet)</text>
+  <text x="427" y="820" font-size="10" font-weight="300" fill="#94a3b8">Property → Site → SiteAsset</text>
+  <text x="427" y="834" font-size="10" font-weight="300" fill="#2dd4bf">Driivz-style 4-tier hierarchy</text>
+
+  <rect x="674" y="748" width="252" height="92" rx="6" fill="#0f2547" stroke="#3b82f6" stroke-width="1"/>
+  <text x="689" y="770" font-size="12" font-weight="500" fill="#f8fafc">Plans · Tariffs · Pricing</text>
+  <text x="689" y="788" font-size="10" font-weight="300" fill="#94a3b8">CustomerPlan (driver↔SP)</text>
+  <text x="689" y="804" font-size="10" font-weight="300" fill="#94a3b8">ChargerServicePlan (Host↔SP)</text>
+  <text x="689" y="820" font-size="10" font-weight="300" fill="#94a3b8">products · displays · locales</text>
+  <text x="689" y="834" font-size="10" font-weight="300" fill="#2dd4bf">user-based, not connector-tax</text>
+
+  <rect x="936" y="748" width="284" height="92" rx="6" fill="#0f2547" stroke="#3b82f6" stroke-width="1"/>
+  <text x="951" y="770" font-size="12" font-weight="500" fill="#f8fafc">Billing &amp; Payouts</text>
+  <text x="951" y="788" font-size="10" font-weight="300" fill="#94a3b8">billing transactions · invoices ·</text>
+  <text x="951" y="804" font-size="10" font-weight="300" fill="#94a3b8">statements · refunds · penalties</text>
+  <text x="951" y="820" font-size="10" font-weight="300" fill="#94a3b8">money in BIGINT minor units</text>
+  <text x="951" y="834" font-size="10" font-weight="300" fill="#2dd4bf">employer reimbursement · payouts</text>
+
+  <!-- Row 2 -->
+  <rect x="150" y="848" width="252" height="92" rx="6" fill="#0f2547" stroke="#3b82f6" stroke-width="1"/>
+  <text x="165" y="870" font-size="12" font-weight="500" fill="#f8fafc">Charging Sessions</text>
+  <text x="165" y="888" font-size="10" font-weight="300" fill="#94a3b8">authorize · session lifecycle</text>
+  <text x="165" y="904" font-size="10" font-weight="300" fill="#94a3b8">meter values · stop reasons</text>
+  <text x="165" y="920" font-size="10" font-weight="300" fill="#94a3b8">reservations (now / by-date)</text>
+  <text x="165" y="934" font-size="10" font-weight="300" fill="#94a3b8">cost calculation pipeline</text>
+
+  <rect x="412" y="848" width="252" height="92" rx="6" fill="#0f2547" stroke="#2dd4bf" stroke-width="1.2"/>
+  <text x="427" y="870" font-size="12" font-weight="500" fill="#f8fafc">Issue Engine</text>
+  <text x="427" y="888" font-size="10" font-weight="300" fill="#2dd4bf">detect · categorize · route</text>
+  <text x="427" y="904" font-size="10" font-weight="300" fill="#94a3b8">helper → contractor escalation</text>
+  <text x="427" y="920" font-size="10" font-weight="300" fill="#94a3b8">lifetime asset history (moat)</text>
+  <text x="427" y="934" font-size="10" font-weight="300" fill="#94a3b8">rule-based v1 · AI Phase 3+</text>
+
+  <rect x="674" y="848" width="252" height="92" rx="6" fill="#0f2547" stroke="#3b82f6" stroke-width="1"/>
+  <text x="689" y="870" font-size="12" font-weight="500" fill="#f8fafc">Capability · Entitlements</text>
+  <text x="689" y="888" font-size="10" font-weight="300" fill="#94a3b8">capability = what asset can do</text>
+  <text x="689" y="904" font-size="10" font-weight="300" fill="#94a3b8">entitlement = what tenant may</text>
+  <text x="689" y="920" font-size="10" font-weight="300" fill="#94a3b8">enterprise license · feature flags</text>
+  <text x="689" y="934" font-size="10" font-weight="300" fill="#2dd4bf">fair-use envelopes (no surprise)</text>
+
+  <rect x="936" y="848" width="284" height="92" rx="6" fill="#0f2547" stroke="#3b82f6" stroke-width="1"/>
+  <text x="951" y="870" font-size="12" font-weight="500" fill="#f8fafc">Energy Operations</text>
+  <text x="951" y="888" font-size="10" font-weight="300" fill="#94a3b8">site / property energy policies</text>
+  <text x="951" y="904" font-size="10" font-weight="300" fill="#94a3b8">load mgmt · runtime engine refresh</text>
+  <text x="951" y="920" font-size="10" font-weight="300" fill="#94a3b8">SiteAsset polymorphism: charger,</text>
+  <text x="951" y="934" font-size="10" font-weight="300" fill="#2dd4bf">meter, modem, controller (Day-1)</text>
+
+  <!-- arrow down to data -->
+  <line x1="685" y1="940" x2="685" y2="970" stroke="#2dd4bf" stroke-width="1" opacity="0.5" marker-end="url(#ar-teal)"/>
+
+  <!-- ===== Lane 6: DATA (y 970..1100) ===== -->
+  <text x="80" y="988" font-size="9" font-weight="700" fill="#2dd4bf" letter-spacing="2">DATA</text>
+  <text x="80" y="1002" font-size="8" font-weight="300" fill="#475569">neon postgres EU</text>
+  <text x="80" y="1015" font-size="8" font-weight="300" fill="#475569">tenancy + audit</text>
+
+  <rect x="150" y="970" width="1070" height="118" rx="6" fill="#0d2a32" stroke="#2dd4bf" stroke-width="1.2"/>
+  <text x="170" y="994" font-size="14" font-weight="500" fill="#f8fafc">Neon Postgres · EU region (Frankfurt)</text>
+  <text x="170" y="1012" font-size="10" font-weight="300" fill="#94a3b8">branches per environment · multi-tenant via org_id on every operational row</text>
+
+  <!-- schemas as small chips -->
+  <g font-size="9" font-weight="500" font-family="monospace">
+    <rect x="170" y="1024" width="86" height="22" rx="3" fill="#06141a" stroke="#14b8a6" stroke-width="0.6"/>
+    <text x="213" y="1039" text-anchor="middle" fill="#2dd4bf">identity</text>
+
+    <rect x="262" y="1024" width="86" height="22" rx="3" fill="#06141a" stroke="#14b8a6" stroke-width="0.6"/>
+    <text x="305" y="1039" text-anchor="middle" fill="#2dd4bf">tenancy</text>
+
+    <rect x="354" y="1024" width="86" height="22" rx="3" fill="#06141a" stroke="#14b8a6" stroke-width="0.6"/>
+    <text x="397" y="1039" text-anchor="middle" fill="#2dd4bf">hosts</text>
+
+    <rect x="446" y="1024" width="86" height="22" rx="3" fill="#06141a" stroke="#14b8a6" stroke-width="0.6"/>
+    <text x="489" y="1039" text-anchor="middle" fill="#2dd4bf">assets</text>
+
+    <rect x="538" y="1024" width="86" height="22" rx="3" fill="#06141a" stroke="#14b8a6" stroke-width="0.6"/>
+    <text x="581" y="1039" text-anchor="middle" fill="#2dd4bf">ocpp</text>
+
+    <rect x="630" y="1024" width="86" height="22" rx="3" fill="#06141a" stroke="#14b8a6" stroke-width="0.6"/>
+    <text x="673" y="1039" text-anchor="middle" fill="#2dd4bf">charging</text>
+
+    <rect x="722" y="1024" width="86" height="22" rx="3" fill="#06141a" stroke="#14b8a6" stroke-width="0.6"/>
+    <text x="765" y="1039" text-anchor="middle" fill="#2dd4bf">billing</text>
+
+    <rect x="814" y="1024" width="86" height="22" rx="3" fill="#06141a" stroke="#14b8a6" stroke-width="0.6"/>
+    <text x="857" y="1039" text-anchor="middle" fill="#2dd4bf">issues</text>
+
+    <rect x="906" y="1024" width="86" height="22" rx="3" fill="#06141a" stroke="#14b8a6" stroke-width="0.6"/>
+    <text x="949" y="1039" text-anchor="middle" fill="#2dd4bf">events</text>
+
+    <rect x="998" y="1024" width="86" height="22" rx="3" fill="#06141a" stroke="#14b8a6" stroke-width="0.6"/>
+    <text x="1041" y="1039" text-anchor="middle" fill="#2dd4bf">audit</text>
+
+    <rect x="1090" y="1024" width="120" height="22" rx="3" fill="#06141a" stroke="#14b8a6" stroke-width="0.6"/>
+    <text x="1150" y="1039" text-anchor="middle" fill="#2dd4bf">entitlements</text>
+  </g>
+
+  <g font-size="9" font-weight="500" font-family="monospace">
+    <rect x="170" y="1052" width="86" height="22" rx="3" fill="#06141a" stroke="#14b8a6" stroke-width="0.6"/>
+    <text x="213" y="1067" text-anchor="middle" fill="#2dd4bf">people</text>
+
+    <rect x="262" y="1052" width="86" height="22" rx="3" fill="#06141a" stroke="#14b8a6" stroke-width="0.6"/>
+    <text x="305" y="1067" text-anchor="middle" fill="#2dd4bf">vendors</text>
+
+    <rect x="354" y="1052" width="86" height="22" rx="3" fill="#06141a" stroke="#14b8a6" stroke-width="0.6"/>
+    <text x="397" y="1067" text-anchor="middle" fill="#2dd4bf">roaming</text>
+
+    <rect x="446" y="1052" width="86" height="22" rx="3" fill="#06141a" stroke="#14b8a6" stroke-width="0.6"/>
+    <text x="489" y="1067" text-anchor="middle" fill="#2dd4bf">energy</text>
+
+    <rect x="538" y="1052" width="86" height="22" rx="3" fill="#06141a" stroke="#14b8a6" stroke-width="0.6"/>
+    <text x="581" y="1067" text-anchor="middle" fill="#2dd4bf">webhooks</text>
+  </g>
+
+  <text x="685" y="1083" text-anchor="middle" font-size="9" font-weight="300" fill="#64748b" font-style="italic">tenant-scoped data layer — every query passes withOrgContext()</text>
+
+  <!-- ============================================================ -->
+  <!-- RIGHT RAIL — three insets (x 1260..1750)                      -->
+  <!-- ============================================================ -->
+
+  <!-- INSET 1: Business Hierarchy (y 160..540) -->
+  <rect x="1260" y="160" width="490" height="384" rx="6" fill="url(#panel)" stroke="#1e3a5f" stroke-width="1"/>
+  <text x="1280" y="184" font-size="10" font-weight="700" fill="#3b82f6" letter-spacing="2">BUSINESS HIERARCHY</text>
+  <text x="1280" y="200" font-size="11" font-weight="400" fill="#94a3b8">7 layers · multi-tenant from row one</text>
+
+  <!-- Hierarchy boxes -->
+  <g>
+    <rect x="1280" y="216" width="450" height="36" rx="4" fill="#0f2547" stroke="#3b82f6" stroke-width="0.8"/>
+    <text x="1295" y="234" font-size="11" font-weight="500" fill="#f8fafc">Org</text>
+    <text x="1320" y="234" font-size="10" font-weight="300" fill="#94a3b8">— SaaS tenant, the CPO running the platform</text>
+    <text x="1295" y="247" font-size="9" font-weight="300" fill="#64748b">tenancy.organizations</text>
+
+    <line x1="1505" y1="252" x2="1505" y2="262" stroke="#475569" stroke-width="1" opacity="0.6"/>
+
+    <rect x="1300" y="262" width="430" height="36" rx="4" fill="#0f2547" stroke="#2dd4bf" stroke-width="0.8"/>
+    <text x="1315" y="280" font-size="11" font-weight="500" fill="#f8fafc">Charger Host</text>
+    <text x="1395" y="280" font-size="10" font-weight="300" fill="#94a3b8">— workplace, MDU, hotel, fleet, retail</text>
+    <text x="1315" y="293" font-size="9" font-weight="300" fill="#2dd4bf">hosts.charger_hosts · NEW in V3</text>
+
+    <line x1="1515" y1="298" x2="1515" y2="308" stroke="#475569" stroke-width="1" opacity="0.6"/>
+
+    <rect x="1320" y="308" width="410" height="32" rx="4" fill="#0f2547" stroke="#3b82f6" stroke-width="0.8"/>
+    <text x="1335" y="326" font-size="11" font-weight="500" fill="#f8fafc">Property</text>
+    <text x="1395" y="326" font-size="10" font-weight="300" fill="#94a3b8">— a building, a parcel of land</text>
+
+    <line x1="1525" y1="340" x2="1525" y2="350" stroke="#475569" stroke-width="1" opacity="0.6"/>
+
+    <rect x="1340" y="350" width="390" height="32" rx="4" fill="#0f2547" stroke="#3b82f6" stroke-width="0.8"/>
+    <text x="1355" y="368" font-size="11" font-weight="500" fill="#f8fafc">Site</text>
+    <text x="1395" y="368" font-size="10" font-weight="300" fill="#94a3b8">— sublocation: floor, lot, depot bay</text>
+
+    <line x1="1535" y1="382" x2="1535" y2="392" stroke="#475569" stroke-width="1" opacity="0.6"/>
+
+    <rect x="1360" y="392" width="370" height="32" rx="4" fill="#0f2547" stroke="#3b82f6" stroke-width="0.8"/>
+    <text x="1375" y="410" font-size="11" font-weight="500" fill="#f8fafc">Charger</text>
+    <text x="1430" y="410" font-size="10" font-weight="300" fill="#94a3b8">— physical hardware (assets.chargers)</text>
+
+    <line x1="1545" y1="424" x2="1545" y2="434" stroke="#475569" stroke-width="1" opacity="0.6"/>
+
+    <rect x="1380" y="434" width="350" height="32" rx="4" fill="#0f2547" stroke="#2dd4bf" stroke-width="0.8"/>
+    <text x="1395" y="452" font-size="11" font-weight="500" fill="#f8fafc">OCPP Identity</text>
+    <text x="1475" y="452" font-size="10" font-weight="300" fill="#2dd4bf">— control endpoint (NEW in V2)</text>
+
+    <line x1="1555" y1="466" x2="1555" y2="476" stroke="#475569" stroke-width="1" opacity="0.6"/>
+
+    <rect x="1400" y="476" width="330" height="32" rx="4" fill="#0f2547" stroke="#3b82f6" stroke-width="0.8"/>
+    <text x="1415" y="494" font-size="11" font-weight="500" fill="#f8fafc">Connector</text>
+    <text x="1480" y="494" font-size="10" font-weight="300" fill="#94a3b8">— socket the EV plugs into</text>
+  </g>
+
+  <text x="1280" y="528" font-size="9" font-weight="300" fill="#64748b" font-style="italic">Sibling at Site level: SiteAsset (charger / meter / modem / controller)</text>
+
+  <!-- INSET 2: Commercial Model (y 558..820) -->
+  <rect x="1260" y="558" width="490" height="262" rx="6" fill="url(#panel)" stroke="#1e3a5f" stroke-width="1"/>
+  <text x="1280" y="582" font-size="10" font-weight="700" fill="#3b82f6" letter-spacing="2">COMMERCIAL MODEL</text>
+  <text x="1280" y="598" font-size="11" font-weight="400" fill="#94a3b8">two contract types · multi-currency · multi-locale</text>
+
+  <rect x="1280" y="612" width="450" height="92" rx="6" fill="#0f2547" stroke="#3b82f6" stroke-width="1"/>
+  <text x="1295" y="634" font-size="12" font-weight="500" fill="#f8fafc">CustomerPlan</text>
+  <text x="1295" y="650" font-size="10" font-weight="300" fill="#94a3b8">contract: driver ↔ Service Provider</text>
+  <text x="1295" y="666" font-size="10" font-weight="300" fill="#94a3b8">products: setup · subscription · RFID · usage credit</text>
+  <text x="1295" y="680" font-size="10" font-weight="300" fill="#94a3b8">tariffs: ToU · per-connector · per-speed</text>
+  <text x="1295" y="694" font-size="10" font-weight="300" fill="#2dd4bf">balance type: prepaid / postpaid / non-paying / immediate</text>
+
+  <rect x="1280" y="714" width="450" height="92" rx="6" fill="#0f2547" stroke="#2dd4bf" stroke-width="1.2"/>
+  <text x="1295" y="736" font-size="12" font-weight="500" fill="#f8fafc">ChargerServicePlan</text>
+  <text x="1295" y="752" font-size="10" font-weight="300" fill="#2dd4bf">contract: Host ↔ Service Provider · NEW in V3</text>
+  <text x="1295" y="768" font-size="10" font-weight="300" fill="#94a3b8">revenue share · electricity reimbursement</text>
+  <text x="1295" y="782" font-size="10" font-weight="300" fill="#94a3b8">maintenance responsibility · platform fee</text>
+  <text x="1295" y="796" font-size="10" font-weight="300" fill="#94a3b8">enables MDU / workplace commercial flexibility</text>
+
+  <!-- INSET 3: Principles & V3 commitments (y 834..1100) -->
+  <rect x="1260" y="834" width="490" height="266" rx="6" fill="url(#panel)" stroke="#1e3a5f" stroke-width="1"/>
+  <text x="1280" y="858" font-size="10" font-weight="700" fill="#3b82f6" letter-spacing="2">PRINCIPLES &amp; COMMITMENTS</text>
+  <text x="1280" y="874" font-size="11" font-weight="400" fill="#94a3b8">what V3 holds firm</text>
+
+  <g font-size="11" font-weight="300" fill="#94a3b8">
+    <text x="1280" y="898">▸  <tspan fill="#f8fafc">Foundations before floors</tspan> — concrete dries first</text>
+    <text x="1280" y="918">▸  <tspan fill="#f8fafc">Event log</tspan> as source of truth — tiered retention</text>
+    <text x="1280" y="938">▸  <tspan fill="#f8fafc">Tenancy</tspan> in the schema from row one</text>
+    <text x="1280" y="958">▸  <tspan fill="#f8fafc">OCPP behind translator</tspan> — domain events out</text>
+    <text x="1280" y="978">▸  <tspan fill="#f8fafc">Capability ≠ entitlement</tspan> — both first-class</text>
+    <text x="1280" y="998">▸  <tspan fill="#f8fafc">No split-brain</tspan> — one owner per control domain</text>
+    <text x="1280" y="1018">▸  <tspan fill="#f8fafc">OCPI as foundation</tspan> — dual CPO + eMSP from day one</text>
+    <text x="1280" y="1038">▸  <tspan fill="#f8fafc">Postgres until proven otherwise</tspan> — boring scales</text>
+    <text x="1280" y="1058">▸  <tspan fill="#f8fafc">Fair-use, not surprise billing</tspan> — soft limits, review</text>
+    <text x="1280" y="1078">▸  <tspan fill="#f8fafc">EU residency</tspan> — Cloudflare DLS · Neon EU · DO eu-hint</text>
+  </g>
+
+  <!-- ============================================================ -->
+  <!-- BOTTOM STRIP                                                  -->
+  <!-- ============================================================ -->
+  <line x1="60" y1="1130" x2="1740" y2="1130" stroke="#1e3a5f" stroke-width="1" opacity="0.4"/>
+
+  <text x="80" y="1158" font-size="10" font-weight="700" fill="#3b82f6" letter-spacing="2">RUNTIME</text>
+  <text x="200" y="1158" font-size="11" font-weight="300" fill="#94a3b8">Cloudflare Workers + Durable Objects · OpenNext · Neon EU · Cloudflare Queues + Cron Triggers</text>
+
+  <text x="80" y="1184" font-size="10" font-weight="700" fill="#2dd4bf" letter-spacing="2">CHANGED IN V3</text>
+  <text x="220" y="1184" font-size="11" font-weight="300" fill="#94a3b8">Charger Host tier · ChargerServicePlan · OCPI as foundation · SiteAsset polymorphism · Push API as subsystem · Driivz-style commercial model</text>
+
+  <text x="80" y="1210" font-size="10" font-weight="700" fill="#475569" letter-spacing="2">DEFERRED</text>
+  <text x="220" y="1210" font-size="11" font-weight="300" fill="#64748b">Battery / solar SiteAssets · AI/ML scaffolding (Phase 3+) · Smart charging optimization · DC enrichment vendors · Contractor marketplace</text>
+</svg>

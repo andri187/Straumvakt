@@ -1,0 +1,38 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "hlada",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-04-18",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "observability": {
+    "enabled": true
+  },
+  "limits": {
+    "cpu_ms": 50
+  },
+  "vars": {
+    "NEXT_PUBLIC_APP_NAME": "Straumvakt",
+    "NEXT_PUBLIC_APP_ENV": "production"
+  },
+  // Staging env — deployed by Cloudflare's git integration from the `staging`
+  // branch, or locally via `wrangler deploy --env staging`. Secrets
+  // (AUTH_SECRET, ADMIN_EMAIL, ADMIN_PASSWORD, DATABASE_URL, DIRECT_URL)
+  // live in the Cloudflare dashboard per-Worker, NOT here.
+  "env": {
+    "staging": {
+      "name": "hlada-staging",
+      "assets": {
+        "directory": ".open-next/assets",
+        "binding": "ASSETS"
+      },
+      "vars": {
+        "NEXT_PUBLIC_APP_NAME": "Straumvakt (staging)",
+        "NEXT_PUBLIC_APP_ENV": "staging"
+      }
+    }
+  }
+}

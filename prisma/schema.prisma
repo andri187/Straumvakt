@@ -1,0 +1,1391 @@
+// Straumvakt — V3 Foundation Schema
+//
+// Sprint 0 deliverable. Supersedes the empty stub.
+//
+// Conventions (see docs/architecture/STRAUMVAKT_ARCHITECTURE_V3.md §10):
+//   • UUIDv7 primary keys (Postgres gen_random_uuid() is acceptable through v7 adoption)
+//   • Every operational row carries org_id (the tenant)
+//   • Money as BIGINT minor units — no Float, no Decimal ambiguity
+//   • JSONB for "shape may grow" fields; regular columns for things that must index
+//   • Soft delete only where strictly required (users for compliance); otherwise status columns
+//   • Audit columns (created_at / updated_at) on every operational table
+//
+// Schema namespaces (18) map 1:1 to Postgres schemas via multiSchema:
+//   identity, tenancy, hosts, properties, assets, hardware, ocpp,
+//   charging, billing, issues, events, audit, entitlements, people,
+//   vendors, roaming, energy, webhooks
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  schemas  = ["identity", "tenancy", "hosts", "properties", "assets", "hardware", "ocpp", "charging", "billing", "issues", "events", "audit", "entitlements", "people", "vendors", "roaming", "energy", "webhooks"]
+}
+
+// Connection URL lives in prisma.config.ts (Prisma 7 requirement).
+// Runtime client passes a PrismaNeon adapter to PrismaClient — see src/lib/prisma.ts.
+
+// ─────────────────────────────────────────────────────────────────────────────
+// identity — users and their credentials
+// ─────────────────────────────────────────────────────────────────────────────
+
+model User {
+  id             String           @id @default(uuid()) @db.Uuid
+  email          String           @unique @db.Citext
+  displayName    String?          @map("display_name")
+  status         UserStatus       @default(active)
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  credentials    UserCredential?
+  memberships    Membership[]
+  primaryFamily  FamilyGroup[]    @relation("FamilyGroupPrimary")
+  familyMember   FamilyMembership[]
+  sessions       ChargeSession[]
+  auditActions   AuditAction[]
+  commandsAsked  OutboundCommand[] @relation("OutboundCommandRequester")
+  ocpiTokens     OcpiToken[]
+
+  @@map("users")
+  @@schema("identity")
+}
+
+enum UserStatus {
+  active
+  suspended
+  deleted
+
+  @@schema("identity")
+}
+
+model UserCredential {
+  userId        String   @id @map("user_id") @db.Uuid
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  passwordHash  String?  @map("password_hash")
+  totpSecret    String?  @map("totp_secret")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("user_credentials")
+  @@schema("identity")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// tenancy — organizations (SaaS tenants / CPOs) and memberships
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Organization {
+  id                  String              @id @default(uuid()) @db.Uuid
+  slug                String              @unique
+  displayName         String              @map("display_name")
+  countryCode         String              @map("country_code") // ISO 3166-1 alpha-2
+  status              OrgStatus           @default(active)
+  createdAt           DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  memberships         Membership[]
+  chargerHosts        ChargerHost[]
+  chargerServicePlans ChargerServicePlan[]
+  properties          Property[]
+  sites               Site[]
+  installations       Installation[]
+  siteAssets          SiteAsset[]
+  chargers            Charger[]
+  ocppIdentities      OcppIdentity[]
+  connectors          Connector[]
+  outboundCommands    OutboundCommand[]
+  chargeSessions      ChargeSession[]
+  meterValues         MeterValue[]
+  reservations        Reservation[]
+  tariffs             Tariff[]
+  customerPlans       CustomerPlan[]
+  subscriptions       Subscription[]
+  billingTransactions BillingTransaction[]
+  invoices            Invoice[]
+  statements          Statement[]
+  tickets             IssueTicket[]
+  detectionRules      DetectionRule[]
+  eventLog            EventLogEntry[]
+  auditActions        AuditAction[]
+  featureFlags        FeatureFlag[]
+  enterpriseLicenses  EnterpriseLicense[]
+  familyGroups        FamilyGroup[]
+  ocpiTokens          OcpiToken[]
+  hubConnections      HubConnection[]
+  cdrQueueEntries     CdrQueueEntry[]
+  siteEnergyPolicies  SiteEnergyPolicy[]
+  propertyEnergyPolicies PropertyEnergyPolicy[]
+  energyPlanningResults EnergyPlanningResult[]
+  webhookSubscriptions WebhookSubscription[]
+
+  @@map("organizations")
+  @@schema("tenancy")
+}
+
+enum OrgStatus {
+  active
+  suspended
+  archived
+
+  @@schema("tenancy")
+}
+
+model Membership {
+  orgId        String         @map("org_id") @db.Uuid
+  userId       String         @map("user_id") @db.Uuid
+  role         MembershipRole
+  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization Organization   @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([orgId, userId])
+  @@map("memberships")
+  @@schema("tenancy")
+}
+
+enum MembershipRole {
+  owner
+  admin
+  operator
+  helper
+  contractor
+  driver
+  viewer
+
+  @@schema("tenancy")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// hosts — charger hosts (workplace / MDU / fleet / hotel / retail) and their
+// service contracts with the Service Provider
+// ─────────────────────────────────────────────────────────────────────────────
+
+model ChargerHost {
+  id            String            @id @default(uuid()) @db.Uuid
+  orgId         String            @map("org_id") @db.Uuid
+  displayName   String            @map("display_name")
+  type          HostType          @default(standard)
+  address       Json              @default("{}") @db.JsonB
+  branding      Json              @default("{}") @db.JsonB // per-Host branding for driver-facing surfaces
+  status        HostStatus        @default(active)
+  createdAt     DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization  Organization      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  servicePlans  ChargerServicePlan[]
+  properties    Property[]
+
+  @@index([orgId])
+  @@map("charger_hosts")
+  @@schema("hosts")
+}
+
+enum HostType {
+  standard
+  workplace
+  mdu
+  hotel
+  fleet
+  retail
+
+  @@schema("hosts")
+}
+
+enum HostStatus {
+  active
+  suspended
+  archived
+
+  @@schema("hosts")
+}
+
+model ChargerServicePlan {
+  id                         String       @id @default(uuid()) @db.Uuid
+  orgId                      String       @map("org_id") @db.Uuid
+  hostId                     String       @map("host_id") @db.Uuid
+  displayName                String       @map("display_name")
+  revenueShareRule           Json         @map("revenue_share_rule") @default("{}") @db.JsonB
+  electricityReimbursement   Json         @map("electricity_reimbursement") @default("{}") @db.JsonB
+  maintenanceResponsibility  String?      @map("maintenance_responsibility")
+  platformFeeModel           Json         @map("platform_fee_model") @default("{}") @db.JsonB
+  defaultTariffId            String?      @map("default_tariff_id") @db.Uuid
+  termMonths                 Int?         @map("term_months")
+  validFrom                  DateTime     @map("valid_from") @db.Timestamptz(6)
+  validUntil                 DateTime?    @map("valid_until") @db.Timestamptz(6)
+  status                     String       @default("active")
+  createdAt                  DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                  DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization               Organization @relation(fields: [orgId], references: [id])
+  host                       ChargerHost  @relation(fields: [hostId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, hostId])
+  @@map("charger_service_plans")
+  @@schema("hosts")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// properties — physical locations and their sublocations
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Property {
+  id                 String         @id @default(uuid()) @db.Uuid
+  orgId              String         @map("org_id") @db.Uuid
+  hostId             String         @map("host_id") @db.Uuid
+  displayName        String         @map("display_name")
+  address            Json           @default("{}") @db.JsonB
+  locationType       String?        @map("location_type")
+  latitude           Decimal?       @db.Decimal(9, 6)
+  longitude          Decimal?       @db.Decimal(9, 6)
+  provisioningStatus String         @map("provisioning_status") @default("provisioned")
+  external           Boolean        @default(false) // shadow record from OCPI roaming partner
+  createdAt          DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization       Organization   @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  host               ChargerHost    @relation(fields: [hostId], references: [id], onDelete: Cascade)
+  sites              Site[]
+  energyPolicies     PropertyEnergyPolicy[]
+
+  @@index([orgId, hostId])
+  @@map("properties")
+  @@schema("properties")
+}
+
+model Site {
+  id                 String          @id @default(uuid()) @db.Uuid
+  orgId              String          @map("org_id") @db.Uuid
+  propertyId         String          @map("property_id") @db.Uuid
+  displayName        String          @map("display_name")
+  timezone           String          @default("Atlantic/Reykjavik")
+  accessLevel        SiteAccessLevel @map("access_level") @default(private)
+  powerClass         SitePowerClass? @map("power_class")
+  provisioningStatus String          @map("provisioning_status") @default("provisioned")
+  external           Boolean         @default(false)
+  createdAt          DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization       Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  property           Property        @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  assets             SiteAsset[]
+  installations      Installation[]
+  sessions           ChargeSession[]
+  energyPolicies     SiteEnergyPolicy[]
+  energyPlanningResults EnergyPlanningResult[]
+
+  @@index([orgId, propertyId])
+  @@map("sites")
+  @@schema("properties")
+}
+
+enum SiteAccessLevel {
+  public
+  private
+  taxi_only
+
+  @@schema("properties")
+}
+
+enum SitePowerClass {
+  lt_50kw
+  between_50_150kw
+  between_150_500kw
+  gt_500kw
+
+  @@schema("properties")
+}
+
+// SiteAsset is the polymorphic "thing at a site". Specific kinds (charger,
+// meter, modem, controller) extend this via separate rows in `assets`.
+model SiteAsset {
+  id            String        @id @default(uuid()) @db.Uuid
+  orgId         String        @map("org_id") @db.Uuid
+  siteId        String        @map("site_id") @db.Uuid
+  kind          SiteAssetKind
+  displayName   String        @map("display_name")
+  status        String        @default("active")
+  metadata      Json          @default("{}") @db.JsonB
+  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization  Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  site          Site          @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  charger       Charger?
+  meter         Meter?
+  modem         Modem?
+  controller    Controller?
+
+  @@index([orgId, siteId])
+  @@index([kind, status])
+  @@map("site_assets")
+  @@schema("properties")
+}
+
+enum SiteAssetKind {
+  charger
+  meter
+  modem
+  controller
+
+  @@schema("properties")
+}
+
+// Installation — optional grouping between Site and charger-kind SiteAssets.
+// Used for AC vendor-managed hardware (Zaptec Pro, Easee One) where the vendor
+// portal models an installation and credentials cover the whole group.
+// OCPP-only chargers and DC chargers typically have no Installation.
+model Installation {
+  id                     String                        @id @default(uuid()) @db.Uuid
+  orgId                  String                        @map("org_id") @db.Uuid
+  siteId                 String                        @map("site_id") @db.Uuid
+  vendorId               String?                       @map("vendor_id") @db.Uuid
+  modelId                String?                       @map("model_id") @db.Uuid
+  displayName            String                        @map("display_name")
+  vendorInstallationRef  String?                       @map("vendor_installation_ref") // vendor's own installation ID after discovery
+  credentialsRef         String?                       @map("credentials_ref")         // secret store key; never the credential itself
+  credentialsStatus      String?                       @map("credentials_status")      // pending / valid / expired / revoked
+  onboardingStatus       InstallationOnboardingStatus  @map("onboarding_status") @default(pending_credentials)
+  metadata               Json                          @default("{}") @db.JsonB
+  createdAt              DateTime                      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime                      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization           Organization                  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  site                   Site                          @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  vendor                 HardwareVendor?               @relation(fields: [vendorId], references: [id])
+  model                  HardwareModel?                @relation(fields: [modelId], references: [id])
+  chargers               Charger[]
+
+  @@index([orgId, siteId])
+  @@index([vendorId])
+  @@map("installations")
+  @@schema("properties")
+}
+
+enum InstallationOnboardingStatus {
+  pending_credentials
+  discovering
+  active
+  suspended
+  error
+
+  @@schema("properties")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// assets — kind-specific hardware records, extending SiteAsset
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Charger {
+  siteAssetId      String        @id @map("site_asset_id") @db.Uuid
+  orgId            String        @map("org_id") @db.Uuid
+  modelId          String?       @map("model_id") @db.Uuid        // catalog link; when set, templates technical fields
+  installationId   String?       @map("installation_id") @db.Uuid // vendor-managed grouping (AC portal vendors)
+  vendor           String?                                        // free-text fallback when modelId is null (OCPP-only / catalog gap)
+  model            String?                                        // free-text fallback when modelId is null
+  serialNumber     String?       @map("serial_number")
+  installDate      DateTime?     @map("install_date") @db.Date
+  warrantyExpires  DateTime?     @map("warranty_expires") @db.Date
+  firmwareVersion  String?       @map("firmware_version")
+  createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  siteAsset        SiteAsset     @relation(fields: [siteAssetId], references: [id], onDelete: Cascade)
+  organization     Organization  @relation(fields: [orgId], references: [id])
+  hardwareModel    HardwareModel? @relation(fields: [modelId], references: [id])
+  installation     Installation? @relation(fields: [installationId], references: [id])
+  identities       OcppIdentity[]
+  sessions         ChargeSession[]
+
+  @@index([modelId])
+  @@index([installationId])
+  @@map("chargers")
+  @@schema("assets")
+}
+
+model Meter {
+  siteAssetId   String      @id @map("site_asset_id") @db.Uuid
+  meterSerial   String?     @map("meter_serial")
+  meterType     String?     @map("meter_type") // grid / submeter / pv / battery
+  maxAmps       Int?        @map("max_amps")
+  createdAt     DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  siteAsset     SiteAsset   @relation(fields: [siteAssetId], references: [id], onDelete: Cascade)
+
+  @@map("meters")
+  @@schema("assets")
+}
+
+model Modem {
+  siteAssetId  String     @id @map("site_asset_id") @db.Uuid
+  imei         String?    @unique
+  carrier      String?
+  iccid        String?
+  lastSeenAt   DateTime?  @map("last_seen_at") @db.Timestamptz(6)
+  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  siteAsset    SiteAsset  @relation(fields: [siteAssetId], references: [id], onDelete: Cascade)
+
+  @@map("modems")
+  @@schema("assets")
+}
+
+model Controller {
+  siteAssetId    String     @id @map("site_asset_id") @db.Uuid
+  vendor         String?    // e.g. "shelly"
+  deviceId       String?    @map("device_id")
+  endpointUrl    String?    @map("endpoint_url")
+  capabilities   Json       @default("{}") @db.JsonB
+  lastSeenAt     DateTime?  @map("last_seen_at") @db.Timestamptz(6)
+  createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  siteAsset      SiteAsset  @relation(fields: [siteAssetId], references: [id], onDelete: Cascade)
+
+  @@map("controllers")
+  @@schema("assets")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// hardware — platform-level catalog of supported vendors and models.
+// Not tenant-scoped: all Orgs see the same catalog. Model profiles are the
+// template for charger / meter / modem / controller records. Credential
+// scope on the model drives where adapter credentials attach (installation
+// vs. OCPP identity vs. none).
+// ─────────────────────────────────────────────────────────────────────────────
+
+model HardwareVendor {
+  id             String              @id @default(uuid()) @db.Uuid
+  slug           String              @unique // e.g. "zaptec", "easee", "kempower", "shelly", "generic-ocpp"
+  displayName    String              @map("display_name")
+  kind           HardwareVendorKind
+  website        String?
+  apiKind        VendorApiKind       @map("api_kind") @default(none)
+  supportContact Json                @default("{}") @map("support_contact") @db.JsonB
+  status         String              @default("active")
+  createdAt      DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  models         HardwareModel[]
+  installations  Installation[]
+
+  @@map("vendors")
+  @@schema("hardware")
+}
+
+enum HardwareVendorKind {
+  charger_ac
+  charger_dc
+  meter
+  modem
+  controller
+  multi // vendors that span kinds (e.g. Shelly: modem + controller)
+
+  @@schema("hardware")
+}
+
+enum VendorApiKind {
+  oauth       // Zaptec Pro style — exchange user/pass for token, then refresh
+  basic_auth  // Easee-style user/pass sent per request, or per-identity DC
+  none        // no vendor API; OCPP-only
+
+  @@schema("hardware")
+}
+
+model HardwareModel {
+  id               String                @id @default(uuid()) @db.Uuid
+  vendorId         String                @map("vendor_id") @db.Uuid
+  slug             String                // unique per vendor, e.g. "zaptec-pro", "easee-one"
+  displayName      String                @map("display_name")
+  kind             HardwareVendorKind
+  assetClass       AssetClass?           @map("asset_class") // ac/dc for chargers; null for non-chargers
+  credentialScope  VendorCredentialScope @map("credential_scope") @default(none)
+  profile          Json                  @default("{}") @db.JsonB // technical spec template: power, phases, connectors, OCPP versions
+  status           String                @default("active")
+  createdAt        DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  vendor           HardwareVendor        @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  chargers         Charger[]
+  installations    Installation[]
+
+  @@unique([vendorId, slug])
+  @@index([kind, status])
+  @@map("models")
+  @@schema("hardware")
+}
+
+enum VendorCredentialScope {
+  installation // AC vendor-managed: creds on properties.installations
+  identity     // DC vendor-managed: creds on ocpp.ocpp_identities
+  none         // OCPP-only: no vendor API
+
+  @@schema("hardware")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ocpp — OCPP identities (control endpoints), connectors, outbound commands
+// ─────────────────────────────────────────────────────────────────────────────
+
+model OcppIdentity {
+  id                   String         @id @default(uuid()) @db.Uuid
+  orgId                String         @map("org_id") @db.Uuid
+  chargerId            String         @map("charger_id") @db.Uuid
+  identityString       String         @map("identity_string")
+  authSecretHash       String         @map("auth_secret_hash")
+  ocppVersion          OcppVersion    @map("ocpp_version")
+  assetClass           AssetClass     @map("asset_class") @default(ac)
+  vendor               String?
+  vendorResourceId     String?        @map("vendor_resource_id")
+  credentialsRef       String?        @map("credentials_ref")    // per-identity vendor API creds (DC). Secret store key; never the credential.
+  credentialsStatus    String?        @map("credentials_status") // pending / valid / expired / revoked
+  capabilities         Json           @default("{}") @db.JsonB
+  controlRouting       Json           @map("control_routing") @default("{}") @db.JsonB
+  status               String         @default("provisioned")
+  lastSeenAt           DateTime?      @map("last_seen_at") @db.Timestamptz(6)
+  createdAt            DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization         Organization   @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  charger              Charger        @relation(fields: [chargerId], references: [siteAssetId], onDelete: Cascade)
+  connectors           Connector[]
+  outboundCommands     OutboundCommand[]
+  sessions             ChargeSession[]
+
+  @@unique([orgId, identityString])
+  @@index([orgId, chargerId])
+  @@map("ocpp_identities")
+  @@schema("ocpp")
+}
+
+enum OcppVersion {
+  ocpp_1_6
+  ocpp_2_0_1
+  ocpp_2_1
+
+  @@schema("ocpp")
+}
+
+enum AssetClass {
+  ac
+  dc
+
+  @@schema("ocpp")
+}
+
+model Connector {
+  id                String          @id @default(uuid()) @db.Uuid
+  orgId             String          @map("org_id") @db.Uuid
+  ocppIdentityId    String          @map("ocpp_identity_id") @db.Uuid
+  connectorIndex    Int             @map("connector_index")
+  type              String          // Type2 / CCS2 / CHAdeMO / Schuko
+  maxPowerKw        Decimal?        @map("max_power_kw") @db.Decimal(8, 2)
+  status            String          @default("unknown")
+  statusUpdatedAt   DateTime?       @map("status_updated_at") @db.Timestamptz(6)
+  createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization      Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  ocppIdentity      OcppIdentity    @relation(fields: [ocppIdentityId], references: [id], onDelete: Cascade)
+  sessions          ChargeSession[]
+  reservations      Reservation[]
+
+  @@unique([ocppIdentityId, connectorIndex])
+  @@index([orgId])
+  @@map("connectors")
+  @@schema("ocpp")
+}
+
+model OutboundCommand {
+  id              String       @id @default(uuid()) @db.Uuid
+  orgId           String       @map("org_id") @db.Uuid
+  identityId      String       @map("identity_id") @db.Uuid
+  controlDomain   String       @map("control_domain")
+  routedTo        String       @map("routed_to") // 'ocpp' or 'vendor:<name>'
+  payload         Json         @db.JsonB
+  status          CommandStatus @default(pending)
+  attempts        Int          @default(0)
+  notBefore       DateTime     @map("not_before") @db.Timestamptz(6)
+  lastAttemptAt   DateTime?    @map("last_attempt_at") @db.Timestamptz(6)
+  result          Json?        @db.JsonB
+  correlationId   String       @map("correlation_id") @db.Uuid
+  requestedBy     String?      @map("requested_by") @db.Uuid
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  identity        OcppIdentity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+  requester       User?        @relation("OutboundCommandRequester", fields: [requestedBy], references: [id])
+
+  @@index([status, notBefore])
+  @@index([orgId, identityId])
+  @@map("outbound_commands")
+  @@schema("ocpp")
+}
+
+enum CommandStatus {
+  pending
+  sent
+  acked
+  failed
+  cancelled
+
+  @@schema("ocpp")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// charging — sessions, meter values, reservations
+// ─────────────────────────────────────────────────────────────────────────────
+
+model ChargeSession {
+  id            String        @id @default(uuid()) @db.Uuid
+  orgId         String        @map("org_id") @db.Uuid
+  siteId        String        @map("site_id") @db.Uuid
+  chargerId     String        @map("charger_id") @db.Uuid
+  ocppIdentityId String       @map("ocpp_identity_id") @db.Uuid
+  connectorId   String        @map("connector_id") @db.Uuid
+  userId        String?       @map("user_id") @db.Uuid
+  idTag         String?       @map("id_tag")
+  startedAt     DateTime      @map("started_at") @db.Timestamptz(6)
+  endedAt       DateTime?     @map("ended_at") @db.Timestamptz(6)
+  energyWh      BigInt?       @map("energy_wh")
+  stopReason    String?       @map("stop_reason")
+  status        SessionStatus @default(in_progress)
+  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization  Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  site          Site          @relation(fields: [siteId], references: [id])
+  charger       Charger       @relation(fields: [chargerId], references: [siteAssetId])
+  ocppIdentity  OcppIdentity  @relation(fields: [ocppIdentityId], references: [id])
+  connector     Connector     @relation(fields: [connectorId], references: [id])
+  user          User?         @relation(fields: [userId], references: [id])
+  meterValues   MeterValue[]
+
+  @@index([orgId, startedAt(sort: Desc)])
+  @@index([chargerId, startedAt(sort: Desc)])
+  @@index([userId, startedAt(sort: Desc)])
+  @@map("sessions")
+  @@schema("charging")
+}
+
+enum SessionStatus {
+  in_progress
+  completed
+  aborted
+
+  @@schema("charging")
+}
+
+model MeterValue {
+  id          String        @id @default(uuid()) @db.Uuid
+  orgId       String        @map("org_id") @db.Uuid
+  sessionId   String        @map("session_id") @db.Uuid
+  measuredAt  DateTime      @map("measured_at") @db.Timestamptz(6)
+  energyWh    BigInt?       @map("energy_wh")
+  powerW      Int?          @map("power_w")
+  voltageV    Decimal?      @map("voltage_v") @db.Decimal(6, 2)
+  currentA    Decimal?      @map("current_a") @db.Decimal(6, 2)
+  socPercent  Decimal?      @map("soc_percent") @db.Decimal(5, 2)
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  session     ChargeSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, measuredAt])
+  @@map("meter_values")
+  @@schema("charging")
+}
+
+model Reservation {
+  id            String    @id @default(uuid()) @db.Uuid
+  orgId         String    @map("org_id") @db.Uuid
+  connectorId   String    @map("connector_id") @db.Uuid
+  userId        String?   @map("user_id") @db.Uuid
+  reservedFrom  DateTime  @map("reserved_from") @db.Timestamptz(6)
+  reservedUntil DateTime  @map("reserved_until") @db.Timestamptz(6)
+  status        String    @default("confirmed")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  connector     Connector    @relation(fields: [connectorId], references: [id])
+
+  @@index([orgId, reservedFrom])
+  @@map("reservations")
+  @@schema("charging")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// billing — plans, tariffs, subscriptions, invoices
+// Money is BIGINT minor units (aurar / öre / cents). No floats, no decimals.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Tariff {
+  id           String     @id @default(uuid()) @db.Uuid
+  orgId        String     @map("org_id") @db.Uuid
+  displayName  String     @map("display_name")
+  rule         Json       @db.JsonB // interpreted by the tariff engine
+  currency     String     // ISO 4217
+  validFrom    DateTime   @map("valid_from") @db.Timestamptz(6)
+  validUntil   DateTime?  @map("valid_until") @db.Timestamptz(6)
+  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  customerPlans CustomerPlan[]
+
+  @@index([orgId])
+  @@map("tariffs")
+  @@schema("billing")
+}
+
+model CustomerPlan {
+  id                   String        @id @default(uuid()) @db.Uuid
+  orgId                String        @map("org_id") @db.Uuid
+  code                 String
+  displayName          String        @map("display_name")
+  description          String?
+  balanceType          BalanceType   @map("balance_type")
+  category             PlanCategory
+  products             Json          @default("[]") @db.JsonB // setup/subscription/RFID/usage credit
+  defaultTariffId      String?       @map("default_tariff_id") @db.Uuid
+  terminationBehavior  TerminationBehavior @map("termination_behavior") @default(evergreen)
+  minCommitmentMonths  Int?          @map("min_commitment_months")
+  costFactor           Decimal?      @map("cost_factor") @db.Decimal(8, 4)
+  country              String?
+  currency             String?
+  locale               String?
+  validFrom            DateTime      @map("valid_from") @db.Timestamptz(6)
+  validUntil           DateTime?     @map("valid_until") @db.Timestamptz(6)
+  status               String        @default("active")
+  createdAt            DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization         Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  defaultTariff        Tariff?       @relation(fields: [defaultTariffId], references: [id])
+  subscriptions        Subscription[]
+
+  @@unique([orgId, code])
+  @@map("customer_plans")
+  @@schema("billing")
+}
+
+enum BalanceType {
+  prepaid
+  postpaid
+  non_paying
+  pay_immediately
+  postpaid_immediately
+
+  @@schema("billing")
+}
+
+enum PlanCategory {
+  single_tariff
+  membership
+  roaming
+  guest_otp
+
+  @@schema("billing")
+}
+
+enum TerminationBehavior {
+  terminate
+  evergreen
+  rollover
+
+  @@schema("billing")
+}
+
+model Subscription {
+  id         String       @id @default(uuid()) @db.Uuid
+  orgId      String       @map("org_id") @db.Uuid
+  userId     String       @map("user_id") @db.Uuid
+  planId     String       @map("plan_id") @db.Uuid
+  startedAt  DateTime     @map("started_at") @db.Timestamptz(6)
+  endedAt    DateTime?    @map("ended_at") @db.Timestamptz(6)
+  status     String       @default("active")
+  createdAt  DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  plan       CustomerPlan @relation(fields: [planId], references: [id])
+
+  @@index([orgId, userId])
+  @@map("subscriptions")
+  @@schema("billing")
+}
+
+model BillingTransaction {
+  id             String       @id @default(uuid()) @db.Uuid
+  orgId          String       @map("org_id") @db.Uuid
+  userId         String?      @map("user_id") @db.Uuid
+  type           BillingTxType
+  amountMinor    BigInt       @map("amount_minor") // can be negative (refunds)
+  currency       String
+  description    String?
+  metadata       Json         @default("{}") @db.JsonB
+  occurredAt     DateTime     @map("occurred_at") @db.Timestamptz(6)
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, occurredAt(sort: Desc)])
+  @@map("billing_transactions")
+  @@schema("billing")
+}
+
+enum BillingTxType {
+  payment
+  refund
+  penalty
+  credit
+  contract_charge
+  external_payment
+
+  @@schema("billing")
+}
+
+model Invoice {
+  id              String        @id @default(uuid()) @db.Uuid
+  orgId           String        @map("org_id") @db.Uuid
+  userId          String        @map("user_id") @db.Uuid
+  periodStart     DateTime      @map("period_start") @db.Date
+  periodEnd       DateTime      @map("period_end") @db.Date
+  currency        String
+  totalMinor      BigInt        @map("total_minor")
+  status          InvoiceStatus @default(draft)
+  issuedAt        DateTime?     @map("issued_at") @db.Timestamptz(6)
+  paidAt          DateTime?     @map("paid_at") @db.Timestamptz(6)
+  externalRef     String?       @map("external_ref")
+  pdfRef          String?       @map("pdf_ref")
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization    Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  lines           InvoiceLine[]
+
+  @@index([orgId, userId, periodStart])
+  @@map("invoices")
+  @@schema("billing")
+}
+
+enum InvoiceStatus {
+  draft
+  issued
+  paid
+  void
+
+  @@schema("billing")
+}
+
+model InvoiceLine {
+  id             String  @id @default(uuid()) @db.Uuid
+  invoiceId      String  @map("invoice_id") @db.Uuid
+  description    String
+  quantity       Decimal @db.Decimal(12, 4)
+  unitPriceMinor BigInt  @map("unit_price_minor")
+  amountMinor    BigInt  @map("amount_minor")
+  sourceType     String  @map("source_type")
+  sourceId       String? @map("source_id") @db.Uuid
+
+  invoice        Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@map("invoice_lines")
+  @@schema("billing")
+}
+
+model Statement {
+  id           String       @id @default(uuid()) @db.Uuid
+  orgId        String       @map("org_id") @db.Uuid
+  subjectType  String       @map("subject_type") // user / host
+  subjectId    String       @map("subject_id") @db.Uuid
+  periodStart  DateTime     @map("period_start") @db.Date
+  periodEnd    DateTime     @map("period_end") @db.Date
+  content      Json         @db.JsonB
+  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, subjectType, subjectId])
+  @@map("statements")
+  @@schema("billing")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// issues — tickets, timeline, detection rules (Issue Engine moat)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model IssueTicket {
+  id                    String        @id @default(uuid()) @db.Uuid
+  orgId                 String        @map("org_id") @db.Uuid
+  subjectType           IssueSubject  @map("subject_type")
+  subjectId             String?       @map("subject_id") @db.Uuid
+  category              String
+  severity              IssueSeverity @default(medium)
+  status                IssueStatus   @default(open)
+  detectedBy            String        @map("detected_by")
+  assignedToUserId      String?       @map("assigned_to_user_id") @db.Uuid
+  assignedToContractorId String?      @map("assigned_to_contractor_id") @db.Uuid
+  slaTargetAt           DateTime?     @map("sla_target_at") @db.Timestamptz(6)
+  resolvedAt            DateTime?     @map("resolved_at") @db.Timestamptz(6)
+  resolutionSummary     String?       @map("resolution_summary")
+  createdAt             DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization          Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  events                TicketEvent[]
+
+  @@index([orgId, status, severity])
+  @@index([subjectType, subjectId])
+  @@map("tickets")
+  @@schema("issues")
+}
+
+enum IssueSubject {
+  charger
+  ocpp_identity
+  connector
+  session
+  site
+  user
+  other
+
+  @@schema("issues")
+}
+
+enum IssueSeverity {
+  low
+  medium
+  high
+  critical
+
+  @@schema("issues")
+}
+
+enum IssueStatus {
+  open
+  triaged
+  assigned
+  in_progress
+  waiting
+  resolved
+  closed
+
+  @@schema("issues")
+}
+
+model TicketEvent {
+  id           String      @id @default(uuid()) @db.Uuid
+  ticketId     String      @map("ticket_id") @db.Uuid
+  eventType    String      @map("event_type")
+  actorUserId  String?     @map("actor_user_id") @db.Uuid
+  payload      Json        @default("{}") @db.JsonB
+  occurredAt   DateTime    @default(now()) @map("occurred_at") @db.Timestamptz(6)
+
+  ticket       IssueTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId, occurredAt])
+  @@map("ticket_events")
+  @@schema("issues")
+}
+
+model DetectionRule {
+  id          String       @id @default(uuid()) @db.Uuid
+  orgId       String       @map("org_id") @db.Uuid
+  ruleKey     String       @map("rule_key")
+  config      Json         @default("{}") @db.JsonB
+  enabled     Boolean      @default(true)
+  version     Int          @default(1)
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, ruleKey])
+  @@map("detection_rules")
+  @@schema("issues")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// events — append-only event log (source of truth) + idempotency
+// ─────────────────────────────────────────────────────────────────────────────
+
+model EventLogEntry {
+  id              String          @id @default(uuid()) @db.Uuid // UUIDv7 when driver lands it
+  orgId           String          @map("org_id") @db.Uuid
+  aggregateType   String          @map("aggregate_type")
+  aggregateId    String           @map("aggregate_id") @db.Uuid
+  eventType       String          @map("event_type")
+  schemaVersion   Int             @map("schema_version") @default(1)
+  payload         Json            @db.JsonB
+  metadata        Json            @default("{}") @db.JsonB
+  retentionClass  RetentionClass  @map("retention_class") @default(operational)
+  occurredAt      DateTime        @map("occurred_at") @db.Timestamptz(6)
+  recordedAt      DateTime        @default(now()) @map("recorded_at") @db.Timestamptz(6)
+
+  organization    Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, occurredAt(sort: Desc)])
+  @@index([aggregateType, aggregateId, occurredAt])
+  @@index([eventType, occurredAt(sort: Desc)])
+  @@map("event_log")
+  @@schema("events")
+}
+
+enum RetentionClass {
+  financial     // indefinite, hot
+  operational   // indefinite, hot, small
+  raw_protocol  // 30–90 days, then deleted
+  aggregate     // 12–24 months
+  issue_history // indefinite
+
+  @@schema("events")
+}
+
+model IdempotencyKey {
+  scope      String   // 'ocpp:<identity>', 'api', 'webhook:<partner>'
+  key        String
+  result     Json?    @db.JsonB
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  expiresAt  DateTime @map("expires_at") @db.Timestamptz(6)
+
+  @@id([scope, key])
+  @@index([expiresAt])
+  @@map("idempotency_keys")
+  @@schema("events")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// audit — actor-did-what log (distinct from events which is what-happened)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model AuditAction {
+  id           String        @id @default(uuid()) @db.Uuid
+  orgId        String        @map("org_id") @db.Uuid
+  actorUserId  String?       @map("actor_user_id") @db.Uuid
+  actorKind    ActorKind     @map("actor_kind")
+  action       String
+  targetType   String?       @map("target_type")
+  targetId     String?       @map("target_id") @db.Uuid
+  metadata     Json          @default("{}") @db.JsonB
+  occurredAt   DateTime      @default(now()) @map("occurred_at") @db.Timestamptz(6)
+
+  organization Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  actor        User?         @relation(fields: [actorUserId], references: [id])
+
+  @@index([orgId, occurredAt(sort: Desc)])
+  @@index([targetType, targetId, occurredAt(sort: Desc)])
+  @@map("actions")
+  @@schema("audit")
+}
+
+enum ActorKind {
+  user
+  system
+  vendor_webhook
+  ocpp_worker
+
+  @@schema("audit")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// entitlements — feature flags + enterprise licenses (capability vs permission)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model FeatureFlag {
+  id          String       @id @default(uuid()) @db.Uuid
+  orgId       String       @map("org_id") @db.Uuid
+  featureKey  String       @map("feature_key")
+  scopeType   String       @map("scope_type") // org/site/identity/user
+  scopeId     String?      @map("scope_id") @db.Uuid
+  enabled     Boolean      @default(true)
+  source      String       // enterprise_license/addon/trial/manual
+  sourceRef   String?      @map("source_ref") @db.Uuid
+  validFrom   DateTime     @map("valid_from") @db.Timestamptz(6)
+  validUntil  DateTime?    @map("valid_until") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, scopeType, scopeId, featureKey])
+  @@map("feature_flags")
+  @@schema("entitlements")
+}
+
+model EnterpriseLicense {
+  id          String       @id @default(uuid()) @db.Uuid
+  orgId       String       @map("org_id") @db.Uuid
+  tier        String       // standard/enterprise/enterprise_plus
+  apiFairUse  Json         @map("api_fair_use") @default("{}") @db.JsonB
+  features    String[]     // array of feature_keys this tier grants
+  validFrom   DateTime     @map("valid_from") @db.Timestamptz(6)
+  validUntil  DateTime?    @map("valid_until") @db.Timestamptz(6)
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@map("enterprise_licenses")
+  @@schema("entitlements")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// people — family groups (primary driver + family members for AC pricing)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model FamilyGroup {
+  id             String            @id @default(uuid()) @db.Uuid
+  orgId          String            @map("org_id") @db.Uuid
+  displayName    String            @map("display_name")
+  primaryUserId  String            @map("primary_user_id") @db.Uuid
+  createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization   Organization      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  primaryUser    User              @relation("FamilyGroupPrimary", fields: [primaryUserId], references: [id])
+  members        FamilyMembership[]
+
+  @@index([orgId])
+  @@map("family_groups")
+  @@schema("people")
+}
+
+model FamilyMembership {
+  familyGroupId String       @map("family_group_id") @db.Uuid
+  userId        String       @map("user_id") @db.Uuid
+  memberKind    MemberKind   @map("member_kind")
+  joinedAt      DateTime     @default(now()) @map("joined_at") @db.Timestamptz(6)
+
+  familyGroup   FamilyGroup  @relation(fields: [familyGroupId], references: [id], onDelete: Cascade)
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([familyGroupId, userId])
+  @@map("family_memberships")
+  @@schema("people")
+}
+
+enum MemberKind {
+  primary
+  family_user
+
+  @@schema("people")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// vendors — adapter health + contract test results
+// ─────────────────────────────────────────────────────────────────────────────
+
+model VendorAdapterHealth {
+  id            String   @id @default(uuid()) @db.Uuid
+  vendor        String
+  windowStart   DateTime @map("window_start") @db.Timestamptz(6)
+  windowEnd     DateTime @map("window_end") @db.Timestamptz(6)
+  errorRate     Decimal  @map("error_rate") @db.Decimal(6, 4)
+  p50LatencyMs  Int      @map("p50_latency_ms")
+  p95LatencyMs  Int      @map("p95_latency_ms")
+  lastSuccessAt DateTime? @map("last_success_at") @db.Timestamptz(6)
+
+  @@index([vendor, windowStart])
+  @@map("adapter_health")
+  @@schema("vendors")
+}
+
+model VendorContractTest {
+  id        String   @id @default(uuid()) @db.Uuid
+  vendor    String
+  testName  String   @map("test_name")
+  result    String   // pass/fail/skip
+  runAt     DateTime @map("run_at") @db.Timestamptz(6)
+  details   Json     @default("{}") @db.JsonB
+
+  @@index([vendor, runAt(sort: Desc)])
+  @@map("contract_tests")
+  @@schema("vendors")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// roaming — OCPI tokens, hub connections, CDR queue
+// ─────────────────────────────────────────────────────────────────────────────
+
+model OcpiToken {
+  id          String       @id @default(uuid()) @db.Uuid
+  orgId       String       @map("org_id") @db.Uuid
+  tokenUid    String       @map("token_uid")
+  tokenType   String       @map("token_type") // RFID/APP_USER/AD_HOC_USER/OTHER
+  partyId     String       @map("party_id")
+  countryCode String       @map("country_code")
+  valid       Boolean      @default(true)
+  userId      String?      @map("user_id") @db.Uuid
+  expiresAt   DateTime?    @map("expires_at") @db.Timestamptz(6)
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user        User?        @relation(fields: [userId], references: [id])
+
+  @@unique([countryCode, partyId, tokenUid])
+  @@index([orgId])
+  @@map("ocpi_tokens")
+  @@schema("roaming")
+}
+
+model HubConnection {
+  id              String       @id @default(uuid()) @db.Uuid
+  orgId           String       @map("org_id") @db.Uuid
+  hub             HubKind
+  partyId         String       @map("party_id")
+  countryCode     String       @map("country_code")
+  endpointUrl     String       @map("endpoint_url")
+  credentialsRef  String       @map("credentials_ref") // secret store key
+  status          String       @default("active")
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, hub])
+  @@map("hub_connections")
+  @@schema("roaming")
+}
+
+enum HubKind {
+  hubject
+  gireve
+  direct
+
+  @@schema("roaming")
+}
+
+model CdrQueueEntry {
+  id          String       @id @default(uuid()) @db.Uuid
+  orgId       String       @map("org_id") @db.Uuid
+  direction   CdrDirection
+  partnerRef  String       @map("partner_ref")
+  payload     Json         @db.JsonB
+  status      String       @default("pending")
+  attempts    Int          @default(0)
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, status])
+  @@map("cdr_queue")
+  @@schema("roaming")
+}
+
+enum CdrDirection {
+  inbound
+  outbound
+
+  @@schema("roaming")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// energy — site/property policies and planning results
+// ─────────────────────────────────────────────────────────────────────────────
+
+model SiteEnergyPolicy {
+  id         String       @id @default(uuid()) @db.Uuid
+  orgId      String       @map("org_id") @db.Uuid
+  siteId     String       @map("site_id") @db.Uuid
+  policy     Json         @db.JsonB
+  validFrom  DateTime     @map("valid_from") @db.Timestamptz(6)
+  validUntil DateTime?    @map("valid_until") @db.Timestamptz(6)
+  createdAt  DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  site       Site         @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, siteId])
+  @@map("site_energy_policies")
+  @@schema("energy")
+}
+
+model PropertyEnergyPolicy {
+  id          String       @id @default(uuid()) @db.Uuid
+  orgId       String       @map("org_id") @db.Uuid
+  propertyId  String       @map("property_id") @db.Uuid
+  policy      Json         @db.JsonB
+  validFrom   DateTime     @map("valid_from") @db.Timestamptz(6)
+  validUntil  DateTime?    @map("valid_until") @db.Timestamptz(6)
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  property    Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, propertyId])
+  @@map("property_energy_policies")
+  @@schema("energy")
+}
+
+model EnergyPlanningResult {
+  id           String       @id @default(uuid()) @db.Uuid
+  orgId        String       @map("org_id") @db.Uuid
+  siteId       String       @map("site_id") @db.Uuid
+  calculatedAt DateTime     @default(now()) @map("calculated_at") @db.Timestamptz(6)
+  result       Json         @db.JsonB
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  site         Site         @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, siteId, calculatedAt(sort: Desc)])
+  @@map("energy_planning_results")
+  @@schema("energy")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// webhooks — outbound delivery subsystem
+// ─────────────────────────────────────────────────────────────────────────────
+
+model WebhookSubscription {
+  id               String       @id @default(uuid()) @db.Uuid
+  orgId            String       @map("org_id") @db.Uuid
+  name             String
+  endpointUrl      String       @map("endpoint_url")
+  signingSecretRef String       @map("signing_secret_ref")
+  scopes           String[]     // event_type filters; empty = all
+  status           String       @default("active")
+  createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization     Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  deliveries       WebhookDelivery[]
+  deadLetters      WebhookDeadLetter[]
+
+  @@index([orgId])
+  @@map("subscriptions")
+  @@schema("webhooks")
+}
+
+model WebhookDelivery {
+  id             String              @id @default(uuid()) @db.Uuid
+  subscriptionId String              @map("subscription_id") @db.Uuid
+  eventId        String              @map("event_id") @db.Uuid
+  attempt        Int
+  status         String
+  responseCode   Int?                @map("response_code")
+  responseBody   String?             @map("response_body")
+  deliveredAt    DateTime?           @map("delivered_at") @db.Timestamptz(6)
+  createdAt      DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  subscription   WebhookSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId, createdAt(sort: Desc)])
+  @@map("deliveries")
+  @@schema("webhooks")
+}
+
+model WebhookDeadLetter {
+  id             String              @id @default(uuid()) @db.Uuid
+  subscriptionId String              @map("subscription_id") @db.Uuid
+  eventId        String              @map("event_id") @db.Uuid
+  payload        Json                @db.JsonB
+  lastError      String?             @map("last_error")
+  movedAt        DateTime            @default(now()) @map("moved_at") @db.Timestamptz(6)
+
+  subscription   WebhookSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId, movedAt(sort: Desc)])
+  @@map("dead_letters")
+  @@schema("webhooks")
+}

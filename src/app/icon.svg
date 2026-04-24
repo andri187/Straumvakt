@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
+  <defs>
+    <linearGradient id="svFavBolt" x1="40" y1="20" x2="80" y2="100" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#8EF5C7"/>
+      <stop offset="100%" stop-color="#6FDCEA"/>
+    </linearGradient>
+  </defs>
+  <rect width="120" height="120" rx="24" fill="#0B1220"/>
+  <path d="M 84 18 L 54 18 A 24 24 0 0 0 30 42 L 30 60"
+        stroke="#3EE9A7" stroke-width="13" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <path d="M 36 102 L 66 102 A 24 24 0 0 0 90 78 L 90 60"
+        stroke="#2BB6E8" stroke-width="13" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <path d="M 66 28 L 44 66 L 58 66 L 52 96 L 78 56 L 62 56 Z" fill="url(#svFavBolt)"/>
+</svg>

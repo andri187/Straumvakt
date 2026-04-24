@@ -1,0 +1,73 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+
+  /* Straumvakt brand surface tokens — consumed by arbitrary values */
+  --sv-bg: #070b16;
+  --sv-surface: #0b1220;
+  --sv-raised: #111a2e;
+  --sv-border: #1e2a44;
+  --sv-green: #3ee9a7;
+  --sv-blue: #2bb6e8;
+  --sv-sky: #6fb8f0;
+  --sv-text: #f5f7fa;
+  --sv-muted: #97a3b8;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  @apply bg-bg-base text-ink-50 antialiased;
+  background-image:
+    radial-gradient(1200px 600px at 80% -10%, rgba(43, 182, 232, 0.1), transparent 60%),
+    radial-gradient(900px 500px at -10% 10%, rgba(62, 233, 167, 0.08), transparent 60%);
+  background-attachment: fixed;
+}
+
+/* Reusable brand gradient text — used for the wordmark in the sidebar/login */
+.sv-wordmark {
+  background-image: linear-gradient(135deg, #3ee9a7 0%, #2bd3c9 55%, #2bb6e8 100%);
+  -webkit-background-clip: text;
+          background-clip: text;
+  color: transparent;
+  letter-spacing: -0.01em;
+}
+
+/* Tagline — small-caps Icelandic tagline under the wordmark */
+.sv-tagline {
+  color: var(--sv-sky);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+/* Thin, brand-tinted scrollbars for dense views */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(75 86 109 / 0.7) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgb(75 86 109 / 0.7);
+  border-radius: 4px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgb(111 184 240 / 0.7);
+}
+
+/* Focus ring uses the brand blue */
+:where(a, button, [role="button"], input, select, textarea):focus-visible {
+  outline: 2px solid var(--sv-blue);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
