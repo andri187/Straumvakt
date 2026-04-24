@@ -191,12 +191,20 @@ simulator.
 
 **Milestones.**
 
-- **1.1** Refactor `src/app/api/ocpp/events/route.ts` to be event-log-first
-  + idempotent. On receipt: verify HMAC (existing), check
-  `idempotency_keys`, insert to `event_log`, project to operational
-  tables, all in one transaction.
-  - *Exit:* Replaying the same webhook twice produces exactly one log
-    row and one projection update.
+- **1.1** Create `src/app/api/ocpp/events/route.ts` event-log-first
+  + idempotent. (V1 said "refactor" — no prior code exists in Straumvakt;
+  this is a create from scratch.) On receipt: gate by
+  `OCPP_INGEST_SECRET` header (constant-time compare, not HMAC — see
+  [ADR 0004](../adr/0004-ocpp-transport-service-binding.md)), check
+  `events.idempotency_keys`, insert to `events.event_log`, dispatch
+  projection by event type, all in one Postgres transaction.
+  - *Exit:* Replay test green — same `eventId` posted twice produces
+    exactly one event-log row and one projection dispatch; second call
+    returns the cached 202 envelope. Auth test green — missing / wrong
+    secret returns 401 constant-time.
+  - *Out of scope until 1.4:* real Service Binding call from the
+    gateway (gateway worker lands in 1.4). Contract shape is locked
+    here so 1.4 is plumbing, not rework.
 
 - **1.2** Domain event translator module for OCPP 1.6J. Maps every 1.6J
   message type to a named domain event. No OCPP vocabulary escapes this
