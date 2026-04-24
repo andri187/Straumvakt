@@ -49,6 +49,9 @@ function StraumvaktMark({ className }: { className?: string }) {
 }
 
 export default function LoginPage() {
+  const version = process.env.APP_VERSION ?? "dev";
+  const buildTime = process.env.BUILD_TIME ?? "unknown";
+
   return (
     <div className="relative min-h-screen flex items-center justify-center px-4 overflow-hidden">
       {/* Soft brand halo behind the card */}
@@ -70,6 +73,12 @@ export default function LoginPage() {
 
         <h1 className="mt-8 text-xl font-semibold text-ink-50">Sign in</h1>
         <LoginAuthSwitcher />
+      </div>
+
+      <div className="absolute inset-x-0 bottom-4 text-center text-xs text-ink-400 tabular-nums tracking-wide">
+        <span>v{version}</span>
+        <span className="mx-2 text-ink-500">·</span>
+        <span>build {buildTime}</span>
       </div>
     </div>
   );
