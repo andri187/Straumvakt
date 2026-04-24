@@ -19,8 +19,16 @@
  * later"). ADR 0002 governs the catalog design.
  */
 import { PrismaClient } from "@prisma/client";
+import { PrismaNeon } from "@prisma/adapter-neon";
 
-const prisma = new PrismaClient();
+const databaseUrl = process.env.DATABASE_URL;
+if (!databaseUrl) {
+  throw new Error("DATABASE_URL is required to run the seed");
+}
+
+const prisma = new PrismaClient({
+  adapter: new PrismaNeon({ connectionString: databaseUrl }),
+});
 
 async function seedHardwareCatalog() {
   const zaptec = await prisma.hardwareVendor.upsert({
