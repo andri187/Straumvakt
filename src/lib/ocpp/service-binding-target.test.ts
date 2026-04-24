@@ -40,6 +40,27 @@ describe("ServiceBindingOcppTarget", () => {
     expect(binding.fetch).toHaveBeenCalledOnce();
   });
 
+  it.each([
+    ["remote_stop", "RemoteStopTransaction"],
+    ["get_configuration", "GetConfiguration"],
+    ["change_configuration", "ChangeConfiguration"],
+    ["reset", "Reset"],
+    ["unlock_connector", "UnlockConnector"],
+  ])("maps controlDomain %s → OCPP action %s", async (controlDomain, expectedAction) => {
+    let observedAction: string | undefined;
+    const binding = {
+      fetch: vi.fn(async (req: Request) => {
+        const body = (await req.json()) as { action: string };
+        observedAction = body.action;
+        return new Response(JSON.stringify({ kind: "ack", result: {} }), { status: 202 });
+      }),
+    };
+    const t = new ServiceBindingOcppTarget(binding, "secret");
+    const r = await t.dispatch(cmd({ controlDomain }));
+    expect(observedAction).toBe(expectedAction);
+    expect(r.kind).toBe("ack");
+  });
+
   it("returns 'permanent' for unmapped controlDomain without calling the gateway", async () => {
     const binding = { fetch: vi.fn() };
     const t = new ServiceBindingOcppTarget(binding, "secret");

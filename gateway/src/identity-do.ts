@@ -284,10 +284,10 @@ export class IdentityDurableObject {
       return;
     }
     this.pendingOutbound.delete(frame.uniqueId);
-    // Main-app integration (recording the charger's reply) is Sprint 1.5
-    // scope; for 1.4 the ack is the 'Sent' response to main-app at
-    // dispatch time.
-    console.info("[ocpp-gw] charger accepted command", pending.commandId, frame.payload);
+    await this.recordCommandResult(pending, {
+      outcome: "accepted",
+      result: frame.payload,
+    });
   }
 
   private async handleInboundCallError(
@@ -299,12 +299,46 @@ export class IdentityDurableObject {
       return;
     }
     this.pendingOutbound.delete(frame.uniqueId);
-    console.warn(
-      "[ocpp-gw] charger rejected command",
-      pending.commandId,
-      frame.errorCode,
-      frame.errorDescription,
-    );
+    await this.recordCommandResult(pending, {
+      outcome: "rejected",
+      result: {
+        errorCode: frame.errorCode,
+        errorDescription: frame.errorDescription,
+      },
+    });
+  }
+
+  /**
+   * Ship a command-result event back to main app so the reply is
+   * persisted in the event log (retention: operational). Operator
+   * console / tests read from there to confirm a round-trip.
+   */
+  private async recordCommandResult(
+    pending: OutboundPending,
+    outcome: { outcome: "accepted" | "rejected"; result: Record<string, unknown> },
+  ): Promise<void> {
+    if (!this.meta) return;
+    const event = {
+      eventId: crypto.randomUUID(),
+      orgId: this.meta.orgId,
+      aggregateType: "outbound_command",
+      aggregateId: pending.commandId,
+      eventType: "ocpp.command_result",
+      occurredAt: new Date().toISOString(),
+      correlationId: pending.uniqueId,
+      retentionClass: "operational" as const,
+      payload: {
+        commandId: pending.commandId,
+        action: pending.action,
+        outcome: outcome.outcome,
+        result: outcome.result,
+        latencyMs: Date.now() - pending.enqueuedAt,
+      },
+    };
+    const shipped = await postEvent(this.env, event);
+    if (shipped.kind !== "accepted") {
+      console.warn("[ocpp-gw] command_result ingest failed", shipped);
+    }
   }
 
   // ───────────────────────────────────────────────────────────────

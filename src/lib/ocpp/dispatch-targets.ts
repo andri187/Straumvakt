@@ -104,6 +104,8 @@ export class ServiceBindingOcppTarget implements DispatchTarget {
       remote_stop: "RemoteStopTransaction",
       reset: "Reset",
       unlock_connector: "UnlockConnector",
+      get_configuration: "GetConfiguration",
+      change_configuration: "ChangeConfiguration",
     },
   ) {}
 
