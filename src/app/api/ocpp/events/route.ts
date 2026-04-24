@@ -18,6 +18,8 @@ import { NextResponse } from "next/server";
 import { verifyIngest } from "@/lib/ocpp/ingest-auth";
 import { parseIngestEvent } from "@/lib/ocpp/event-envelope";
 import { ingestEvent } from "@/lib/repositories/events";
+// Side-effect import — registers projection handlers on first module load.
+import "@/lib/ocpp/bootstrap";
 
 export async function POST(req: Request) {
   const authFail = verifyIngest(req);

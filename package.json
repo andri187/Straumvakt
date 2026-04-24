@@ -34,7 +34,8 @@
     "prisma": "^7.7.0",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "tailwind-merge": "2.5.2"
+    "tailwind-merge": "2.5.2",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@opennextjs/cloudflare": "^1.19.1",
