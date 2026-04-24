@@ -1,0 +1,229 @@
+<svg viewBox="0 0 1800 960" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0a1628"/>
+      <stop offset="100%" stop-color="#06101e"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0f1f3a" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#0a1628" stop-opacity="0.2"/>
+    </linearGradient>
+    <linearGradient id="barDone" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#14b8a6" stop-opacity="0.45"/>
+      <stop offset="100%" stop-color="#2dd4bf" stop-opacity="0.75"/>
+    </linearGradient>
+    <linearGradient id="barNext" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#1e3a5f" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="#2563eb" stop-opacity="0.35"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1800" height="960" fill="url(#bg)"/>
+
+  <!-- ============================================================ -->
+  <!-- HEADER                                                        -->
+  <!-- ============================================================ -->
+  <text x="900" y="56" text-anchor="middle" font-size="11" font-weight="600" fill="#3b82f6" letter-spacing="6">STRAUMVAKT</text>
+  <text x="900" y="92" text-anchor="middle" font-size="28" font-weight="500" fill="#f8fafc" letter-spacing="-0.4">Sprint Timeline · Sprints 0 → 1</text>
+  <text x="900" y="118" text-anchor="middle" font-size="13" font-weight="300" fill="#64748b" letter-spacing="0.5">Foundation Schema complete · OCPP Foundation next · 2-week sprints, solo dev</text>
+
+  <line x1="60" y1="148" x2="1740" y2="148" stroke="#1e3a5f" stroke-width="1" opacity="0.4"/>
+
+  <!-- ============================================================ -->
+  <!-- LEGEND  (y 160..195)                                          -->
+  <!-- ============================================================ -->
+  <text x="60" y="178" font-size="10" font-weight="700" fill="#3b82f6" letter-spacing="2">LEGEND</text>
+
+  <!-- Done swatch -->
+  <rect x="150" y="168" width="42" height="14" rx="3" fill="url(#barDone)" stroke="#2dd4bf" stroke-width="0.8"/>
+  <text x="200" y="179" font-size="11" font-weight="400" fill="#cbd5e1">Done</text>
+
+  <!-- Next swatch -->
+  <rect x="260" y="168" width="42" height="14" rx="3" fill="url(#barNext)" stroke="#3b82f6" stroke-width="0.8" stroke-dasharray="3 2"/>
+  <text x="310" y="179" font-size="11" font-weight="400" fill="#cbd5e1">Next</text>
+
+  <!-- Superseded swatch -->
+  <line x1="370" y1="175" x2="412" y2="175" stroke="#475569" stroke-width="1.5" stroke-dasharray="2 2"/>
+  <text x="420" y="179" font-size="11" font-weight="400" fill="#94a3b8">Superseded (ADR)</text>
+
+  <!-- Today marker swatch -->
+  <line x1="560" y1="166" x2="560" y2="186" stroke="#3ee9a7" stroke-width="1.6"/>
+  <circle cx="560" cy="170" r="2.5" fill="#3ee9a7"/>
+  <text x="572" y="179" font-size="11" font-weight="400" fill="#cbd5e1">Today marker</text>
+
+  <!-- Milestone complete swatch -->
+  <circle cx="700" cy="175" r="4" fill="#2dd4bf" stroke="#14b8a6" stroke-width="1"/>
+  <text x="712" y="179" font-size="11" font-weight="400" fill="#cbd5e1">Milestone complete</text>
+
+  <!-- Date stamp right-aligned -->
+  <text x="1740" y="179" text-anchor="end" font-size="11" font-weight="300" fill="#64748b">as of 2026-04-24</text>
+
+  <!-- ============================================================ -->
+  <!-- TIME AXIS  (y 210..250)                                       -->
+  <!-- Label col: x 60..310  |  Gantt: x 330..1730  (20 days × 70px) -->
+  <!-- ============================================================ -->
+
+  <!-- Week labels -->
+  <text x="60" y="230" font-size="10" font-weight="700" fill="#3b82f6" letter-spacing="2">TIMELINE</text>
+  <text x="60" y="244" font-size="9" font-weight="300" fill="#475569">2-week sprints</text>
+
+  <!-- Sprint boundary panels (backgrounds under week labels) -->
+  <rect x="330" y="218" width="700" height="28" rx="4" fill="url(#panel)" stroke="#1e3a5f" stroke-width="0.8"/>
+  <rect x="1030" y="218" width="700" height="28" rx="4" fill="url(#panel)" stroke="#1e3a5f" stroke-width="0.8"/>
+
+  <text x="680" y="237" text-anchor="middle" font-size="11" font-weight="600" fill="#2dd4bf" letter-spacing="3">SPRINT 0 · FOUNDATION SCHEMA · WEEKS 1 → 2</text>
+  <text x="1380" y="237" text-anchor="middle" font-size="11" font-weight="600" fill="#3b82f6" letter-spacing="3">SPRINT 1 · OCPP FOUNDATION · WEEKS 3 → 4</text>
+
+  <!-- Day grid ticks (20 days) -->
+  <!-- S0 week 1 days 1-5 -->
+  <line x1="330" y1="256" x2="330" y2="900" stroke="#1e3a5f" stroke-width="0.6" opacity="0.5"/>
+  <line x1="400" y1="256" x2="400" y2="900" stroke="#1e3a5f" stroke-width="0.4" opacity="0.3"/>
+  <line x1="470" y1="256" x2="470" y2="900" stroke="#1e3a5f" stroke-width="0.4" opacity="0.3"/>
+  <line x1="540" y1="256" x2="540" y2="900" stroke="#1e3a5f" stroke-width="0.4" opacity="0.3"/>
+  <line x1="610" y1="256" x2="610" y2="900" stroke="#1e3a5f" stroke-width="0.4" opacity="0.3"/>
+  <!-- S0 week 2 days 6-10 -->
+  <line x1="680" y1="256" x2="680" y2="900" stroke="#1e3a5f" stroke-width="0.6" opacity="0.5"/>
+  <line x1="750" y1="256" x2="750" y2="900" stroke="#1e3a5f" stroke-width="0.4" opacity="0.3"/>
+  <line x1="820" y1="256" x2="820" y2="900" stroke="#1e3a5f" stroke-width="0.4" opacity="0.3"/>
+  <line x1="890" y1="256" x2="890" y2="900" stroke="#1e3a5f" stroke-width="0.4" opacity="0.3"/>
+  <line x1="960" y1="256" x2="960" y2="900" stroke="#1e3a5f" stroke-width="0.4" opacity="0.3"/>
+  <!-- Sprint boundary (end of Sprint 0 / start of Sprint 1) -->
+  <line x1="1030" y1="256" x2="1030" y2="900" stroke="#475569" stroke-width="0.8" opacity="0.6"/>
+  <!-- S1 week 3 days 11-15 -->
+  <line x1="1100" y1="256" x2="1100" y2="900" stroke="#1e3a5f" stroke-width="0.4" opacity="0.3"/>
+  <line x1="1170" y1="256" x2="1170" y2="900" stroke="#1e3a5f" stroke-width="0.4" opacity="0.3"/>
+  <line x1="1240" y1="256" x2="1240" y2="900" stroke="#1e3a5f" stroke-width="0.4" opacity="0.3"/>
+  <line x1="1310" y1="256" x2="1310" y2="900" stroke="#1e3a5f" stroke-width="0.4" opacity="0.3"/>
+  <line x1="1380" y1="256" x2="1380" y2="900" stroke="#1e3a5f" stroke-width="0.6" opacity="0.5"/>
+  <!-- S1 week 4 days 16-20 -->
+  <line x1="1450" y1="256" x2="1450" y2="900" stroke="#1e3a5f" stroke-width="0.4" opacity="0.3"/>
+  <line x1="1520" y1="256" x2="1520" y2="900" stroke="#1e3a5f" stroke-width="0.4" opacity="0.3"/>
+  <line x1="1590" y1="256" x2="1590" y2="900" stroke="#1e3a5f" stroke-width="0.4" opacity="0.3"/>
+  <line x1="1660" y1="256" x2="1660" y2="900" stroke="#1e3a5f" stroke-width="0.4" opacity="0.3"/>
+  <line x1="1730" y1="256" x2="1730" y2="900" stroke="#1e3a5f" stroke-width="0.6" opacity="0.5"/>
+
+  <!-- Day numbers -->
+  <g font-size="8" font-weight="300" fill="#475569" text-anchor="middle">
+    <text x="365" y="262">d1</text>
+    <text x="435" y="262">d2</text>
+    <text x="505" y="262">d3</text>
+    <text x="575" y="262">d4</text>
+    <text x="645" y="262">d5</text>
+    <text x="715" y="262">d6</text>
+    <text x="785" y="262">d7</text>
+    <text x="855" y="262">d8</text>
+    <text x="925" y="262">d9</text>
+    <text x="995" y="262">d10</text>
+    <text x="1065" y="262">d11</text>
+    <text x="1135" y="262">d12</text>
+    <text x="1205" y="262">d13</text>
+    <text x="1275" y="262">d14</text>
+    <text x="1345" y="262">d15</text>
+    <text x="1415" y="262">d16</text>
+    <text x="1485" y="262">d17</text>
+    <text x="1555" y="262">d18</text>
+    <text x="1625" y="262">d19</text>
+    <text x="1695" y="262">d20</text>
+  </g>
+
+  <!-- ============================================================ -->
+  <!-- SPRINT 0 MILESTONES  (y 280..540)                             -->
+  <!-- ============================================================ -->
+  <text x="60" y="290" font-size="10" font-weight="700" fill="#2dd4bf" letter-spacing="2">SPRINT 0</text>
+  <text x="60" y="303" font-size="9" font-weight="300" fill="#475569">foundation · all done</text>
+
+  <!-- Row: 0.1 Create 18 Postgres schemas -->
+  <text x="70" y="336" font-size="11" font-weight="500" fill="#f8fafc">0.1 Create 18 schemas</text>
+  <text x="70" y="350" font-size="9" font-weight="300" fill="#94a3b8">incl. new `hardware`</text>
+  <rect x="330" y="322" width="140" height="24" rx="4" fill="url(#barDone)" stroke="#2dd4bf" stroke-width="0.8"/>
+  <circle cx="465" cy="334" r="3.5" fill="#2dd4bf" stroke="#14b8a6" stroke-width="0.8"/>
+
+  <!-- Row: 0.2 Core tables per schema -->
+  <text x="70" y="376" font-size="11" font-weight="500" fill="#f8fafc">0.2 Core tables / enums</text>
+  <text x="70" y="390" font-size="9" font-weight="300" fill="#94a3b8">~45 models, ~30 enums, event log</text>
+  <rect x="400" y="362" width="280" height="24" rx="4" fill="url(#barDone)" stroke="#2dd4bf" stroke-width="0.8"/>
+  <circle cx="675" cy="374" r="3.5" fill="#2dd4bf" stroke="#14b8a6" stroke-width="0.8"/>
+
+  <!-- Row: 0.3 CPMS backfill (superseded) -->
+  <text x="70" y="416" font-size="11" font-weight="500" fill="#64748b" text-decoration="line-through">0.3 CPMS backfill</text>
+  <text x="70" y="430" font-size="9" font-weight="300" fill="#475569">superseded by ADR 0003</text>
+  <line x1="330" y1="414" x2="680" y2="414" stroke="#475569" stroke-width="1.2" stroke-dasharray="2 2" opacity="0.6"/>
+  <text x="505" y="410" text-anchor="middle" font-size="9" font-weight="400" fill="#64748b" letter-spacing="1">ADR 0003 — clean V3 rebuild, nothing to migrate</text>
+
+  <!-- Row: 0.4 Money as BIGINT -->
+  <text x="70" y="456" font-size="11" font-weight="500" fill="#f8fafc">0.4 Money as BIGINT</text>
+  <text x="70" y="470" font-size="9" font-weight="300" fill="#94a3b8">minor units across billing</text>
+  <rect x="470" y="442" width="140" height="24" rx="4" fill="url(#barDone)" stroke="#2dd4bf" stroke-width="0.8"/>
+  <circle cx="605" cy="454" r="3.5" fill="#2dd4bf" stroke="#14b8a6" stroke-width="0.8"/>
+
+  <!-- Row: 0.5 withOrgContext + test -->
+  <text x="70" y="496" font-size="11" font-weight="500" fill="#f8fafc">0.5 Tenant context + test</text>
+  <text x="70" y="510" font-size="9" font-weight="300" fill="#94a3b8">`withOrgContext` 5/5 green</text>
+  <rect x="540" y="482" width="140" height="24" rx="4" fill="url(#barDone)" stroke="#2dd4bf" stroke-width="0.8"/>
+  <circle cx="675" cy="494" r="3.5" fill="#2dd4bf" stroke="#14b8a6" stroke-width="0.8"/>
+
+  <!-- Row: 0.6 Hardware Catalog seed -->
+  <text x="70" y="536" font-size="11" font-weight="500" fill="#f8fafc">0.6 Catalog seed</text>
+  <text x="70" y="550" font-size="9" font-weight="300" fill="#94a3b8">Zaptec + Zaptec Pro (profile TBD)</text>
+  <rect x="680" y="522" width="70" height="24" rx="4" fill="url(#barDone)" stroke="#2dd4bf" stroke-width="0.8"/>
+  <circle cx="745" cy="534" r="3.5" fill="#2dd4bf" stroke="#14b8a6" stroke-width="0.8"/>
+
+  <!-- Row: ADR 0002 (late-sprint addition) -->
+  <text x="70" y="576" font-size="11" font-weight="500" fill="#f8fafc">+ Hardware catalog schema</text>
+  <text x="70" y="590" font-size="9" font-weight="300" fill="#94a3b8">ADR 0002 — Installation + credential scope</text>
+  <rect x="750" y="562" width="140" height="24" rx="4" fill="url(#barDone)" stroke="#2dd4bf" stroke-width="0.8"/>
+  <circle cx="885" cy="574" r="3.5" fill="#2dd4bf" stroke="#14b8a6" stroke-width="0.8"/>
+
+  <!-- Row: Sprint 0 closeout -->
+  <text x="70" y="616" font-size="11" font-weight="500" fill="#f8fafc">+ Migration + seed applied</text>
+  <text x="70" y="630" font-size="9" font-weight="300" fill="#94a3b8">tsc · build · vitest · login footer</text>
+  <rect x="820" y="602" width="210" height="24" rx="4" fill="url(#barDone)" stroke="#2dd4bf" stroke-width="0.8"/>
+  <circle cx="1025" cy="614" r="3.5" fill="#2dd4bf" stroke="#14b8a6" stroke-width="0.8"/>
+
+  <!-- ============================================================ -->
+  <!-- SPRINT 1 MILESTONES  (y 650..790)                             -->
+  <!-- ============================================================ -->
+  <text x="60" y="666" font-size="10" font-weight="700" fill="#3b82f6" letter-spacing="2">SPRINT 1</text>
+  <text x="60" y="679" font-size="9" font-weight="300" fill="#475569">OCPP foundation · next</text>
+
+  <!-- Row: 1.1 Event-log-first OCPP webhook -->
+  <text x="70" y="708" font-size="11" font-weight="500" fill="#f8fafc">1.1 Event-log-first webhook</text>
+  <text x="70" y="722" font-size="9" font-weight="300" fill="#94a3b8">idempotent; one row per replay</text>
+  <rect x="1030" y="694" width="210" height="24" rx="4" fill="url(#barNext)" stroke="#3b82f6" stroke-width="0.8" stroke-dasharray="3 2"/>
+
+  <!-- Row: 1.2 Domain event translator (1.6J) -->
+  <text x="70" y="748" font-size="11" font-weight="500" fill="#f8fafc">1.2 Domain event translator</text>
+  <text x="70" y="762" font-size="9" font-weight="300" fill="#94a3b8">OCPP 1.6J → named domain events</text>
+  <rect x="1170" y="734" width="210" height="24" rx="4" fill="url(#barNext)" stroke="#3b82f6" stroke-width="0.8" stroke-dasharray="3 2"/>
+
+  <!-- Row: 1.3 Outbox dispatcher -->
+  <text x="70" y="788" font-size="11" font-weight="500" fill="#f8fafc">1.3 Outbox dispatcher</text>
+  <text x="70" y="802" font-size="9" font-weight="300" fill="#94a3b8">Cron trigger · remote start reliable</text>
+  <rect x="1380" y="774" width="210" height="24" rx="4" fill="url(#barNext)" stroke="#3b82f6" stroke-width="0.8" stroke-dasharray="3 2"/>
+
+  <!-- Row: 1.4 DO key change -->
+  <text x="70" y="828" font-size="11" font-weight="500" fill="#f8fafc">1.4 DO key = identity UUID</text>
+  <text x="70" y="842" font-size="9" font-weight="300" fill="#94a3b8">one DO per OCPPIdentity</text>
+  <rect x="1450" y="814" width="140" height="22" rx="4" fill="url(#barNext)" stroke="#3b82f6" stroke-width="0.8" stroke-dasharray="3 2"/>
+
+  <!-- Row: 1.5 E2E simulator test -->
+  <text x="70" y="866" font-size="11" font-weight="500" fill="#f8fafc">1.5 E2E simulator test</text>
+  <text x="70" y="878" font-size="9" font-weight="300" fill="#94a3b8">full session, assertions</text>
+  <rect x="1590" y="852" width="140" height="22" rx="4" fill="url(#barNext)" stroke="#3b82f6" stroke-width="0.8" stroke-dasharray="3 2"/>
+
+  <!-- ============================================================ -->
+  <!-- TODAY marker (at Sprint 0 / 1 boundary)                       -->
+  <!-- ============================================================ -->
+  <line x1="1030" y1="270" x2="1030" y2="900" stroke="#3ee9a7" stroke-width="1.6" opacity="0.9"/>
+  <circle cx="1030" cy="270" r="4" fill="#3ee9a7" stroke="#0a1628" stroke-width="1.5"/>
+  <rect x="988" y="274" width="84" height="16" rx="3" fill="#0a1628" stroke="#3ee9a7" stroke-width="0.8"/>
+  <text x="1030" y="285" text-anchor="middle" font-size="9" font-weight="600" fill="#3ee9a7" letter-spacing="2">TODAY</text>
+
+  <!-- Bottom note -->
+  <line x1="60" y1="910" x2="1740" y2="910" stroke="#1e3a5f" stroke-width="1" opacity="0.4"/>
+  <text x="60" y="934" font-size="10" font-weight="600" fill="#3b82f6" letter-spacing="2">GATING</text>
+  <text x="140" y="934" font-size="11" font-weight="300" fill="#94a3b8">Sprint 0 exit met · concrete dried · Sprint 1 may begin once git `staging`/`master` remotes are provisioned and operator confirms deploy cadence.</text>
+  <text x="60" y="952" font-size="10" font-weight="600" fill="#64748b" letter-spacing="2">SOURCE</text>
+  <text x="140" y="952" font-size="11" font-weight="300" fill="#64748b">STRAUMVAKT_V3_DELIVERY_PLAN.md §3 (Sprint 0), §4 (Sprint 1) · ADR 0002 (hardware) · ADR 0003 (no-backfill)</text>
+</svg>

@@ -16,6 +16,7 @@
 | [`STRAUMVAKT_ARCHITECTURE_V3.md`](./STRAUMVAKT_ARCHITECTURE_V3.md) | The architecture canon. Principles, seven-layer asset hierarchy, three integration tracks, commercial model, data retention, runtime, schemas, non-goals. | Any time you're making an architectural decision or adding a new module |
 | [`STRAUMVAKT_V3_DELIVERY_PLAN.md`](./STRAUMVAKT_V3_DELIVERY_PLAN.md) | The execution canon. Scope, success criteria, 10 sprints × 3–5 milestones, open questions, risks, working conventions. | Start of every sprint, end of every sprint (retrospective check-in) |
 | [`straumvakt_architecture_v3.svg`](./straumvakt_architecture_v3.svg) | The visual map. Six horizontal lanes (Clients → Edge → Integration → Event Bus → Domain → Data) plus business hierarchy, commercial model, and principles insets. | Any time you need the big picture in one frame |
+| [`straumvakt_sprint_timeline.svg`](./straumvakt_sprint_timeline.svg) | Gantt-style timeline of the first two sprints. Done vs. next, milestone bars, "today" marker at the Sprint 0 / Sprint 1 boundary. Updated at each sprint transition. | Sprint kickoff / stakeholder update |
 
 **Reading order for a first pass:** architecture → diagram → delivery plan.
 
@@ -82,6 +83,7 @@ sprint at every sprint kickoff.
 
 | Date | Change | By |
 |---|---|---|
+| 2026-04-24 | Sprint timeline diagram added (`straumvakt_sprint_timeline.svg`) — Gantt of Sprints 0–1 with "today" marker at the boundary. | Thor (with Claude) |
 | 2026-04-24 | Sprint 0 closed. ADR 0003 supersedes milestone 0.3 (no CPMS backfill — clean rebuild). Catalog seed (Zaptec + Zaptec Pro, empty profile) landed. tsc / build / vitest green. Retro in `docs/retros/sprint-00.md`. | Thor (with Claude) |
 | 2026-04-24 | Hardware catalog + Installations added (ADR 0002). Architecture §3/§4/§5/§10 updated; delivery-plan Sprint 0 gains milestone 0.6 (catalog seed) and `hardware` schema; Sprint 5 gains Hardware nav group. SVG diagram update pending. | Thor (with Claude) |
 | 2026-04-24 | Initial V3 drop — architecture, delivery plan, diagram | Thor (with Claude) |
