@@ -19,7 +19,8 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
-    "db:validate": "prisma validate"
+    "db:validate": "prisma validate",
+    "sync:detour-assets": "node scripts/sync-detour-assets.mjs"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

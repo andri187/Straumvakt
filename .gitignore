@@ -50,3 +50,12 @@ logs/
 # Test artefacts
 /playwright-report/
 /test-results/
+
+# UI detour external assets — refresh via `npm run sync:detour-assets`.
+# Source of truth lives elsewhere:
+#   public/mobile-app-mock/  ← E:\Claude\CPMS\mobile-app\mock1\build\web
+#   public/reference/        ← docs/reference/
+#   public/zaptec/           ← E:\Claude\zaptec-test (openapi.json + zaptec-constants.json only — NO .env)
+public/mobile-app-mock/
+public/reference/
+public/zaptec/

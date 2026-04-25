@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard } from "lucide-react";
+import { LayoutDashboard, Smartphone, BookOpen, Zap } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { useLanguage } from "@/components/language-provider";
@@ -15,11 +15,28 @@ type NavItem = {
 };
 
 // Minimal Sprint 0 nav — Dashboard only. Expanded in Sprint 5 per V3 plan.
+// Mobile App / Reference / Zaptec API are operator-side detour panels
+// added during the Sprint 1.5 UI detour for previewing external assets.
 const nav: NavItem[] = [
   {
     href: "/dashboard",
     label: { is: "Mælaborð", en: "Dashboard" },
     icon: LayoutDashboard,
+  },
+  {
+    href: "/mobile-app",
+    label: { is: "Snjalltæki", en: "Mobile App" },
+    icon: Smartphone,
+  },
+  {
+    href: "/reference",
+    label: { is: "Tilvísanir", en: "Reference" },
+    icon: BookOpen,
+  },
+  {
+    href: "/zaptec",
+    label: { is: "Zaptec API", en: "Zaptec API" },
+    icon: Zap,
   },
 ];
 
