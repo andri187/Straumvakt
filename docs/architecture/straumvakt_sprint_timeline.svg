@@ -184,46 +184,46 @@
   <!-- ============================================================ -->
   <!-- SPRINT 1 MILESTONES  (y 650..790)                             -->
   <!-- ============================================================ -->
-  <text x="60" y="666" font-size="10" font-weight="700" fill="#3b82f6" letter-spacing="2">SPRINT 1</text>
-  <text x="60" y="679" font-size="9" font-weight="300" fill="#475569">OCPP foundation · next</text>
+  <text x="60" y="666" font-size="10" font-weight="700" fill="#2dd4bf" letter-spacing="2">SPRINT 1</text>
+  <text x="60" y="679" font-size="9" font-weight="300" fill="#94a3b8">OCPP foundation · 4/5 milestones done</text>
 
-  <!-- Row: 1.1 Event-log-first OCPP webhook -->
-  <text x="70" y="708" font-size="11" font-weight="500" fill="#f8fafc">1.1 Event-log-first webhook</text>
+  <!-- Row: 1.1 Event-log-first OCPP webhook (done) -->
+  <text x="70" y="708" font-size="11" font-weight="500" fill="#f8fafc">1.1 ✓ Event-log-first webhook</text>
   <text x="70" y="722" font-size="9" font-weight="300" fill="#94a3b8">idempotent; one row per replay</text>
-  <rect x="1030" y="694" width="210" height="24" rx="4" fill="url(#barNext)" stroke="#3b82f6" stroke-width="0.8" stroke-dasharray="3 2"/>
+  <rect x="1030" y="694" width="210" height="24" rx="4" fill="url(#barDone)" stroke="#2dd4bf" stroke-width="0.8"/>
 
-  <!-- Row: 1.2 Domain event translator (1.6J) -->
-  <text x="70" y="748" font-size="11" font-weight="500" fill="#f8fafc">1.2 Domain event translator</text>
+  <!-- Row: 1.2 Domain event translator (1.6J) (done) -->
+  <text x="70" y="748" font-size="11" font-weight="500" fill="#f8fafc">1.2 ✓ Domain event translator</text>
   <text x="70" y="762" font-size="9" font-weight="300" fill="#94a3b8">OCPP 1.6J → named domain events</text>
-  <rect x="1170" y="734" width="210" height="24" rx="4" fill="url(#barNext)" stroke="#3b82f6" stroke-width="0.8" stroke-dasharray="3 2"/>
+  <rect x="1170" y="734" width="210" height="24" rx="4" fill="url(#barDone)" stroke="#2dd4bf" stroke-width="0.8"/>
 
-  <!-- Row: 1.3 Outbox dispatcher -->
-  <text x="70" y="788" font-size="11" font-weight="500" fill="#f8fafc">1.3 Outbox dispatcher</text>
+  <!-- Row: 1.3 Outbox dispatcher (done) -->
+  <text x="70" y="788" font-size="11" font-weight="500" fill="#f8fafc">1.3 ✓ Outbox dispatcher</text>
   <text x="70" y="802" font-size="9" font-weight="300" fill="#94a3b8">Cron trigger · remote start reliable</text>
-  <rect x="1380" y="774" width="210" height="24" rx="4" fill="url(#barNext)" stroke="#3b82f6" stroke-width="0.8" stroke-dasharray="3 2"/>
+  <rect x="1380" y="774" width="210" height="24" rx="4" fill="url(#barDone)" stroke="#2dd4bf" stroke-width="0.8"/>
 
-  <!-- Row: 1.4 DO key change -->
-  <text x="70" y="828" font-size="11" font-weight="500" fill="#f8fafc">1.4 DO key = identity UUID</text>
+  <!-- Row: 1.4 DO key change (done) -->
+  <text x="70" y="828" font-size="11" font-weight="500" fill="#f8fafc">1.4 ✓ DO key = identity UUID</text>
   <text x="70" y="842" font-size="9" font-weight="300" fill="#94a3b8">one DO per OCPPIdentity</text>
-  <rect x="1450" y="814" width="140" height="22" rx="4" fill="url(#barNext)" stroke="#3b82f6" stroke-width="0.8" stroke-dasharray="3 2"/>
+  <rect x="1450" y="814" width="140" height="22" rx="4" fill="url(#barDone)" stroke="#2dd4bf" stroke-width="0.8"/>
 
-  <!-- Row: 1.5 E2E simulator test -->
+  <!-- Row: 1.5 E2E simulator test (next) -->
   <text x="70" y="866" font-size="11" font-weight="500" fill="#f8fafc">1.5 E2E simulator test</text>
   <text x="70" y="878" font-size="9" font-weight="300" fill="#94a3b8">full session, assertions</text>
   <rect x="1590" y="852" width="140" height="22" rx="4" fill="url(#barNext)" stroke="#3b82f6" stroke-width="0.8" stroke-dasharray="3 2"/>
 
   <!-- ============================================================ -->
-  <!-- TODAY marker (at Sprint 0 / 1 boundary)                       -->
+  <!-- TODAY marker (at 1.4 / 1.5 boundary — after four Sprint 1 done) -->
   <!-- ============================================================ -->
-  <line x1="1030" y1="270" x2="1030" y2="900" stroke="#3ee9a7" stroke-width="1.6" opacity="0.9"/>
-  <circle cx="1030" cy="270" r="4" fill="#3ee9a7" stroke="#0a1628" stroke-width="1.5"/>
-  <rect x="988" y="274" width="84" height="16" rx="3" fill="#0a1628" stroke="#3ee9a7" stroke-width="0.8"/>
-  <text x="1030" y="285" text-anchor="middle" font-size="9" font-weight="600" fill="#3ee9a7" letter-spacing="2">TODAY</text>
+  <line x1="1590" y1="270" x2="1590" y2="900" stroke="#3ee9a7" stroke-width="1.6" opacity="0.9"/>
+  <circle cx="1590" cy="270" r="4" fill="#3ee9a7" stroke="#0a1628" stroke-width="1.5"/>
+  <rect x="1548" y="274" width="84" height="16" rx="3" fill="#0a1628" stroke="#3ee9a7" stroke-width="0.8"/>
+  <text x="1590" y="285" text-anchor="middle" font-size="9" font-weight="600" fill="#3ee9a7" letter-spacing="2">TODAY</text>
 
   <!-- Bottom note -->
   <line x1="60" y1="910" x2="1740" y2="910" stroke="#1e3a5f" stroke-width="1" opacity="0.4"/>
-  <text x="60" y="934" font-size="10" font-weight="600" fill="#3b82f6" letter-spacing="2">GATING</text>
-  <text x="140" y="934" font-size="11" font-weight="300" fill="#94a3b8">Sprint 0 exit met · concrete dried · Sprint 1 may begin once git `staging`/`master` remotes are provisioned and operator confirms deploy cadence.</text>
+  <text x="60" y="934" font-size="10" font-weight="600" fill="#2dd4bf" letter-spacing="2">GATING</text>
+  <text x="140" y="934" font-size="11" font-weight="300" fill="#94a3b8">Sprint 0 closed · Sprint 1 in flight · 1.1–1.4 complete (gateway Worker live with DO per OCPPIdentity, Basic-Auth, Service-Binding ingest) · 1.5 end-to-end simulator test next.</text>
   <text x="60" y="952" font-size="10" font-weight="600" fill="#64748b" letter-spacing="2">SOURCE</text>
   <text x="140" y="952" font-size="11" font-weight="300" fill="#64748b">STRAUMVAKT_V3_DELIVERY_PLAN.md §3 (Sprint 0), §4 (Sprint 1) · ADR 0002 (hardware) · ADR 0003 (no-backfill)</text>
 </svg>

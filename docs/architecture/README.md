@@ -9,16 +9,18 @@
 
 ---
 
-## The three canonical documents
+## The canonical documents
 
 | Document | What it is | When you read it |
 |---|---|---|
 | [`STRAUMVAKT_ARCHITECTURE_V3.md`](./STRAUMVAKT_ARCHITECTURE_V3.md) | The architecture canon. Principles, seven-layer asset hierarchy, three integration tracks, commercial model, data retention, runtime, schemas, non-goals. | Any time you're making an architectural decision or adding a new module |
 | [`STRAUMVAKT_V3_DELIVERY_PLAN.md`](./STRAUMVAKT_V3_DELIVERY_PLAN.md) | The execution canon. Scope, success criteria, 10 sprints × 3–5 milestones, open questions, risks, working conventions. | Start of every sprint, end of every sprint (retrospective check-in) |
 | [`straumvakt_architecture_v3.svg`](./straumvakt_architecture_v3.svg) | The visual map. Six horizontal lanes (Clients → Edge → Integration → Event Bus → Domain → Data) plus business hierarchy, commercial model, and principles insets. | Any time you need the big picture in one frame |
+| [`data_flow_charger_to_ui.svg`](./data_flow_charger_to_ui.svg) | End-to-end data flow — one message followed from charger hardware to storage to UI. Labels each hop with service, language, and protocol. Inbound telemetry, read flow, and outbound command flow all in one frame. | Onboarding a new engineer, explaining the system to non-technical stakeholders, debugging "where did that event go?" |
+| [`entity_relationships.svg`](./entity_relationships.svg) | How CPO, Driver, Site, and Connector relate. Two columns — people side (Driver → Family Group → CustomerPlan) and hardware side (Charger Host → Property → Site → Charger → OCPP Identity → Connector) — converging on the Charge Session as the binding row. | "How does a driver end up connected to a connector?" questions; data-model onboarding; explaining the 7-layer hierarchy without writing SQL |
 | [`straumvakt_sprint_timeline.svg`](./straumvakt_sprint_timeline.svg) | Gantt-style timeline of the first two sprints. Done vs. next, milestone bars, "today" marker at the Sprint 0 / Sprint 1 boundary. Updated at each sprint transition. | Sprint kickoff / stakeholder update |
 
-**Reading order for a first pass:** architecture → diagram → delivery plan.
+**Reading order for a first pass:** architecture → architecture diagram → delivery plan → data flow diagram (for the "how does it actually move" mental model).
 
 ---
 
@@ -83,6 +85,9 @@ sprint at every sprint kickoff.
 
 | Date | Change | By |
 |---|---|---|
+| 2026-04-24 | Sprint 1 milestones 1.1–1.4 landed. `gateway/` Worker live: per-OCPPIdentity Durable Objects, Basic-Auth per identity, OCPP 1.6J envelope parser, signed ingest client via Cloudflare Service Binding. Delivery plan §4 and sprint timeline updated. 1.5 (E2E simulator test) is the remaining Sprint 1 milestone. | Thor (with Claude + VSCode Claude) |
+| 2026-04-24 | Entity relationships diagram added (`entity_relationships.svg`) — CPO / Driver / Site / Connector and how the Charge Session binds them. People side and hardware side converging on one row. | Thor (with Claude) |
+| 2026-04-24 | Data flow diagram added (`data_flow_charger_to_ui.svg`) — inbound telemetry, read, and outbound command flows in one frame, each hop labelled with service, language, and protocol. | Thor (with Claude) |
 | 2026-04-24 | Sprint timeline diagram added (`straumvakt_sprint_timeline.svg`) — Gantt of Sprints 0–1 with "today" marker at the boundary. | Thor (with Claude) |
 | 2026-04-24 | Sprint 0 closed. ADR 0003 supersedes milestone 0.3 (no CPMS backfill — clean rebuild). Catalog seed (Zaptec + Zaptec Pro, empty profile) landed. tsc / build / vitest green. Retro in `docs/retros/sprint-00.md`. | Thor (with Claude) |
 | 2026-04-24 | Hardware catalog + Installations added (ADR 0002). Architecture §3/§4/§5/§10 updated; delivery-plan Sprint 0 gains milestone 0.6 (catalog seed) and `hardware` schema; Sprint 5 gains Hardware nav group. SVG diagram update pending. | Thor (with Claude) |

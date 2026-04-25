@@ -1,0 +1,1329 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Iceland energy parties · Straumvakt</title>
+<style>
+  :root {
+    --sv-bg: #070b16;
+    --sv-surface: #0b1220;
+    --sv-raised: #111a2e;
+    --sv-border: #1e2a44;
+    --sv-green: #3ee9a7;
+    --sv-blue: #2bb6e8;
+    --sv-sky: #6fb8f0;
+    --sv-text: #f5f7fa;
+    --sv-muted: #97a3b8;
+    color-scheme: dark;
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background-color: var(--sv-bg);
+    color: var(--sv-text);
+    font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.45;
+    background-image:
+      radial-gradient(1200px 600px at 80% -10%, rgba(43, 182, 232, 0.10), transparent 60%),
+      radial-gradient(900px 500px at -10% 10%, rgba(62, 233, 167, 0.08), transparent 60%);
+    background-attachment: fixed;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: rgba(75,86,109,0.7); border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(111,184,240,0.7); }
+
+  a { color: var(--sv-sky); text-decoration: none; }
+  a:hover { color: var(--sv-blue); }
+  button { font: inherit; }
+
+  .wordmark {
+    background-image: linear-gradient(135deg, #3ee9a7 0%, #2bd3c9 55%, #2bb6e8 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    letter-spacing: -0.01em;
+  }
+  .eyebrow {
+    color: var(--sv-sky); text-transform: uppercase;
+    letter-spacing: 0.22em; font-size: 0.68rem; font-weight: 600;
+  }
+
+  /* Topbar */
+  .topbar {
+    position: sticky; top: 0; z-index: 50; height: 56px;
+    border-bottom: 1px solid var(--sv-border);
+    background: rgba(7,11,22,0.85); backdrop-filter: blur(12px);
+    display: flex; align-items: center; padding: 0 24px; gap: 24px;
+  }
+  .topbar .brand { font-size: 1.05rem; font-weight: 700; }
+  .topbar .crumbs { color: var(--sv-muted); font-size: 0.9rem; }
+  .topbar .crumbs span { color: var(--sv-text); }
+  .topbar .spacer { flex: 1; }
+  .topbar .user { color: var(--sv-muted); font-size: 0.85rem; }
+
+  .container { max-width: 1320px; margin: 0 auto; padding: 28px 28px 64px; }
+
+  /* Hero */
+  .hero h1 { font-size: 1.8rem; font-weight: 600; margin: 6px 0 6px; }
+  .hero .lede { color: var(--sv-muted); max-width: 760px; margin: 0; }
+
+  /* Card surface */
+  .card {
+    border: 1px solid var(--sv-border);
+    background-color: rgba(11,18,32,0.7);
+    backdrop-filter: blur(8px);
+    border-radius: 12px;
+    box-shadow: 0 8px 32px -12px rgba(0,0,0,0.5);
+    transition: border-color 0.18s ease, transform 0.18s ease;
+  }
+
+  /* Stats */
+  .stats {
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-top: 22px;
+  }
+  .stat { padding: 18px 20px; }
+  .stat .num { font-size: 2rem; font-weight: 700; line-height: 1; }
+  .stat .label {
+    margin-top: 8px; color: var(--sv-sky);
+    text-transform: uppercase; letter-spacing: 0.14em;
+    font-size: 0.68rem; font-weight: 600;
+  }
+
+  /* Filter bar */
+  .filter-bar { margin-top: 22px; padding: 16px 20px 14px; }
+  .filter-row {
+    display: flex; flex-wrap: wrap; align-items: center;
+    gap: 12px; padding: 4px 0;
+  }
+  .filter-row + .filter-row { border-top: 1px dashed rgba(30,42,68,0.6); margin-top: 8px; padding-top: 12px; }
+  .filter-row .label {
+    color: var(--sv-muted); font-size: 0.74rem;
+    text-transform: uppercase; letter-spacing: 0.12em; font-weight: 600;
+    min-width: 88px;
+  }
+  .filter-row .grow { flex: 1; }
+  .filter-row .right { margin-left: auto; display: flex; gap: 10px; align-items: center; }
+
+  /* EV-only switch — prominent toggle */
+  .ev-switch {
+    display: inline-flex; align-items: center; gap: 12px;
+    padding: 8px 14px;
+    border: 1px solid var(--sv-border);
+    border-radius: 999px;
+    background: var(--sv-raised);
+    cursor: pointer; user-select: none;
+    transition: all 0.18s ease;
+  }
+  .ev-switch:hover { border-color: rgba(62,233,167,0.4); }
+  .ev-switch .track {
+    position: relative; width: 38px; height: 20px;
+    background: var(--sv-border); border-radius: 999px;
+    transition: background 0.18s ease;
+  }
+  .ev-switch .track::after {
+    content: ''; position: absolute; top: 2px; left: 2px;
+    width: 16px; height: 16px; border-radius: 50%;
+    background: var(--sv-text);
+    transition: transform 0.18s ease;
+  }
+  .ev-switch[aria-pressed="true"] {
+    border-color: rgba(62,233,167,0.5);
+    background: rgba(62,233,167,0.08);
+  }
+  .ev-switch[aria-pressed="true"] .track {
+    background: linear-gradient(135deg, #3ee9a7, #2bb6e8);
+  }
+  .ev-switch[aria-pressed="true"] .track::after { transform: translateX(18px); }
+  .ev-switch .text { font-size: 0.85rem; font-weight: 600; }
+  .ev-switch[aria-pressed="true"] .text { color: var(--sv-green); }
+  .ev-switch .hint { color: var(--sv-muted); font-size: 0.74rem; font-weight: 400; }
+
+  /* Search */
+  .search-box {
+    position: relative; flex: 0 0 280px;
+  }
+  .search-box svg {
+    position: absolute; left: 11px; top: 50%; transform: translateY(-50%);
+    color: var(--sv-muted); pointer-events: none;
+  }
+  .search-box input {
+    width: 100%; background: var(--sv-raised);
+    border: 1px solid var(--sv-border); color: var(--sv-text);
+    padding: 8px 12px 8px 34px; border-radius: 8px;
+    font-size: 0.88rem;
+  }
+  .search-box input:focus { outline: 2px solid var(--sv-blue); outline-offset: 1px; }
+  .search-box .clear {
+    position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+    background: transparent; border: none; color: var(--sv-muted);
+    cursor: pointer; padding: 4px 6px; font-size: 1rem; display: none;
+  }
+  .search-box.has-value .clear { display: block; }
+  .search-box .clear:hover { color: var(--sv-text); }
+
+  /* Action buttons */
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 7px 12px; border-radius: 8px;
+    background: var(--sv-raised); border: 1px solid var(--sv-border);
+    color: var(--sv-text); font-size: 0.82rem; cursor: pointer;
+    transition: all 0.14s ease;
+  }
+  .btn:hover { border-color: var(--sv-blue); color: var(--sv-blue); }
+  .btn.ghost { background: transparent; }
+
+  /* Pills (granular cat) */
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 11px; border-radius: 999px;
+    font-size: 0.78rem; font-weight: 600;
+    border: 1px solid var(--sv-border); background: var(--sv-raised);
+    color: var(--sv-muted); cursor: pointer; user-select: none;
+    transition: all 0.12s ease;
+  }
+  .pill:hover { color: var(--sv-text); }
+  .pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--sv-muted); }
+  .pill[disabled] { opacity: 0.4; cursor: not-allowed; }
+  .pill[data-cat="public_ev"][aria-pressed="true"] { color: var(--sv-blue); border-color: rgba(43,182,232,0.4); background: rgba(43,182,232,0.08); }
+  .pill[data-cat="public_ev"][aria-pressed="true"] .dot { background: var(--sv-blue); }
+  .pill[data-cat="workplace_ev"][aria-pressed="true"] { color: var(--sv-sky); border-color: rgba(111,184,240,0.4); background: rgba(111,184,240,0.08); }
+  .pill[data-cat="workplace_ev"][aria-pressed="true"] .dot { background: var(--sv-sky); }
+  .pill[data-cat="home_ev"][aria-pressed="true"] { color: var(--sv-green); border-color: rgba(62,233,167,0.4); background: rgba(62,233,167,0.08); }
+  .pill[data-cat="home_ev"][aria-pressed="true"] .dot { background: var(--sv-green); }
+  .pill[data-cat="general_supply"][aria-pressed="true"] { color: var(--sv-text); border-color: var(--sv-muted); }
+  .pill[data-cat="general_supply"][aria-pressed="true"] .dot { background: var(--sv-text); }
+  .pill[data-cat="not_ev"][aria-pressed="true"] { color: #c8b6f0; border-color: rgba(200,182,240,0.3); background: rgba(200,182,240,0.06); }
+  .pill[data-cat="not_ev"][aria-pressed="true"] .dot { background: #c8b6f0; }
+
+  .advanced-row { display: none; }
+  .advanced-row.open { display: flex; }
+  .toggle-advanced {
+    color: var(--sv-muted); background: transparent;
+    border: none; cursor: pointer; font-size: 0.78rem;
+    padding: 4px 0; display: inline-flex; align-items: center; gap: 4px;
+  }
+  .toggle-advanced:hover { color: var(--sv-text); }
+  .toggle-advanced .caret { transition: transform 0.16s ease; }
+  .toggle-advanced.open .caret { transform: rotate(180deg); }
+
+  /* Role chips (interactive filter) */
+  .role-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 11px; border-radius: 7px;
+    font-size: 0.78rem; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    border: 1px solid var(--sv-border); background: var(--sv-raised);
+    color: var(--sv-muted); cursor: pointer; user-select: none;
+    transition: all 0.14s ease;
+  }
+  .role-chip:hover { color: var(--sv-text); border-color: var(--sv-muted); }
+  .role-chip .badge {
+    font-size: 0.66rem; padding: 1px 6px; border-radius: 999px;
+    background: rgba(255,255,255,0.06); color: var(--sv-muted);
+  }
+  .role-chip[aria-pressed="true"] {
+    background: rgba(255,255,255,0.04);
+  }
+  .role-chip[data-role="retailer"][aria-pressed="true"] { color: var(--sv-green); border-color: rgba(62,233,167,0.5); background: rgba(62,233,167,0.08); }
+  .role-chip[data-role="dso"][aria-pressed="true"]      { color: var(--sv-blue);  border-color: rgba(43,182,232,0.5); background: rgba(43,182,232,0.08); }
+  .role-chip[data-role="tso"][aria-pressed="true"]      { color: var(--sv-sky);   border-color: rgba(111,184,240,0.5); background: rgba(111,184,240,0.08); }
+  .role-chip[data-role="producer"][aria-pressed="true"],
+  .role-chip[data-role="public-charging"][aria-pressed="true"],
+  .role-chip[data-role="aggregator"][aria-pressed="true"] { color: var(--sv-text); border-color: var(--sv-muted); }
+  .role-chip[data-role="home-charging"][aria-pressed="true"] { color: #f5b955; border-color: rgba(245,185,85,0.5); background: rgba(245,185,85,0.08); }
+
+  /* Summary bar */
+  .summary {
+    margin-top: 12px;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+    padding: 10px 16px;
+    border: 1px solid var(--sv-border);
+    border-radius: 10px;
+    background: rgba(11,18,32,0.5);
+    font-size: 0.82rem;
+    color: var(--sv-muted);
+  }
+  .summary .stats-text { color: var(--sv-text); }
+  .summary .stats-text b { color: var(--sv-green); font-weight: 700; }
+  .summary .active-filter {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 8px; border-radius: 6px;
+    background: var(--sv-raised); border: 1px solid var(--sv-border);
+    font-size: 0.74rem; color: var(--sv-text);
+  }
+  .summary .active-filter button {
+    background: transparent; border: none; color: var(--sv-muted);
+    cursor: pointer; padding: 0 0 0 4px; font-size: 0.9rem; line-height: 1;
+  }
+  .summary .active-filter button:hover { color: var(--sv-text); }
+  .summary .clear-all {
+    margin-left: auto;
+    background: transparent; border: 1px solid var(--sv-border);
+    color: var(--sv-muted); padding: 4px 10px; border-radius: 6px;
+    cursor: pointer; font-size: 0.75rem;
+  }
+  .summary .clear-all:hover { color: var(--sv-text); border-color: var(--sv-blue); }
+  .summary .clear-all:disabled { opacity: 0.4; cursor: default; }
+  .summary .clear-all:disabled:hover { color: var(--sv-muted); border-color: var(--sv-border); }
+
+  /* Empty state */
+  .empty-state {
+    margin-top: 24px; padding: 40px 24px;
+    text-align: center;
+    color: var(--sv-muted); font-size: 0.92rem;
+  }
+  .empty-state h3 { color: var(--sv-text); margin: 0 0 6px; font-size: 1.05rem; font-weight: 600; }
+  .empty-state .icon { font-size: 2rem; opacity: 0.5; margin-bottom: 12px; }
+
+  /* Status pill on card */
+  .status-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 3px 10px; border-radius: 999px;
+    font-size: 0.7rem; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  .status-pill.active { color: var(--sv-green); background: rgba(62,233,167,0.08); border: 1px solid rgba(62,233,167,0.25); }
+  .status-pill.exited { color: var(--sv-muted); background: rgba(151,163,184,0.08); border: 1px solid var(--sv-border); }
+
+  /* Party card with rail */
+  .party {
+    margin-top: 14px; position: relative; overflow: hidden;
+  }
+  .party:hover { border-color: rgba(111,184,240,0.35); }
+  .party.exited { opacity: 0.6; }
+  .party .rail {
+    position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+    border-radius: 0 2px 2px 0;
+  }
+  .party.retailer .rail { background: var(--sv-green); }
+  .party.dso .rail { background: var(--sv-blue); }
+  .party.tso .rail { background: var(--sv-sky); }
+  .party.cpo .rail { background: linear-gradient(180deg, #f5b955 0%, #f08580 100%); }
+  .party.multi .rail { background: linear-gradient(180deg, #3ee9a7 0%, #2bd3c9 50%, #2bb6e8 100%); }
+  .party.exited .rail { background: var(--sv-border); }
+
+  .party-head {
+    display: flex; align-items: center; padding: 16px 22px 16px 26px;
+    gap: 16px; cursor: pointer; user-select: none;
+  }
+  .party-head:hover { background: rgba(17,26,46,0.4); }
+  .party-head .titleblock { flex: 1; min-width: 0; }
+  .party-logo {
+    flex: 0 0 auto;
+    width: 64px; height: 40px;
+    display: flex; align-items: center; justify-content: center;
+    background: transparent;
+  }
+  .party-logo img {
+    max-width: 100%; max-height: 100%; object-fit: contain;
+    display: block;
+  }
+  .party.exited .party-logo { filter: grayscale(100%) opacity(0.7); }
+  .party-head .name { font-size: 1.05rem; font-weight: 600; color: var(--sv-text); }
+  .party-head .legal { color: var(--sv-muted); font-size: 0.85rem; margin-left: 8px; font-weight: 400; }
+  .party-head .meta { margin-top: 4px; color: var(--sv-muted); font-size: 0.8rem; }
+  .party-head .roles-inline { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
+  .party-head .caret {
+    color: var(--sv-muted); font-size: 1.1rem;
+    transition: transform 0.16s ease;
+  }
+  .party.expanded .party-head .caret { transform: rotate(180deg); color: var(--sv-text); }
+
+  .party-body {
+    display: none; padding: 0 22px 22px 26px;
+    border-top: 1px solid var(--sv-border);
+  }
+  .party.expanded .party-body { display: block; }
+
+  .party-body .section-eyebrow {
+    color: var(--sv-sky); text-transform: uppercase;
+    letter-spacing: 0.14em; font-size: 0.68rem; font-weight: 600;
+    margin: 18px 0 8px;
+  }
+
+  .party-body .info-grid {
+    display: grid; grid-template-columns: repeat(2, 1fr);
+    gap: 10px 28px; font-size: 0.85rem;
+  }
+  .party-body .info-grid div { color: var(--sv-muted); }
+  .party-body .info-grid div b { color: var(--sv-text); font-weight: 600; }
+
+  .party-body .area-chips {
+    display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px;
+  }
+  .party-body .area-chips span {
+    background: var(--sv-raised); border: 1px solid var(--sv-border);
+    color: var(--sv-muted); padding: 3px 9px;
+    border-radius: 6px; font-size: 0.78rem;
+  }
+
+  .tariff-source {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 14px;
+    background: rgba(17,26,46,0.5);
+    border: 1px solid var(--sv-border); border-radius: 8px;
+    font-size: 0.83rem; color: var(--sv-muted);
+  }
+  .tariff-source a { word-break: break-all; }
+  .tariff-source .verified {
+    margin-left: auto; font-size: 0.74rem; color: var(--sv-green);
+    white-space: nowrap;
+  }
+
+  /* Tariff table */
+  .tariff-table {
+    margin-top: 12px; width: 100%;
+    border-collapse: separate; border-spacing: 0;
+    font-size: 0.83rem;
+  }
+  .tariff-table th {
+    text-align: left; text-transform: uppercase;
+    letter-spacing: 0.1em; font-size: 0.68rem;
+    color: var(--sv-muted); background: var(--sv-raised);
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--sv-border);
+    border-top: 1px solid var(--sv-border);
+    font-weight: 600;
+  }
+  .tariff-table th:first-child { border-left: 1px solid var(--sv-border); border-top-left-radius: 8px; }
+  .tariff-table th:last-child { border-right: 1px solid var(--sv-border); border-top-right-radius: 8px; }
+  .tariff-table td {
+    padding: 9px 12px;
+    border-bottom: 1px solid rgba(30,42,68,0.6);
+    color: var(--sv-text);
+  }
+  .tariff-table td:first-child { border-left: 1px solid var(--sv-border); }
+  .tariff-table td:last-child { border-right: 1px solid var(--sv-border); }
+  .tariff-table tbody tr:nth-child(even) td { background: rgba(11,18,32,0.4); }
+  .tariff-table tbody tr.hidden-row { display: none; }
+  .tariff-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .tariff-table .code {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    color: var(--sv-muted); font-size: 0.78rem;
+  }
+  .cat-dot {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 0.72rem; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .cat-dot::before {
+    content: ''; width: 7px; height: 7px;
+    border-radius: 50%; background: var(--sv-muted);
+  }
+  .cat-dot.public_ev { color: var(--sv-blue); }
+  .cat-dot.public_ev::before { background: var(--sv-blue); }
+  .cat-dot.workplace_ev { color: var(--sv-sky); }
+  .cat-dot.workplace_ev::before { background: var(--sv-sky); }
+  .cat-dot.home_ev { color: var(--sv-green); }
+  .cat-dot.home_ev::before { background: var(--sv-green); }
+  .cat-dot.general_supply { color: var(--sv-text); }
+  .cat-dot.general_supply::before { background: var(--sv-text); }
+  .cat-dot.not_ev { color: var(--sv-muted); }
+  .cat-dot.not_ev::before { background: transparent; border: 1px solid var(--sv-muted); }
+
+  .tariff-footer {
+    margin-top: 8px; color: var(--sv-muted); font-size: 0.77rem;
+    display: flex; gap: 18px; flex-wrap: wrap;
+  }
+  .tariff-footer .visible-count { color: var(--sv-green); }
+
+  .empty-note {
+    background: rgba(43,182,232,0.06);
+    border: 1px solid rgba(43,182,232,0.2);
+    color: var(--sv-sky);
+    padding: 10px 14px; border-radius: 8px;
+    font-size: 0.85rem; margin-top: 8px;
+  }
+
+  .legend {
+    margin-top: 36px; padding: 18px 22px;
+    color: var(--sv-muted); font-size: 0.78rem;
+  }
+  .legend strong { color: var(--sv-text); font-weight: 600; }
+
+  .footer-note {
+    margin-top: 32px; padding: 14px 18px;
+    color: var(--sv-muted); font-size: 0.77rem;
+    text-align: center; border-top: 1px solid var(--sv-border);
+  }
+
+  /* Scroll-to-top fab */
+  .fab {
+    position: fixed; bottom: 28px; right: 28px;
+    width: 44px; height: 44px; border-radius: 50%;
+    background: var(--sv-raised); border: 1px solid var(--sv-border);
+    color: var(--sv-text); cursor: pointer;
+    display: none; align-items: center; justify-content: center;
+    box-shadow: 0 8px 24px -8px rgba(0,0,0,0.6);
+    z-index: 40;
+  }
+  .fab:hover { border-color: var(--sv-blue); color: var(--sv-blue); }
+  .fab.show { display: flex; }
+
+  @media (max-width: 720px) {
+    .stats { grid-template-columns: repeat(2, 1fr); }
+    .container { padding: 20px 14px 48px; }
+    .topbar { padding: 0 14px; }
+    .party-body .info-grid { grid-template-columns: 1fr; }
+    .filter-row .label { min-width: 0; width: 100%; }
+    .search-box { flex: 1 1 100%; }
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand wordmark">Straumvakt</div>
+  <div class="crumbs">Energy &nbsp;/&nbsp; <span>Parties</span></div>
+  <div class="spacer"></div>
+  <div class="user">andri@straumvakt.is</div>
+</header>
+
+<main class="container">
+
+  <section class="hero">
+    <p class="eyebrow">Energy market</p>
+    <h1>Iceland energy parties</h1>
+    <p class="lede">Retailers, distribution operators and Landsnet — the reference catalogue used by tariff resolution and driver-facing tariff comparison views. Click a role badge to filter; toggle <strong style="color:var(--sv-green)">EV only</strong> to focus on tariff items that affect charging cost.</p>
+  </section>
+
+  <section class="stats">
+    <div class="card stat"><div class="num wordmark" id="stat-retailers">8</div><div class="label">Retailers</div></div>
+    <div class="card stat"><div class="num wordmark" id="stat-dsos">6</div><div class="label">DSOs</div></div>
+    <div class="card stat"><div class="num wordmark" id="stat-tso">1</div><div class="label">TSO</div></div>
+    <div class="card stat"><div class="num wordmark" id="stat-cpo">—</div><div class="label">CPOs</div></div>
+    <div class="card stat"><div class="num wordmark" id="stat-rows">—</div><div class="label">Tariff rows visible</div></div>
+  </section>
+
+  <section class="filter-bar card">
+    <div class="filter-row">
+      <button class="ev-switch" id="evOnly" aria-pressed="true" type="button" title="When on, only EV-relevant tariff lines are shown">
+        <span class="track"></span>
+        <span>
+          <span class="text">EV only</span>
+          <span class="hint" id="evHint"> · hide non-EV tariff rows</span>
+        </span>
+      </button>
+      <div class="search-box" id="searchBox">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+        <input type="search" id="search" placeholder="Search by name, kennitala, region…" />
+        <button class="clear" id="clearSearch" type="button" aria-label="Clear search">✕</button>
+      </div>
+      <div class="right">
+        <button class="btn ghost" id="expandAll" type="button">⌃ Expand all</button>
+        <button class="btn ghost" id="collapseAll" type="button">⌄ Collapse all</button>
+      </div>
+    </div>
+
+    <div class="filter-row">
+      <span class="label">Roles</span>
+      <button class="role-chip" data-role="retailer" aria-pressed="false" type="button">Retailer <span class="badge" id="badge-retailer"></span></button>
+      <button class="role-chip" data-role="dso" aria-pressed="false" type="button">DSO <span class="badge" id="badge-dso"></span></button>
+      <button class="role-chip" data-role="tso" aria-pressed="false" type="button">TSO <span class="badge" id="badge-tso"></span></button>
+      <button class="role-chip" data-role="producer" aria-pressed="false" type="button">Producer <span class="badge" id="badge-producer"></span></button>
+      <button class="role-chip" data-role="public-charging" aria-pressed="false" type="button">Public charging <span class="badge" id="badge-public-charging"></span></button>
+      <button class="role-chip" data-role="home-charging" aria-pressed="false" type="button">Charger rental <span class="badge" id="badge-home-charging"></span></button>
+      <button class="role-chip" data-role="aggregator" aria-pressed="false" type="button">Aggregator <span class="badge" id="badge-aggregator"></span></button>
+    </div>
+
+    <div class="filter-row">
+      <button class="toggle-advanced" id="toggleAdvanced" type="button" aria-expanded="false">
+        <span>Advanced — per-category visibility</span>
+        <span class="caret">▾</span>
+      </button>
+    </div>
+
+    <div class="filter-row advanced-row" id="advancedRow">
+      <span class="label">Categories</span>
+      <button class="pill" data-cat="public_ev" aria-pressed="true" type="button"><span class="dot"></span>Public EV</button>
+      <button class="pill" data-cat="workplace_ev" aria-pressed="true" type="button"><span class="dot"></span>Workplace EV</button>
+      <button class="pill" data-cat="home_ev" aria-pressed="true" type="button"><span class="dot"></span>Home EV</button>
+      <button class="pill" data-cat="general_supply" aria-pressed="true" type="button"><span class="dot"></span>General supply</button>
+      <button class="pill" data-cat="not_ev" aria-pressed="false" type="button"><span class="dot"></span>Not EV</button>
+    </div>
+  </section>
+
+  <div class="summary" id="summary">
+    <span class="stats-text">Loading…</span>
+    <button class="clear-all" id="clearAll" disabled type="button">Clear all filters</button>
+  </div>
+
+  <section id="parties"></section>
+
+  <div id="emptyState" class="card empty-state" style="display:none">
+    <div class="icon">🔍</div>
+    <h3>No parties match your filters.</h3>
+    <p>Try removing a role filter or clearing the search.</p>
+    <button class="btn" id="clearAllEmpty" type="button" style="margin-top:14px">Clear all filters</button>
+  </div>
+
+  <div class="card legend">
+    <strong>Visibility model.</strong> Rows tagged <span class="cat-dot public_ev"></span>public_ev,
+    <span class="cat-dot workplace_ev"></span>workplace_ev,
+    <span class="cat-dot home_ev"></span>home_ev and
+    <span class="cat-dot general_supply"></span>general_supply
+    are EV-relevant. Rows tagged <span class="cat-dot not_ev"></span>not_ev (heating, street lighting, industrial afltaxti, connection fees, transmission-only items) are kept for completeness — turn off <em>EV only</em> to reveal them, or use Advanced for per-category control. Rail colour on each card encodes role: <span style="color:var(--sv-green)">retailer</span>, <span style="color:var(--sv-blue)">DSO</span>, <span style="color:var(--sv-sky)">TSO</span>, gradient = multi-role.
+  </div>
+
+  <p class="footer-note">Reference catalogue · last verified 2026-04-24 · seed for future <code>energy.parties</code> + <code>energy.tariff_catalogue</code> models.</p>
+
+</main>
+
+<button class="fab" id="scrollTop" type="button" aria-label="Back to top">↑</button>
+
+<script>
+const parties = [
+  {
+    slug: 'on', tradeName: 'ON', legalName: 'Orka náttúrunnar ohf.', rail: 'retailer', status: 'active',
+    kennitala: '521213-0190', address: 'Bæjarháls 1, 110 Reykjavík', phone: '591 2700', email: 'on@on.is', website: 'on.is', logoUrl: 'logos/on.png',
+    roles: ['retailer','producer','public-charging','home-charging'],
+    tariffUrl: 'https://www.on.is/verdskrar', verifiedAt: '2026-04-24', tariffVersion: null, validFrom: '2026-01-01',
+    tariffs: [
+      { code:'', name:'General electricity', applies:'Heimili', unit:'kr/kWh', noVat:'9.20', withVat:'11.41', vat:'24%', cat:'general_supply' },
+      { code:'', name:'Energy Guide — winter night', applies:'Heimili', unit:'kr/kWh', noVat:'5.16', withVat:'6.40', vat:'24%', cat:'home_ev' },
+      { code:'', name:'Winter rate', applies:'Heimili', unit:'kr/kWh', noVat:'10.12', withVat:'12.55', vat:'24%', cat:'general_supply' },
+      { code:'', name:'Summer night', applies:'Heimili', unit:'kr/kWh', noVat:'4.77', withVat:'5.91', vat:'24%', cat:'home_ev' },
+      { code:'', name:'Summer rate', applies:'Heimili', unit:'kr/kWh', noVat:'9.35', withVat:'11.59', vat:'24%', cat:'general_supply' },
+      { code:'', name:'Origin guarantee', applies:'Add-on', unit:'kr/kWh', noVat:'0.40', withVat:'0.50', vat:'24%', cat:'general_supply' },
+      { code:'', name:'Neighbourhood AC', applies:'Public AC', unit:'kr/kWh', noVat:'—', withVat:'33', vat:'24%', cat:'public_ev' },
+      { code:'', name:'Neighbourhood AC — loyalty', applies:'Public AC', unit:'kr/kWh', noVat:'—', withVat:'27', vat:'24%', cat:'public_ev' },
+      { code:'', name:'Travel AC', applies:'Public AC', unit:'kr/kWh', noVat:'—', withVat:'48', vat:'24%', cat:'public_ev' },
+      { code:'', name:'Travel AC — loyalty', applies:'Public AC', unit:'kr/kWh', noVat:'—', withVat:'39', vat:'24%', cat:'public_ev' },
+      { code:'', name:'Fast DC (temporary reduction)', applies:'Public DC', unit:'kr/kWh', noVat:'—', withVat:'62', vat:'24%', cat:'public_ev' },
+      { code:'', name:'Fast DC — loyalty', applies:'Public DC', unit:'kr/kWh', noVat:'—', withVat:'55', vat:'24%', cat:'public_ev' },
+      { code:'', name:'Heimahleðsla — detached, charger included', applies:'Heimili', unit:'kr/mán', noVat:'—', withVat:'2,900', vat:'24%', cat:'home_ev' },
+      { code:'', name:'Heimahleðsla — apartment, charger included', applies:'Heimili', unit:'kr/mán', noVat:'—', withVat:'4,400', vat:'24%', cat:'home_ev' },
+      { code:'', name:'Heimahleðsla — own charger', applies:'Heimili', unit:'kr/mán', noVat:'—', withVat:'1,190', vat:'24%', cat:'home_ev' },
+      { code:'', name:'Fyrirtækjahleðsla — charger included', applies:'Fyrirtæki', unit:'kr/mán', noVat:'3,548', withVat:'4,400', vat:'24%', cat:'workplace_ev' },
+      { code:'', name:'Fyrirtækjahleðsla — own charger', applies:'Fyrirtæki', unit:'kr/mán', noVat:'960', withVat:'1,190', vat:'24%', cat:'workplace_ev' },
+      { code:'', name:'Subscription+', applies:'Fyrirtæki', unit:'kr/mán', noVat:'4,435', withVat:'5,500', vat:'24%', cat:'workplace_ev' },
+      { code:'', name:'Subscription+ own charger', applies:'Fyrirtæki', unit:'kr/mán', noVat:'1,847', withVat:'2,290', vat:'24%', cat:'workplace_ev' },
+      { code:'', name:'Home charging for employees', applies:'Fyrirtæki', unit:'kr/mán', noVat:'3,548', withVat:'4,400', vat:'24%', cat:'workplace_ev' },
+    ]
+  },
+  {
+    slug: 'orkusalan', tradeName: 'Orkusalan', legalName: 'Orkusalan ehf.', rail: 'retailer', status: 'active',
+    kennitala: '560306-1130', address: 'Dvergshöfði 2, 110 Reykjavík', phone: '422 1000', email: 'orkusalan@orkusalan.is', website: 'orkusalan.is', logoUrl: 'logos/orkusalan.png',
+    roles: ['retailer','public-charging','home-charging'],
+    tariffUrl: 'https://www.orkusalan.is/verdskra', verifiedAt: '2026-04-24', tariffVersion: null, validFrom: '2025-05-01',
+    tariffs: [
+      { code:'', name:'SparOrka', applies:'General', unit:'kr/kWh', noVat:'7.94', withVat:'9.85', vat:'24%', cat:'general_supply' },
+      { code:'', name:'HleðsluOrka', applies:'EV-marketed', unit:'kr/kWh', noVat:'8.36', withVat:'10.38', vat:'24%', cat:'home_ev' },
+      { code:'', name:'NæturOrka — daytime', applies:'General', unit:'kr/kWh', noVat:'10.46', withVat:'12.97', vat:'24%', cat:'general_supply' },
+      { code:'', name:'NæturOrka — night 00–06', applies:'General', unit:'kr/kWh', noVat:'5.23', withVat:'6.49', vat:'24%', cat:'home_ev' },
+      { code:'', name:'GrænOrka', applies:'General', unit:'kr/kWh', noVat:'12.40', withVat:'15.38', vat:'24%', cat:'general_supply' },
+      { code:'', name:'No plan (default)', applies:'General', unit:'kr/kWh', noVat:'10.46', withVat:'12.97', vat:'24%', cat:'general_supply' },
+      { code:'', name:'SparOrka — rafhitun', applies:'Húshitun', unit:'kr/kWh', noVat:'—', withVat:'8.82', vat:'11%', cat:'not_ev' },
+      { code:'', name:'NæturOrka night — rafhitun', applies:'Húshitun', unit:'kr/kWh', noVat:'—', withVat:'5.80', vat:'11%', cat:'not_ev' },
+      { code:'', name:'Home charger Amina', applies:'Heimili', unit:'kr/mán', noVat:'—', withVat:'990', vat:'24%', cat:'home_ev' },
+      { code:'', name:'Home charger Qudo', applies:'Heimili', unit:'kr/mán', noVat:'—', withVat:'1,990', vat:'24%', cat:'home_ev' },
+      { code:'', name:'Home charger Easee Charge', applies:'Heimili', unit:'kr/mán', noVat:'—', withVat:'3,410', vat:'24%', cat:'home_ev' },
+      { code:'', name:'Public DC CCS-2 (top tier)', applies:'Public DC', unit:'kr/kWh', noVat:'—', withVat:'59', vat:'24%', cat:'public_ev' },
+      { code:'', name:'Public DC CHAdeMO (top tier)', applies:'Public DC', unit:'kr/kWh', noVat:'—', withVat:'44', vat:'24%', cat:'public_ev' },
+      { code:'', name:'Public AC Type 2 22 kW (top tier)', applies:'Public AC', unit:'kr/kWh', noVat:'—', withVat:'30', vat:'24%', cat:'public_ev' },
+    ]
+  },
+  {
+    slug: 'hsorka', tradeName: 'HS Orka', legalName: 'HS Orka hf.', rail: 'retailer', status: 'active',
+    kennitala: '680475-0169', address: 'Orkubraut 3, Svartsengi, 241 Grindavík', phone: '520 9300', email: 'hsorka@hsorka.is', website: 'hsorka.is', logoUrl: 'logos/hsorka.png',
+    roles: ['retailer','producer','home-charging'],
+    tariffUrl: 'https://www.hsorka.is/rafmagn/', verifiedAt: '2026-04-24', tariffVersion: null, validFrom: null,
+    tariffs: [
+      { code:'', name:'Almenn verðskrá — einstaklingar', applies:'Heimili', unit:'kr/kWh', noVat:'9.82', withVat:'12.18', vat:'24%', cat:'general_supply' },
+      { code:'', name:'Almenn verðskrá — fyrirtæki', applies:'Fyrirtæki', unit:'kr/kWh', noVat:'11.09', withVat:'13.74', vat:'24%', cat:'general_supply' },
+      { code:'', name:'Upprunaábyrgð', applies:'Add-on', unit:'kr/kWh', noVat:'12.27', withVat:'15.21', vat:'24%', cat:'general_supply' },
+      { code:'', name:'Ódýrara rafmagn á nóttunni 01–06', applies:'Rafbíll', unit:'kr/kWh', noVat:'0.00', withVat:'0.00', vat:'24%', cat:'home_ev' },
+      { code:'', name:'22 kW AC Compact — charger subscription', applies:'Heimili / Fjölbýli / Fyrirtæki', unit:'kr/mán', noVat:'—', withVat:'2,490', vat:'24%', cat:'home_ev' },
+      { code:'', name:'22 kW AC Wallbox — charger subscription', applies:'Heimili / Fjölbýli / Fyrirtæki', unit:'kr/mán', noVat:'—', withVat:'4,490', vat:'24%', cat:'home_ev' },
+    ]
+  },
+  {
+    slug: 'straumlind', tradeName: 'Straumlind', legalName: 'Straumlind ehf.', rail: 'retailer', status: 'active',
+    kennitala: '480920-0150', address: 'Bjargargötu 1, 102 Reykjavík', phone: '—', email: 'info@straumlind.is', website: 'straumlind.is', logoUrl: 'logos/straumlind.png',
+    roles: ['retailer'],
+    tariffUrl: 'https://straumlind.is/samningur', verifiedAt: '2026-04-24', tariffVersion: null, validFrom: '2026-01-01',
+    tariffs: [
+      { code:'', name:'General price', applies:'Heimili', unit:'kr/kWh', noVat:'8.50', withVat:'10.54', vat:'24%', cat:'general_supply' },
+      { code:'', name:'Day rate (07–23)', applies:'Heimili', unit:'kr/kWh', noVat:'8.50', withVat:'10.54', vat:'24%', cat:'general_supply' },
+      { code:'', name:'Night rate (23–07)', applies:'Heimili', unit:'kr/kWh', noVat:'5.67', withVat:'7.03', vat:'24%', cat:'home_ev' },
+      { code:'', name:'Prepaid electricity', applies:'Heimili', unit:'kr/kWh', noVat:'7.94', withVat:'9.85', vat:'24%', cat:'general_supply' },
+      { code:'', name:'General price — fyrirtæki', applies:'Fyrirtæki', unit:'kr/kWh', noVat:'9.20', withVat:'11.41', vat:'24%', cat:'general_supply' },
+      { code:'', name:'Origin certification', applies:'Add-on', unit:'kr/kWh', noVat:'0.50', withVat:'0.62', vat:'24%', cat:'general_supply' },
+      { code:'', name:'Electric heating', applies:'Húshitun', unit:'kr/kWh', noVat:'8.50', withVat:'9.44', vat:'11%', cat:'not_ev' },
+      { code:'', name:'Bank transfer fee', applies:'Per transaction', unit:'kr', noVat:'100', withVat:'124', vat:'24%', cat:'not_ev' },
+    ]
+  },
+  {
+    slug: 'n1rafmagn', tradeName: 'N1 Rafmagn', legalName: 'N1 Rafmagn ehf.', rail: 'retailer', status: 'active',
+    kennitala: '471216-1190', vsk: '133198', address: 'Dalvegi 10–14, 201 Kópavogur', phone: '440 1000', email: 'rafmagn@n1.is', website: 'rafmagn.n1.is', logoUrl: 'logos/n1.png',
+    roles: ['retailer'],
+    note: 'Electricity retail subsidiary of Festi hf. (kt 540206-2010), distinct from the parent N1 ehf which operates the public fast-charging network at N1 fuel stations — see the separate "N1 (charging)" card for that side.',
+    tariffUrl: 'https://rafmagn.n1.is/heimili', verifiedAt: '2026-04-24', tariffVersion: null, validFrom: '2025-01-03',
+    tariffs: [
+      { code:'', name:'Almenn notkun', applies:'Heimili', unit:'kr/kWh', noVat:'8.83', withVat:'10.95', vat:'24%', cat:'general_supply' },
+      { code:'', name:'Upprunaábyrgð', applies:'Add-on', unit:'kr/kWh', noVat:'0.50', withVat:'0.62', vat:'24%', cat:'general_supply' },
+      { code:'', name:'33% night discount (02–06)', applies:'Smart-meter homes', unit:'discount', noVat:'—', withVat:'—', vat:'—', cat:'home_ev' },
+      { code:'', name:'3% N1 Points cashback', applies:'Card holders', unit:'rebate', noVat:'—', withVat:'—', vat:'—', cat:'general_supply' },
+      { code:'', name:'Rafhitun', applies:'Húshitun', unit:'kr/kWh', noVat:'8.83', withVat:'9.80', vat:'11%', cat:'not_ev' },
+    ]
+  },
+  {
+    slug: 'ov-sales', tradeName: 'Orkubú Vestfjarða (sales)', legalName: 'Orkubú Vestfjarða ohf.', rail: 'multi', status: 'active',
+    kennitala: '660877-0299', address: 'Stakkanes 1, 400 Ísafjörður', phone: '450 3211', email: 'orkubu@ov.is', website: 'ov.is', logoUrl: 'logos/ov.png',
+    roles: ['retailer','dso','public-charging'],
+    note: 'Same legal entity as the Westfjords DSO. Operates 16 public chargers across the Westfjords (Ísafjörður, Patreksfjörður, Bíldudalur, etc.) on the e1 platform — open to any EV via the e1 app.',
+    tariffUrl: 'https://www.ov.is/asset/4571/verdskra-raforkusala-01.01.2025-01.02.2025.pdf', verifiedAt: '2026-04-24', tariffVersion: null, validFrom: '2025-01-01',
+    tariffs: [
+      { code:'A10S', name:'Heimili / einstaklingar — orkugjald', applies:'Heimili', unit:'kr/kWh', noVat:'6.85', withVat:'8.49', vat:'24%', cat:'general_supply' },
+      { code:'A15S', name:'Fyrirtæki / lögaðilar — orkugjald', applies:'Fyrirtæki', unit:'kr/kWh', noVat:'7.86', withVat:'9.75', vat:'24%', cat:'general_supply' },
+      { code:'', name:'Upprunaábyrgðir', applies:'Add-on', unit:'kr/kWh', noVat:'1.31', withVat:'1.62', vat:'24%', cat:'general_supply' },
+      { code:'C10S', name:'Heimili — rafhitun', applies:'Húshitun', unit:'kr/kWh', noVat:'6.85', withVat:'7.60', vat:'11%', cat:'not_ev' },
+      { code:'A30S', name:'Útilýsing — aflgjald', applies:'Götulýsing', unit:'kr/kW/ár', noVat:'28,770', withVat:'35,675', vat:'24%', cat:'not_ev' },
+      { code:'V10S', name:'Ómæld smánotkun — aflgjald', applies:'Smáheimtaug', unit:'kr/kW/ár', noVat:'68,854', withVat:'85,379', vat:'24%', cat:'not_ev' },
+    ]
+  },
+  {
+    slug: 'orkaheimilanna', tradeName: 'Orka heimilanna', legalName: 'Orka heimilanna ehf.', rail: 'retailer', status: 'active',
+    kennitala: '420218-2060', vsk: '130508', address: 'Mánagötu 11, 105 Reykjavík', phone: '546 0033', email: 'orkaheimilanna@orkaheimilanna.is', website: 'orkaheimilanna.is', logoUrl: 'logos/orka-heimilanna.png',
+    roles: ['retailer','aggregator'],
+    tariffUrl: 'https://orkaheimilanna.is/verdskra/', verifiedAt: '2026-04-24', tariffVersion: null, validFrom: '2025-04-01',
+    tariffs: [
+      { code:'', name:'Óvottað rafmagn — almenn notkun', applies:'Heimili', unit:'kr/kWh', noVat:'—', withVat:'9.83', vat:'24%', cat:'general_supply' },
+      { code:'', name:'Umhverfisvottað rafmagn — almenn notkun', applies:'Heimili', unit:'kr/kWh', noVat:'—', withVat:'10.55', vat:'24%', cat:'general_supply' },
+      { code:'', name:'Óvottað — húshitun', applies:'Húshitun', unit:'kr/kWh', noVat:'—', withVat:'8.80', vat:'11%', cat:'not_ev' },
+      { code:'', name:'Umhverfisvottað — húshitun', applies:'Húshitun', unit:'kr/kWh', noVat:'—', withVat:'9.45', vat:'11%', cat:'not_ev' },
+    ]
+  },
+  {
+    slug: 'fallorka', tradeName: 'Fallorka', legalName: 'Fallorka ehf.', rail: 'retailer', status: 'exited',
+    kennitala: '600302-4180', address: 'Rangárvöllum, 603 Akureyri', phone: '460 1300', email: 'fallorka@fallorka.is', website: 'fallorka.is',
+    roles: ['producer'],
+    note: 'Exited retail. Customers redirected to Orkusalan. Kept for historical session reconciliation.',
+    tariffUrl: 'https://www.fallorka.is/is/komdu-i-vidskipti/gjaldskra', verifiedAt: '2026-04-24', tariffVersion: null, validFrom: null,
+    tariffs: [
+      { code:'', name:'Last published rate', applies:'Heimili', unit:'kr/kWh', noVat:'—', withVat:'11.94', vat:'24%', cat:'general_supply' },
+    ]
+  },
+
+  // ── Pure-play CPOs (Charge Point Operators) ────────
+  {
+    slug: 'isorka', tradeName: 'Ísorka', legalName: 'Ísorka ehf.', rail: 'cpo', status: 'active',
+    kennitala: '450808-1560', address: 'Sævarhöfða 2, 110 Reykjavík', phone: '568 7666', email: 'isorka@isorka.is', website: 'isorka.is',
+    roles: ['public-charging','home-charging'],
+    serviceArea: ['National — 3,000+ stations'],
+    tariffUrl: 'https://isorka.is/pages/hledslunet', verifiedAt: '2026-04-25', tariffVersion: null, validFrom: null,
+    note: 'Largest CPO in Iceland. Operates the open Ísorka network — also hosts Olís, ÓB, hotels and many municipal sites. Per-station pricing surfaced through the Hleðsluappið mobile app, not as a single public schedule. Bands below are typical street rates as of 2026; verify in app per station.',
+    tariffs: [
+      { code:'', name:'AC public 22 kW (typical)',          applies:'Public AC', unit:'kr/kWh', noVat:'—', withVat:'≈30',  vat:'24%', cat:'public_ev' },
+      { code:'', name:'DC fast 50 kW (typical)',            applies:'Public DC', unit:'kr/kWh', noVat:'—', withVat:'≈45',  vat:'24%', cat:'public_ev' },
+      { code:'', name:'DC fast 150 kW (typical)',           applies:'Public DC', unit:'kr/kWh', noVat:'—', withVat:'≈55',  vat:'24%', cat:'public_ev' },
+      { code:'', name:'DC ultra 300+ kW (typical)',         applies:'Public DC', unit:'kr/kWh', noVat:'—', withVat:'≈65',  vat:'24%', cat:'public_ev' },
+      { code:'', name:'Idle / time fee (after grace)',      applies:'Per minute', unit:'kr/min', noVat:'—', withVat:'varies', vat:'24%', cat:'public_ev' },
+      { code:'', name:'Hleðsluappið subscription',          applies:'App access', unit:'kr/mán', noVat:'—', withVat:'free', vat:'—',  cat:'general_supply' },
+      { code:'', name:'Heimahleðsla (home wallbox + service)', applies:'Heimili', unit:'kr/mán', noVat:'—', withVat:'see app', vat:'24%', cat:'home_ev' },
+    ]
+  },
+  {
+    slug: 'bilorka', tradeName: 'Bílorka (e1)', legalName: 'Íslensk Bílorka ehf.', rail: 'cpo', status: 'active',
+    kennitala: '701277-0239', vsk: '11650', address: 'Reykjavík', phone: '515 7800', email: 'info@bilorka.is', website: 'bilorka.is',
+    roles: ['public-charging'],
+    serviceArea: ['Reykjavík','Hafnarfjörður','Reykjanesbær','Búðardalur','Reykhólar','Akureyri','Þórshöfn'],
+    tariffUrl: 'https://bilorka.is/hradhledslustodvar-kort', verifiedAt: '2026-04-25', tariffVersion: null, validFrom: '2026-01-01',
+    note: 'Brimborg-affiliated CPO. 17 DC fast-charging stations across Iceland (DC30 → DC600). Pricing is tiered by station capacity, surfaced through the eONE / e1 app. Brimborg brands (Volvo, Polestar, Ford, Mazda, Citroën, Peugeot, Opel) get discounted rates. Operates Iceland\'s first 600 kW station in Reykjanesbær.',
+    tariffs: [
+      { code:'', name:'30 kW DC — base rate',               applies:'Public DC', unit:'kr/kWh', noVat:'—', withVat:'29', vat:'24%', cat:'public_ev' },
+      { code:'', name:'150 kW DC — base rate',              applies:'Public DC', unit:'kr/kWh', noVat:'—', withVat:'≈45', vat:'24%', cat:'public_ev' },
+      { code:'', name:'300–400 kW DC — base rate',          applies:'Public DC', unit:'kr/kWh', noVat:'—', withVat:'59', vat:'24%', cat:'public_ev' },
+      { code:'', name:'600 kW ultra DC',                    applies:'Public DC', unit:'kr/kWh', noVat:'—', withVat:'59', vat:'24%', cat:'public_ev' },
+      { code:'', name:'Brimborg-brand discount',            applies:'Volvo/Polestar/Ford/etc.', unit:'rebate', noVat:'—', withVat:'—', vat:'—', cat:'public_ev' },
+      { code:'', name:'Time fee — after 45 min',            applies:'Per minute', unit:'kr/min', noVat:'—', withVat:'55', vat:'24%', cat:'public_ev' },
+      { code:'', name:'Connection fee — after 1.0 kWh',     applies:'Per session', unit:'kr', noVat:'—', withVat:'see app', vat:'24%', cat:'public_ev' },
+    ]
+  },
+  {
+    slug: 'olis', tradeName: 'Olís (charging)', legalName: 'Olíuverzlun Íslands hf.', rail: 'cpo', status: 'active',
+    kennitala: '500269-2649', address: 'Skútuvogur 5, 104 Reykjavík', phone: '515 1000', email: 'olis@olis.is', website: 'olis.is',
+    roles: ['public-charging'],
+    serviceArea: ['Olís + ÓB station network — nationwide'],
+    tariffUrl: 'https://www.olis.is/rafhledsla', verifiedAt: '2026-04-25', tariffVersion: null, validFrom: '2021-01-01',
+    note: 'Fuel-station chain. Public chargers at Olís and ÓB locations are operated on the Ísorka network and accessed via the Ísorka app — Olís is the host, Ísorka is the technical CPO. Pricing below is from the 2021 launch announcement and is likely outdated; treat the Ísorka app as the source of truth.',
+    tariffs: [
+      { code:'', name:'AC 22 kW slow charging',             applies:'Public AC', unit:'kr/kWh', noVat:'—', withVat:'23', vat:'24%', cat:'public_ev' },
+      { code:'', name:'DC 50 kW fast charging',             applies:'Public DC', unit:'kr/kWh', noVat:'—', withVat:'45', vat:'24%', cat:'public_ev' },
+      { code:'', name:'Time fee — DC after 30 min',         applies:'Per minute', unit:'kr/min', noVat:'—', withVat:'10', vat:'24%', cat:'public_ev' },
+    ]
+  },
+  {
+    slug: 'n1-charging', tradeName: 'N1 (charging)', legalName: 'N1 ehf.', rail: 'cpo', status: 'active',
+    kennitala: '411003-3370', address: 'Dalvegur 10–14, 201 Kópavogur', phone: '440 1000', email: 'n1@n1.is', website: 'n1.is', logoUrl: 'logos/n1.png',
+    roles: ['public-charging'],
+    serviceArea: ['Borgarnes','Staðarskáli (Borðeyri)','Vík','Hvolsvöllur','Egilsstaðir','Sauðárkrókur','Ísafjörður','+ additional N1 fuel sites'],
+    tariffUrl: 'https://www.n1.is/thjonusta/hledslulausnir/verdskra/', verifiedAt: '2026-04-25', tariffVersion: null, validFrom: null,
+    note: 'Fuel-station chain (parent: Festi hf., kt 540206-2010). Distinct from N1 Rafmagn ehf (the electricity retail subsidiary, see separate retailer card). Public DC fast chargers live at major N1 fuel sites around the ring road; access and payment via the N1 app (card or N1 points). Customers earn 3% in N1 points per fast-charge session. Per-kWh rates surface in the verðskrá page / app; bands below are typical Icelandic 2026 fast-charge street rates pending re-scrape.',
+    tariffs: [
+      { code:'', name:'DC 50 kW (typical)',                  applies:'Public DC', unit:'kr/kWh', noVat:'—', withVat:'≈45', vat:'24%', cat:'public_ev' },
+      { code:'', name:'DC 150 kW (typical)',                 applies:'Public DC', unit:'kr/kWh', noVat:'—', withVat:'≈55', vat:'24%', cat:'public_ev' },
+      { code:'', name:'DC 300+ kW (typical)',                applies:'Public DC', unit:'kr/kWh', noVat:'—', withVat:'≈65', vat:'24%', cat:'public_ev' },
+      { code:'', name:'3% N1 Points cashback per session',   applies:'Card / app holders', unit:'rebate', noVat:'—', withVat:'—', vat:'—', cat:'public_ev' },
+      { code:'', name:'Idle / time fee',                     applies:'Per minute', unit:'kr/min', noVat:'—', withVat:'see app', vat:'24%', cat:'public_ev' },
+    ]
+  },
+  {
+    slug: 'tesla-iceland', tradeName: 'Tesla Supercharger', legalName: 'Tesla, Inc. (Iceland operations)', rail: 'cpo', status: 'active',
+    kennitala: '—', address: '—', phone: '—', email: '—', website: 'tesla.com',
+    roles: ['public-charging'],
+    serviceArea: ['Keflavík','Vatnagardar (RVK)','Álfabakki (RVK)','Fossvogur (RVK)','Akureyri','Höfn'],
+    tariffUrl: 'https://www.tesla.com/findus/list/superchargers/Iceland', verifiedAt: '2026-04-25', tariffVersion: null, validFrom: null,
+    note: '7 Supercharger locations across Iceland. Most sites are open to non-Tesla EVs via CCS adapters — non-Tesla rates are higher than the Tesla-owner rates listed below. Idle fees apply once the car is full and other vehicles are waiting. Billing routes through Tesla account, not local invoicing.',
+    tariffs: [
+      { code:'', name:'Vatnagardar — off-peak (00–08, 23–00)', applies:'Tesla owners', unit:'kr/kWh', noVat:'—', withVat:'29', vat:'24%', cat:'public_ev' },
+      { code:'', name:'Vatnagardar — evening (19–23)',        applies:'Tesla owners', unit:'kr/kWh', noVat:'—', withVat:'50', vat:'24%', cat:'public_ev' },
+      { code:'', name:'Vatnagardar — peak (08–19)',           applies:'Tesla owners', unit:'kr/kWh', noVat:'—', withVat:'54', vat:'24%', cat:'public_ev' },
+      { code:'', name:'Akureyri — base rate',                 applies:'Tesla owners', unit:'kr/kWh', noVat:'—', withVat:'36', vat:'24%', cat:'public_ev' },
+      { code:'', name:'Keflavík — base rate',                 applies:'Tesla owners', unit:'kr/kWh', noVat:'—', withVat:'38', vat:'24%', cat:'public_ev' },
+      { code:'', name:'Non-Tesla CCS surcharge',              applies:'Non-Tesla EV', unit:'multiplier', noVat:'—', withVat:'higher', vat:'24%', cat:'public_ev' },
+      { code:'', name:'Idle fee — when other cars wait',      applies:'Per minute', unit:'kr/min', noVat:'—', withVat:'see app', vat:'24%', cat:'public_ev' },
+    ]
+  },
+  {
+    slug: 'amper', tradeName: 'Amper', legalName: 'Amper Orka ehf.', rail: 'cpo', status: 'active',
+    kennitala: '471123-0210', vsk: '154494', address: 'Borgartún 25, 105 Reykjavík', phone: '546 4200', email: 'amper@amper.is', website: 'amper.is',
+    roles: ['home-charging'],
+    serviceArea: ['National — home, MDU and workplace installations'],
+    tariffUrl: 'https://www.amper.is/', verifiedAt: '2026-04-25', tariffVersion: null, validFrom: null,
+    note: 'Pure home / MDU / workplace charger-as-a-service. Pioneered the no-upfront-cost subscription model in Iceland. Does not sell electricity directly — passes customers to a partner retailer at ~20.8 kr/kWh. Distinctive: will buy back an existing home charger when a customer switches.',
+    tariffs: [
+      { code:'', name:'Subscription — charger + infrastructure', applies:'Heimili / Fjölbýli', unit:'kr/mán', noVat:'—', withVat:'4,380',   vat:'24%', cat:'home_ev' },
+      { code:'', name:'Subscription — charger only',              applies:'Heimili / Fjölbýli', unit:'kr/mán', noVat:'—', withVat:'3,390',   vat:'24%', cat:'home_ev' },
+      { code:'', name:'Purchase — charger + infrastructure',      applies:'Heimili / Fjölbýli', unit:'kr',     noVat:'—', withVat:'299,990', vat:'24%', cat:'home_ev' },
+      { code:'', name:'Purchase — charger only',                  applies:'Heimili / Fjölbýli', unit:'kr',     noVat:'—', withVat:'219,990', vat:'24%', cat:'home_ev' },
+      { code:'', name:'Service fee (with purchase)',              applies:'Owned install',      unit:'kr/mán', noVat:'—', withVat:'990',     vat:'24%', cat:'home_ev' },
+      { code:'', name:'Electricity supply — via partner retailer',applies:'Heimili',            unit:'kr/kWh', noVat:'—', withVat:'~20.8',   vat:'24%', cat:'general_supply' },
+      { code:'', name:'Existing-install buyback',                  applies:'Existing install',   unit:'rebate', noVat:'—', withVat:'up to 100%', vat:'—', cat:'home_ev' },
+    ]
+  },
+
+  // ── DSOs ─────────────────────────────────────────────
+  {
+    slug: 'veitur', tradeName: 'Veitur', legalName: 'Veitur ohf.', rail: 'dso', status: 'active',
+    kennitala: '501213-1870', address: 'Bæjarháls 1, 110 Reykjavík', phone: '516 6000', email: 'veitur@veitur.is', website: 'veitur.is',
+    roles: ['dso'],
+    serviceArea: ['Reykjavík','Kópavogur','Mosfellsbær','Akranes','Garðabær','Seltjarnarnes'],
+    tariffUrl: 'https://www.veitur.is/verdskrar', verifiedAt: '2026-04-24', tariffVersion: 'LAV-250', validFrom: '2026-04-01',
+    note: 'Full A/B/C/D code schedule needs PDF re-extract — placeholder rows below from the published 2026 change summary.',
+    tariffs: [
+      { code:'', name:'Distribution — apartment summary', applies:'Heimili', unit:'kr/kWh', noVat:'—', withVat:'11.52', vat:'24%', cat:'general_supply' },
+      { code:'', name:'Veitur meter fixed charge — fyrirtæki', applies:'Fyrirtæki', unit:'kr/dag', noVat:'46.52', withVat:'—', vat:'24%', cat:'workplace_ev' },
+      { code:'', name:'Equalization fee (jöfnunargjald)', applies:'All', unit:'change YoY', noVat:'+27%', withVat:'—', vat:'—', cat:'not_ev' },
+    ]
+  },
+  {
+    slug: 'rarik', tradeName: 'RARIK', legalName: 'RARIK ohf.', rail: 'dso', status: 'active',
+    kennitala: '520269-2669', address: 'Dvergshöfði 2, 110 Reykjavík', phone: '528 9000', email: 'rarik@rarik.is', website: 'rarik.is',
+    roles: ['dso'],
+    serviceArea: ['Most rural Iceland','many towns','urban + rural zones'],
+    tariffUrl: 'https://www.rarik.is/gjaldskrar/gjaldskrar', verifiedAt: '2026-04-24', tariffVersion: null, validFrom: '2026-01-01',
+    note: 'Full schedule needs PDF re-extract. Numbers below are from ON\'s tariff page where it republishes the daily Veitur/RARIK meter charges.',
+    tariffs: [
+      { code:'', name:'Daily fixed — urban 0–80A', applies:'Fyrirtæki', unit:'kr/dag', noVat:'88.36', withVat:'—', vat:'24%', cat:'workplace_ev' },
+      { code:'', name:'Daily fixed — rural 0–80A', applies:'Fyrirtæki', unit:'kr/dag', noVat:'123.63', withVat:'—', vat:'24%', cat:'workplace_ev' },
+      { code:'', name:'Equalization fee — guaranteed', applies:'All', unit:'kr/kWh', noVat:'0.52', withVat:'—', vat:'—', cat:'not_ev' },
+      { code:'', name:'Equalization fee — interruptible', applies:'All', unit:'kr/kWh', noVat:'0.17', withVat:'—', vat:'—', cat:'not_ev' },
+    ]
+  },
+  {
+    slug: 'hsveitur', tradeName: 'HS Veitur', legalName: 'HS Veitur hf.', rail: 'dso', status: 'active',
+    kennitala: '431208-0590', lei: '5493001WFODO2B8KWD84', address: 'Brekkustíg 36, 260 Reykjanesbær', phone: '422 5200', email: 'hsveitur@hsveitur.is', website: 'hsveitur.is',
+    roles: ['dso'],
+    serviceArea: ['Reykjanes','Vestmannaeyjar','Hafnarfjörður (part)','Garðabær (part)','Árborg'],
+    tariffUrl: 'https://hsveitur.is/media/nm1jkpfr/33-verdskra-fyrir-dreifingu-og-flutning-raforku_01012025.pdf', verifiedAt: '2026-04-24', tariffVersion: '33', validFrom: '2025-01-01',
+    tariffs: [
+      { code:'AD1', name:'Almennur taxti — orkugjald (0–80A)', applies:'≤80A', unit:'kr/kWh', noVat:'8.64', withVat:'10.71', vat:'24%', cat:'general_supply' },
+      { code:'AD1', name:'Almennur taxti — fastagjald (0–80A)', applies:'≤80A', unit:'kr/dag', noVat:'45.19', withVat:'56.03', vat:'24%', cat:'general_supply' },
+      { code:'AD2', name:'Almennur taxti — orkugjald (81–199A)', applies:'81–199A', unit:'kr/kWh', noVat:'8.64', withVat:'10.71', vat:'24%', cat:'workplace_ev' },
+      { code:'AD2', name:'Almennur taxti — fastagjald (81–199A)', applies:'81–199A', unit:'kr/dag', noVat:'170.28', withVat:'211.15', vat:'24%', cat:'workplace_ev' },
+      { code:'AD3', name:'Almennur taxti — orkugjald (200–299A)', applies:'200–299A', unit:'kr/kWh', noVat:'8.64', withVat:'10.71', vat:'24%', cat:'workplace_ev' },
+      { code:'AD3', name:'Almennur taxti — fastagjald (200–299A)', applies:'200–299A', unit:'kr/dag', noVat:'340.55', withVat:'422.28', vat:'24%', cat:'workplace_ev' },
+      { code:'AD4', name:'Almennur taxti — fastagjald (300–500A)', applies:'300–500A', unit:'kr/dag', noVat:'510.82', withVat:'633.42', vat:'24%', cat:'workplace_ev' },
+      { code:'ADT1', name:'Tvígjaldsmælir — lág (0–80A)', applies:'≤80A', unit:'kr/kWh', noVat:'6.17', withVat:'7.65', vat:'24%', cat:'home_ev' },
+      { code:'ADT1', name:'Tvígjaldsmælir — há (0–80A)', applies:'≤80A', unit:'kr/kWh', noVat:'12.79', withVat:'15.86', vat:'24%', cat:'home_ev' },
+      { code:'ADÞ2', name:'Þrígjaldsmælir — lág (<300A)', applies:'<300A', unit:'kr/kWh', noVat:'6.08', withVat:'7.54', vat:'24%', cat:'workplace_ev' },
+      { code:'ADÞ2', name:'Þrígjaldsmælir — mið (<300A)', applies:'<300A', unit:'kr/kWh', noVat:'8.64', withVat:'10.71', vat:'24%', cat:'workplace_ev' },
+      { code:'ADÞ2', name:'Þrígjaldsmælir — há (<300A)', applies:'<300A', unit:'kr/kWh', noVat:'18.20', withVat:'22.57', vat:'24%', cat:'workplace_ev' },
+      { code:'HD1', name:'Hitataxti — orkugjald', applies:'Húshitun', unit:'kr/kWh', noVat:'8.64', withVat:'9.59', vat:'11%', cat:'not_ev' },
+      { code:'BD2', name:'Afltaxti BD2 — orkugjald (0.4 kV)', applies:'Iðnaður', unit:'kr/kWh', noVat:'3.1477', withVat:'3.9031', vat:'24%', cat:'not_ev' },
+      { code:'BD2', name:'Afltaxti BD2 — aflgjald (0.4 kV)', applies:'Iðnaður', unit:'kr/kW/ár', noVat:'19,914', withVat:'24,693', vat:'24%', cat:'not_ev' },
+      { code:'VGD1', name:'Götulýsing aflmæld', applies:'Götulýsing', unit:'kr/kW/ár', noVat:'34,495', withVat:'42,773', vat:'24%', cat:'not_ev' },
+      { code:'ÓD1', name:'Ótryggð orka (11 kV) — orkugjald', applies:'Ótryggt', unit:'kr/kWh', noVat:'4.0454', withVat:'5.0163', vat:'24%', cat:'not_ev' },
+      { code:'', name:'Aðalheimtaug 50A 3-fasa', applies:'Connection', unit:'kr', noVat:'177,332', withVat:'219,892', vat:'24%', cat:'not_ev' },
+      { code:'', name:'Aðalheimtaug 200A 3-fasa', applies:'Connection', unit:'kr', noVat:'619,745', withVat:'768,484', vat:'24%', cat:'not_ev' },
+    ]
+  },
+  {
+    slug: 'ov-dso', tradeName: 'Orkubú Vestfjarða (DSO)', legalName: 'Orkubú Vestfjarða ohf.', rail: 'multi', status: 'active',
+    kennitala: '660877-0299', address: 'Stakkanes 1, 400 Ísafjörður', phone: '450 3211', email: 'orkubu@ov.is', website: 'ov.is', logoUrl: 'logos/ov.png',
+    roles: ['dso','retailer'],
+    serviceArea: ['Westfjords (urban + rural zones)'],
+    tariffUrl: 'https://www.ov.is/asset/4594/verdskra-dreifing-og-flutningur-raforku-13.10.2025', verifiedAt: '2026-04-24', tariffVersion: null, validFrom: '2025-10-13',
+    tariffs: [
+      { code:'A10T', name:'Almenn notkun ≤80A — orkugjald (þéttbýli)', applies:'≤80A urban', unit:'kr/kWh', noVat:'9.59', withVat:'11.89', vat:'24%', cat:'general_supply' },
+      { code:'A10T', name:'Almenn notkun ≤80A — fastagjald (þéttbýli)', applies:'≤80A urban', unit:'kr/ár', noVat:'25,528', withVat:'31,655', vat:'24%', cat:'general_supply' },
+      { code:'A21T', name:'Almenn 81–150A — orkugjald (þéttbýli)', applies:'81–150A urban', unit:'kr/kWh', noVat:'8.78', withVat:'10.89', vat:'24%', cat:'workplace_ev' },
+      { code:'A21T', name:'Almenn 81–150A — fastagjald (þéttbýli)', applies:'81–150A urban', unit:'kr/ár', noVat:'86,979', withVat:'107,854', vat:'24%', cat:'workplace_ev' },
+      { code:'A22T', name:'Almenn 151–300A — orkugjald (þéttbýli)', applies:'151–300A urban', unit:'kr/kWh', noVat:'8.78', withVat:'10.89', vat:'24%', cat:'workplace_ev' },
+      { code:'A23T', name:'Almenn 301–500A — orkugjald (þéttbýli)', applies:'301–500A urban', unit:'kr/kWh', noVat:'8.78', withVat:'10.89', vat:'24%', cat:'workplace_ev' },
+      { code:'A10D', name:'Almenn notkun ≤80A — orkugjald (dreifbýli)', applies:'≤80A rural', unit:'kr/kWh', noVat:'12.30', withVat:'15.25', vat:'24%', cat:'general_supply' },
+      { code:'A10D', name:'Almenn notkun ≤80A — fastagjald (dreifbýli)', applies:'≤80A rural', unit:'kr/ár', noVat:'33,077', withVat:'41,015', vat:'24%', cat:'general_supply' },
+      { code:'A21D', name:'Almenn 81–150A — orkugjald (dreifbýli)', applies:'81–150A rural', unit:'kr/kWh', noVat:'11.25', withVat:'13.95', vat:'24%', cat:'workplace_ev' },
+      { code:'C10T', name:'Hitanotkun ≤80A — orkugjald (þéttbýli)', applies:'Húshitun urban', unit:'kr/kWh', noVat:'9.59', withVat:'10.64', vat:'11%', cat:'not_ev' },
+      { code:'C10D', name:'Hitanotkun ≤80A — orkugjald (dreifbýli)', applies:'Húshitun rural', unit:'kr/kWh', noVat:'12.30', withVat:'13.65', vat:'11%', cat:'not_ev' },
+      { code:'B50T', name:'Aflmæling — orkugjald (þéttbýli)', applies:'Iðnaður urban', unit:'kr/kWh', noVat:'4.18', withVat:'5.18', vat:'24%', cat:'not_ev' },
+      { code:'B50T', name:'Aflmæling — aflgjald (þéttbýli)', applies:'Iðnaður urban', unit:'kr/kW/ár', noVat:'17,415', withVat:'21,595', vat:'24%', cat:'not_ev' },
+      { code:'V10T', name:'Ómæld smánotkun (þéttbýli)', applies:'Smáheimtaug', unit:'kr/kW/ár', noVat:'245,210', withVat:'304,060', vat:'24%', cat:'not_ev' },
+      { code:'A30T', name:'Útilýsing (þéttbýli)', applies:'Götulýsing', unit:'kr/kW/ár', noVat:'45,739', withVat:'56,716', vat:'24%', cat:'not_ev' },
+      { code:'D40', name:'Skerðanleg orka <1 MW (innan afltopps)', applies:'Interruptible', unit:'kr/kWh', noVat:'—', withVat:'8.74', vat:'24%', cat:'not_ev' },
+      { code:'AXX', name:'Mælaleiga — fjarmælir', applies:'Service', unit:'kr/ár', noVat:'62,970', withVat:'78,083', vat:'24%', cat:'not_ev' },
+    ]
+  },
+  {
+    slug: 'nordurorka', tradeName: 'Norðurorka', legalName: 'Norðurorka hf.', rail: 'multi', status: 'active',
+    kennitala: '550978-0169', address: 'Rangárvöllum 5, 603 Akureyri', phone: '460 1300', email: 'nordurorka@no.is', website: 'no.is',
+    roles: ['dso','producer'],
+    serviceArea: ['Akureyri'],
+    tariffUrl: 'https://www.no.is/static/files/2026/Verdskrar/RV/rafveita-gjaldskra-1.1.2026-lokautgafa.pdf', verifiedAt: '2026-04-24', tariffVersion: null, validFrom: '2026-01-01',
+    tariffs: [
+      { code:'A1D', name:'Almenn ≤100A — orkugjald', applies:'≤100A', unit:'kr/kWh', noVat:'9.33', withVat:'11.57', vat:'24%', cat:'general_supply' },
+      { code:'A1D', name:'Almenn ≤100A — fastagjald', applies:'≤100A', unit:'kr/dag', noVat:'60.20', withVat:'74.65', vat:'24%', cat:'general_supply' },
+      { code:'A4D', name:'101–500A — orkugjald', applies:'101–500A', unit:'kr/kWh', noVat:'8.87', withVat:'11.00', vat:'24%', cat:'workplace_ev' },
+      { code:'A4D', name:'101–500A — fastagjald', applies:'101–500A', unit:'kr/dag', noVat:'429.40', withVat:'532.46', vat:'24%', cat:'workplace_ev' },
+      { code:'T1D', name:'Tvígjald — daggjald (08–20)', applies:'Time-of-use', unit:'kr/kWh', noVat:'11.87', withVat:'14.72', vat:'24%', cat:'general_supply' },
+      { code:'T1D', name:'Tvígjald — næturgjald (20–08)', applies:'Time-of-use', unit:'kr/kWh', noVat:'4.63', withVat:'5.74', vat:'24%', cat:'home_ev' },
+      { code:'T1D', name:'Tvígjald — fastagjald', applies:'Time-of-use', unit:'kr/dag', noVat:'910.89', withVat:'1,129.50', vat:'24%', cat:'general_supply' },
+      { code:'T3LD', name:'Þrígjald lágspenna — lág', applies:'Time-of-use', unit:'kr/kWh', noVat:'6.34', withVat:'7.86', vat:'24%', cat:'workplace_ev' },
+      { code:'T3LD', name:'Þrígjald lágspenna — mið', applies:'Time-of-use', unit:'kr/kWh', noVat:'8.67', withVat:'10.75', vat:'24%', cat:'workplace_ev' },
+      { code:'T3LD', name:'Þrígjald lágspenna — há', applies:'Time-of-use', unit:'kr/kWh', noVat:'17.47', withVat:'21.66', vat:'24%', cat:'workplace_ev' },
+      { code:'C1D', name:'Rafhitun — orkugjald', applies:'Húshitun', unit:'kr/kWh', noVat:'9.33', withVat:'10.36', vat:'11%', cat:'not_ev' },
+      { code:'B11D', name:'Aflgjald lágspenna — orkugjald', applies:'Iðnaður', unit:'kr/kWh', noVat:'3.61', withVat:'4.48', vat:'24%', cat:'not_ev' },
+      { code:'B11D', name:'Aflgjald lágspenna — aflgjald', applies:'Iðnaður', unit:'kr/kW/dag', noVat:'46.61', withVat:'57.80', vat:'24%', cat:'not_ev' },
+      { code:'B22D', name:'Aflgjald háspenna — orkugjald', applies:'Iðnaður', unit:'kr/kWh', noVat:'3.53', withVat:'4.38', vat:'24%', cat:'not_ev' },
+    ]
+  },
+  {
+    slug: 'rafveita-reydarfjardar', tradeName: 'Rafveita Reyðarfjarðar', legalName: 'Rafveita Reyðarfjarðar (Fjarðabyggð)', rail: 'dso', status: 'active',
+    kennitala: '410272-2459', address: 'Hafnargötu 2, 730 Reyðarfirði', phone: '470 9000', email: 'fjardabyggd@fjardabyggd.is', website: 'fjardabyggd.is',
+    roles: ['dso'],
+    serviceArea: ['Reyðarfjörður'],
+    tariffUrl: null, verifiedAt: '2026-04-24', tariffVersion: null, validFrom: null,
+    note: 'No public tariff page — request schedule from Fjarðabyggð directly.',
+    tariffs: []
+  },
+
+  // ── TSO ──────────────────────────────────────────────
+  {
+    slug: 'landsnet', tradeName: 'Landsnet', legalName: 'Landsnet hf.', rail: 'tso', status: 'active',
+    kennitala: '—', address: 'Reykjavík', phone: '—', email: '—', website: 'landsnet.is',
+    roles: ['tso'],
+    serviceArea: ['National transmission grid'],
+    tariffUrl: 'https://www.landsnet.is/library?itemid=efb00f23-d1f2-4d51-aaaa-bf9043e0ea8a', verifiedAt: '2026-04-24', tariffVersion: '20', validFrom: '2016-01-01',
+    note: 'Wholesale, no VAT. Stórnotendur invoiced in USD. Sits behind every DSO — never directly billed to a charging session.',
+    tariffs: [
+      { code:'4.1', name:'Innmötun — afhendingargjald', applies:'Production', unit:'kr/ár', noVat:'5,176,725', withVat:'—', vat:'—', cat:'not_ev' },
+      { code:'4.1', name:'Úttekt dreifiveitur — afhendingargjald', applies:'DSO offtake', unit:'kr/ár', noVat:'5,176,725', withVat:'—', vat:'—', cat:'not_ev' },
+      { code:'4.1', name:'Úttekt dreifiveitur — aflgjald', applies:'DSO offtake', unit:'kr/ársMW', noVat:'5,315,090', withVat:'—', vat:'—', cat:'not_ev' },
+      { code:'4.1', name:'Úttekt dreifiveitur — orkugjald', applies:'DSO offtake', unit:'kr/MWst', noVat:'384.87', withVat:'—', vat:'—', cat:'not_ev' },
+      { code:'4.1', name:'Úttekt stórnotendur — afhendingargjald', applies:'Large consumer', unit:'USD/ár', noVat:'55,395', withVat:'—', vat:'—', cat:'not_ev' },
+      { code:'4.1', name:'Úttekt stórnotendur — aflgjald', applies:'Large consumer', unit:'USD/ársMW', noVat:'32,268', withVat:'—', vat:'—', cat:'not_ev' },
+      { code:'4.1', name:'Úttekt stórnotendur — orkugjald', applies:'Large consumer', unit:'USD/MWst', noVat:'1.632', withVat:'—', vat:'—', cat:'not_ev' },
+      { code:'4.2', name:'Kerfisþjónusta', applies:'All offtake', unit:'kr/MWst', noVat:'47.69', withVat:'—', vat:'—', cat:'not_ev' },
+      { code:'4.2', name:'Flutningstöp', applies:'All offtake', unit:'kr/MWst', noVat:'98.41', withVat:'—', vat:'—', cat:'not_ev' },
+    ]
+  },
+];
+
+const ROLE_LABEL = {
+  retailer: 'Retailer', dso: 'DSO', tso: 'TSO',
+  producer: 'Producer', 'public-charging': 'Public charging', 'home-charging': 'Charger rental', aggregator: 'Aggregator',
+};
+
+// ── State ─────────────────────────────────────────────
+const EV_CATS = ['public_ev','workplace_ev','home_ev','general_supply'];
+let evOnly = true;
+let visibleCats = new Set(EV_CATS);
+const activeRoles = new Set();
+let searchQuery = '';
+
+// ── Render helpers ────────────────────────────────────
+function partyMatchesFilters(p) {
+  if (activeRoles.size > 0) {
+    const has = p.roles.some(r => activeRoles.has(r));
+    if (!has) return false;
+  }
+  if (searchQuery) {
+    const hay = (p.tradeName + ' ' + p.legalName + ' ' + (p.kennitala||'') + ' ' + (p.serviceArea||[]).join(' ')).toLowerCase();
+    if (!hay.includes(searchQuery)) return false;
+  }
+  return true;
+}
+
+function partyCardHtml(p) {
+  const railCls = p.rail;
+  const statusCls = p.status === 'exited' ? 'exited' : 'active';
+  const subtitleParts = [];
+  if (p.kennitala && p.kennitala !== '—') subtitleParts.push(`kt ${p.kennitala}`);
+  if (p.vsk) subtitleParts.push(`vsk ${p.vsk}`);
+  if (p.address) subtitleParts.push(p.address);
+  if (p.phone && p.phone !== '—') subtitleParts.push(p.phone);
+  const sub = subtitleParts.join(' · ');
+
+  const inlineRoles = p.roles.map(r => {
+    const pressed = activeRoles.has(r) ? 'true' : 'false';
+    return `<button class="role-chip" data-role="${r}" aria-pressed="${pressed}" type="button" data-stop>${ROLE_LABEL[r] || r}</button>`;
+  }).join('');
+
+  const areaHtml = p.serviceArea ? p.serviceArea.map(a => `<span>${a}</span>`).join('') : '';
+
+  const tariffRows = p.tariffs.map(t => {
+    const noVat = t.noVat && t.noVat !== '—' ? t.noVat : '—';
+    const withVat = t.withVat && t.withVat !== '—' ? t.withVat : '—';
+    return `
+      <tr data-cat="${t.cat}">
+        <td><span class="cat-dot ${t.cat}"></span></td>
+        <td class="code">${t.code || '—'}</td>
+        <td>${t.name}</td>
+        <td>${t.applies}</td>
+        <td>${t.unit}</td>
+        <td class="num">${noVat}</td>
+        <td class="num">${withVat}</td>
+        <td>${t.vat}</td>
+      </tr>`;
+  }).join('');
+
+  const noteHtml = p.note ? `<div class="empty-note">${p.note}</div>` : '';
+  const validityHtml = p.validFrom ? `Effective ${p.validFrom}` : 'Validity not stated';
+  const versionHtml = p.tariffVersion ? ` · Tariff nr. ${p.tariffVersion}` : '';
+
+  const tariffSection = p.tariffs.length === 0
+    ? `<div class="empty-note">No tariff items in catalogue.</div>`
+    : `
+      <table class="tariff-table">
+        <thead>
+          <tr>
+            <th></th><th>Code</th><th>Name</th><th>Applies to</th>
+            <th>Unit</th><th class="num">Ex VAT</th><th class="num">+VAT</th><th>VAT</th>
+          </tr>
+        </thead>
+        <tbody>${tariffRows}</tbody>
+      </table>
+      <div class="tariff-footer">
+        <span>${validityHtml}${versionHtml}</span>
+        <span>·</span>
+        <span>Source verified ${p.verifiedAt}</span>
+        <span>·</span>
+        <span class="visible-count" data-vc>… of ${p.tariffs.length} visible</span>
+      </div>`;
+
+  return `
+    <article class="card party ${railCls} ${statusCls}" data-slug="${p.slug}">
+      <div class="rail"></div>
+      <div class="party-head">
+        ${p.logoUrl ? `<div class="party-logo"><img src="${p.logoUrl}" alt="${p.tradeName} logo" loading="lazy" /></div>` : ''}
+        <div class="titleblock">
+          <div>
+            <span class="name">${p.tradeName}</span>
+            <span class="legal">· ${p.legalName}</span>
+          </div>
+          <div class="meta">${sub || '—'}</div>
+          <div class="roles-inline">${inlineRoles}</div>
+        </div>
+        <span class="status-pill ${statusCls}">${p.status}</span>
+        <span class="caret">▾</span>
+      </div>
+      <div class="party-body">
+        ${p.serviceArea ? `
+          <div class="section-eyebrow">Service area</div>
+          <div class="area-chips">${areaHtml}</div>
+        ` : ''}
+
+        <div class="section-eyebrow">Identity</div>
+        <div class="info-grid">
+          <div><b>Kennitala</b> ${p.kennitala || '—'}</div>
+          ${p.vsk ? `<div><b>VSK nr.</b> ${p.vsk}</div>` : ''}
+          ${p.lei ? `<div><b>LEI</b> ${p.lei}</div>` : ''}
+          <div><b>Address</b> ${p.address || '—'}</div>
+          <div><b>Phone</b> ${p.phone || '—'}</div>
+          <div><b>Email</b> ${p.email || '—'}</div>
+          <div><b>Website</b> <a href="https://${p.website}" target="_blank" rel="noopener">${p.website}</a></div>
+        </div>
+
+        <div class="section-eyebrow">Tariff source</div>
+        ${p.tariffUrl
+          ? `<div class="tariff-source"><a href="${p.tariffUrl}" target="_blank" rel="noopener">${p.tariffUrl}</a><span class="verified">✓ Verified ${p.verifiedAt}</span></div>`
+          : `<div class="empty-note">No public tariff URL.</div>`}
+
+        ${noteHtml}
+
+        <div class="section-eyebrow">Tariff items</div>
+        ${tariffSection}
+      </div>
+    </article>`;
+}
+
+function render() {
+  const root = document.getElementById('parties');
+  const visible = parties.filter(partyMatchesFilters);
+  root.innerHTML = visible.map(partyCardHtml).join('');
+  document.getElementById('emptyState').style.display = visible.length === 0 ? 'block' : 'none';
+  applyVisibility();
+  attachExpandHandlers();
+  attachInlineRoleChipHandlers();
+  updateStats(visible);
+  updateSummary(visible);
+}
+
+function attachExpandHandlers() {
+  document.querySelectorAll('.party').forEach(el => {
+    const head = el.querySelector('.party-head');
+    head.addEventListener('click', (e) => {
+      if (e.target.closest('[data-stop]')) return;
+      el.classList.toggle('expanded');
+    });
+  });
+}
+
+function attachInlineRoleChipHandlers() {
+  document.querySelectorAll('.party-head .role-chip').forEach(chip => {
+    chip.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleRole(chip.getAttribute('data-role'));
+    });
+  });
+}
+
+function applyVisibility() {
+  let totalVisible = 0;
+  document.querySelectorAll('.party').forEach(party => {
+    let visibleHere = 0;
+    party.querySelectorAll('tbody tr').forEach(tr => {
+      const cat = tr.getAttribute('data-cat');
+      const show = visibleCats.has(cat);
+      tr.classList.toggle('hidden-row', !show);
+      if (show) visibleHere++;
+    });
+    totalVisible += visibleHere;
+    const vc = party.querySelector('[data-vc]');
+    if (vc) {
+      const total = party.querySelectorAll('tbody tr').length;
+      vc.textContent = `${visibleHere} of ${total} visible`;
+    }
+  });
+  document.getElementById('stat-rows').textContent = totalVisible.toString();
+}
+
+function updateStats(visible) {
+  document.getElementById('stat-retailers').textContent = visible.filter(p => p.roles.includes('retailer') && p.status === 'active').length;
+  document.getElementById('stat-dsos').textContent = visible.filter(p => p.roles.includes('dso') && p.status === 'active').length;
+  document.getElementById('stat-tso').textContent = visible.filter(p => p.roles.includes('tso') && p.status === 'active').length;
+  document.getElementById('stat-cpo').textContent = visible.filter(p => p.roles.includes('public-charging') && p.status === 'active').length;
+
+  // Role badge counts (across the full catalogue, not filtered)
+  Object.keys(ROLE_LABEL).forEach(r => {
+    const el = document.getElementById('badge-' + r);
+    if (el) el.textContent = parties.filter(p => p.roles.includes(r) && p.status === 'active').length;
+  });
+}
+
+function updateSummary(visible) {
+  const total = parties.length;
+  const summary = document.getElementById('summary');
+  const filterChips = [];
+
+  if (evOnly) {
+    filterChips.push(`<span class="active-filter" style="color:var(--sv-green)">EV only<button data-clear="ev" type="button" aria-label="Disable EV-only">✕</button></span>`);
+  }
+  activeRoles.forEach(r => {
+    filterChips.push(`<span class="active-filter">${ROLE_LABEL[r]}<button data-clear-role="${r}" type="button" aria-label="Remove role filter">✕</button></span>`);
+  });
+  if (searchQuery) {
+    filterChips.push(`<span class="active-filter">"${escapeHtml(searchQuery)}"<button data-clear="search" type="button" aria-label="Clear search">✕</button></span>`);
+  }
+  if (!evOnly) {
+    EV_CATS.concat(['not_ev']).forEach(cat => {
+      const def = (cat === 'not_ev') ? false : true;
+      const isOn = visibleCats.has(cat);
+      if (isOn !== def) {
+        const label = isOn ? '+' + cat : '−' + cat;
+        filterChips.push(`<span class="active-filter">${label}<button data-clear-cat="${cat}" type="button" aria-label="Reset category">✕</button></span>`);
+      }
+    });
+  }
+
+  const anyFilter = evOnly !== true || activeRoles.size > 0 || searchQuery || !setsEqual(visibleCats, new Set(EV_CATS));
+  const totalRows = parties.reduce((s,p) => s + p.tariffs.length, 0);
+  let visibleRows = 0;
+  document.querySelectorAll('.party').forEach(party => {
+    party.querySelectorAll('tbody tr').forEach(tr => {
+      if (!tr.classList.contains('hidden-row')) visibleRows++;
+    });
+  });
+
+  summary.innerHTML = `
+    <span class="stats-text">Showing <b>${visible.length}</b> of ${total} parties · <b>${visibleRows}</b> tariff rows visible</span>
+    ${filterChips.join('')}
+    <button class="clear-all" id="clearAll" type="button" ${anyFilter ? '' : 'disabled'}>Clear all filters</button>
+  `;
+  summary.querySelectorAll('[data-clear]').forEach(b => {
+    b.addEventListener('click', () => {
+      const k = b.getAttribute('data-clear');
+      if (k === 'ev') setEvOnly(false);
+      if (k === 'search') { document.getElementById('search').value = ''; searchQuery = ''; document.getElementById('searchBox').classList.remove('has-value'); render(); }
+    });
+  });
+  summary.querySelectorAll('[data-clear-role]').forEach(b => {
+    b.addEventListener('click', () => toggleRole(b.getAttribute('data-clear-role')));
+  });
+  summary.querySelectorAll('[data-clear-cat]').forEach(b => {
+    b.addEventListener('click', () => {
+      const cat = b.getAttribute('data-clear-cat');
+      const def = (cat === 'not_ev') ? false : true;
+      if (def) visibleCats.add(cat); else visibleCats.delete(cat);
+      syncPills();
+      applyVisibility();
+      updateSummary(parties.filter(partyMatchesFilters));
+    });
+  });
+  document.getElementById('clearAll').addEventListener('click', clearAllFilters);
+}
+
+function setsEqual(a, b) {
+  if (a.size !== b.size) return false;
+  for (const x of a) if (!b.has(x)) return false;
+  return true;
+}
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ── EV-only switch ────────────────────────────────────
+function setEvOnly(on) {
+  evOnly = on;
+  const btn = document.getElementById('evOnly');
+  btn.setAttribute('aria-pressed', String(on));
+  document.getElementById('evHint').textContent = on
+    ? ' · hide non-EV tariff rows'
+    : ' · show all tariff rows';
+
+  if (on) {
+    visibleCats = new Set(EV_CATS);
+  } else {
+    visibleCats = new Set([...EV_CATS, 'not_ev']);
+  }
+  syncPills();
+  // Disable pills when EV-only is on
+  document.querySelectorAll('.pill').forEach(p => {
+    p.toggleAttribute('disabled', on);
+  });
+  applyVisibility();
+  updateSummary(parties.filter(partyMatchesFilters));
+}
+
+function syncPills() {
+  document.querySelectorAll('.pill').forEach(p => {
+    const cat = p.getAttribute('data-cat');
+    p.setAttribute('aria-pressed', String(visibleCats.has(cat)));
+  });
+}
+
+// ── Role filtering ────────────────────────────────────
+function toggleRole(role) {
+  if (activeRoles.has(role)) activeRoles.delete(role);
+  else activeRoles.add(role);
+  syncRoleChips();
+  render();
+}
+
+function syncRoleChips() {
+  document.querySelectorAll('.role-chip[data-role]').forEach(c => {
+    c.setAttribute('aria-pressed', activeRoles.has(c.getAttribute('data-role')) ? 'true' : 'false');
+  });
+}
+
+// ── Wire up ───────────────────────────────────────────
+document.getElementById('evOnly').addEventListener('click', () => setEvOnly(!evOnly));
+
+document.querySelectorAll('.filter-row .role-chip').forEach(chip => {
+  chip.addEventListener('click', () => toggleRole(chip.getAttribute('data-role')));
+});
+
+document.querySelectorAll('.pill').forEach(pill => {
+  pill.addEventListener('click', () => {
+    if (pill.hasAttribute('disabled')) return;
+    const cat = pill.getAttribute('data-cat');
+    if (visibleCats.has(cat)) visibleCats.delete(cat);
+    else visibleCats.add(cat);
+    syncPills();
+    applyVisibility();
+    updateSummary(parties.filter(partyMatchesFilters));
+  });
+});
+
+const searchEl = document.getElementById('search');
+searchEl.addEventListener('input', e => {
+  searchQuery = e.target.value.trim().toLowerCase();
+  document.getElementById('searchBox').classList.toggle('has-value', !!searchQuery);
+  render();
+});
+document.getElementById('clearSearch').addEventListener('click', () => {
+  searchEl.value = ''; searchQuery = '';
+  document.getElementById('searchBox').classList.remove('has-value');
+  render(); searchEl.focus();
+});
+searchEl.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && searchEl.value) {
+    searchEl.value = ''; searchQuery = '';
+    document.getElementById('searchBox').classList.remove('has-value');
+    render();
+  }
+});
+
+document.getElementById('toggleAdvanced').addEventListener('click', (e) => {
+  const btn = e.currentTarget;
+  const open = btn.classList.toggle('open');
+  btn.setAttribute('aria-expanded', String(open));
+  document.getElementById('advancedRow').classList.toggle('open', open);
+});
+
+document.getElementById('expandAll').addEventListener('click', () => {
+  document.querySelectorAll('.party').forEach(p => p.classList.add('expanded'));
+});
+document.getElementById('collapseAll').addEventListener('click', () => {
+  document.querySelectorAll('.party').forEach(p => p.classList.remove('expanded'));
+});
+
+function clearAllFilters() {
+  activeRoles.clear();
+  searchQuery = '';
+  searchEl.value = '';
+  document.getElementById('searchBox').classList.remove('has-value');
+  syncRoleChips();
+  setEvOnly(true);
+  render();
+}
+document.getElementById('clearAllEmpty').addEventListener('click', clearAllFilters);
+
+// Scroll-to-top FAB
+const fab = document.getElementById('scrollTop');
+window.addEventListener('scroll', () => {
+  fab.classList.toggle('show', window.scrollY > 400);
+});
+fab.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+
+// Initial paint
+setEvOnly(true);     // also calls applyVisibility + updateSummary
+render();            // first render with default state
+</script>
+
+</body>
+</html>

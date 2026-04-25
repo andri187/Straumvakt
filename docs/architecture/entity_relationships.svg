@@ -1,0 +1,186 @@
+<svg viewBox="0 0 1800 1440" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0a1628"/>
+      <stop offset="100%" stop-color="#06101e"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0f1f3a" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#0a1628" stop-opacity="0.2"/>
+    </linearGradient>
+    <linearGradient id="teal-fill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0d2a32"/>
+      <stop offset="100%" stop-color="#0a1f26"/>
+    </linearGradient>
+    <marker id="ar-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#3b82f6"/>
+    </marker>
+    <marker id="ar-teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2dd4bf"/>
+    </marker>
+    <marker id="ar-mint" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#8EF5C7"/>
+    </marker>
+  </defs>
+
+  <rect width="1800" height="1440" fill="url(#bg)"/>
+
+  <!-- Header -->
+  <text x="900" y="58" text-anchor="middle" font-size="11" font-weight="600" fill="#3b82f6" letter-spacing="6">STRAUMVAKT</text>
+  <text x="900" y="92" text-anchor="middle" font-size="26" font-weight="500" fill="#f8fafc" letter-spacing="-0.3">Entity Relationships — CPO · Driver · Site · Connector</text>
+  <text x="900" y="118" text-anchor="middle" font-size="13" font-weight="300" fill="#64748b">people side and hardware side meet inside a Charge Session · Sprint 1 state reflected inline</text>
+  <line x1="60" y1="148" x2="1740" y2="148" stroke="#1e3a5f" stroke-width="1" opacity="0.4"/>
+
+  <!-- Top: CPO / Org -->
+  <rect x="640" y="168" width="520" height="108" rx="10" fill="url(#teal-fill)" stroke="#2dd4bf" stroke-width="1.5"/>
+  <text x="660" y="194" font-size="10" font-weight="700" fill="#2dd4bf" letter-spacing="2">1 · CPO / ORGANIZATION</text>
+  <text x="660" y="222" font-size="20" font-weight="500" fill="#f8fafc">The SaaS tenant — the operator itself</text>
+  <text x="660" y="244" font-size="12" font-weight="300" fill="#94a3b8">Owns every row via <tspan font-family="monospace" font-size="11">org_id</tspan>. Your Icelandic CPO running workplaces, MDUs, fleet depots under one brand.</text>
+  <text x="660" y="262" font-size="11" font-weight="300" fill="#64748b">schema: <tspan font-family="monospace" font-style="italic">tenancy.organizations</tspan></text>
+
+  <!-- PEOPLE SIDE (left) -->
+  <text x="110" y="310" font-size="10" font-weight="700" fill="#8EF5C7" letter-spacing="3">PEOPLE SIDE · who charges</text>
+
+  <!-- Arrow CPO → Driver -->
+  <path d="M 780 276 Q 780 305 620 305 Q 460 305 460 330" stroke="#8EF5C7" stroke-width="2" fill="none" opacity="0.9" marker-end="url(#ar-mint)"/>
+  <text x="500" y="297" font-size="11" font-weight="500" fill="#f8fafc">has members</text>
+  <text x="500" y="311" font-size="9" font-weight="300" fill="#64748b">via <tspan font-family="monospace" font-size="9">tenancy.memberships</tspan> · role = "driver"</text>
+
+  <!-- Driver card -->
+  <rect x="110" y="330" width="700" height="102" rx="8" fill="#0f2547" stroke="#3b82f6" stroke-width="1.2"/>
+  <text x="130" y="356" font-size="10" font-weight="700" fill="#3b82f6" letter-spacing="2">2 · DRIVER (a User with role=driver)</text>
+  <text x="130" y="382" font-size="18" font-weight="500" fill="#f8fafc">The human who plugs the car in</text>
+  <text x="130" y="402" font-size="12" font-weight="300" fill="#94a3b8">One person, one account. Can be a primary user with family attached, or a fleet driver attached to an employer.</text>
+  <text x="130" y="420" font-size="11" font-weight="300" fill="#64748b">schema: <tspan font-family="monospace" font-style="italic">identity.users</tspan> + <tspan font-family="monospace" font-style="italic">tenancy.memberships</tspan> · key fields: email, national ID (Auðkenni — Sprint 3), role</text>
+
+  <!-- Arrow Driver → Family Group -->
+  <line x1="460" y1="432" x2="460" y2="470" stroke="#8EF5C7" stroke-width="2" opacity="0.9" marker-end="url(#ar-mint)"/>
+  <text x="475" y="456" font-size="11" font-weight="500" fill="#f8fafc">belongs to</text>
+
+  <!-- Family Group -->
+  <rect x="110" y="478" width="700" height="92" rx="8" fill="#0f2547" stroke="#3b82f6" stroke-width="1"/>
+  <text x="130" y="504" font-size="10" font-weight="700" fill="#3b82f6" letter-spacing="2">3 · FAMILY GROUP</text>
+  <text x="130" y="530" font-size="18" font-weight="500" fill="#f8fafc">A primary user plus family members — one billing subject</text>
+  <text x="130" y="550" font-size="12" font-weight="300" fill="#94a3b8">Drives AC user-based pricing. Family members charging on the primary's plan don't pay separately.</text>
+  <text x="130" y="566" font-size="11" font-weight="300" fill="#64748b">schema: <tspan font-family="monospace" font-style="italic">people.family_groups</tspan> + <tspan font-family="monospace" font-style="italic">people.family_memberships</tspan></text>
+
+  <!-- Arrow FG → CustomerPlan -->
+  <line x1="460" y1="570" x2="460" y2="608" stroke="#8EF5C7" stroke-width="2" opacity="0.9" marker-end="url(#ar-mint)"/>
+  <text x="475" y="594" font-size="11" font-weight="500" fill="#f8fafc">subscribes to</text>
+
+  <!-- Customer Plan -->
+  <rect x="110" y="616" width="700" height="112" rx="8" fill="url(#teal-fill)" stroke="#2dd4bf" stroke-width="1.2"/>
+  <text x="130" y="642" font-size="10" font-weight="700" fill="#2dd4bf" letter-spacing="2">4 · CUSTOMER PLAN (driver ↔ SP contract)</text>
+  <text x="130" y="668" font-size="18" font-weight="500" fill="#f8fafc">What the driver pays and how</text>
+  <text x="130" y="688" font-size="12" font-weight="300" fill="#94a3b8">Tariff (ToU rates, overtime penalty) + products (RFID, subscription fee, usage credit) + balance type (prepaid / postpaid / non-paying).</text>
+  <text x="130" y="706" font-size="11" font-weight="300" fill="#94a3b8">Governs the money math at session end. Country + currency + locale variants.</text>
+  <text x="130" y="722" font-size="11" font-weight="300" fill="#64748b">schema: <tspan font-family="monospace" font-style="italic">billing.customer_plans</tspan> + <tspan font-family="monospace" font-style="italic">billing.subscriptions</tspan></text>
+
+  <!-- HARDWARE SIDE (right) -->
+  <text x="1040" y="310" font-size="10" font-weight="700" fill="#8EF5C7" letter-spacing="3">HARDWARE SIDE · where the power flows</text>
+
+  <!-- Arrow CPO → Host -->
+  <path d="M 1020 276 Q 1020 305 1180 305 Q 1340 305 1340 330" stroke="#2dd4bf" stroke-width="2" fill="none" opacity="0.9" marker-end="url(#ar-teal)"/>
+  <text x="1120" y="297" font-size="11" font-weight="500" fill="#f8fafc">contracts with (revenue share)</text>
+  <text x="1120" y="311" font-size="9" font-weight="300" fill="#64748b">via <tspan font-family="monospace" font-size="9">hosts.charger_service_plans</tspan></text>
+
+  <!-- Charger Host -->
+  <rect x="990" y="330" width="700" height="102" rx="8" fill="#0f2547" stroke="#2dd4bf" stroke-width="1.2"/>
+  <text x="1010" y="356" font-size="10" font-weight="700" fill="#2dd4bf" letter-spacing="2">A · CHARGER HOST</text>
+  <text x="1010" y="382" font-size="18" font-weight="500" fill="#f8fafc">The business at the site — workplace, MDU, hotel, fleet</text>
+  <text x="1010" y="402" font-size="12" font-weight="300" fill="#94a3b8">One CPO serves many Hosts. Each Host has its own contract, revenue share, branding.</text>
+  <text x="1010" y="420" font-size="11" font-weight="300" fill="#64748b">schema: <tspan font-family="monospace" font-style="italic">hosts.charger_hosts</tspan> · type: <tspan font-family="monospace" font-size="11">WORKPLACE / MDU / FLEET / HOTEL / RETAIL</tspan></text>
+
+  <!-- Arrow Host → Property -->
+  <line x1="1340" y1="432" x2="1340" y2="470" stroke="#2dd4bf" stroke-width="2" opacity="0.9" marker-end="url(#ar-teal)"/>
+  <text x="1355" y="456" font-size="11" font-weight="500" fill="#f8fafc">owns / leases</text>
+
+  <!-- Property -->
+  <rect x="990" y="478" width="700" height="82" rx="8" fill="#0f2547" stroke="#3b82f6" stroke-width="1"/>
+  <text x="1010" y="504" font-size="10" font-weight="700" fill="#3b82f6" letter-spacing="2">B · PROPERTY</text>
+  <text x="1010" y="528" font-size="17" font-weight="500" fill="#f8fafc">A physical location — a building, a parcel</text>
+  <text x="1010" y="548" font-size="11" font-weight="300" fill="#94a3b8">One address. A Host can have several properties. Can be multi-installation per TTR §4.1.7 exceptions.</text>
+
+  <!-- Arrow Property → Site -->
+  <line x1="1340" y1="560" x2="1340" y2="598" stroke="#2dd4bf" stroke-width="2" opacity="0.9" marker-end="url(#ar-teal)"/>
+  <text x="1355" y="584" font-size="11" font-weight="500" fill="#f8fafc">contains</text>
+
+  <!-- Site (one of the four — highlighted amber) -->
+  <rect x="990" y="606" width="700" height="98" rx="8" fill="#0f2547" stroke="#FBBF24" stroke-width="1.5"/>
+  <text x="1010" y="632" font-size="10" font-weight="700" fill="#FBBF24" letter-spacing="2">C · SITE  ⬅ one of the four you asked about</text>
+  <text x="1010" y="658" font-size="18" font-weight="500" fill="#f8fafc">A sublocation within a property — floor, parking bay, depot</text>
+  <text x="1010" y="678" font-size="12" font-weight="300" fill="#94a3b8">Where chargers, meters, and (ADR 0005 pending) the Installation + Circuit tree live.</text>
+  <text x="1010" y="694" font-size="11" font-weight="300" fill="#64748b">schema: <tspan font-family="monospace" font-style="italic">properties.sites</tspan> · example: "Grandagarður P1 — floor B"</text>
+
+  <!-- Arrow Site → SiteAsset -->
+  <line x1="1340" y1="704" x2="1340" y2="740" stroke="#2dd4bf" stroke-width="2" opacity="0.9" marker-end="url(#ar-teal)"/>
+  <text x="1355" y="726" font-size="11" font-weight="500" fill="#f8fafc">holds (charger · meter · modem · controller)</text>
+
+  <!-- SiteAsset (Charger kind) -->
+  <rect x="990" y="748" width="700" height="82" rx="8" fill="#0f2547" stroke="#3b82f6" stroke-width="1"/>
+  <text x="1010" y="774" font-size="10" font-weight="700" fill="#3b82f6" letter-spacing="2">D · SITE ASSET (kind = charger)</text>
+  <text x="1010" y="798" font-size="17" font-weight="500" fill="#f8fafc">The physical charger on the wall</text>
+  <text x="1010" y="818" font-size="11" font-weight="300" fill="#94a3b8">Vendor, model, serial, firmware, warranty. Example: Zaptec Pro via Hardware Catalog (ADR 0002).</text>
+
+  <!-- Arrow SiteAsset → OCPPIdentity -->
+  <line x1="1340" y1="830" x2="1340" y2="866" stroke="#2dd4bf" stroke-width="2" opacity="0.9" marker-end="url(#ar-teal)"/>
+  <text x="1355" y="852" font-size="11" font-weight="500" fill="#f8fafc">controls via (1 or more)</text>
+
+  <!-- OCPP Identity - LIVE marker for Sprint 1.4 -->
+  <rect x="990" y="874" width="700" height="94" rx="8" fill="#0f2547" stroke="#2dd4bf" stroke-width="1.5"/>
+  <text x="1010" y="900" font-size="10" font-weight="700" fill="#2dd4bf" letter-spacing="2">E · OCPP IDENTITY</text>
+  <text x="1560" y="900" font-size="9" font-weight="700" fill="#3ee9a7" letter-spacing="2" text-anchor="end">● SPRINT 1.4 LIVE</text>
+  <text x="1010" y="924" font-size="17" font-weight="500" fill="#f8fafc">The control endpoint that speaks OCPP</text>
+  <text x="1010" y="944" font-size="11" font-weight="300" fill="#94a3b8">Each row has a live Durable Object at <tspan font-family="monospace" font-size="10">gateway/src/identity-do.ts</tspan> — Basic-Auth, sticky WebSocket,</text>
+  <text x="1010" y="960" font-size="11" font-weight="300" fill="#94a3b8">Zod-validated OCPP 1.6J frames, signed ingest to <tspan font-family="monospace" font-size="10">hlada</tspan> via Cloudflare Service Binding.</text>
+
+  <!-- Arrow OCPP Identity → Connector -->
+  <line x1="1340" y1="968" x2="1340" y2="1006" stroke="#2dd4bf" stroke-width="2" opacity="0.9" marker-end="url(#ar-teal)"/>
+  <text x="1355" y="992" font-size="11" font-weight="500" fill="#f8fafc">exposes one or more</text>
+
+  <!-- Connector (highlighted amber) -->
+  <rect x="990" y="1014" width="700" height="108" rx="8" fill="#0f2547" stroke="#FBBF24" stroke-width="1.5"/>
+  <text x="1010" y="1040" font-size="10" font-weight="700" fill="#FBBF24" letter-spacing="2">F · CONNECTOR  ⬅ one of the four you asked about</text>
+  <text x="1010" y="1066" font-size="18" font-weight="500" fill="#f8fafc">The socket the EV plugs into</text>
+  <text x="1010" y="1086" font-size="12" font-weight="300" fill="#94a3b8">Type 2 / CCS2 / CHAdeMO / Schuko. Max power rating. The place a charging session actually happens.</text>
+  <text x="1010" y="1106" font-size="11" font-weight="300" fill="#64748b">schema: <tspan font-family="monospace" font-style="italic">ocpp.connectors</tspan> · example: Zaptec Pro, connector #1, Type 2, 22 kW</text>
+
+  <!-- Arrow CustomerPlan → Session (from left, long curve) -->
+  <path d="M 460 728 Q 460 1120 760 1200" stroke="#8EF5C7" stroke-width="2" fill="none" opacity="0.85" marker-end="url(#ar-mint)"/>
+  <text x="310" y="1050" font-size="11" font-weight="500" fill="#f8fafc">governs pricing for</text>
+  <text x="310" y="1066" font-size="9" font-weight="300" fill="#64748b">tariff + products + balance type</text>
+
+  <!-- Arrow Connector → Session (from right) -->
+  <path d="M 1340 1122 Q 1340 1180 1040 1200" stroke="#2dd4bf" stroke-width="2" fill="none" opacity="0.85" marker-end="url(#ar-teal)"/>
+  <text x="1420" y="1160" font-size="11" font-weight="500" fill="#f8fafc">plugged into / session on</text>
+
+  <!-- Charge Session - the binding, LIVE marker for 1.1 -->
+  <rect x="470" y="1190" width="860" height="140" rx="10" fill="url(#teal-fill)" stroke="#2dd4bf" stroke-width="2"/>
+  <text x="490" y="1216" font-size="10" font-weight="700" fill="#2dd4bf" letter-spacing="3">★ THE BINDING · a CHARGE SESSION is where it all meets</text>
+  <text x="1310" y="1216" font-size="9" font-weight="700" fill="#3ee9a7" letter-spacing="2" text-anchor="end">● SPRINT 1.1 LIVE</text>
+  <text x="900" y="1248" text-anchor="middle" font-size="20" font-weight="500" fill="#f8fafc">Driver × Connector × Site × CPO — at one moment in time</text>
+  <text x="900" y="1272" text-anchor="middle" font-size="12" font-weight="300" fill="#94a3b8">Records started_at, ended_at, energy (Wh), stop reason. Cost resolves from the driver's plan + the site's tariff.</text>
+  <text x="900" y="1292" text-anchor="middle" font-size="12" font-weight="300" fill="#94a3b8">Every state change persists to <tspan font-family="monospace" font-size="11">events.event_log</tspan> first via <tspan font-family="monospace" font-size="11">/api/ocpp/events</tspan>, then projects into this row.</text>
+  <text x="900" y="1312" text-anchor="middle" font-size="11" font-weight="300" fill="#64748b">schema: <tspan font-family="monospace" font-style="italic">charging.sessions</tspan> · FKs: org_id, site_id, charger_id, ocpp_identity_id, connector_id, user_id</text>
+
+  <!-- Footer / Legend -->
+  <line x1="60" y1="1352" x2="1740" y2="1352" stroke="#1e3a5f" stroke-width="1" opacity="0.4"/>
+
+  <text x="80" y="1382" font-size="10" font-weight="700" fill="#3b82f6" letter-spacing="3">HOW TO READ</text>
+  <g font-size="11" fill="#94a3b8">
+    <line x1="200" y1="1377" x2="232" y2="1377" stroke="#8EF5C7" stroke-width="2" marker-end="url(#ar-mint)"/>
+    <text x="240" y="1382">people side (who charges)</text>
+
+    <line x1="420" y1="1377" x2="452" y2="1377" stroke="#2dd4bf" stroke-width="2" marker-end="url(#ar-teal)"/>
+    <text x="460" y="1382">hardware side (where power flows)</text>
+
+    <rect x="670" y="1370" width="14" height="14" rx="3" fill="#0f2547" stroke="#FBBF24" stroke-width="1.5"/>
+    <text x="692" y="1382">the four you asked about</text>
+
+    <circle cx="870" cy="1377" r="4" fill="#3ee9a7"/>
+    <text x="882" y="1382">live as of Sprint 1.x</text>
+  </g>
+
+  <text x="80" y="1414" font-size="10" font-weight="700" fill="#2dd4bf" letter-spacing="3">BOTTOM LINE</text>
+  <text x="260" y="1414" font-size="12" font-weight="400" fill="#f8fafc">CPO owns everything · Driver and Connector never touch directly — they meet inside a <tspan fill="#2dd4bf">Charge Session</tspan>, which knows the Site and the CPO from both sides · OCPPIdentity is the wire between domain and hardware (Sprint 1.4 live).</text>
+</svg>

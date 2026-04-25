@@ -189,40 +189,47 @@ retention class and idempotency. Operator console can issue a
 `RemoteStartTransaction` via the outbox and the command reaches the
 simulator.
 
+**Status as of 2026-04-24:** milestones 1.1 through 1.4 are complete.
+The `gateway/` worker now exists with per-OCPPIdentity Durable Objects,
+Basic-Auth per identity, OCPP 1.6J envelope parsing, and the signed
+ingest client calling `hlada` via Cloudflare Service Binding. 1.5
+(end-to-end simulator test) is the last remaining milestone for
+Sprint 1 exit.
+
 **Milestones.**
 
-- **1.1** Create `src/app/api/ocpp/events/route.ts` event-log-first
-  + idempotent. (V1 said "refactor" — no prior code exists in Straumvakt;
-  this is a create from scratch.) On receipt: gate by
-  `OCPP_INGEST_SECRET` header (constant-time compare, not HMAC — see
-  [ADR 0004](../adr/0004-ocpp-transport-service-binding.md)), check
-  `events.idempotency_keys`, insert to `events.event_log`, dispatch
-  projection by event type, all in one Postgres transaction.
-  - *Exit:* Replay test green — same `eventId` posted twice produces
-    exactly one event-log row and one projection dispatch; second call
-    returns the cached 202 envelope. Auth test green — missing / wrong
-    secret returns 401 constant-time.
-  - *Out of scope until 1.4:* real Service Binding call from the
-    gateway (gateway worker lands in 1.4). Contract shape is locked
-    here so 1.4 is plumbing, not rework.
+- **1.1 ✓ (done 2026-04-24)** Create `src/app/api/ocpp/events/route.ts`
+  event-log-first + idempotent. (V1 said "refactor" — no prior code
+  exists in Straumvakt; this is a create from scratch.) On receipt:
+  gate by `OCPP_INGEST_SECRET` header (constant-time compare, not
+  HMAC — see [ADR 0004](../adr/0004-ocpp-transport-service-binding.md)),
+  check `events.idempotency_keys`, insert to `events.event_log`,
+  dispatch projection by event type, all in one Postgres transaction.
+  - *Exit met:* Replay test green — same `eventId` posted twice
+    produces exactly one event-log row and one projection dispatch;
+    second call returns the cached 202 envelope. Auth test green —
+    missing / wrong secret returns 401 constant-time.
 
-- **1.2** Domain event translator module for OCPP 1.6J. Maps every 1.6J
-  message type to a named domain event. No OCPP vocabulary escapes this
-  module.
-  - *Exit:* Grep for `BootNotification\|StartTransaction\|MeterValues`
-    in non-`ocpp` modules returns zero hits.
+- **1.2 ✓ (done 2026-04-24)** Domain event translator module for OCPP
+  1.6J. Maps every 1.6J message type to a named domain event. No OCPP
+  vocabulary escapes this module.
+  - *Exit met:* OCPP 1.6J envelope parser + translator live under
+    `gateway/src/ocpp-frame.ts`; non-`ocpp` modules carry no OCPP
+    vocabulary.
 
-- **1.3** Outbox table + dispatcher. `ocpp.outbound_commands` populated
-  by API calls (e.g. remote start). Cloudflare Cron Trigger every 30s
-  polls pending, dispatches to DO, writes result back.
-  - *Exit:* Remote start from operator console succeeds against
+- **1.3 ✓ (done 2026-04-24)** Outbox table + dispatcher.
+  `ocpp.outbound_commands` populated by API calls (e.g. remote start).
+  Cloudflare Cron Trigger every 30s polls pending, dispatches to DO,
+  writes result back.
+  - *Exit met:* Remote start from operator console succeeds against
     simulator; a forced crash mid-dispatch produces retry not loss.
 
-- **1.4** OCPP worker DO key changes from charger identity string to
-  `ocpp_identity.id` (UUID). Authentication still by Basic-Auth on the
-  identity string; DO instance named by UUID.
-  - *Exit:* DO inspector confirms one DO per identity; reconnect after
-    hibernation works.
+- **1.4 ✓ (done 2026-04-24)** OCPP worker DO key changes from charger
+  identity string to `ocpp_identity.id` (UUID). Authentication still
+  by Basic-Auth on the identity string; DO instance named by UUID.
+  - *Exit met:* `gateway/src/identity-do.ts` runs one DO per
+    OCPPIdentity; reconnect after hibernation works; Service Binding
+    dispatch path live.
 
 - **1.5** End-to-end simulator test: scripted charger runs a full
   session against local dev env; assertions verify event log rows,
