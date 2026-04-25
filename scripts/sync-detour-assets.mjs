@@ -8,7 +8,15 @@
  * Sources are absolute Windows paths because the assets live outside
  * the Straumvakt repo. Adjust here if your tree differs.
  */
-import { cpSync, rmSync, existsSync, mkdirSync, statSync } from "node:fs";
+import {
+  cpSync,
+  rmSync,
+  existsSync,
+  mkdirSync,
+  statSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { resolve } from "node:path";
 
 const here = resolve(import.meta.dirname);
@@ -63,4 +71,21 @@ for (const t of tasks) {
   }
   console.log(`[sync] ${t.name}: ${t.from} → ${t.to}`);
 }
+
+// Post-process: rewrite Flutter <base href="/"> to "/mobile-app-mock/"
+// so asset paths resolve correctly when the build is served from a
+// subpath via Next's public/ directory.
+const flutterIndex = resolve(repoRoot, "public", "mobile-app-mock", "index.html");
+if (existsSync(flutterIndex)) {
+  const before = readFileSync(flutterIndex, "utf8");
+  const after = before.replace(
+    /<base href="\/">/,
+    '<base href="/mobile-app-mock/">',
+  );
+  if (before !== after) {
+    writeFileSync(flutterIndex, after);
+    console.log("[sync] flutter base-href rewritten → /mobile-app-mock/");
+  }
+}
+
 console.log("[sync] done.");

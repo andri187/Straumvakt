@@ -2,41 +2,77 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Smartphone, BookOpen, Zap } from "lucide-react";
+import {
+  LayoutDashboard,
+  Smartphone,
+  BookOpen,
+  Zap,
+  Wrench,
+  Globe,
+} from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { useLanguage } from "@/components/language-provider";
 import { useSidebar } from "@/components/sidebar-context";
 
-type NavItem = {
+type Label = { is: string; en: string };
+
+type LeafItem = {
+  kind: "leaf";
   href: string;
-  label: { is: string; en: string };
+  label: Label;
   icon: LucideIcon;
 };
 
+type GroupItem = {
+  kind: "group";
+  basePath: string; // routes starting with this are considered "in this group"
+  label: Label;
+  icon: LucideIcon;
+  children: { href: string; label: Label; icon: LucideIcon }[];
+};
+
+type NavItem = LeafItem | GroupItem;
+
 // Minimal Sprint 0 nav — Dashboard only. Expanded in Sprint 5 per V3 plan.
-// Mobile App / Reference / Zaptec API are operator-side detour panels
-// added during the Sprint 1.5 UI detour for previewing external assets.
+// Mobile App / Reference / Technical Read are operator-side detour
+// panels added during the Sprint 1.5 UI detour.
 const nav: NavItem[] = [
   {
+    kind: "leaf",
     href: "/dashboard",
     label: { is: "Mælaborð", en: "Dashboard" },
     icon: LayoutDashboard,
   },
   {
+    kind: "leaf",
     href: "/mobile-app",
     label: { is: "Snjalltæki", en: "Mobile App" },
     icon: Smartphone,
   },
   {
-    href: "/reference",
-    label: { is: "Tilvísanir", en: "Reference" },
-    icon: BookOpen,
+    kind: "leaf",
+    href: "/technical-read",
+    label: { is: "Tæknilegur lestur", en: "Technical Read" },
+    icon: Wrench,
   },
   {
-    href: "/zaptec",
-    label: { is: "Zaptec API", en: "Zaptec API" },
-    icon: Zap,
+    kind: "group",
+    basePath: "/reference",
+    label: { is: "Tilvísanir", en: "Reference" },
+    icon: BookOpen,
+    children: [
+      {
+        href: "/reference",
+        label: { is: "Orkuaðilar Íslands", en: "Iceland — Energy Parties" },
+        icon: Globe,
+      },
+      {
+        href: "/reference/zaptec-api",
+        label: { is: "Zaptec API", en: "Zaptec API" },
+        icon: Zap,
+      },
+    ],
   },
 ];
 
@@ -125,30 +161,97 @@ export function Sidebar() {
         </div>
 
         <nav className="flex-1 space-y-0.5 overflow-y-auto px-2 py-4">
-          {nav.map(({ href, label, icon: Icon }) => {
-            const active = pathname === href || pathname.startsWith(href + "/");
-            return (
-              <Link
-                key={href}
-                href={href as Parameters<typeof Link>[0]["href"]}
-                title={label[language]}
-                onClick={close}
-                className={cn(
-                  "flex min-h-[40px] items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                  "md:justify-center md:px-0 lg:justify-start lg:px-3",
-                  active
-                    ? "bg-brand-500/15 text-sv-sky ring-1 ring-inset ring-brand-500/25"
-                    : "text-ink-300 hover:bg-bg-raised hover:text-ink-50",
-                )}
-              >
-                <Icon
+          {nav.map((item) => {
+            if (item.kind === "leaf") {
+              const active =
+                pathname === item.href || pathname.startsWith(item.href + "/");
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href as Parameters<typeof Link>[0]["href"]}
+                  title={item.label[language]}
+                  onClick={close}
                   className={cn(
-                    "h-5 w-5 shrink-0",
-                    active ? "text-sv-green" : "text-ink-400",
+                    "flex min-h-[40px] items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                    "md:justify-center md:px-0 lg:justify-start lg:px-3",
+                    active
+                      ? "bg-brand-500/15 text-sv-sky ring-1 ring-inset ring-brand-500/25"
+                      : "text-ink-300 hover:bg-bg-raised hover:text-ink-50",
                   )}
-                />
-                <span className="md:hidden lg:block">{label[language]}</span>
-              </Link>
+                >
+                  <Icon
+                    className={cn(
+                      "h-5 w-5 shrink-0",
+                      active ? "text-sv-green" : "text-ink-400",
+                    )}
+                  />
+                  <span className="md:hidden lg:block">
+                    {item.label[language]}
+                  </span>
+                </Link>
+              );
+            }
+
+            // Group: render header + children. Header is non-clickable
+            // chrome at lg width; on collapsed-rail (md) only the icon
+            // shows and acts like a label tooltip.
+            const groupActive = pathname.startsWith(item.basePath);
+            const GroupIcon = item.icon;
+            return (
+              <div key={item.basePath} className="pt-2">
+                <div
+                  title={item.label[language]}
+                  className={cn(
+                    "flex min-h-[36px] items-center gap-3 rounded-md px-3 py-1.5 text-[10px] font-semibold uppercase tracking-brand",
+                    "md:justify-center md:px-0 lg:justify-start lg:px-3",
+                    groupActive ? "text-sv-sky" : "text-ink-400",
+                  )}
+                >
+                  <GroupIcon
+                    className={cn(
+                      "h-5 w-5 shrink-0",
+                      groupActive ? "text-sv-green" : "text-ink-500",
+                    )}
+                  />
+                  <span className="md:hidden lg:block">
+                    {item.label[language]}
+                  </span>
+                </div>
+                <div className="ml-2 space-y-0.5 border-l border-bg-border/60 pl-2 md:ml-0 md:border-l-0 md:pl-0 lg:ml-2 lg:border-l lg:pl-2">
+                  {item.children.map((child) => {
+                    // Exact match = active so /reference and
+                    // /reference/zaptec-api don't both light up.
+                    const childActive = pathname === child.href;
+                    const ChildIcon = child.icon;
+                    return (
+                      <Link
+                        key={child.href}
+                        href={child.href as Parameters<typeof Link>[0]["href"]}
+                        title={child.label[language]}
+                        onClick={close}
+                        className={cn(
+                          "flex min-h-[36px] items-center gap-3 rounded-md px-3 py-1.5 text-sm transition-colors",
+                          "md:justify-center md:px-0 lg:justify-start lg:px-3",
+                          childActive
+                            ? "bg-brand-500/15 text-sv-sky ring-1 ring-inset ring-brand-500/25"
+                            : "text-ink-300 hover:bg-bg-raised hover:text-ink-50",
+                        )}
+                      >
+                        <ChildIcon
+                          className={cn(
+                            "h-4 w-4 shrink-0",
+                            childActive ? "text-sv-green" : "text-ink-500",
+                          )}
+                        />
+                        <span className="md:hidden lg:block">
+                          {child.label[language]}
+                        </span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
             );
           })}
         </nav>
