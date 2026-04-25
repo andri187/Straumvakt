@@ -1,0 +1,265 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1840" viewBox="0 0 1800 1840">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#101827"/>
+      <stop offset="0.55" stop-color="#070a12"/>
+      <stop offset="1" stop-color="#03050a"/>
+    </linearGradient>
+    <linearGradient id="bandDone" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#0c2a1f" stop-opacity="0.85"/>
+      <stop offset="1" stop-color="#0a1f18" stop-opacity="0.55"/>
+    </linearGradient>
+    <linearGradient id="bandPilot" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#28210b" stop-opacity="0.75"/>
+      <stop offset="1" stop-color="#1d180a" stop-opacity="0.45"/>
+    </linearGradient>
+    <linearGradient id="bandPost" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#1a172a" stop-opacity="0.75"/>
+      <stop offset="1" stop-color="#16142a" stop-opacity="0.45"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="14" stdDeviation="14" flood-color="#000000" flood-opacity="0.45"/>
+    </filter>
+    <style>
+      .title { font: 800 44px Inter, Segoe UI, Arial, sans-serif; fill: #f5f7fa; }
+      .subtitle { font: 400 18px Inter, Segoe UI, Arial, sans-serif; fill: #9aa7b8; }
+      .phase { font: 800 26px Inter, Segoe UI, Arial, sans-serif; fill: #f5f7fa; letter-spacing: 1.4px; }
+      .phaseSub { font: 500 15px Inter, Segoe UI, Arial, sans-serif; fill: #9aa7b8; }
+      .sprintLabel { font: 800 18px Inter, Segoe UI, Arial, sans-serif; fill: #f5f7fa; }
+      .sprintArea { font: 800 17px Inter, Segoe UI, Arial, sans-serif; fill: #f5f7fa; }
+      .statusBadge { font: 800 11px Inter, Segoe UI, Arial, sans-serif; letter-spacing: 1.2px; }
+      .scopeLabel { font: 700 11px Inter, Segoe UI, Arial, sans-serif; fill: #6b7791; letter-spacing: 1.2px; }
+      .body { font: 500 14px Inter, Segoe UI, Arial, sans-serif; fill: #cbd5e1; }
+      .bodyMuted { font: 500 14px Inter, Segoe UI, Arial, sans-serif; fill: #8a96aa; }
+      .bullet { font: 500 14px Inter, Segoe UI, Arial, sans-serif; fill: #cbd5e1; }
+      .topicLabel { font: 800 13px Inter, Segoe UI, Arial, sans-serif; fill: #b894ff; letter-spacing: 1.4px; }
+      .topicItem { font: 500 14px Inter, Segoe UI, Arial, sans-serif; fill: #d4cce8; }
+      .footer { font: 400 14px Inter, Segoe UI, Arial, sans-serif; fill: #6b7791; }
+      .deferredCount { font: 700 11px Inter, Segoe UI, Arial, sans-serif; fill: #b894ff; letter-spacing: 0.8px; }
+    </style>
+  </defs>
+
+  <rect width="1800" height="1840" fill="url(#bg)"/>
+  <circle cx="1480" cy="160" r="280" fill="#2bb6e8" opacity="0.06"/>
+  <circle cx="220" cy="1620" r="320" fill="#b894ff" opacity="0.05"/>
+  <circle cx="240" cy="800" r="260" fill="#3ee9a7" opacity="0.04"/>
+
+  <!-- HEADER -->
+  <text x="90" y="86" class="title">Straumvakt Roadmap</text>
+  <text x="90" y="120" class="subtitle">Three phases: foundation done, pilot scope tightened, post-pilot backlog grouped by topic.</text>
+  <text x="90" y="142" class="subtitle">Status: Sprint 1.5 complete. Sprint 2 next. Pilot scope updated 2026-04-25.</text>
+
+  <!-- ============================================================ -->
+  <!-- PHASE 1 — DONE (Foundation)                                  -->
+  <!-- ============================================================ -->
+  <g filter="url(#shadow)">
+    <rect x="70" y="180" width="1660" height="320" rx="20" fill="url(#bandDone)" stroke="#3ee9a7" stroke-opacity="0.35" stroke-width="1.2"/>
+  </g>
+  <rect x="70" y="180" width="6" height="320" rx="3" fill="#3ee9a7"/>
+
+  <text x="100" y="225" class="phase">DONE · FOUNDATION</text>
+  <text x="100" y="248" class="phaseSub">Schema, OCPP wiring, login shell — everything the pilot stands on. Sprints −1, 0, 1.</text>
+
+  <!-- Sprint -1 -->
+  <g>
+    <text x="100" y="290" class="sprintLabel">Sprint −1</text>
+    <text x="100" y="310" class="sprintArea">Login Shell</text>
+    <rect x="240" y="278" width="50" height="18" rx="9" fill="#0e2c20" stroke="#3ee9a7" stroke-opacity="0.7"/>
+    <text x="265" y="290" text-anchor="middle" class="statusBadge" fill="#8ef5c7">DONE</text>
+    <text x="320" y="295" class="body">Admin login · session handling · base app shell · dev/staging/prod wiring</text>
+  </g>
+
+  <!-- Sprint 0 -->
+  <g>
+    <text x="100" y="350" class="sprintLabel">Sprint 0</text>
+    <text x="100" y="370" class="sprintArea">Foundation Schema</text>
+    <rect x="240" y="338" width="50" height="18" rx="9" fill="#0e2c20" stroke="#3ee9a7" stroke-opacity="0.7"/>
+    <text x="265" y="350" text-anchor="middle" class="statusBadge" fill="#8ef5c7">DONE</text>
+    <text x="320" y="355" class="body">V3 schemas · tenancy · event log · idempotency · repositories · hardware catalog seed</text>
+  </g>
+
+  <!-- Sprint 1 -->
+  <g>
+    <text x="100" y="410" class="sprintLabel">Sprint 1</text>
+    <text x="100" y="430" class="sprintArea">OCPP Foundation</text>
+    <rect x="240" y="398" width="74" height="18" rx="9" fill="#0e2c20" stroke="#3ee9a7" stroke-opacity="0.7"/>
+    <text x="277" y="410" text-anchor="middle" class="statusBadge" fill="#8ef5c7">DONE 1.5</text>
+    <text x="338" y="415" class="body">Ingest · translator · projections · outbound commands · gateway Worker · Durable Objects</text>
+  </g>
+
+  <text x="100" y="470" class="scopeLabel">UNLOCKED · authenticated operator surface · real domain model · chargers can talk to Straumvakt</text>
+
+  <!-- ============================================================ -->
+  <!-- PHASE 2 — PILOT                                              -->
+  <!-- ============================================================ -->
+  <g filter="url(#shadow)">
+    <rect x="70" y="540" width="1660" height="780" rx="20" fill="url(#bandPilot)" stroke="#f7b733" stroke-opacity="0.4" stroke-width="1.2"/>
+  </g>
+  <rect x="70" y="540" width="6" height="780" rx="3" fill="#f7b733"/>
+
+  <text x="100" y="585" class="phase">PILOT · TIGHTENED SCOPE</text>
+  <text x="100" y="608" class="phaseSub">Demonstrable pilot, not commercial release. Real chargers + drivers, no money movement, no roaming.</text>
+
+  <!-- Sprint 2 -->
+  <g>
+    <text x="100" y="650" class="sprintLabel">Sprint 2</text>
+    <text x="100" y="670" class="sprintArea">OCPI Foundation</text>
+    <rect x="240" y="638" width="50" height="18" rx="9" fill="#2c2510" stroke="#f7b733" stroke-opacity="0.7"/>
+    <text x="265" y="650" text-anchor="middle" class="statusBadge" fill="#f7b733">NEXT</text>
+    <text x="320" y="655" class="body">CPO endpoints · locations · sessions · CDRs · tariffs · basic RFID authorize</text>
+    <rect x="320" y="667" width="138" height="16" rx="8" fill="#1a172a" stroke="#b894ff" stroke-opacity="0.5"/>
+    <text x="389" y="678" text-anchor="middle" class="deferredCount">↪ 2 DEFERRED · A</text>
+  </g>
+
+  <!-- Sprint 3 -->
+  <g>
+    <text x="100" y="715" class="sprintLabel">Sprint 3</text>
+    <text x="100" y="735" class="sprintArea">Driver Experience</text>
+    <rect x="240" y="703" width="60" height="18" rx="9" fill="#1a2030" stroke="#5a7088" stroke-opacity="0.55"/>
+    <text x="270" y="715" text-anchor="middle" class="statusBadge" fill="#9aa7b8">FUTURE</text>
+    <text x="330" y="720" class="body">Driver PWA (user/pass login) · session history · family groups · reimbursement flag</text>
+    <rect x="330" y="732" width="138" height="16" rx="8" fill="#1a172a" stroke="#b894ff" stroke-opacity="0.5"/>
+    <text x="399" y="743" text-anchor="middle" class="deferredCount">↪ 2 DEFERRED · B</text>
+  </g>
+
+  <!-- Sprint 4 -->
+  <g>
+    <text x="100" y="780" class="sprintLabel">Sprint 4</text>
+    <text x="100" y="800" class="sprintArea">Commercial Model</text>
+    <rect x="240" y="768" width="60" height="18" rx="9" fill="#1a2030" stroke="#5a7088" stroke-opacity="0.55"/>
+    <text x="270" y="780" text-anchor="middle" class="statusBadge" fill="#9aa7b8">FUTURE</text>
+    <text x="330" y="785" class="body">CustomerPlan · ChargerServicePlan · tariff engine · plan selection (ISK only)</text>
+    <rect x="330" y="797" width="138" height="16" rx="8" fill="#1a172a" stroke="#b894ff" stroke-opacity="0.5"/>
+    <text x="399" y="808" text-anchor="middle" class="deferredCount">↪ 1 DEFERRED · C</text>
+  </g>
+
+  <!-- Sprint 5 -->
+  <g>
+    <text x="100" y="845" class="sprintLabel">Sprint 5</text>
+    <text x="100" y="865" class="sprintArea">Issue Engine + Console</text>
+    <rect x="240" y="833" width="60" height="18" rx="9" fill="#1a2030" stroke="#5a7088" stroke-opacity="0.55"/>
+    <text x="270" y="845" text-anchor="middle" class="statusBadge" fill="#9aa7b8">FUTURE</text>
+    <text x="330" y="850" class="body">Five basic issue rules · ticket workflow · helper role · charger history · console pages</text>
+    <rect x="330" y="862" width="138" height="16" rx="8" fill="#1a172a" stroke="#b894ff" stroke-opacity="0.5"/>
+    <text x="399" y="873" text-anchor="middle" class="deferredCount">↪ 4 DEFERRED · D</text>
+  </g>
+
+  <!-- Sprint 6 -->
+  <g>
+    <text x="100" y="910" class="sprintLabel">Sprint 6</text>
+    <text x="100" y="930" class="sprintArea">Billing Dashboard</text>
+    <rect x="240" y="898" width="60" height="18" rx="9" fill="#1a2030" stroke="#5a7088" stroke-opacity="0.55"/>
+    <text x="270" y="910" text-anchor="middle" class="statusBadge" fill="#9aa7b8">FUTURE</text>
+    <text x="330" y="915" class="body">Billing data + dashboard view (read-only presentation, no money movement)</text>
+    <rect x="330" y="927" width="138" height="16" rx="8" fill="#1a172a" stroke="#b894ff" stroke-opacity="0.5"/>
+    <text x="399" y="938" text-anchor="middle" class="deferredCount">↪ 5 DEFERRED · E</text>
+  </g>
+
+  <!-- Sprint 7 — no de-scope -->
+  <g>
+    <text x="100" y="975" class="sprintLabel">Sprint 7</text>
+    <text x="100" y="995" class="sprintArea">Push API + Observability</text>
+    <rect x="240" y="963" width="60" height="18" rx="9" fill="#1a2030" stroke="#5a7088" stroke-opacity="0.55"/>
+    <text x="270" y="975" text-anchor="middle" class="statusBadge" fill="#9aa7b8">FUTURE</text>
+    <text x="330" y="980" class="body">Webhook subscriptions · canonical events · retries · DLQ · OTel · tenant dashboard</text>
+  </g>
+
+  <!-- Sprint 8 -->
+  <g>
+    <text x="100" y="1040" class="sprintLabel">Sprint 8</text>
+    <text x="100" y="1060" class="sprintArea">Hardening</text>
+    <rect x="240" y="1028" width="60" height="18" rx="9" fill="#1a2030" stroke="#5a7088" stroke-opacity="0.55"/>
+    <text x="270" y="1040" text-anchor="middle" class="statusBadge" fill="#9aa7b8">FUTURE</text>
+    <text x="330" y="1045" class="body">Backup restore drill · OCPP gateway load test</text>
+    <rect x="330" y="1057" width="138" height="16" rx="8" fill="#1a172a" stroke="#b894ff" stroke-opacity="0.5"/>
+    <text x="399" y="1068" text-anchor="middle" class="deferredCount">↪ 3 DEFERRED · F</text>
+  </g>
+
+  <!-- Sprint 9 -->
+  <g>
+    <text x="100" y="1105" class="sprintLabel">Sprint 9</text>
+    <text x="100" y="1125" class="sprintArea">Multi-Tenant + White-Label</text>
+    <rect x="240" y="1093" width="60" height="18" rx="9" fill="#1a2030" stroke="#5a7088" stroke-opacity="0.55"/>
+    <text x="270" y="1105" text-anchor="middle" class="statusBadge" fill="#9aa7b8">FUTURE</text>
+    <text x="330" y="1110" class="body">New-org onboarding · Host branding · RLS audit · scoped API keys</text>
+    <rect x="330" y="1122" width="138" height="16" rx="8" fill="#1a172a" stroke="#b894ff" stroke-opacity="0.5"/>
+    <text x="399" y="1133" text-anchor="middle" class="deferredCount">↪ 1 DEFERRED · G</text>
+  </g>
+
+  <!-- Sprint 10 -->
+  <g>
+    <rect x="90" y="1162" width="1620" height="92" rx="14" fill="#0d1322" stroke="#f7b733" stroke-opacity="0.45" stroke-width="1.4"/>
+    <text x="110" y="1196" class="sprintLabel">Sprint 10</text>
+    <text x="110" y="1217" class="sprintArea">Pilot Go-Live</text>
+    <rect x="250" y="1186" width="60" height="18" rx="9" fill="#2c2510" stroke="#f7b733" stroke-opacity="0.7"/>
+    <text x="280" y="1198" text-anchor="middle" class="statusBadge" fill="#f7b733">TARGET</text>
+    <text x="345" y="1196" class="body">Real chargers (OCPP 1.6J) · pilot drivers (user/pass) · presentable billing data ·</text>
+    <text x="345" y="1216" class="body">runbooks finalized · pilot retrospective</text>
+    <text x="345" y="1238" class="bodyMuted">Demonstrable platform, not commercial release. Commercial readiness lives in post-pilot.</text>
+  </g>
+
+  <!-- ============================================================ -->
+  <!-- PHASE 3 — POST-PILOT BACKLOG                                 -->
+  <!-- ============================================================ -->
+  <g filter="url(#shadow)">
+    <rect x="70" y="1360" width="1660" height="380" rx="20" fill="url(#bandPost)" stroke="#b894ff" stroke-opacity="0.45" stroke-width="1.2"/>
+  </g>
+  <rect x="70" y="1360" width="6" height="380" rx="3" fill="#b894ff"/>
+
+  <text x="100" y="1405" class="phase">POST-PILOT · BACKLOG</text>
+  <text x="100" y="1428" class="phaseSub">Items pulled from pilot scope on 2026-04-25, grouped by theme. Each tag (A–G) maps back to the sprint it came from.</text>
+
+  <!-- 5 topical groups in 2 columns -->
+  <!-- LEFT COLUMN -->
+
+  <!-- A — Roaming -->
+  <g>
+    <text x="100" y="1474" class="topicLabel">A · ROAMING</text>
+    <text x="100" y="1494" class="topicItem">• eMSP endpoints (let our drivers charge at partner CPOs)</text>
+    <text x="100" y="1514" class="topicItem">• OCPI token push to roaming partners</text>
+    <text x="100" y="1534" class="topicItem">• OCPP 2.0.1 adapter</text>
+  </g>
+
+  <!-- B — Driver login -->
+  <g>
+    <text x="100" y="1574" class="topicLabel">B · DRIVER LOGIN</text>
+    <text x="100" y="1594" class="topicItem">• Auðkenni electronic-ID (OIDC)</text>
+    <text x="100" y="1614" class="topicItem">• QR-code session start</text>
+  </g>
+
+  <!-- C — Single currency -->
+  <g>
+    <text x="100" y="1654" class="topicLabel">C · MULTI-CURRENCY</text>
+    <text x="100" y="1674" class="topicItem">• EUR + per-locale variants on top of the ISK-only pilot</text>
+  </g>
+
+  <!-- RIGHT COLUMN -->
+
+  <!-- D — Issue Engine v2 -->
+  <g>
+    <text x="930" y="1474" class="topicLabel">D · ISSUE ENGINE v2</text>
+    <text x="930" y="1494" class="topicItem">• Advanced detection (anomaly + sequence rules)</text>
+    <text x="930" y="1514" class="topicItem">• Smart routing (helper → contractor → escalation)</text>
+    <text x="930" y="1534" class="topicItem">• ML categorization on issue history</text>
+    <text x="930" y="1554" class="topicItem">• Helper reputation scoring</text>
+  </g>
+
+  <!-- E — Real billing -->
+  <g>
+    <text x="930" y="1594" class="topicLabel">E · REAL BILLING</text>
+    <text x="930" y="1614" class="topicItem">• Monthly invoice generation · billing transactions · statements · employer reimbursement · PDF invoices</text>
+  </g>
+
+  <!-- F — Commerce + compliance -->
+  <g>
+    <text x="930" y="1654" class="topicLabel">F · COMMERCE + COMPLIANCE</text>
+    <text x="930" y="1674" class="topicItem">• Payment provider integration · dunning workflow</text>
+    <text x="930" y="1694" class="topicItem">• EU residency verification ceremony (CF Data Localization + Neon EU posture stays in place)</text>
+  </g>
+
+  <!-- G — Protocol upgrades sits inside A but called out -->
+
+  <!-- FOOTER -->
+  <text x="90" y="1790" class="footer">Source: E:\Claude\Straumvakt docs · roadmap-vertical-table.svg · pilot scope tightened 2026-04-25 per operator note.</text>
+  <text x="90" y="1812" class="footer">Tags A–G in pilot rows map to topical groups in the post-pilot section. OCPP 2.0.1 (G) listed under A (Roaming) since it unlocks 2.0.1-only roaming partners.</text>
+</svg>

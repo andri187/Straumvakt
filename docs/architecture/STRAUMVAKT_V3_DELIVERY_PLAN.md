@@ -31,25 +31,41 @@ dates — it's a commitment to *order*.
 
 ### 1.1 In scope for pilot go-live (end of Sprint 10)
 
+> **Pilot is a demonstrable platform, not a commercial release.**
+> Scope tightened 2026-04-25 — see [ADR 0005](../adr/0005-pilot-scope-tightening-2026-04-25.md)
+> and [`straumvakt_roadmap.svg`](./straumvakt_roadmap.svg) (tags A–F
+> show what moved to post-pilot).
+
 - One pilot site operating on Straumvakt with real chargers, real
-  drivers, real invoices
+  drivers, real session activity (no money movement during pilot)
 - Both OCPP-managed and vendor-portal-managed chargers (Zaptec or Easee
-  onboarded via vendor adapter; any OCPP charger via the gateway)
-- Full commercial model live (`CustomerPlan` + `ChargerServicePlan`)
-- Issue Engine v1 with rule-based detection (5 core rules)
+  onboarded via vendor adapter; any OCPP 1.6J charger via the gateway)
+- Commercial model **schema** live (`CustomerPlan` + `ChargerServicePlan`)
+  — Sprint 4 ships the model; Sprint 6 ships a read-only **billing
+  dashboard** rather than invoice generation
+- Issue Engine v1 with rule-based detection (5 core rules) — basic
+  scope, no advanced detection / smart routing / ML categorization
 - Operator console covering chargers, sessions, users, issues, billing
-- Driver PWA with Auðkenni login, QR start, session history, family
-  group, employer reimbursement flow
-- OCPI foundation (CPO + eMSP endpoints scaffolded; hub connection
-  feasible but not required for pilot)
+  dashboard
+- Driver PWA with **user/password login** (no Auðkenni for pilot),
+  session history, family group, employer reimbursement flag (workflow
+  itself deferred)
+- **CPO-side** OCPI (locations, sessions, CDRs, tariffs, basic RFID
+  authorize). eMSP endpoints + OCPI token push deferred to post-pilot
 - Push API with canonical event vocabulary
-- Payments live (provider decided Sprint 8)
-- EU residency posture verified
-- Backups verified by restore drill
+- EU residency **posture** in place (Cloudflare Data Localization,
+  Neon EU region, R2 EU jurisdiction). Verification *ceremony*
+  (audit runbook, sign-off paperwork) deferred to post-pilot
+- Backups verified by restore drill (Sprint 8)
+- ISK currency only (multi-currency post-pilot)
 
-### 1.2 Out of scope for V3
+### 1.2 Out of scope for V3 / pilot
 
-Deferred explicitly to keep focus:
+Deferred to keep focus. **Two tiers** — items deferred from V3
+entirely (long-haul scope discipline) and items deferred from the
+*pilot* into the post-pilot backlog (see ADR 0005).
+
+#### 1.2a — Deferred from V3 entirely
 
 - Battery and solar as `SiteAsset` kinds
 - AI / ML scaffolding (event log stays ML-ready; no models Day 1)
@@ -64,6 +80,25 @@ Deferred explicitly to keep focus:
 - Advanced RBAC engine (roles stay enum-based)
 - MCP access for agents
 
+#### 1.2b — Deferred from pilot to post-pilot (per ADR 0005)
+
+Tags A–F match the [roadmap SVG](./straumvakt_roadmap.svg).
+
+- **A · Roaming** — eMSP endpoints, OCPI token push to roaming
+  partners, OCPP 2.0.1 adapter
+- **B · Driver login** — Auðkenni electronic-ID (OIDC), QR-code
+  session start
+- **C · Multi-currency** — EUR + per-locale variants on top of
+  ISK-only pilot
+- **D · Issue Engine v2** — advanced detection, smart routing,
+  ML categorization, helper reputation scoring
+- **E · Real billing** — monthly invoice generation, billing
+  transactions as ledger entries, statements, employer
+  reimbursement workflow, PDF invoices
+- **F · Commerce + compliance** — payment provider integration,
+  dunning workflow, EU residency *verification ceremony* (the
+  runtime *posture* stays in place during pilot)
+
 ### 1.3 Success criteria for pilot
 
 Pilot is judged successful when all of the following hold for 30
@@ -71,9 +106,12 @@ consecutive days:
 
 1. ≥95% of charging sessions complete without operator intervention
 2. ≥99% OCPP gateway uptime (excluding planned maintenance windows)
-3. First invoice issued and paid through the platform
-4. Issue Engine has opened, routed, and resolved at least 10 real
-   issues (not just simulator-generated)
+3. **Billing dashboard reflects what *would* have been invoiced** —
+   per-driver and per-Host totals, per-period rollups, all reviewable
+   in the operator console. *Real invoice generation + payment is
+   post-pilot per ADR 0005.*
+4. Issue Engine has opened, routed (basic rules only), and resolved
+   at least 10 real issues (not just simulator-generated)
 5. Driver NPS from the 6 pilot drivers ≥ 40 (baseline, not industry
    comparable)
 6. Zero Rule-1 / Rule-2 / Rule-3 / Rule-5 violations from CLAUDE.md
@@ -88,15 +126,15 @@ consecutive days:
 |---|---|---|---|
 | 0 | Foundation Schema | V3 schema live; concrete drying | All V3 schemas created (incl. `hardware` + `properties.installations`), catalog seeded (Zaptec + Zaptec Pro minimum), tsc clean, build clean, money as BIGINT minor units. No CPMS backfill (ADR 0003). |
 | 1 | OCPP Foundation | One simulator charger, full loop | Simulator boots, starts session, ends session; events in log; commands dispatchable via outbox |
-| 2 | OCPI Foundation | Roaming surface exists | OCPI 2.2.1 CPO + eMSP endpoints respond correctly to contract tests; external property/site shadow records work |
-| 3 | Driver Experience | A real driver can charge | Auðkenni login, QR start, session history, family group, all working end to end in PWA |
-| 4 | Commercial Model | The money math works | `CustomerPlan` + `ChargerServicePlan` + tariff engine compute correct cost for 10 synthetic scenarios |
-| 5 | Issue Engine + Console | Operator can run a site | Operator console covers chargers, users, sessions, issues, plans; 5 detection rules firing against simulator |
-| 6 | Billing v1 | Invoices issue correctly | Monthly cron produces correct draft invoices; PDF generation works; employer reimbursement flow complete |
+| 2 | OCPI Foundation (CPO-only) | CPO surface exists; eMSP deferred (A) | OCPI 2.2.1 **CPO** endpoints respond correctly to contract tests; external property/site shadow records work; basic RFID authorize. *eMSP endpoints + token push deferred per ADR 0005.* |
+| 3 | Driver Experience | A real driver can charge | Driver PWA with **user/password** login, session history, family group, employer reimbursement flag — all working end to end. *Auðkenni login + QR start deferred per ADR 0005 (B).* |
+| 4 | Commercial Model | The money math works (ISK only) | `CustomerPlan` + `ChargerServicePlan` + tariff engine compute correct cost for 10 synthetic scenarios in **ISK**. *Multi-currency (EUR) deferred per ADR 0005 (C).* |
+| 5 | Issue Engine + Console | Operator can run a site (basic) | Operator console covers chargers, users, sessions, issues, plans; 5 basic detection rules firing against simulator. *Advanced detection / routing / ML deferred per ADR 0005 (D).* |
+| 6 | Billing **Dashboard** | Billing data is reviewable | Billing dashboard shows per-driver / per-Host accumulating amounts in ISK, rolled up by period, read-only. *Invoice generation, transactions, statements, employer reimbursement, PDF invoices deferred per ADR 0005 (E).* |
 | 7 | Push API + Observability | External systems can consume; we can see inside | Push API delivers canonical events to test subscribers with retries; OTel traces end to end |
-| 8 | Payments + Hardening | Production-grade commercially | Payment provider integrated; dunning flow; restore drill clean; EU residency verified; load test documented |
-| 9 | Multi-Tenant + White-Label | Platform is a platform | Second org onboards cleanly; branding scopes per Host; API keys + scopes; OCPP 2.0.1 adapter complete |
-| 10 | Pilot Go-Live | Real chargers, real drivers, real invoices | Pilot site live; real session completed; first invoice issued; retrospective captured |
+| 8 | Hardening | Pilot-grade reliability | Restore drill clean; OCPP gateway load test documented. *Payment provider, dunning, EU residency verification ceremony deferred per ADR 0005 (F). EU runtime posture (CF Data Localization, Neon EU) stays in place.* |
+| 9 | Multi-Tenant + White-Label | Platform is a platform | Second org onboards cleanly; branding scopes per Host; API keys + scopes. *OCPP 2.0.1 adapter deferred per ADR 0005 (A).* |
+| 10 | Pilot Go-Live | Demonstrable platform, not commercial release | Pilot site live; real charger sessions running on OCPP 1.6J; pilot drivers using user/password login; billing dashboard reviewable; backup restore drill completed; retrospective captured. *No money movement during pilot.* |
 
 Total: 20 weeks / 5 months at full-time solo pace.
 
@@ -242,18 +280,24 @@ reconnection behavior (use the simulator — don't guess).
 
 ---
 
-## 5. Sprint 2 — OCPI Foundation
+## 5. Sprint 2 — OCPI Foundation (CPO-only for pilot)
 
-**Goal.** OCPI is a foundation seam, not a Phase-5 scaffold. Dual-role
-endpoints respond correctly; external Property/Site shadow records work.
+> **Pilot scope (per [ADR 0005](../adr/0005-pilot-scope-tightening-2026-04-25.md), tag A):**
+> CPO-side ships in pilot. **eMSP endpoints + OCPI token push to roaming
+> partners are deferred to post-pilot.** Token translator stays — it
+> supports the CPO-side authorize path (charger sends RFID, we resolve
+> to a local user).
+
+**Goal.** OCPI is a foundation seam, not a Phase-5 scaffold. CPO-side
+endpoints respond correctly; external Property/Site shadow records
+work. Pilot is CPO-only; eMSP shipping post-pilot.
 
 **Entry.** Sprint 1 exit met.
 
-**Exit.** OCPI 2.2.1 endpoints for both CPO and eMSP respond to contract
-tests. Token translator works between RFID UIDs, OCPI tokens, and users.
-External Property/Site auto-creation on receipt of partner location push
-is functional. Hub connection code exists but a real hub is not yet
-contracted.
+**Exit.** OCPI 2.2.1 **CPO** endpoints respond to contract tests.
+Token translator works for the CPO-receive direction (RFID UID + any
+locally-issued OCPI token resolve to a user). Hub connection code
+exists for future use but no live partner contracted.
 
 **Milestones.**
 
@@ -263,28 +307,28 @@ contracted.
   Projections from our data into OCPI shapes.
   - *Exit:* Contract test against OCPI 2.2.1 reference spec passes.
 
-- **2.2** eMSP endpoints: `/ocpi/emsp/2.2.1/tokens` (push),
-  `/ocpi/emsp/2.2.1/cdrs` (pull). Inbound location and session pushes
-  accepted and stored.
-  - *Exit:* Mock partner can publish a location to us and we create an
-    external `properties.sites` shadow record.
+- **2.2** ~~eMSP endpoints~~ — **deferred per ADR 0005 (tag A).**
+  `/ocpi/emsp/2.2.1/tokens` (push) and `/ocpi/emsp/2.2.1/cdrs` (pull)
+  ship post-pilot together with OCPI token push to roaming partners.
+  Schema (`roaming.external_properties`, `roaming.cdr_queue`) stays
+  in place from Sprint 0 so the post-pilot work is additive.
 
-- **2.3** Token translator. `roaming.ocpi_tokens` table maps OCPI tokens
-  to our users / family groups / cards. Authorize requests from chargers
-  flow through: charger → OCPP gateway → authorize check (local RFID or
-  OCPI token) → response.
-  - *Exit:* Authorization works for both a local RFID UID and a
-    hypothetical partner-issued OCPI token.
+- **2.3** Token translator (CPO-receive only). `roaming.ocpi_tokens`
+  table maps OCPI tokens to our users / family groups / cards.
+  Authorize requests from chargers flow through: charger → OCPP
+  gateway → authorize check (local RFID or known token) → response.
+  - *Exit:* Authorization works for a local RFID UID and a known
+    locally-issued token.
 
-- **2.4** Hub connector scaffold. A `roaming.hub_connections` table with
-  fields for Hubject, Gireve, or direct peer. One mock hub in test env
-  to validate push/pull flows.
-  - *Exit:* Hub connection can be created, credentials stored, mock
-    hub receives our published locations.
+- **2.4** Hub connector scaffold. A `roaming.hub_connections` table
+  with fields for Hubject, Gireve, or direct peer. Schema only — no
+  live partner credentials configured during pilot.
+  - *Exit:* Hub connection row can be created and listed in console;
+    real connection lands when eMSP ships post-pilot.
 
-- **2.5** Contract tests for OCPI 2.2.1 schemas. Vendored JSON Schemas
-  in the repo. Nightly CI.
-  - *Exit:* `npm run test:ocpi-contract` passes.
+- **2.5** Contract tests for OCPI 2.2.1 CPO schemas. Vendored JSON
+  Schemas in the repo. Nightly CI.
+  - *Exit:* `npm run test:ocpi-contract` passes for the CPO surface.
 
 **Risks.** OCPI 2.2.1 has real ambiguities (party IDs, versioning
 semantics, tariff alternatives). Follow the Virta / Hubject interop docs
@@ -292,33 +336,45 @@ closely. Book 2–3 days of spec-reading before coding.
 
 ---
 
-## 6. Sprint 3 — Driver Experience
+## 6. Sprint 3 — Driver Experience (user/password login)
 
-**Goal.** A real Icelandic driver can sign in with Auðkenni, see the
-chargers at their home site, and start a charging session from the app.
+> **Pilot scope (per [ADR 0005](../adr/0005-pilot-scope-tightening-2026-04-25.md), tag B):**
+> Driver PWA ships with **user/password** login. **Auðkenni
+> electronic-ID + QR-code session start are deferred to post-pilot.**
+> Pilot drivers start sessions by presenting an idTag (RFID card) at
+> the charger.
+
+**Goal.** A real driver can sign in to the PWA with email/password,
+see the chargers at their home site, view session history, and have
+their account properly modeled.
 
 **Entry.** Sprint 2 exit met.
 
-**Exit.** Driver opens the PWA, signs in with Auðkenni, lands on a
-dashboard showing their family group + session history + available
-chargers at assigned sites. QR start works end to end against the
-simulator. Employer reimbursement field exists on sessions.
+**Exit.** Driver opens the PWA, signs in with email/password, lands
+on a dashboard showing their family group + session history +
+available chargers at assigned sites. Sessions started via RFID at
+the charger appear in the driver's history. Employer reimbursement
+field exists on sessions.
 
 **Milestones.**
 
-- **3.1** Auðkenni OIDC end to end. `.env.example` already has the vars;
-  wire the flow. Token exchange, user creation / linking, session cookie.
-  - *Exit:* A developer can log in via Auðkenni in dev environment and
-    have a user row created with the national ID linked.
+- **3.1** ~~Auðkenni OIDC end to end~~ — **deferred per ADR 0005
+  (tag B).** `.env.example` keeps the `AUDKENNI_*` vars as placeholders;
+  Auðkenni adapter ships post-pilot. Pilot uses the user/password
+  path below.
 
-- **3.2** Driver PWA shell. Sign in, home dashboard, bilingual.
-  Components follow the existing sidebar/topbar conventions from CPMS.
-  - *Exit:* PWA installable on iOS and Android; sign-in works on both.
+- **3.2** Driver PWA shell with user/password sign-in. Sign in, home
+  dashboard, bilingual. Components follow the existing sidebar/topbar
+  conventions. `identity.users` rows + `identity.user_credentials`
+  password hash (existing schema).
+  - *Exit:* PWA installable on iOS and Android; user can register +
+    sign in with email/password on both.
 
-- **3.3** QR start flow. Each charger gets a stable QR that encodes
-  `org_id + site_id + identity_id + connector_id`. Driver scans,
-  authorization check runs, charger starts if authorized.
-  - *Exit:* Simulator charger starts a session triggered by the app.
+- **3.3** ~~QR start flow~~ — **deferred per ADR 0005 (tag B).**
+  Pilot session start path is RFID-at-charger only (idTag presented
+  on the charger; OCPP `Authorize` resolves to a local user).
+  Sessions are visible in the driver's PWA history but the driver
+  doesn't initiate them via QR during pilot.
 
 - **3.4** Family group management. `people.family_groups` and
   `people.family_memberships`. Primary user can invite family members.
@@ -326,28 +382,38 @@ simulator. Employer reimbursement field exists on sessions.
   - *Exit:* Primary user invites a family member; family member appears
     in group; sessions by family member roll up to primary for billing.
 
-- **3.5** Employer reimbursement flag on sessions. Session carries an
-  `employer_site_id` (nullable); employer reimbursement workflow is
-  stubbed but fields exist. Full flow lands in Sprint 6.
+- **3.5** Employer reimbursement **flag** on sessions. Session
+  carries an `employer_site_id` (nullable); flag is set when a
+  session occurs at a workplace-tagged site. **Full reimbursement
+  workflow** (employer-pays-driver flow, employer invoice routing)
+  is part of Sprint 6's deferred billing work — pilot has the flag,
+  not the workflow.
   - *Exit:* Schema fields present; operator console shows the flag.
 
-**Risks.** Auðkenni test environment access and timing (start ordering
-credentials Sprint 1 if not already). PWA push notifications on iOS are
-limited; acceptable for pilot but flag for later.
+**Risks.** PWA push notifications on iOS are limited; acceptable for
+pilot but flag for later. Email-verification ceremony (do we
+require it?) is its own design decision before driver onboarding —
+park it as a Sprint-3 open question.
 
 ---
 
-## 7. Sprint 4 — Commercial Model
+## 7. Sprint 4 — Commercial Model (ISK only for pilot)
 
-**Goal.** The money math is correct and the two-contract model works end
-to end for the pilot Host.
+> **Pilot scope (per [ADR 0005](../adr/0005-pilot-scope-tightening-2026-04-25.md), tag C):**
+> Tariff engine, `CustomerPlan`, and `ChargerServicePlan` ship in **ISK
+> only** for pilot. **Multi-currency (EUR + per-locale variants) is
+> deferred to post-pilot.** Schema already supports a `currency`
+> column; turning EUR on post-pilot is additive.
+
+**Goal.** The money math is correct and the two-contract model works
+end to end for the pilot Host, in ISK.
 
 **Entry.** Sprint 3 exit met.
 
-**Exit.** Given a session, the tariff engine produces a correct cost
-breakdown. `CustomerPlan` and `ChargerServicePlan` both active; plan
-selection logic picks the right `CustomerPlan` for a given user/site.
-Revenue share from `ChargerServicePlan` computes correctly.
+**Exit.** Given a session, the tariff engine produces a correct ISK
+cost breakdown. `CustomerPlan` and `ChargerServicePlan` both active;
+plan selection logic picks the right `CustomerPlan` for a given
+user/site. Revenue share from `ChargerServicePlan` computes correctly.
 
 **Milestones.**
 
@@ -376,10 +442,13 @@ Revenue share from `ChargerServicePlan` computes correctly.
   default > org default).
   - *Exit:* Priority tests pass for four combinations.
 
-- **4.5** Multi-currency + multi-locale scaffolding. ISK as primary
-  currency, EUR supported; Icelandic + English display variants.
+- **4.5** Locale + currency posture for pilot — **ISK only**.
+  Icelandic + English display variants ship; the schema's
+  `currency` column accepts EUR but no EUR plans are created during
+  pilot. **Multi-currency (EUR variants, per-locale rendering)
+  deferred per ADR 0005 (tag C).**
   - *Exit:* A plan renders correctly in `is-IS` and `en-GB` locales
-    with ISK and EUR variants.
+    with the ISK variant.
 
 **Risks.** This is where silent bugs are most expensive. Follow
 Rule 5 from CLAUDE.md strictly — any change to billing math requires
@@ -387,11 +456,18 @@ explicit approval of the change summary before coding.
 
 ---
 
-## 8. Sprint 5 — Issue Engine + Operator Console
+## 8. Sprint 5 — Issue Engine + Operator Console (basic for pilot)
+
+> **Pilot scope (per [ADR 0005](../adr/0005-pilot-scope-tightening-2026-04-25.md), tag D):**
+> Five basic detection rules + ticket workflow + helper role + console
+> pages ship for pilot. **Advanced detection (anomaly + sequence
+> rules), smart routing, ML categorization, and helper reputation
+> scoring are deferred to post-pilot.** The basic Issue Engine is
+> what the pilot needs to operate.
 
 **Goal.** An operator can actually run the site from the console. The
-Issue Engine opens, categorizes, routes, and resolves issues from real
-event log rows.
+Issue Engine opens, categorizes, and resolves issues from real
+event log rows using the basic rule set.
 
 **Entry.** Sprint 4 exit met.
 
@@ -438,50 +514,59 @@ to ignore the console. Start conservative; expand after real data.
 
 ---
 
-## 9. Sprint 6 — Billing v1
+## 9. Sprint 6 — Billing Dashboard (read-only for pilot)
 
-**Goal.** Invoices generate correctly from sessions, employer
-reimbursement works, PDFs render, and billing transactions are
-auditable.
+> **Pilot scope (per [ADR 0005](../adr/0005-pilot-scope-tightening-2026-04-25.md), tag E):**
+> Sprint 6 ships a **read-only billing dashboard** — operators and
+> drivers can see what *would* be invoiced, but no money moves.
+> **Real invoice generation, billing transactions as ledger entries,
+> statements, employer reimbursement workflow, and PDF invoices are
+> deferred to post-pilot.** Schema for all of these already exists
+> (Sprint 0); turning them on post-pilot is additive, not migrational.
+
+**Goal.** Billing data is reviewable in the operator console and the
+driver PWA. Per-driver / per-Host accumulating amounts roll up by
+period. No invoice generation, no payment processing, no PDFs during
+pilot — those land post-pilot.
 
 **Entry.** Sprint 5 exit met.
 
-**Exit.** Monthly cron run produces draft invoices for the pilot Host.
-Each driver receives a correct invoice. Employer reimbursement routes
-workplace charging costs to the Host's employer account. PDF invoices
-render and are downloadable.
+**Exit.** Operator console "Billing" page renders, for each
+driver / Host, the sum of session-derived charges in the current
+period and prior periods. Driver PWA shows the driver's own
+accumulating amount with a per-session breakdown. Numbers match
+what the tariff engine (Sprint 4) computes for each session.
 
 **Milestones.**
 
-- **6.1** Invoice generation job. Cloudflare Cron Trigger runs monthly
-  (1st of month at 02:00 Icelandic time), reads sessions for the prior
-  month, groups by user and billing period, produces draft invoices.
-  - *Exit:* Cron fires on schedule; draft invoices appear.
+- **6.1** Tariff-engine session cost projection. For each completed
+  session, the tariff engine output is persisted in
+  `charging.sessions.cost_minor` (already in schema) and rolled up
+  per period.
+  - *Exit:* For 10 simulator-generated sessions, `cost_minor` matches
+    the tariff engine's pure-function output exactly.
 
-- **6.2** Billing transaction types: payment, refund, penalty, credit,
-  contract-charge, external-payment. Each can be applied via API or
-  console; rolls up into invoices.
-  - *Exit:* Each transaction type created via API; invoice totals match.
+- **6.2** Billing dashboard — operator view. Per-driver totals,
+  per-Host totals, per-period rollups, drillable to individual
+  sessions. Read-only; no actions.
+  - *Exit:* Console "Billing" page renders for the pilot tenant with
+    real session data.
 
-- **6.3** Statements rollup. Cross-period view of all transactions for a
-  user or Host. Read-only aggregate.
-  - *Exit:* Statement view renders for a user across 3 test months.
+- **6.3** Billing dashboard — driver view. PWA "My charges" page:
+  accumulating amount this period, prior-period summary, per-session
+  breakdown. Read-only.
+  - *Exit:* Driver PWA shows correct totals matching the operator view.
 
-- **6.4** Employer reimbursement flow. When a session is flagged
-  workplace (via the Sprint 3 stub), the cost is routed to the Host's
-  employer billing entry. Employer receives a consolidated monthly
-  invoice.
-  - *Exit:* Workplace sessions route to employer invoice; driver
-    invoice omits them.
+- **6.4** ~~Invoice generation, billing transactions, statements,
+  employer reimbursement, PDF invoices~~ — **deferred per ADR 0005
+  (tag E).** Post-pilot work, on top of the schema and the dashboard
+  data already in place.
 
-- **6.5** PDF invoice generation. Use a headless renderer (Cloudflare
-  Browser Rendering or a lightweight server-side lib). Stored in R2
-  (EU). Downloadable from console.
-  - *Exit:* A driver invoice PDF renders; matches the digital view.
-
-**Risks.** Rule 5 applies — invoice generation is the highest-stakes
-code path. Run a dry-run against simulator data for a full month before
-firing against real data. Sign off on the first real run manually.
+**Risks.** Rule 5 still applies — the dashboard renders billing
+numbers. If the rendered total differs from what the tariff engine
+computed, drivers and operators lose trust before pilot exits.
+Validate against tariff-engine output in unit tests, not just
+visual review.
 
 ---
 
@@ -536,42 +621,48 @@ become expensive — use aggregate tables, not raw events.
 
 ---
 
-## 11. Sprint 8 — Payments + Hardening
+## 11. Sprint 8 — Hardening
 
-**Goal.** Production-grade. Payments live. Backups verified. EU
-residency posture re-confirmed. Load ceiling documented.
+> **Pilot scope (per [ADR 0005](../adr/0005-pilot-scope-tightening-2026-04-25.md), tag F):**
+> Backup restore drill + OCPP gateway load test ship for pilot.
+> **Payment provider integration, dunning workflow, and the EU
+> residency *verification ceremony* are deferred to post-pilot.**
+> The EU runtime *posture* (Cloudflare Data Localization, Neon EU
+> region, R2 EU jurisdiction, DO `locationHint=weur`) is configured
+> from Sprint 0–1 onward and stays in place; what's deferred is the
+> documented audit-trail ceremony.
+
+**Goal.** Pilot-grade reliability. Backups verified by restore drill;
+OCPP gateway ceiling measured.
 
 **Entry.** Sprint 7 exit met.
 
-**Exit.** First real test invoice charged against a live payment
-provider. Dunning workflow functional. Restore from backup produces a
-clean working system. EU residency verified via documented checklist.
-Load test establishes the single-process ceiling.
+**Exit.** Restore from backup produces a clean working system. Load
+test establishes the single-process ceiling.
 
 **Milestones.**
 
-- **8.1** Payment provider integration. Decision this sprint: Stripe
-  (fastest, global), Adyen (enterprise EU), Netgíró (Iceland-local,
-  easiest for pilot). Integrate one. Tokenize cards, handle
-  authorization, capture on invoice issuance.
-  - *Exit:* A real test invoice (low value, your own card) charges
-    successfully.
+- **8.1** ~~Payment provider integration~~ — **deferred per ADR 0005
+  (tag F).** Post-pilot. Provider decision (Stripe / Adyen / Netgíró)
+  punted to the post-pilot kick-off so it gets dedicated focus.
 
-- **8.2** Dunning workflow. Failed payment → retry schedule →
-  notifications → suspension after N failed attempts.
-  - *Exit:* A forced payment failure triggers the dunning path
-    correctly.
+- **8.2** ~~Dunning workflow~~ — **deferred per ADR 0005 (tag F).**
+  Lives on top of the payment provider; ships in the same post-pilot
+  package as 8.1.
 
 - **8.3** Backup verification by restore drill. Nightly Neon PITR
   backups; once this sprint, actually restore to a scratch branch and
   run the app against it.
   - *Exit:* Restore drill runbook exists; executed successfully once.
 
-- **8.4** EU residency posture verification. Cloudflare Data
-  Localization configured; Durable Object `locationHint` set to EU
-  regions; Neon region confirmed; R2 jurisdiction confirmed; OTel
-  backend in EU. Document in runbook.
-  - *Exit:* Residency runbook checked off; screenshots in docs.
+- **8.4** ~~EU residency *verification ceremony*~~ — **deferred per
+  ADR 0005 (tag F).** Runtime posture (CF Data Localization, Neon EU
+  region, R2 EU jurisdiction, DO `locationHint=weur`) is in place from
+  earlier sprints and stays in place. The deferred work is the
+  audit-trail ceremony: documented residency runbook, per-quarter
+  re-verification, sign-off paperwork. Communicate the *posture stays /
+  ceremony defers* split clearly to any privacy-conscious pilot
+  customer.
 
 - **8.5** Load test OCPP gateway. Spin up N simulator chargers (100,
   1000, 10000 target), measure CPU/memory/latency of the DO fleet.
@@ -579,23 +670,28 @@ Load test establishes the single-process ceiling.
   - *Exit:* Load test results document exists; ceiling is above
     3× pilot scale.
 
-**Risks.** Payment provider SLA sign-offs may take time — don't let
-procurement paperwork block code. Restore drill will find problems;
-allocate a day for unexpected fixes.
+**Risks.** Restore drill will find problems; allocate a day for
+unexpected fixes.
 
 ---
 
 ## 12. Sprint 9 — Multi-Tenant + White-Label
 
+> **Pilot scope (per [ADR 0005](../adr/0005-pilot-scope-tightening-2026-04-25.md), tag A):**
+> Multi-tenant onboarding, per-Host branding, RLS, and scoped API keys
+> ship for pilot. **OCPP 2.0.1 adapter is deferred to post-pilot**
+> (groups under tag A, Roaming, since 2.0.1 unlocks 2.0.1-only roaming
+> partners). Pilot stays on OCPP 1.6J.
+
 **Goal.** Prove the platform is a platform, not a single-customer app.
-Second org onboards cleanly; branding scopes work; OCPP 2.0.1 adapter is
-in place.
+Second org onboards cleanly; branding scopes work; multi-tenant
+isolation is enforceable.
 
 **Entry.** Sprint 8 exit met.
 
 **Exit.** A second (staged) org onboards end to end. Per-Host branding
 applies to driver-facing surfaces. API keys + scopes work for partner
-integrations. OCPP 2.0.1 adapter is code-complete.
+integrations.
 
 **Milestones.**
 
@@ -622,55 +718,79 @@ integrations. OCPP 2.0.1 adapter is code-complete.
   - *Exit:* A scoped API key can call permitted endpoints and is
     rejected on others.
 
-- **9.5** OCPP 2.0.1 adapter. Second protocol module under
-  `gateway/protocol/2.0.1/` with schemas, parsers, state machine mapping.
-  Both versions tested against simulator.
-  - *Exit:* Simulator charger can connect with 2.0.1 and complete a
-    session; translation to domain events identical to 1.6J path.
+- **9.5** ~~OCPP 2.0.1 adapter~~ — **deferred per ADR 0005 (tag A).**
+  Post-pilot. Pilot stays on OCPP 1.6J. The gateway / translator
+  module boundary (`gateway/src/translator.ts`) was deliberately
+  designed to admit a second protocol version as a sibling module
+  without rework — adding 2.0.1 post-pilot is additive.
 
-**Risks.** OCPP 2.0.1 state model differs in non-trivial ways; plan a
-spec-reading day. RLS can slow down queries; measure before enabling in
-hot paths.
+**Risks.** RLS can slow down queries; measure before enabling in hot
+paths.
 
 ---
 
-## 13. Sprint 10 — Pilot Go-Live
+## 13. Sprint 10 — Pilot Go-Live (demonstrable, not commercial)
 
-**Goal.** Real chargers, real drivers, real invoices at the pilot site.
+> **Pilot scope (per [ADR 0005](../adr/0005-pilot-scope-tightening-2026-04-25.md)):**
+> The pilot is a **demonstrable platform**, not a commercial release.
+> Real chargers, real drivers, real session activity — but no money
+> movement during the pilot window. Commercial readiness lives in
+> the post-pilot backlog (tags A–F).
+
+**Goal.** Real chargers (OCPP 1.6J) communicating with Straumvakt.
+Real pilot drivers using user/password login + RFID at the charger
+to start sessions. Operator console runs the site. Billing dashboard
+shows what *would* be invoiced. Pilot retrospective captured.
 
 **Entry.** Sprint 9 exit met.
 
-**Exit.** Pilot site is live on Straumvakt. At least one real session
-completed and invoiced. Retrospective held. Post-pilot plan drafted.
+**Exit.** Pilot site is live on Straumvakt. Real charger sessions
+complete end-to-end. Billing dashboard reflects the period's
+activity. Backup restore drill executed at least once. Pilot
+retrospective written and post-pilot plan outlined.
 
 **Milestones.**
 
 - **10.1** Real chargers onboarded. Whichever hardware the pilot uses
-  (Zaptec / Easee via vendor adapter; or generic OCPP via the gateway)
-  — provisioned, connected, status showing healthy.
+  (Zaptec / Easee via vendor adapter; or generic OCPP 1.6J via the
+  gateway) — provisioned, connected, status showing healthy.
   - *Exit:* Pilot chargers visible in operator console with live
     `Available` status.
 
 - **10.2** Real drivers invited. Pilot 6 drivers onboarded via
-  Auðkenni; family groups created where relevant; RFID cards assigned
-  where applicable.
+  email/password sign-up; family groups created where relevant; RFID
+  cards assigned where applicable.
   - *Exit:* All 6 drivers completed sign-up and appear in users list.
+    Each has at least one assigned RFID card.
 
-- **10.3** First commercial invoice issued. For one driver or Host,
-  covering real charging activity, matching the ChargerServicePlan
-  rules.
-  - *Exit:* Invoice issued, paid, recorded in `billing.invoices`.
+- **10.3** Pilot session lifecycle. Real driver presents RFID at a
+  pilot charger; session starts; meter values stream; session ends.
+  Session row + projection state visible in operator console;
+  driver's PWA history updates.
+  - *Exit:* At least 10 real sessions completed during pilot window
+    with no operator intervention.
 
-- **10.4** Runbooks finalized. Incident response, backup restore, EU
-  residency check, OCPP reconnect troubleshooting, common operator
-  tasks. Living doc in `/docs/runbooks/`.
+- **10.4** Billing dashboard reviewed against pilot activity.
+  Per-driver and per-Host accumulated amounts (ISK) match what the
+  tariff engine computed for each session. Operator and at least
+  one driver review the dashboard during the pilot window.
+  - *Exit:* Dashboard totals reconcile to tariff-engine output for
+    every pilot session. **No invoices issued during pilot per ADR
+    0005 (tag E)** — manual operator-side invoicing is a post-pilot
+    or operator-side task, not a Straumvakt pilot deliverable.
+
+- **10.5** Runbooks finalized. Incident response, backup restore,
+  OCPP reconnect troubleshooting, common operator tasks. Living
+  doc in `/docs/runbooks/`.
   - *Exit:* Runbook index exists; each top-5 scenario documented.
 
-- **10.5** Pilot retrospective. What went right, what broke, what the
+- **10.6** Pilot retrospective. What went right, what broke, what the
   data says, what the drivers and operator say. Post-pilot plan
-  (Sprints 11+) drafted.
+  drafted, listing the order in which tags A–F (per ADR 0005) are
+  picked up.
   - *Exit:* Retrospective doc written; post-pilot plan outlined (next
-    two sprints of priorities).
+    two sprints of priorities — typically tag F first since it
+    unlocks money movement).
 
 **Risks.** Real hardware always surprises. Budget time for diagnosing
 one or two unexpected OCPP quirks at the pilot site. Don't ship a

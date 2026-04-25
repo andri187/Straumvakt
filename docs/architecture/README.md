@@ -19,8 +19,9 @@
 | [`data_flow_charger_to_ui.svg`](./data_flow_charger_to_ui.svg) | End-to-end data flow — one message followed from charger hardware to storage to UI. Labels each hop with service, language, and protocol. Inbound telemetry, read flow, and outbound command flow all in one frame. | Onboarding a new engineer, explaining the system to non-technical stakeholders, debugging "where did that event go?" |
 | [`entity_relationships.svg`](./entity_relationships.svg) | How CPO, Driver, Site, and Connector relate. Two columns — people side (Driver → Family Group → CustomerPlan) and hardware side (Charger Host → Property → Site → Charger → OCPP Identity → Connector) — converging on the Charge Session as the binding row. | "How does a driver end up connected to a connector?" questions; data-model onboarding; explaining the 7-layer hierarchy without writing SQL |
 | [`straumvakt_sprint_timeline.svg`](./straumvakt_sprint_timeline.svg) | Gantt-style timeline of the first two sprints. Done vs. next, milestone bars, "today" marker at the Sprint 0 / Sprint 1 boundary. Updated at each sprint transition. | Sprint kickoff / stakeholder update |
+| [`straumvakt_roadmap.svg`](./straumvakt_roadmap.svg) | Phase-banded delivery roadmap. Three phases — Done (Foundation), Pilot (tightened scope per ADR 0005), Post-Pilot (tags A–F mapped back to sprint rows). Companion to the delivery plan. | Pilot scope conversations, board review, what-defers-to-when |
 
-**Reading order for a first pass:** architecture → architecture diagram → delivery plan → data flow diagram (for the "how does it actually move" mental model).
+**Reading order for a first pass:** architecture → architecture diagram → delivery plan → roadmap (for "what's in pilot, what's deferred") → data flow diagram (for "how does it actually move").
 
 ---
 
@@ -85,6 +86,7 @@ sprint at every sprint kickoff.
 
 | Date | Change | By |
 |---|---|---|
+| 2026-04-25 | **Pilot scope tightened** ([ADR 0005](../adr/0005-pilot-scope-tightening-2026-04-25.md)). Pilot reframed as *demonstrable platform*, not commercial release. Six topical groups (A–F) deferred to post-pilot: roaming/eMSP/OCPP 2.0.1, Auðkenni/QR start, multi-currency, advanced issue engine, real billing, payments + dunning + EU residency ceremony. Delivery plan §1.1/§1.2/§1.3/§2 + per-sprint sections §5/§6/§7/§8/§9/§11/§12/§13 updated. Architecture §11 non-goals split into "deferred from V3" vs "deferred from pilot". New roadmap SVG (`straumvakt_roadmap.svg`) added as canonical. Rollback anchor: git tag `pre-pilot-rescope-2026-04-25`. | Thor (with Claude) |
 | 2026-04-24 | Sprint 1 milestones 1.1–1.4 landed. `gateway/` Worker live: per-OCPPIdentity Durable Objects, Basic-Auth per identity, OCPP 1.6J envelope parser, signed ingest client via Cloudflare Service Binding. Delivery plan §4 and sprint timeline updated. 1.5 (E2E simulator test) is the remaining Sprint 1 milestone. | Thor (with Claude + VSCode Claude) |
 | 2026-04-24 | Entity relationships diagram added (`entity_relationships.svg`) — CPO / Driver / Site / Connector and how the Charge Session binds them. People side and hardware side converging on one row. | Thor (with Claude) |
 | 2026-04-24 | Data flow diagram added (`data_flow_charger_to_ui.svg`) — inbound telemetry, read, and outbound command flows in one frame, each hop labelled with service, language, and protocol. | Thor (with Claude) |

@@ -282,7 +282,11 @@ through events or explicit typed interfaces.
 
 ## 11. Non-goals for V3
 
-Explicit exclusions so scope doesn't silently creep:
+Explicit exclusions so scope doesn't silently creep. **Two tiers** —
+items deferred from V3 entirely, and items deferred from the *pilot*
+into the post-pilot backlog (per [ADR 0005](../adr/0005-pilot-scope-tightening-2026-04-25.md)).
+
+### 11.1 Deferred from V3 entirely
 
 - Battery and solar as `SiteAsset` kinds (deferred; shape admits them)
 - ML models, feature store, model registry (deferred; event log written
@@ -296,6 +300,32 @@ Explicit exclusions so scope doesn't silently creep:
 - ClickHouse or dedicated analytics store
 - Kafka or dedicated event bus — Cloudflare Queues + Postgres suffice
 - MCP access for agent-friendly APIs (interesting; deferred past V3)
+
+### 11.2 Deferred from pilot to post-pilot (ADR 0005, tags A–F)
+
+The pilot is a **demonstrable platform**, not a commercial release.
+The following items have schema and module boundaries already in
+place from earlier sprints — turning them on post-pilot is additive,
+not migrational. Tags match the
+[`straumvakt_roadmap.svg`](./straumvakt_roadmap.svg).
+
+- **A · Roaming** — eMSP endpoints (`/ocpi/emsp/2.2.1/*`), OCPI token
+  push to roaming partners, OCPP 2.0.1 adapter
+- **B · Driver login** — Auðkenni electronic-ID (OIDC) login flow,
+  QR-code session start
+- **C · Multi-currency** — EUR + per-locale variants (pilot is ISK
+  only)
+- **D · Issue Engine v2** — advanced detection (anomaly + sequence
+  rules), smart routing (helper → contractor → escalation tiers),
+  ML categorization, helper reputation scoring
+- **E · Real billing** — monthly invoice generation, billing
+  transactions as committed ledger entries, statements, employer
+  reimbursement workflow, PDF invoice rendering
+- **F · Commerce + compliance** — payment provider integration,
+  dunning workflow, EU residency *verification ceremony* (the
+  runtime *posture* — Cloudflare Data Localization, Neon EU region,
+  R2 EU jurisdiction, DO `locationHint=weur` — stays in place
+  during pilot; only the audit ceremony defers)
 
 ## 12. Reading guide
 
