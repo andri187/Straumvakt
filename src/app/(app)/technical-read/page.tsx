@@ -41,9 +41,12 @@ export default async function TechnicalReadPage({
   for (const [k, v] of Object.entries(sp)) {
     if (typeof v === "string") qs.set(k, v);
   }
-  const iframeUrl =
-    `${ZAPTEC_TEST_BASE}${TECHNICIAN_PATH}` +
-    (qs.toString() ? `?${qs.toString()}` : "");
+  // Tell zaptec-test to render in "embedded" mode — its Sidebar
+  // self-hides and globals.css drops the left margin on <main> so
+  // only Straumvakt's outer chrome remains. See zaptec-test
+  // src/components/sidebar.tsx + globals.css.
+  qs.set("embedded", "1");
+  const iframeUrl = `${ZAPTEC_TEST_BASE}${TECHNICIAN_PATH}?${qs.toString()}`;
 
   return (
     <>
