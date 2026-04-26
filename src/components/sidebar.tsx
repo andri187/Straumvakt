@@ -23,6 +23,7 @@ import {
   Briefcase,
   Users,
   UserCog,
+  PlusCircle,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -54,6 +55,12 @@ const nav: NavItem[] = [
     href: "/dashboard",
     label: { is: "Mælaborð", en: "Dashboard" },
     icon: LayoutDashboard,
+  },
+  {
+    kind: "leaf",
+    href: "/onboard",
+    label: { is: "Innskráning", en: "Onboard" },
+    icon: PlusCircle,
   },
   {
     kind: "leaf",
