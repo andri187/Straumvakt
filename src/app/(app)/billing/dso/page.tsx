@@ -9,15 +9,32 @@ export const metadata = { title: "DSO rates" };
 type Row = {
   party: Party;
   item: TariffItem;
+  uid: string;
 };
+
+// Stable UID per (party, DSOF, position). Shown when the catalogue's
+// `code` field is null. Format: <PARTY>-DSOF-<NN> e.g. RARIK-DSOF-01.
+// Becomes editable once assigned to a TariffDefinition via /billing/tariffs.
+function partyKey(slug: string): string {
+  return slug.toUpperCase().replace(/[^A-Z0-9]+/g, "_");
+}
 
 export default async function DsoRatesPage() {
   const cat = loadCatalogue();
   const parties = cat ? filterByRole(cat.parties, "dso") : [];
 
-  const rows: Row[] = parties.flatMap((p) =>
-    (p.tariff_items ?? []).map((item) => ({ party: p, item })),
-  );
+  const rows: Row[] = parties.flatMap((p) => {
+    const items = p.tariff_items ?? [];
+    const prefix = partyKey(p.slug);
+    return items.map((item, idx) => ({
+      party: p,
+      item,
+      uid:
+        item.code && item.code.trim().length > 0
+          ? item.code
+          : `${prefix}-DSOF-${String(idx + 1).padStart(2, "0")}`,
+    }));
+  });
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-8">
@@ -70,7 +87,7 @@ function RatesTable({ rows }: { rows: Row[] }) {
       <thead className="bg-bg-base/50 text-[10px] uppercase tracking-brand text-ink-400">
         <tr>
           <th className="px-3 py-2 text-left">Party</th>
-          <th className="px-3 py-2 text-left">Code</th>
+          <th className="px-3 py-2 text-left">UID</th>
           <th className="px-3 py-2 text-left">Tariff</th>
           <th className="px-3 py-2 text-left">Applies to</th>
           <th className="px-3 py-2 text-left">Unit</th>
@@ -80,15 +97,15 @@ function RatesTable({ rows }: { rows: Row[] }) {
         </tr>
       </thead>
       <tbody className="divide-y divide-bg-border/60">
-        {rows.map(({ party, item }, i) => (
-          <tr key={`${party.slug}:${item.code ?? i}:${item.display_name}`} className="hover:bg-bg-base/20">
+        {rows.map(({ party, item, uid }) => (
+          <tr key={`${party.slug}:${uid}`} className="hover:bg-bg-base/20">
             <td className="px-3 py-2">
               <div className="text-ink-100">{party.trade_name}</div>
               {party.service_area?.description && (
                 <div className="text-[10px] text-ink-500">{party.service_area.description}</div>
               )}
             </td>
-            <td className="px-3 py-2 font-mono text-[11px] text-sv-sky">{item.code ?? "—"}</td>
+            <td className="px-3 py-2 font-mono text-[11px] text-sv-sky">{uid}</td>
             <td className="px-3 py-2 text-ink-200">
               {item.display_name}
               {item.ev_category && (
