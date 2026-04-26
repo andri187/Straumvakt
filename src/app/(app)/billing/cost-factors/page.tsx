@@ -1,3 +1,4 @@
+import { SectionTabs, BILLING_TABS } from "@/components/section-tabs";
 import { listCostFactors } from "@/lib/repositories/cost-factors";
 
 export const dynamic = "force-dynamic";
@@ -7,6 +8,7 @@ export default async function CostFactorsPage() {
   const factors = await listCostFactors();
   return (
     <div className="mx-auto max-w-5xl px-6 py-8">
+      <SectionTabs tabs={BILLING_TABS} />
       <header className="mb-6">
         <h1 className="text-2xl font-semibold text-ink-50">Cost factors</h1>
         <p className="mt-1 text-sm text-ink-400">

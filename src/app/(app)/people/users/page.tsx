@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
+import { SectionTabs, TENANTS_TABS } from "@/components/section-tabs";
 import { adminSessionConfig, verifyAdminSession } from "@/lib/admin-session";
 import { listUsers } from "@/lib/repositories/users";
 import { CreateUserForm } from "./create-form";
@@ -23,11 +24,12 @@ export default async function UsersPage({
 
   return (
     <>
-      <Topbar title="People · Users" email={session?.email} />
+      <Topbar title="Tenants · Users" email={session?.email} />
       <PageShell
         title="Users"
         description="Platform-level user records — staff (owner / admin / operator / helper / contractor / viewer) plus drivers. Per ADR 0006, drivers are inert during pilot (no signin); staff use admin-session env credentials. Real auth lands post-pilot."
       >
+        <SectionTabs tabs={TENANTS_TABS} />
         <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
           <section className="rounded-lg border border-bg-border bg-bg-surface/70 shadow-card backdrop-blur">
             <header className="flex flex-wrap items-baseline justify-between gap-3 border-b border-bg-border bg-bg-base/40 px-5 py-3">

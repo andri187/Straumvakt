@@ -47,6 +47,10 @@ type Group = {
   label: Label;
   icon: LucideIcon;
   children: NavItem[];
+  // Optional landing route the label itself navigates to. When set, clicking
+  // the label navigates AND opens the group; chevron is the only collapse
+  // toggle. When unset, the label is a pure expand/collapse button.
+  defaultHref?: string;
 };
 
 type NavItem = Leaf | Group;
@@ -63,6 +67,7 @@ const nav: NavItem[] = [
     basePath: "/sites",
     label: { is: "Operations", en: "Operations" },
     icon: MapPin,
+    defaultHref: "/sites",
     children: [
       {
         kind: "leaf",
@@ -95,6 +100,7 @@ const nav: NavItem[] = [
     basePath: "/tenants",
     label: { is: "Tenants", en: "Tenants" },
     icon: Briefcase,
+    defaultHref: "/tenants",
     children: [
       {
         kind: "leaf",
@@ -121,6 +127,7 @@ const nav: NavItem[] = [
     basePath: "/billing",
     label: { is: "Billing", en: "Billing" },
     icon: Wallet,
+    defaultHref: "/billing",
     children: [
       {
         kind: "leaf",
@@ -362,39 +369,80 @@ function NavGroup({ item, ctx, depth }: { item: Group; ctx: RenderContext; depth
   const active = ctx.pathname.startsWith(item.basePath);
   const open = ctx.isGroupOpen(item.basePath);
   const GroupIcon = item.icon;
+  const labelClasses = cn(
+    "flex w-full items-center gap-2 rounded-md px-3 text-[10px] font-semibold uppercase tracking-brand transition-colors",
+    depth === 0 ? "min-h-[36px] py-1.5" : "min-h-[28px] py-1 text-[9px]",
+    "md:justify-center md:px-0 lg:justify-start lg:px-3",
+    active ? "text-sv-sky" : "text-ink-400",
+    "hover:bg-bg-raised hover:text-ink-50",
+  );
+  const iconEl = (
+    <GroupIcon
+      className={cn(
+        "shrink-0",
+        depth === 0 ? "h-5 w-5" : "h-4 w-4",
+        active ? "text-sv-green" : "text-ink-500",
+      )}
+    />
+  );
+  const chevronEl = (
+    <ChevronRight
+      className={cn(
+        "h-3.5 w-3.5 shrink-0 transition-transform duration-150 md:hidden lg:block",
+        open && "rotate-90",
+        active ? "text-sv-sky" : "text-ink-500",
+      )}
+    />
+  );
   return (
     <div className={depth === 0 ? "pt-2" : "pt-1"}>
-      <button
-        type="button"
-        title={item.label[ctx.language]}
-        onClick={() => ctx.toggleGroup(item.basePath)}
-        aria-expanded={open}
-        className={cn(
-          "flex w-full items-center gap-2 rounded-md px-3 text-[10px] font-semibold uppercase tracking-brand transition-colors",
-          depth === 0 ? "min-h-[36px] py-1.5" : "min-h-[28px] py-1 text-[9px]",
-          "md:justify-center md:px-0 lg:justify-start lg:px-3",
-          active ? "text-sv-sky" : "text-ink-400",
-          "hover:bg-bg-raised hover:text-ink-50",
-        )}
-      >
-        <GroupIcon
-          className={cn(
-            "shrink-0",
-            depth === 0 ? "h-5 w-5" : "h-4 w-4",
-            active ? "text-sv-green" : "text-ink-500",
-          )}
-        />
-        <span className="flex-1 text-left md:hidden lg:block">
-          {item.label[ctx.language]}
-        </span>
-        <ChevronRight
-          className={cn(
-            "h-3.5 w-3.5 shrink-0 transition-transform duration-150 md:hidden lg:block",
-            open && "rotate-90",
-            active ? "text-sv-sky" : "text-ink-500",
-          )}
-        />
-      </button>
+      {item.defaultHref ? (
+        <div className="flex items-stretch">
+          <Link
+            href={item.defaultHref as Parameters<typeof Link>[0]["href"]}
+            title={item.label[ctx.language]}
+            onClick={() => {
+              if (!open) ctx.toggleGroup(item.basePath);
+              ctx.close();
+            }}
+            className={cn(labelClasses, "flex-1")}
+          >
+            {iconEl}
+            <span className="flex-1 text-left md:hidden lg:block">
+              {item.label[ctx.language]}
+            </span>
+          </Link>
+          <button
+            type="button"
+            aria-label={`Toggle ${item.label[ctx.language]}`}
+            aria-expanded={open}
+            onClick={(e) => {
+              e.preventDefault();
+              ctx.toggleGroup(item.basePath);
+            }}
+            className={cn(
+              "ml-0.5 flex w-7 items-center justify-center rounded-md transition-colors",
+              "hover:bg-bg-raised md:hidden lg:flex",
+            )}
+          >
+            {chevronEl}
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          title={item.label[ctx.language]}
+          onClick={() => ctx.toggleGroup(item.basePath)}
+          aria-expanded={open}
+          className={labelClasses}
+        >
+          {iconEl}
+          <span className="flex-1 text-left md:hidden lg:block">
+            {item.label[ctx.language]}
+          </span>
+          {chevronEl}
+        </button>
+      )}
       {open && (
         <div
           className={cn(

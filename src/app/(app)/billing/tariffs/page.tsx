@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SectionTabs, BILLING_TABS } from "@/components/section-tabs";
 import { listAllTariffs } from "@/lib/repositories/tariff-definitions";
 import { listOrgs } from "@/lib/repositories/organizations";
 import { listCostFactors } from "@/lib/repositories/cost-factors";
@@ -13,6 +14,7 @@ export default async function TariffsPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-8">
+      <SectionTabs tabs={BILLING_TABS} />
       <header className="mb-6">
         <h1 className="text-2xl font-semibold text-ink-50">Tariff definitions</h1>
         <p className="mt-1 text-sm text-ink-400">

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SectionTabs, OPERATIONS_TABS } from "@/components/section-tabs";
 import { listAllInstallations, listVendors } from "@/lib/repositories/installations";
 import { listOrgs } from "@/lib/repositories/organizations";
 import { CreateInstallationForm } from "./create-form";
@@ -16,6 +17,7 @@ export default async function InstallationsPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-8">
+      <SectionTabs tabs={OPERATIONS_TABS} />
       <header className="mb-6">
         <h1 className="text-2xl font-semibold text-ink-50">Installations</h1>
         <p className="mt-1 text-sm text-ink-400">

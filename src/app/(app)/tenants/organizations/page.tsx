@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
+import { SectionTabs, TENANTS_TABS } from "@/components/section-tabs";
 import { adminSessionConfig, verifyAdminSession } from "@/lib/admin-session";
 import { listOrgs } from "@/lib/repositories/organizations";
 import { CreateOrgForm } from "./create-form";
@@ -28,6 +29,7 @@ export default async function OrganizationsPage({
         title="Organizations"
         description="Every Org is a SaaS tenant on Straumvakt — the CPO. Each Org owns Hosts, Properties, Sites, and downstream entities via org_id. Sprint 2.1 (per ADR 0006)."
       >
+        <SectionTabs tabs={TENANTS_TABS} />
         <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
           <section className="rounded-lg border border-bg-border bg-bg-surface/70 shadow-card backdrop-blur">
             <header className="flex flex-wrap items-baseline justify-between gap-3 border-b border-bg-border bg-bg-base/40 px-5 py-3">
