@@ -62,3 +62,7 @@ logs/
 public/mobile-app-mock/
 public/reference/
 public/zaptec/
+
+# Investor pitch deck — kept entirely out of git per operator preference.
+# LibreOffice .odp source + exported slide SVGs + assets all live local-only.
+docs/architecture/investor_slides/
