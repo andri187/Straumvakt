@@ -1,0 +1,115 @@
+import { cookies } from "next/headers";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { Topbar } from "@/components/topbar";
+import { PageShell } from "@/components/page-shell";
+import { adminSessionConfig, verifyAdminSession } from "@/lib/admin-session";
+import {
+  getUserById,
+  listUserMemberships,
+} from "@/lib/repositories/users";
+import { listOrgs } from "@/lib/repositories/organizations";
+import { UserEditPanel } from "./edit-panel";
+import { MembershipsPanel } from "./memberships-panel";
+
+export const metadata = { title: "User detail" };
+
+export default async function UserDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const jar = await cookies();
+  const token = jar.get(adminSessionConfig.SESSION_COOKIE_NAME)?.value;
+  const session = await verifyAdminSession(token);
+
+  const { id } = await params;
+  const [user, memberships, orgs] = await Promise.all([
+    getUserById(id),
+    listUserMemberships(id),
+    listOrgs({ includeArchived: false }),
+  ]);
+  if (!user) notFound();
+
+  const memberOrgIds = new Set(memberships.map((m) => m.orgId));
+  const availableOrgs = orgs.filter((o) => !memberOrgIds.has(o.id));
+
+  return (
+    <>
+      <Topbar
+        title={`People · ${user.email}`}
+        email={session?.email}
+      />
+      <PageShell
+        title={user.displayName ?? user.email}
+        description={`${user.email} · status ${user.status} · ${memberships.length} membership${memberships.length === 1 ? "" : "s"}`}
+      >
+        <div className="mb-3 text-xs text-ink-400">
+          <Link href="/people/users" className="hover:text-ink-50">
+            ← All users
+          </Link>
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
+          <section className="rounded-lg border border-bg-border bg-bg-surface/70 shadow-card backdrop-blur">
+            <header className="flex flex-wrap items-baseline justify-between gap-3 border-b border-bg-border bg-bg-base/40 px-5 py-3">
+              <div>
+                <h2 className="text-sm font-semibold text-ink-50">
+                  Memberships ({memberships.length})
+                </h2>
+                <p className="text-xs text-ink-400">
+                  One row per Org this user belongs to. Roles drive nav
+                  restrictions post-pilot — inert during pilot per ADR 0006.
+                </p>
+              </div>
+            </header>
+            <MembershipsPanel
+              userId={user.id}
+              memberships={memberships}
+              availableOrgs={availableOrgs.map((o) => ({
+                id: o.id,
+                slug: o.slug,
+                displayName: o.displayName,
+              }))}
+            />
+          </section>
+
+          <aside className="rounded-lg border border-bg-border bg-bg-surface/70 p-5 shadow-card backdrop-blur">
+            <h2 className="text-xs font-semibold uppercase tracking-brand text-sv-sky">
+              User detail
+            </h2>
+            <dl className="mt-3 grid gap-x-4 gap-y-1.5 text-xs sm:grid-cols-[110px_1fr]">
+              <dt className="text-ink-500">User ID</dt>
+              <dd className="font-mono text-ink-200">{user.id}</dd>
+              <dt className="text-ink-500">Email</dt>
+              <dd className="font-mono text-ink-100">{user.email}</dd>
+              <dt className="text-ink-500">Sign-in</dt>
+              <dd className="text-ink-200">
+                {user.hasCredentials ? (
+                  <span className="text-emerald-300">Has password</span>
+                ) : (
+                  <span title="Pilot inert record (ADR 0006)">
+                    Inert (no signin)
+                  </span>
+                )}
+              </dd>
+              <dt className="text-ink-500">Created</dt>
+              <dd className="text-ink-200">
+                {new Date(user.createdAt).toLocaleString()}
+              </dd>
+            </dl>
+            <div className="mt-4 border-t border-bg-border/40 pt-4">
+              <UserEditPanel
+                userId={user.id}
+                initial={{
+                  displayName: user.displayName ?? "",
+                  status: user.status,
+                }}
+              />
+            </div>
+          </aside>
+        </div>
+      </PageShell>
+    </>
+  );
+}

@@ -85,19 +85,10 @@ export async function POST(req: Request) {
       select: { id: true, slug: true },
     });
 
-    const host = await tx.chargerHost.create({
-      data: {
-        orgId: org.id,
-        displayName: `${body.displayName} (self-hosted)`,
-        type: "standard",
-      },
-      select: { id: true },
-    });
-
+    // ChargerHost dropped per ADR 0009 — Property attaches directly to Org.
     const property = await tx.property.create({
       data: {
         orgId: org.id,
-        hostId: host.id,
         displayName: body.displayName,
       },
       select: { id: true },
@@ -155,7 +146,6 @@ export async function POST(req: Request) {
     return {
       orgId: org.id,
       orgSlug: org.slug,
-      hostId: host.id,
       propertyId: property.id,
       siteId: site.id,
       chargerId: siteAsset.id,

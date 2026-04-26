@@ -82,8 +82,8 @@ export default async function ZaptecPage() {
     <>
       <Topbar title="Zaptec API" email={email} />
       <PageShell
-        title="Zaptec API"
-        description="Static reference of Zaptec's REST API surface. Live data lands when the Zaptec vendor adapter ships in Sprint 2."
+        title="Zaptec API & OCPP"
+        description="Static reference of Zaptec's REST API surface plus OCPP 1.6J integration notes. Live data lands when the Zaptec vendor adapter ships in Sprint 2.7. Real diagnostics against this surface are visible under Technical Read (iframe of zaptec-test on :3100)."
       >
         {!synced ? (
           <div className="rounded-lg border border-bg-border bg-bg-surface/70 p-6 shadow-card backdrop-blur">
@@ -111,14 +111,71 @@ export default async function ZaptecPage() {
                 Live data
               </h2>
               <p className="mt-2 text-sm text-ink-100">
-                No active Zaptec adapter yet — Sprint 2 wires authenticated calls.
+                No active Zaptec adapter yet — Sprint 2.7 wires authenticated
+                calls into Straumvakt itself.
               </p>
               <p className="mt-1 text-xs text-ink-400">
                 Until then, this page displays the OpenAPI surface and constants pulled
-                from the local <code className="font-mono">zaptec-test</code> sandbox. Real
-                installations and chargers will appear here once the adapter is connected
-                in operator console Sprint 5+.
+                from the local <code className="font-mono">zaptec-test</code> sandbox.
+                Real Zaptec installations + live OCPP traffic <em>are</em> already
+                observable today via{" "}
+                <a
+                  href="/technical-read"
+                  className="text-sv-green hover:text-sv-sky"
+                >
+                  Technical Read
+                </a>
+                {" "}(iframe of zaptec-test on{" "}
+                <code className="font-mono">:3100</code> — real OAuth credentials in
+                <code className="font-mono"> zaptec-test/.env</code>, not duplicated
+                to Straumvakt).
               </p>
+            </section>
+
+            {/* Vendor identity */}
+            <section className="rounded-lg border border-bg-border bg-bg-surface/70 p-5 shadow-card backdrop-blur">
+              <h2 className="text-xs font-semibold uppercase tracking-brand text-sv-sky">
+                Vendor
+              </h2>
+              <dl className="mt-3 grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+                <dt className="text-ink-400">Vendor name</dt>
+                <dd className="text-ink-100">Zaptec AS (Norway)</dd>
+                <dt className="text-ink-400">Cloud API base</dt>
+                <dd className="font-mono text-xs text-ink-100">https://api.zaptec.com</dd>
+                <dt className="text-ink-400">API style</dt>
+                <dd className="text-ink-100">REST + JSON; OAuth 2 password grant → bearer + refresh</dd>
+                <dt className="text-ink-400">Documentation</dt>
+                <dd>
+                  <a
+                    href="https://api.zaptec.com/help/index.html"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-sv-green hover:text-sv-sky"
+                  >
+                    api.zaptec.com/help ↗
+                  </a>
+                </dd>
+                <dt className="text-ink-400">Hardware models</dt>
+                <dd className="text-ink-100">
+                  Zaptec Pro (commercial / workplace, AC), Zaptec Go (home, AC),
+                  Zaptec Sense (smart-meter)
+                </dd>
+                <dt className="text-ink-400">OCPP versions</dt>
+                <dd className="text-ink-100">
+                  OCPP 1.6J on Zaptec Pro (default for V3 pilot); 2.0.1 on selected
+                  firmwares
+                </dd>
+                <dt className="text-ink-400">Native data model</dt>
+                <dd className="text-ink-100">
+                  Installation → Circuit → Charger (maps directly onto V3 hierarchy
+                  with ADR 0007)
+                </dd>
+                <dt className="text-ink-400">Credential scope</dt>
+                <dd className="text-ink-100">
+                  <code className="font-mono text-xs">installation</code> — one
+                  OAuth token per Zaptec installation covers all chargers
+                </dd>
+              </dl>
             </section>
 
             {/* OpenAPI summary */}
@@ -207,6 +264,134 @@ export default async function ZaptecPage() {
                 </div>
               </section>
             )}
+
+            {/* OCPP support */}
+            <section className="rounded-lg border border-bg-border bg-bg-surface/70 p-5 shadow-card backdrop-blur">
+              <h2 className="text-xs font-semibold uppercase tracking-brand text-sv-sky">
+                OCPP support
+              </h2>
+              <dl className="mt-3 grid gap-x-6 gap-y-2 text-sm sm:grid-cols-[180px_1fr]">
+                <dt className="text-ink-400">Default version</dt>
+                <dd className="text-ink-100">
+                  OCPP 1.6J — secure WebSocket (wss://) with Basic-Auth identity
+                </dd>
+                <dt className="text-ink-400">2.0.1 readiness</dt>
+                <dd className="text-ink-100">
+                  Available on selected Zaptec Pro firmwares; deferred to
+                  post-pilot per ADR 0005 tag A. V3 translator boundary in{" "}
+                  <code className="font-mono text-xs">gateway/src/ocpp-frame.ts</code>
+                  {" "}admits 2.0.1 as a sibling module without rework.
+                </dd>
+                <dt className="text-ink-400">Identity convention</dt>
+                <dd className="text-ink-100">
+                  Charger serial as the OCPP identity string; auth_secret
+                  generated by Straumvakt and pushed to the device via the cloud
+                  API at onboarding (Sprint 2.7 wizard). SHA-256 hashed at rest
+                  in <code className="font-mono text-xs">ocpp_identities.auth_secret_hash</code>.
+                </dd>
+                <dt className="text-ink-400">Heartbeat</dt>
+                <dd className="text-ink-100">
+                  300 s default — adjusted via{" "}
+                  <code className="font-mono text-xs">ChangeConfiguration</code>
+                  {" "}from the operator console (Sprint 1.5 wired this end-to-end).
+                </dd>
+                <dt className="text-ink-400">MeterValues cadence</dt>
+                <dd className="text-ink-100">
+                  60 s default during active session (configurable). Energy
+                  accumulation via standard{" "}
+                  <code className="font-mono text-xs">Energy.Active.Import.Register</code>.
+                  Verified end-to-end against zaptec-test sandbox during Sprint 1.
+                </dd>
+                <dt className="text-ink-400">Vendor-specific extensions</dt>
+                <dd className="text-ink-100">
+                  Zaptec uses{" "}
+                  <code className="font-mono text-xs">DataTransfer</code> with
+                  vendor ID{" "}
+                  <code className="font-mono text-xs">com.zaptec</code> for
+                  installation-aware load-balancing payloads — passed through to{" "}
+                  <code className="font-mono text-xs">raw_protocol</code>{" "}
+                  retention class without translation.
+                </dd>
+              </dl>
+            </section>
+
+            {/* V3 integration */}
+            <section className="rounded-lg border border-bg-border bg-bg-surface/70 p-5 shadow-card backdrop-blur">
+              <h2 className="text-xs font-semibold uppercase tracking-brand text-sv-sky">
+                V3 integration
+              </h2>
+              <ul className="mt-3 space-y-2 text-sm text-ink-200">
+                <li>
+                  <strong className="text-ink-50">Hardware Catalog seed</strong>
+                  {" "}— Sprint 0 already ships{" "}
+                  <code className="font-mono text-[11px]">hardware.vendors.slug=zaptec</code>
+                  {" "}with model{" "}
+                  <code className="font-mono text-[11px]">zaptec-pro</code>{" "}
+                  (credential_scope=installation). Sprint 0.6 catalog seed is
+                  the source of truth.
+                </li>
+                <li>
+                  <strong className="text-ink-50">Vendor adapter module</strong>
+                  {" "}— ships in Sprint 2.7 at{" "}
+                  <code className="font-mono text-[11px]">src/lib/vendors/zaptec/</code>.
+                  OAuth tokens stored in Cloudflare KV keyed off{" "}
+                  <code className="font-mono text-[11px]">installations.credentials_ref</code>;
+                  never echoed to chat or committed to git per CLAUDE.md Rule 2.
+                </li>
+                <li>
+                  <strong className="text-ink-50">Onboarding wizard</strong>{" "}
+                  — Sprint 2.7 four-step wizard: enter Zaptec credentials → pick
+                  installation → preview pulled metadata → save. One transaction
+                  creates Installation + Circuits + Chargers + OCPPIdentities +
+                  Connectors with{" "}
+                  <code className="font-mono text-[11px]">vendor_circuit_ref</code>
+                  {" "}+{" "}
+                  <code className="font-mono text-[11px]">vendor_installation_ref</code>
+                  {" "}populated.
+                </li>
+                <li>
+                  <strong className="text-ink-50">OCPP path live since
+                  Sprint 1</strong> — Zaptec chargers connect to{" "}
+                  <code className="font-mono text-[11px]">straumvakt-ocpp</code>{" "}
+                  gateway Worker (per-identity Durable Objects, ADR 0004
+                  Service Binding). End-to-end verified via zaptec-test → real
+                  Zaptec API → gateway → main app event log.
+                </li>
+              </ul>
+            </section>
+
+            {/* Cross-link */}
+            <section className="rounded-lg border border-bg-border bg-bg-surface/70 p-5 shadow-card backdrop-blur">
+              <h2 className="text-xs font-semibold uppercase tracking-brand text-sv-sky">
+                See also
+              </h2>
+              <ul className="mt-3 space-y-1 text-sm text-ink-200">
+                <li>
+                  <a
+                    href="/technical-read"
+                    className="text-sv-green hover:text-sv-sky"
+                  >
+                    Technical Read
+                  </a>
+                  <span className="ml-2 text-xs text-ink-400">
+                    live diagnostics — installation hierarchy, identity strip,
+                    API + OCPP cards. Real Zaptec credentials in{" "}
+                    <code className="font-mono text-[11px]">zaptec-test/.env</code>.
+                  </span>
+                </li>
+                <li>
+                  <a
+                    href="/reference/easee-api"
+                    className="text-sv-green hover:text-sv-sky"
+                  >
+                    Reference · API · Easee
+                  </a>
+                  <span className="ml-2 text-xs text-ink-400">
+                    sibling vendor — curated reference until the adapter ships
+                  </span>
+                </li>
+              </ul>
+            </section>
           </div>
         )}
       </PageShell>

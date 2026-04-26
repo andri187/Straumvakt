@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -8,7 +9,20 @@ import {
   BookOpen,
   Zap,
   Wrench,
-  Globe,
+  Cable,
+  Lightbulb,
+  RadioTower,
+  MapPin,
+  Building2,
+  Code2,
+  Plug,
+  ChevronRight,
+  ChevronsDownUp,
+  ChevronsUpDown,
+  Network,
+  Briefcase,
+  Users,
+  UserCog,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -17,26 +31,23 @@ import { useSidebar } from "@/components/sidebar-context";
 
 type Label = { is: string; en: string };
 
-type LeafItem = {
+type Leaf = {
   kind: "leaf";
   href: string;
   label: Label;
   icon: LucideIcon;
 };
 
-type GroupItem = {
+type Group = {
   kind: "group";
   basePath: string; // routes starting with this are considered "in this group"
   label: Label;
   icon: LucideIcon;
-  children: { href: string; label: Label; icon: LucideIcon }[];
+  children: NavItem[];
 };
 
-type NavItem = LeafItem | GroupItem;
+type NavItem = Leaf | Group;
 
-// Minimal Sprint 0 nav — Dashboard only. Expanded in Sprint 5 per V3 plan.
-// Mobile App / Reference / Technical Read are operator-side detour
-// panels added during the Sprint 1.5 UI detour.
 const nav: NavItem[] = [
   {
     kind: "leaf",
@@ -58,23 +69,111 @@ const nav: NavItem[] = [
   },
   {
     kind: "group",
+    basePath: "/tenants",
+    label: { is: "Leigjendur", en: "Tenants" },
+    icon: Briefcase,
+    children: [
+      {
+        kind: "leaf",
+        href: "/tenants/organizations",
+        label: { is: "Skipulagsheildir", en: "Organizations" },
+        icon: Network,
+      },
+    ],
+  },
+  {
+    kind: "group",
+    basePath: "/people",
+    label: { is: "Fólk", en: "People" },
+    icon: Users,
+    children: [
+      {
+        kind: "leaf",
+        href: "/people/users",
+        label: { is: "Notendur", en: "Users" },
+        icon: UserCog,
+      },
+    ],
+  },
+  {
+    kind: "group",
     basePath: "/reference",
     label: { is: "Tilvísanir", en: "Reference" },
     icon: BookOpen,
     children: [
       {
-        href: "/reference",
-        label: { is: "Orkuaðilar Íslands", en: "Iceland — Energy Parties" },
-        icon: Globe,
+        kind: "group",
+        basePath: "/reference/electricity",
+        label: { is: "Rafmagn", en: "Electricity" },
+        icon: Zap,
+        children: [
+          {
+            kind: "leaf",
+            href: "/reference/electricity/dso",
+            label: { is: "Dreifiveitur", en: "DSO" },
+            icon: Cable,
+          },
+          {
+            kind: "leaf",
+            href: "/reference/electricity/retailers",
+            label: { is: "Söluaðilar", en: "Electricity" },
+            icon: Lightbulb,
+          },
+          {
+            kind: "leaf",
+            href: "/reference/electricity/tso",
+            label: { is: "Landsnet", en: "TSO" },
+            icon: RadioTower,
+          },
+        ],
       },
       {
-        href: "/reference/zaptec-api",
-        label: { is: "Zaptec API", en: "Zaptec API" },
-        icon: Zap,
+        kind: "leaf",
+        href: "/reference/public-charging",
+        label: { is: "Almenningshleðsla", en: "Public Charging" },
+        icon: MapPin,
+      },
+      {
+        kind: "leaf",
+        href: "/reference/rental-service",
+        label: { is: "Hleðsluleiga", en: "Rental Service" },
+        icon: Building2,
+      },
+      {
+        kind: "group",
+        basePath: "/reference/api",
+        label: { is: "API tilvísun", en: "API Reference" },
+        icon: Code2,
+        children: [
+          {
+            kind: "leaf",
+            href: "/reference/zaptec-api",
+            label: { is: "Zaptec API", en: "Zaptec API" },
+            icon: Zap,
+          },
+          {
+            kind: "leaf",
+            href: "/reference/easee-api",
+            label: { is: "Easee API", en: "Easee API" },
+            icon: Plug,
+          },
+        ],
       },
     ],
   },
 ];
+
+function collectGroupBasePaths(items: NavItem[], acc: string[] = []): string[] {
+  for (const it of items) {
+    if (it.kind === "group") {
+      acc.push(it.basePath);
+      collectGroupBasePaths(it.children, acc);
+    }
+  }
+  return acc;
+}
+const ALL_GROUP_BASE_PATHS = collectGroupBasePaths(nav);
+const STORAGE_KEY = "straumvakt:sidebar:openGroups";
 
 function StraumvaktMark({ className }: { className?: string }) {
   return (
@@ -119,10 +218,188 @@ function StraumvaktMark({ className }: { className?: string }) {
   );
 }
 
+type RenderContext = {
+  pathname: string;
+  language: "is" | "en";
+  close: () => void;
+  isGroupOpen: (basePath: string) => boolean;
+  toggleGroup: (basePath: string) => void;
+};
+
+function NavLeaf({ item, ctx, depth }: { item: Leaf; ctx: RenderContext; depth: number }) {
+  const active = ctx.pathname === item.href || ctx.pathname.startsWith(item.href + "/");
+  const Icon = item.icon;
+  if (depth === 0) {
+    return (
+      <Link
+        href={item.href as Parameters<typeof Link>[0]["href"]}
+        title={item.label[ctx.language]}
+        onClick={ctx.close}
+        className={cn(
+          "flex min-h-[40px] items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+          "md:justify-center md:px-0 lg:justify-start lg:px-3",
+          active
+            ? "bg-brand-500/15 text-sv-sky ring-1 ring-inset ring-brand-500/25"
+            : "text-ink-300 hover:bg-bg-raised hover:text-ink-50",
+        )}
+      >
+        <Icon className={cn("h-5 w-5 shrink-0", active ? "text-sv-green" : "text-ink-400")} />
+        <span className="md:hidden lg:block">{item.label[ctx.language]}</span>
+      </Link>
+    );
+  }
+  return (
+    <Link
+      href={item.href as Parameters<typeof Link>[0]["href"]}
+      title={item.label[ctx.language]}
+      onClick={ctx.close}
+      className={cn(
+        "flex min-h-[34px] items-center gap-3 rounded-md px-3 py-1.5 text-sm transition-colors",
+        "md:justify-center md:px-0 lg:justify-start lg:px-3",
+        active
+          ? "bg-brand-500/15 text-sv-sky ring-1 ring-inset ring-brand-500/25"
+          : "text-ink-300 hover:bg-bg-raised hover:text-ink-50",
+      )}
+    >
+      <Icon className={cn("h-4 w-4 shrink-0", active ? "text-sv-green" : "text-ink-500")} />
+      <span className="md:hidden lg:block">{item.label[ctx.language]}</span>
+    </Link>
+  );
+}
+
+function NavGroup({ item, ctx, depth }: { item: Group; ctx: RenderContext; depth: number }) {
+  const active = ctx.pathname.startsWith(item.basePath);
+  const open = ctx.isGroupOpen(item.basePath);
+  const GroupIcon = item.icon;
+  return (
+    <div className={depth === 0 ? "pt-2" : "pt-1"}>
+      <button
+        type="button"
+        title={item.label[ctx.language]}
+        onClick={() => ctx.toggleGroup(item.basePath)}
+        aria-expanded={open}
+        className={cn(
+          "flex w-full items-center gap-2 rounded-md px-3 text-[10px] font-semibold uppercase tracking-brand transition-colors",
+          depth === 0 ? "min-h-[36px] py-1.5" : "min-h-[28px] py-1 text-[9px]",
+          "md:justify-center md:px-0 lg:justify-start lg:px-3",
+          active ? "text-sv-sky" : "text-ink-400",
+          "hover:bg-bg-raised hover:text-ink-50",
+        )}
+      >
+        <GroupIcon
+          className={cn(
+            "shrink-0",
+            depth === 0 ? "h-5 w-5" : "h-4 w-4",
+            active ? "text-sv-green" : "text-ink-500",
+          )}
+        />
+        <span className="flex-1 text-left md:hidden lg:block">
+          {item.label[ctx.language]}
+        </span>
+        <ChevronRight
+          className={cn(
+            "h-3.5 w-3.5 shrink-0 transition-transform duration-150 md:hidden lg:block",
+            open && "rotate-90",
+            active ? "text-sv-sky" : "text-ink-500",
+          )}
+        />
+      </button>
+      {open && (
+        <div
+          className={cn(
+            "space-y-0.5 md:ml-0 md:border-l-0 md:pl-0",
+            depth === 0
+              ? "ml-2 border-l border-bg-border/60 pl-2 lg:ml-2 lg:border-l lg:pl-2"
+              : "ml-3 border-l border-bg-border/40 pl-2 lg:ml-3 lg:border-l lg:pl-2",
+          )}
+        >
+          {item.children.map((child) =>
+            child.kind === "leaf" ? (
+              <NavLeaf key={child.href} item={child} ctx={ctx} depth={depth + 1} />
+            ) : (
+              <NavGroup key={child.basePath} item={child} ctx={ctx} depth={depth + 1} />
+            ),
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Sidebar() {
   const { language } = useLanguage();
   const { mobileOpen, close } = useSidebar();
   const pathname = usePathname();
+
+  // Group open/closed state. Default = all open. Hydrated from localStorage
+  // after mount so SSR markup matches the all-open default; first paint may
+  // briefly show all-open before reapplying user prefs.
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(ALL_GROUP_BASE_PATHS.map((p) => [p, true])),
+  );
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const saved = JSON.parse(raw) as Record<string, boolean>;
+      setOpenGroups((prev) => ({ ...prev, ...saved }));
+    } catch {
+      /* ignore corrupt localStorage */
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(openGroups));
+    } catch {
+      /* quota / privacy mode */
+    }
+  }, [openGroups]);
+
+  const toggleGroup = useCallback((basePath: string) => {
+    setOpenGroups((prev) => ({ ...prev, [basePath]: !prev[basePath] }));
+  }, []);
+
+  const expandAll = useCallback(() => {
+    setOpenGroups(Object.fromEntries(ALL_GROUP_BASE_PATHS.map((p) => [p, true])));
+  }, []);
+
+  const collapseAll = useCallback(() => {
+    setOpenGroups(Object.fromEntries(ALL_GROUP_BASE_PATHS.map((p) => [p, false])));
+  }, []);
+
+  // Auto-expand parents of the active route — so deep links don't get
+  // hidden behind a collapsed parent. Doesn't override user choice for
+  // siblings; only forces ancestors of the current pathname.
+  useEffect(() => {
+    setOpenGroups((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const basePath of ALL_GROUP_BASE_PATHS) {
+        if (
+          (pathname === basePath || pathname.startsWith(basePath + "/")) &&
+          !next[basePath]
+        ) {
+          next[basePath] = true;
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [pathname]);
+
+  const isGroupOpen = useCallback(
+    (basePath: string) => openGroups[basePath] ?? true,
+    [openGroups],
+  );
+
+  const ctx: RenderContext = useMemo(
+    () => ({ pathname, language, close, isGroupOpen, toggleGroup }),
+    [pathname, language, close, isGroupOpen, toggleGroup],
+  );
+
+  const allExpanded = ALL_GROUP_BASE_PATHS.every((p) => openGroups[p] !== false);
 
   return (
     <>
@@ -160,104 +437,47 @@ export function Sidebar() {
           </div>
         </div>
 
-        <nav className="flex-1 space-y-0.5 overflow-y-auto px-2 py-4">
-          {nav.map((item) => {
-            if (item.kind === "leaf") {
-              const active =
-                pathname === item.href || pathname.startsWith(item.href + "/");
-              const Icon = item.icon;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href as Parameters<typeof Link>[0]["href"]}
-                  title={item.label[language]}
-                  onClick={close}
-                  className={cn(
-                    "flex min-h-[40px] items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                    "md:justify-center md:px-0 lg:justify-start lg:px-3",
-                    active
-                      ? "bg-brand-500/15 text-sv-sky ring-1 ring-inset ring-brand-500/25"
-                      : "text-ink-300 hover:bg-bg-raised hover:text-ink-50",
-                  )}
-                >
-                  <Icon
-                    className={cn(
-                      "h-5 w-5 shrink-0",
-                      active ? "text-sv-green" : "text-ink-400",
-                    )}
-                  />
-                  <span className="md:hidden lg:block">
-                    {item.label[language]}
-                  </span>
-                </Link>
-              );
-            }
+        <div className="border-b border-bg-border/60 px-3 py-2 md:hidden lg:flex lg:items-center lg:justify-between">
+          <span className="text-[10px] font-semibold uppercase tracking-brand text-ink-500">
+            {language === "is" ? "Yfirlit" : "Navigation"}
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={allExpanded ? collapseAll : expandAll}
+              title={
+                allExpanded
+                  ? language === "is"
+                    ? "Loka öllum"
+                    : "Collapse all"
+                  : language === "is"
+                    ? "Opna alla"
+                    : "Expand all"
+              }
+              aria-label={allExpanded ? "Collapse all groups" : "Expand all groups"}
+              className="rounded p-1 text-ink-400 transition-colors hover:bg-bg-raised hover:text-ink-50"
+            >
+              {allExpanded ? (
+                <ChevronsDownUp className="h-4 w-4" />
+              ) : (
+                <ChevronsUpDown className="h-4 w-4" />
+              )}
+            </button>
+          </div>
+        </div>
 
-            // Group: render header + children. Header is non-clickable
-            // chrome at lg width; on collapsed-rail (md) only the icon
-            // shows and acts like a label tooltip.
-            const groupActive = pathname.startsWith(item.basePath);
-            const GroupIcon = item.icon;
-            return (
-              <div key={item.basePath} className="pt-2">
-                <div
-                  title={item.label[language]}
-                  className={cn(
-                    "flex min-h-[36px] items-center gap-3 rounded-md px-3 py-1.5 text-[10px] font-semibold uppercase tracking-brand",
-                    "md:justify-center md:px-0 lg:justify-start lg:px-3",
-                    groupActive ? "text-sv-sky" : "text-ink-400",
-                  )}
-                >
-                  <GroupIcon
-                    className={cn(
-                      "h-5 w-5 shrink-0",
-                      groupActive ? "text-sv-green" : "text-ink-500",
-                    )}
-                  />
-                  <span className="md:hidden lg:block">
-                    {item.label[language]}
-                  </span>
-                </div>
-                <div className="ml-2 space-y-0.5 border-l border-bg-border/60 pl-2 md:ml-0 md:border-l-0 md:pl-0 lg:ml-2 lg:border-l lg:pl-2">
-                  {item.children.map((child) => {
-                    // Exact match = active so /reference and
-                    // /reference/zaptec-api don't both light up.
-                    const childActive = pathname === child.href;
-                    const ChildIcon = child.icon;
-                    return (
-                      <Link
-                        key={child.href}
-                        href={child.href as Parameters<typeof Link>[0]["href"]}
-                        title={child.label[language]}
-                        onClick={close}
-                        className={cn(
-                          "flex min-h-[36px] items-center gap-3 rounded-md px-3 py-1.5 text-sm transition-colors",
-                          "md:justify-center md:px-0 lg:justify-start lg:px-3",
-                          childActive
-                            ? "bg-brand-500/15 text-sv-sky ring-1 ring-inset ring-brand-500/25"
-                            : "text-ink-300 hover:bg-bg-raised hover:text-ink-50",
-                        )}
-                      >
-                        <ChildIcon
-                          className={cn(
-                            "h-4 w-4 shrink-0",
-                            childActive ? "text-sv-green" : "text-ink-500",
-                          )}
-                        />
-                        <span className="md:hidden lg:block">
-                          {child.label[language]}
-                        </span>
-                      </Link>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
+        <nav className="flex-1 space-y-0.5 overflow-y-auto px-2 py-3">
+          {nav.map((item) =>
+            item.kind === "leaf" ? (
+              <NavLeaf key={item.href} item={item} ctx={ctx} depth={0} />
+            ) : (
+              <NavGroup key={item.basePath} item={item} ctx={ctx} depth={0} />
+            ),
+          )}
         </nav>
 
         <div className="border-t border-bg-border px-5 py-4 text-xs text-ink-400 md:hidden lg:block">
-          {language === "is" ? "v0.1.0 · Áfangi 0" : "v0.1.0 · Sprint 0"}
+          {language === "is" ? "v0.1.0 · Áfangi 2 (næst)" : "v0.1.0 · Sprint 2 (next)"}
         </div>
       </aside>
     </>
