@@ -15,8 +15,21 @@ export default async function ElectricityRatesPage() {
   const cat = loadCatalogue();
   const parties = cat ? filterByRole(cat.parties, "retailer") : [];
 
+  // Only retail-electricity commodity rates. Excluded:
+  //  - non-kWh units (monthly subscriptions, per-transaction fees)
+  //  - public charging tariffs (those are CPO rates, surfaced under
+  //    /reference/public-charging, not retail electricity from the
+  //    customer's meter)
+  function isRetailElectricity(item: TariffItem): boolean {
+    if (item.ev_category === "public_ev") return false;
+    const unit = (item.unit ?? "").toLowerCase();
+    return unit.includes("kwh");
+  }
+
   const rows: Row[] = parties.flatMap((p) =>
-    (p.tariff_items ?? []).map((item) => ({ party: p, item })),
+    (p.tariff_items ?? [])
+      .filter(isRetailElectricity)
+      .map((item) => ({ party: p, item })),
   );
 
   return (
@@ -31,6 +44,10 @@ export default async function ElectricityRatesPage() {
               the reference catalogue
             </Link>{" "}
             (<code className="font-mono">docs/reference/iceland-energy-parties.json</code>).
+            Retail electricity commodity rates only — per-kWh sale price
+            at the customer&apos;s meter. Public-charging rates, monthly
+            charger subscriptions, and per-transaction fees are filtered
+            out (those live under the relevant Reference pages).
             Anchor for the <span className="font-mono">REPF</span> cost factor at the
             Installation level. Numbers here are reference values; create a
             Tariff definition under{" "}
