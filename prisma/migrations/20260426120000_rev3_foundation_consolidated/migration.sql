@@ -64,6 +64,12 @@ ALTER TABLE "charging"."sessions" DROP CONSTRAINT "sessions_ocpp_identity_id_fke
 -- DropForeignKey
 ALTER TABLE "charging"."sessions" DROP CONSTRAINT "sessions_connector_id_fkey";
 
+-- DropForeignKey (manual fix: prisma migrate diff missed this — Reservation.connector
+-- relation didn't change shape in the schema, but the underlying connectors table is
+-- being moved from ocpp to assets, so the FK needs to be dropped here and re-created
+-- pointing at the new table further down.)
+ALTER TABLE "charging"."reservations" DROP CONSTRAINT "reservations_connector_id_fkey";
+
 -- DropIndex
 DROP INDEX "properties"."properties_org_id_host_id_idx";
 
@@ -671,6 +677,10 @@ ALTER TABLE "charging"."sessions" ADD CONSTRAINT "sessions_evse_id_fkey" FOREIGN
 
 -- AddForeignKey
 ALTER TABLE "charging"."sessions" ADD CONSTRAINT "sessions_connector_id_fkey" FOREIGN KEY ("connector_id") REFERENCES "assets"."connectors"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey (manual fix paired with the corresponding DROP earlier — re-anchors
+-- charging.reservations.connector_id at the new assets.connectors table.)
+ALTER TABLE "charging"."reservations" ADD CONSTRAINT "reservations_connector_id_fkey" FOREIGN KEY ("connector_id") REFERENCES "assets"."connectors"("id") ON DELETE NO ACTION ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "charging"."sessions" ADD CONSTRAINT "sessions_ocpp_identity_id_fkey" FOREIGN KEY ("ocpp_identity_id") REFERENCES "ocpp"."ocpp_identities"("id") ON DELETE SET NULL ON UPDATE CASCADE;
