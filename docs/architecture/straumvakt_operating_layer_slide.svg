@@ -1,0 +1,123 @@
+<svg width="1920" height="1080" viewBox="0 0 1920 1080" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1920" y2="1080" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#07111F"/>
+      <stop offset="0.48" stop-color="#0A1726"/>
+      <stop offset="1" stop-color="#071018"/>
+    </linearGradient>
+    <linearGradient id="core" x1="470" y1="370" x2="1450" y2="670" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#102F3B"/>
+      <stop offset="1" stop-color="#0F2438"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8EF5C7"/>
+      <stop offset="1" stop-color="#6FDCEA"/>
+    </linearGradient>
+    <filter id="softGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="14" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.34 0 0 0 0 0.96 0 0 0 0 0.80 0 0 0 0.45 0"/>
+      <feBlend in="SourceGraphic"/>
+    </filter>
+    <marker id="arrow" markerWidth="14" markerHeight="14" refX="10" refY="7" orient="auto" markerUnits="strokeWidth">
+      <path d="M2 2L11 7L2 12" stroke="#6FDCEA" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <rect width="1920" height="1080" fill="url(#bg)"/>
+  <rect x="56" y="56" width="1808" height="968" rx="38" stroke="#1B3348" stroke-width="2"/>
+
+  <text x="112" y="138" fill="#F8FAFC" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="58" font-weight="760">Straumvakt</text>
+  <text x="112" y="187" fill="#9FB3C8" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="25" font-weight="420">Operating and commercial layer for EV charging, independent of who owns control</text>
+  <text x="1710" y="133" fill="#6FDCEA" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="18" font-weight="700" text-anchor="end" letter-spacing="4">ADR 0011</text>
+
+  <!-- Control planes -->
+  <g font-family="Inter, Segoe UI, Arial, sans-serif">
+    <text x="960" y="271" fill="#CFE7F0" font-size="22" font-weight="700" text-anchor="middle" letter-spacing="3">CONTROL PLANES</text>
+    <g>
+      <rect x="180" y="306" width="340" height="108" rx="18" fill="#101F31" stroke="#29445A"/>
+      <text x="350" y="350" fill="#F8FAFC" font-size="24" font-weight="720" text-anchor="middle">Native OCPP</text>
+      <text x="350" y="382" fill="#8DA3B7" font-size="17" font-weight="430" text-anchor="middle">Straumvakt gateway owns auth/control</text>
+    </g>
+    <g>
+      <rect x="590" y="306" width="340" height="108" rx="18" fill="#102431" stroke="#2A5260"/>
+      <text x="760" y="350" fill="#F8FAFC" font-size="24" font-weight="720" text-anchor="middle">OEM API</text>
+      <text x="760" y="382" fill="#8DA3B7" font-size="17" font-weight="430" text-anchor="middle">Easee, Zaptec, vendor portals</text>
+    </g>
+    <g>
+      <rect x="1000" y="306" width="340" height="108" rx="18" fill="#101F31" stroke="#29445A"/>
+      <text x="1170" y="350" fill="#F8FAFC" font-size="24" font-weight="720" text-anchor="middle">External CPMS</text>
+      <text x="1170" y="382" fill="#8DA3B7" font-size="17" font-weight="430" text-anchor="middle">Existing provider stays in control</text>
+    </g>
+    <g>
+      <rect x="1410" y="306" width="330" height="108" rx="18" fill="#102431" stroke="#2A5260"/>
+      <text x="1575" y="350" fill="#F8FAFC" font-size="24" font-weight="720" text-anchor="middle">Read-only</text>
+      <text x="1575" y="382" fill="#8DA3B7" font-size="17" font-weight="430" text-anchor="middle">Imports, reports, intelligence</text>
+    </g>
+  </g>
+
+  <!-- Arrows into core -->
+  <path d="M350 426V488" stroke="#6FDCEA" stroke-width="3" marker-end="url(#arrow)" opacity="0.7"/>
+  <path d="M760 426V488" stroke="#6FDCEA" stroke-width="3" marker-end="url(#arrow)" opacity="0.7"/>
+  <path d="M1170 426V488" stroke="#6FDCEA" stroke-width="3" marker-end="url(#arrow)" opacity="0.7"/>
+  <path d="M1575 426V488" stroke="#6FDCEA" stroke-width="3" marker-end="url(#arrow)" opacity="0.7"/>
+
+  <!-- Core -->
+  <g filter="url(#softGlow)">
+    <rect x="420" y="480" width="1080" height="205" rx="34" fill="url(#core)" stroke="url(#accent)" stroke-width="3"/>
+  </g>
+  <text x="960" y="555" fill="#F8FAFC" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="48" font-weight="790" text-anchor="middle">Straumvakt Operating Layer</text>
+  <text x="960" y="601" fill="#B8D2DE" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="23" font-weight="430" text-anchor="middle">One asset registry, one event log, one billing truth, one operations console</text>
+  <text x="960" y="641" fill="#6FDCEA" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="19" font-weight="680" text-anchor="middle" letter-spacing="2">CONTROL IS OPTIONAL · OPERATIONS ARE THE PRODUCT</text>
+
+  <!-- Physical asset spine -->
+  <g font-family="Inter, Segoe UI, Arial, sans-serif">
+    <rect x="122" y="500" width="234" height="164" rx="22" fill="#0E1D2B" stroke="#29445A"/>
+    <text x="239" y="544" fill="#F8FAFC" font-size="23" font-weight="720" text-anchor="middle">Physical Assets</text>
+    <text x="239" y="582" fill="#9FB3C8" font-size="17" text-anchor="middle">Charging Station</text>
+    <text x="239" y="612" fill="#9FB3C8" font-size="17" text-anchor="middle">EVSE</text>
+    <text x="239" y="642" fill="#9FB3C8" font-size="17" text-anchor="middle">Connector</text>
+    <path d="M360 582H407" stroke="#6FDCEA" stroke-width="3" marker-end="url(#arrow)" opacity="0.72"/>
+  </g>
+
+  <!-- Outputs -->
+  <g font-family="Inter, Segoe UI, Arial, sans-serif">
+    <rect x="1564" y="500" width="234" height="164" rx="22" fill="#0E1D2B" stroke="#29445A"/>
+    <text x="1681" y="544" fill="#F8FAFC" font-size="23" font-weight="720" text-anchor="middle">Outputs</text>
+    <text x="1681" y="582" fill="#9FB3C8" font-size="17" text-anchor="middle">Operators</text>
+    <text x="1681" y="612" fill="#9FB3C8" font-size="17" text-anchor="middle">Payers</text>
+    <text x="1681" y="642" fill="#9FB3C8" font-size="17" text-anchor="middle">Contractors</text>
+    <path d="M1512 582H1550" stroke="#6FDCEA" stroke-width="3" marker-end="url(#arrow)" opacity="0.72"/>
+  </g>
+
+  <!-- Product modules -->
+  <g font-family="Inter, Segoe UI, Arial, sans-serif">
+    <text x="960" y="756" fill="#CFE7F0" font-size="22" font-weight="700" text-anchor="middle" letter-spacing="3">WHAT STRAUMVAKT OWNS</text>
+    <g>
+      <rect x="240" y="800" width="310" height="118" rx="18" fill="#0E1D2B" stroke="#284257"/>
+      <text x="395" y="846" fill="#F8FAFC" font-size="24" font-weight="720" text-anchor="middle">Operations</text>
+      <text x="395" y="880" fill="#8DA3B7" font-size="17" text-anchor="middle">assets, status, uptime, audit</text>
+    </g>
+    <g>
+      <rect x="610" y="800" width="310" height="118" rx="18" fill="#0E1D2B" stroke="#284257"/>
+      <text x="765" y="846" fill="#F8FAFC" font-size="24" font-weight="720" text-anchor="middle">Billing</text>
+      <text x="765" y="880" fill="#8DA3B7" font-size="17" text-anchor="middle">cost centers, tariffs, CDRs</text>
+    </g>
+    <g>
+      <rect x="980" y="800" width="310" height="118" rx="18" fill="#0E1D2B" stroke="#284257"/>
+      <text x="1135" y="846" fill="#F8FAFC" font-size="24" font-weight="720" text-anchor="middle">Issues</text>
+      <text x="1135" y="880" fill="#8DA3B7" font-size="17" text-anchor="middle">faults, workflow, contractors</text>
+    </g>
+    <g>
+      <rect x="1350" y="800" width="310" height="118" rx="18" fill="#0E1D2B" stroke="#284257"/>
+      <text x="1505" y="846" fill="#F8FAFC" font-size="24" font-weight="720" text-anchor="middle">Intelligence</text>
+      <text x="1505" y="880" fill="#8DA3B7" font-size="17" text-anchor="middle">insights, reports, anomalies</text>
+    </g>
+  </g>
+
+  <path d="M395 790V704" stroke="#31566D" stroke-width="2"/>
+  <path d="M765 790V704" stroke="#31566D" stroke-width="2"/>
+  <path d="M1135 790V704" stroke="#31566D" stroke-width="2"/>
+  <path d="M1505 790V704" stroke="#31566D" stroke-width="2"/>
+
+  <text x="960" y="986" fill="#6B8195" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="18" font-weight="500" text-anchor="middle">Native OCPP is supported. OEM APIs are supported. Existing CPMS lock-in is supported. Straumvakt owns the operating truth above them.</text>
+</svg>

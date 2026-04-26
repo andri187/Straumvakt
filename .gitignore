@@ -36,6 +36,9 @@ Thumbs.db
 # Backup files
 *.bak
 
+# LibreOffice / OpenOffice lock files
+.~lock.*#
+
 # TypeScript cache
 *.tsbuildinfo
 

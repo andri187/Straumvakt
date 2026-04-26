@@ -1,0 +1,24 @@
+<svg width="1920" height="1080" viewBox="0 0 1920 1080" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs><linearGradient id="core" x1="330" y1="475" x2="1590" y2="700"><stop stop-color="#102F3B"/><stop offset="1" stop-color="#0F2438"/></linearGradient><marker id="arrow" markerWidth="14" markerHeight="14" refX="10" refY="7" orient="auto"><path d="M2 2L11 7L2 12" stroke="#6FDCEA" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+  <rect width="1920" height="1080" fill="#07111F"/>
+  <image href="assets/straumvakt-logo.png" x="95" y="70" width="128" height="82" preserveAspectRatio="xMidYMid meet"/>
+  <text x="245" y="120" fill="#F8FAFC" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="30" font-weight="780">Straumvakt</text>
+  <text x="120" y="210" fill="#6FDCEA" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="21" font-weight="800" letter-spacing="4">THE SOLUTION</text>
+  <text x="120" y="290" fill="#F8FAFC" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="56" font-weight="800">One layer above every control plane</text>
+  <g font-family="Inter, Segoe UI, Arial, sans-serif">
+    <rect x="140" y="385" width="320" height="112" rx="20" fill="#0F2132" stroke="#29445A"/><text x="300" y="430" fill="#F8FAFC" font-size="25" font-weight="720" text-anchor="middle">OCPP</text><text x="300" y="462" fill="#91AABD" font-size="18" text-anchor="middle">Straumvakt gateway</text>
+    <rect x="565" y="385" width="320" height="112" rx="20" fill="#0F2132" stroke="#29445A"/><text x="725" y="430" fill="#F8FAFC" font-size="25" font-weight="720" text-anchor="middle">OEM API</text><text x="725" y="462" fill="#91AABD" font-size="18" text-anchor="middle">Easee / Zaptec</text>
+    <rect x="990" y="385" width="320" height="112" rx="20" fill="#0F2132" stroke="#29445A"/><text x="1150" y="430" fill="#F8FAFC" font-size="25" font-weight="720" text-anchor="middle">External CPMS</text><text x="1150" y="462" fill="#91AABD" font-size="18" text-anchor="middle">existing provider</text>
+    <rect x="1415" y="385" width="320" height="112" rx="20" fill="#0F2132" stroke="#29445A"/><text x="1575" y="430" fill="#F8FAFC" font-size="25" font-weight="720" text-anchor="middle">Imports</text><text x="1575" y="462" fill="#91AABD" font-size="18" text-anchor="middle">read-only history</text>
+  </g>
+  <path d="M300 510V565" stroke="#6FDCEA" stroke-width="3" marker-end="url(#arrow)"/><path d="M725 510V565" stroke="#6FDCEA" stroke-width="3" marker-end="url(#arrow)"/><path d="M1150 510V565" stroke="#6FDCEA" stroke-width="3" marker-end="url(#arrow)"/><path d="M1575 510V565" stroke="#6FDCEA" stroke-width="3" marker-end="url(#arrow)"/>
+  <rect x="300" y="565" width="1320" height="180" rx="32" fill="url(#core)" stroke="#6FDCEA" stroke-width="3"/>
+  <text x="960" y="635" fill="#F8FAFC" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="46" font-weight="800" text-anchor="middle">Straumvakt Operating Layer</text>
+  <text x="960" y="688" fill="#B8D2DE" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="24" text-anchor="middle">asset registry · event log · billing truth · issue workflow · operator console</text>
+  <g font-family="Inter, Segoe UI, Arial, sans-serif">
+    <rect x="285" y="835" width="300" height="86" rx="18" fill="#0E1D2B" stroke="#284257"/><text x="435" y="888" fill="#F8FAFC" font-size="23" font-weight="720" text-anchor="middle">Operations</text>
+    <rect x="635" y="835" width="300" height="86" rx="18" fill="#0E1D2B" stroke="#284257"/><text x="785" y="888" fill="#F8FAFC" font-size="23" font-weight="720" text-anchor="middle">Billing</text>
+    <rect x="985" y="835" width="300" height="86" rx="18" fill="#0E1D2B" stroke="#284257"/><text x="1135" y="888" fill="#F8FAFC" font-size="23" font-weight="720" text-anchor="middle">Issues</text>
+    <rect x="1335" y="835" width="300" height="86" rx="18" fill="#0E1D2B" stroke="#284257"/><text x="1485" y="888" fill="#F8FAFC" font-size="23" font-weight="720" text-anchor="middle">Intelligence</text>
+  </g>
+</svg>

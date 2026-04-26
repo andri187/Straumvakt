@@ -1,0 +1,25 @@
+<svg width="1920" height="1080" viewBox="0 0 1920 1080" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1920" height="1080" fill="#07111F"/>
+  <image href="assets/straumvakt-logo.png" x="95" y="70" width="128" height="82" preserveAspectRatio="xMidYMid meet"/>
+  <text x="245" y="120" fill="#F8FAFC" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="30" font-weight="780">Straumvakt</text>
+  <text x="120" y="210" fill="#6FDCEA" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="21" font-weight="800" letter-spacing="4">PRODUCT</text>
+  <text x="120" y="290" fill="#F8FAFC" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="54" font-weight="800">A console for running charging as a business</text>
+  <g font-family="Inter, Segoe UI, Arial, sans-serif">
+    <rect x="130" y="395" width="790" height="225" rx="28" fill="#0F2132" stroke="#29445A"/>
+    <text x="180" y="455" fill="#F8FAFC" font-size="32" font-weight="760">Operations</text>
+    <text x="180" y="510" fill="#AFC5D2" font-size="22">Sites, installations, chargers, connectors, status and uptime.</text>
+    <text x="180" y="552" fill="#6FDCEA" font-size="19" font-weight="720">Works across OCPP, OEM API, overlay or read-only.</text>
+    <rect x="1000" y="395" width="790" height="225" rx="28" fill="#0F2132" stroke="#29445A"/>
+    <text x="1050" y="455" fill="#F8FAFC" font-size="32" font-weight="760">Billing allocation</text>
+    <text x="1050" y="510" fill="#AFC5D2" font-size="22">Splits cost across driver, employer, site, owner, retailer and DSO.</text>
+    <text x="1050" y="552" fill="#6FDCEA" font-size="19" font-weight="720">Session facts stay separate from commercial rules.</text>
+    <rect x="130" y="690" width="790" height="225" rx="28" fill="#0F2132" stroke="#29445A"/>
+    <text x="180" y="750" fill="#F8FAFC" font-size="32" font-weight="760">Issue workflow</text>
+    <text x="180" y="805" fill="#AFC5D2" font-size="22">Detects faults, groups evidence, routes work, preserves history.</text>
+    <text x="180" y="847" fill="#6FDCEA" font-size="19" font-weight="720">From signal to service action.</text>
+    <rect x="1000" y="690" width="790" height="225" rx="28" fill="#0F2132" stroke="#29445A"/>
+    <text x="1050" y="750" fill="#F8FAFC" font-size="32" font-weight="760">Intelligence</text>
+    <text x="1050" y="805" fill="#AFC5D2" font-size="22">Reports, utilization, reimbursement, audit and anomaly insight.</text>
+    <text x="1050" y="847" fill="#6FDCEA" font-size="19" font-weight="720">One operating truth above scattered portals.</text>
+  </g>
+</svg>

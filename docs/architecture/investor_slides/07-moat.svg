@@ -1,0 +1,23 @@
+<svg width="1920" height="1080" viewBox="0 0 1920 1080" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1920" height="1080" fill="#07111F"/>
+  <image href="assets/straumvakt-logo.png" x="95" y="70" width="128" height="82" preserveAspectRatio="xMidYMid meet"/>
+  <text x="245" y="120" fill="#F8FAFC" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="30" font-weight="780">Straumvakt</text>
+  <text x="120" y="210" fill="#6FDCEA" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="21" font-weight="800" letter-spacing="4">WHY WE WIN</text>
+  <text x="120" y="290" fill="#F8FAFC" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="54" font-weight="800">A better system of record</text>
+  <g font-family="Inter, Segoe UI, Arial, sans-serif">
+    <rect x="180" y="390" width="700" height="390" rx="34" fill="#0F2132" stroke="#29445A"/>
+    <text x="530" y="470" fill="#F8FAFC" font-size="38" font-weight="790" text-anchor="middle">Traditional CPMS</text>
+    <text x="530" y="550" fill="#AFC5D2" font-size="25" text-anchor="middle">control-first</text>
+    <text x="530" y="605" fill="#AFC5D2" font-size="25" text-anchor="middle">connector-centric</text>
+    <text x="530" y="660" fill="#AFC5D2" font-size="25" text-anchor="middle">weak commercial model</text>
+    <text x="530" y="715" fill="#AFC5D2" font-size="25" text-anchor="middle">hard to sell into lock-in</text>
+    <rect x="1040" y="390" width="700" height="390" rx="34" fill="#102B37" stroke="#6FDCEA" stroke-width="3"/>
+    <text x="1390" y="470" fill="#F8FAFC" font-size="38" font-weight="790" text-anchor="middle">Straumvakt</text>
+    <text x="1390" y="550" fill="#AFC5D2" font-size="25" text-anchor="middle">operations-first</text>
+    <text x="1390" y="605" fill="#AFC5D2" font-size="25" text-anchor="middle">asset and session truth</text>
+    <text x="1390" y="660" fill="#AFC5D2" font-size="25" text-anchor="middle">cost-center billing engine</text>
+    <text x="1390" y="715" fill="#AFC5D2" font-size="25" text-anchor="middle">works above existing control</text>
+  </g>
+  <rect x="300" y="850" width="1320" height="92" rx="24" fill="#102B37" stroke="#6FDCEA" stroke-width="2"/>
+  <text x="960" y="908" fill="#F8FAFC" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="28" font-weight="730" text-anchor="middle">Moat: operational truth plus commercial truth across heterogeneous infrastructure.</text>
+</svg>

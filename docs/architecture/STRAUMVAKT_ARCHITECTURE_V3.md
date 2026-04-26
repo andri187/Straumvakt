@@ -16,8 +16,9 @@
 
 A structurally lighter charging operating platform whose moat is the
 quality of its event log, the cleanness of its commercial model, and the
-completeness of its OCPI roaming posture — not proprietary AI. Ship the
-platform, not the slides.
+ability to operate above whichever control plane the customer already
+uses — native OCPP, OEM API, external CPMS, hybrid, or read-only
+imports. Ship the platform, not the slides.
 
 ## 2. Principles (firm)
 
@@ -28,8 +29,10 @@ Ten commitments, each one non-negotiable without a decision log entry.
    destructive aggregation without preserving source.
 3. **Tenancy in the schema from row one.** Every operational row carries
    `org_id` (or equivalent tenant key) and every query is scoped.
-4. **OCPP behind a translator.** The OCPP gateway emits domain events;
-   the rest of the platform never sees OCPP vocabulary.
+4. **Control planes behind adapters.** OCPP, OEM APIs, webhooks,
+   external CPMS imports, and read-only feeds emit canonical domain
+   events; the rest of the platform never depends on protocol
+   vocabulary.
 5. **Capability ≠ entitlement.** What an asset *can* do is independent of
    what a tenant is *permitted* to do.
 6. **No split-brain control.** One primary owner per control domain per
@@ -44,6 +47,13 @@ Ten commitments, each one non-negotiable without a decision log entry.
     Localization, Durable Object `locationHint`, Neon EU region —
     checked quarterly.
 
+> **ADR 0011 amendment (2026-04-26).** Native OCPP is one supported
+> control plane, not the architecture's center. Physical charging
+> assets, sessions, billing, issues, and intelligence must work when
+> Straumvakt controls the charger through OCPP, controls it through an
+> OEM API, receives webhook authorization callbacks, overlays an
+> external CPMS, or only imports read-only history.
+
 ## 3. What changed from V2
 
 V2 stands as the architectural backbone. V3 commits the following
@@ -53,7 +63,7 @@ overrides and additions:
 |---|---|---|
 | Business hierarchy | 3-tier: Org → Site → Asset | **4-tier: Org → Charger Host → Property → Site → Asset** |
 | Contract model | Single `CustomerPlan` blob | **Two first-class contracts**: `CustomerPlan` (driver↔SP) + `ChargerServicePlan` (Host↔SP) |
-| Asset model | `Charger → OCPPIdentity → Connector` | Unchanged, plus **`SiteAsset` supertype** covering chargers, meters, 4G modems, onsite controllers (Shelly-class) |
+| Asset model | `Charger → OCPPIdentity → Connector` | **Protocol-neutral physical asset model** per [ADR 0011](../adr/0011-control-plane-optionality.md): current schema still has `SiteAsset -> Charger -> OCPPIdentity -> Connector`, but the decided target is physical charging equipment first, with optional OCPP / OEM API / external CPMS control attachments. |
 | Hardware catalog | None (free-text `vendor` / `model`) | **`hardware` schema** with global Vendor + Model registry; Model profile is the technical template for a charger |
 | Installation layer | None | **`properties.installations`** — optional grouping between Site and charger SiteAsset, holds installation-scope vendor credentials (Zaptec/Easee pattern) |
 | Credential placement | Implied on adapter | **Data-driven by `Model.credential_scope`** — `installation` (AC vendor-managed) vs. `identity` (DC) vs. `none` (OCPP-only) |
@@ -68,24 +78,46 @@ Objects + OpenNext + Neon) is the runtime.
 
 ## 4. The asset hierarchy
 
+> **Rev 4 amendment (2026-04-26).** ChargerHost dropped per
+> [ADR 0009](../adr/0009-drop-charger-host-tier.md). Property attaches
+> directly to Org. The HostType classifier moved to `Site.site_type`.
+> Org is now a **multi-role entity** per
+> [ADR 0010](../adr/0010-organization-profile-enrichment.md) — the
+> same row holds operator / asset_owner / payer / retailer / DSO etc.
+> via the `roles[]` enum array.
+>
+> **Control-plane optionality amendment (2026-04-26,
+> [ADR 0011](../adr/0011-control-plane-optionality.md)).** The current
+> schema still names `OCPPIdentity -> Connector`, but that is not the
+> conceptual root. OCPPIdentity is a protocol endpoint. The target
+> physical model is `ChargingStation -> EVSE -> Connector`, with
+> optional `OcppIdentity`, vendor API references, external CPMS
+> references, routing policy, and capability profile attached.
+
 ```
-Org (tenant / CPO)
- └─ Charger Host (workplace / MDU / hotel / fleet operator / retailer)
-     └─ Property (physical building or parcel)
-         └─ Site (sublocation: floor, lot, depot bay)
-             ├─ [optional] Installation (vendor-managed grouping, AC)
-             │   └─ SiteAsset (polymorphic: charger / meter / modem / controller)
-             │       └─ [when Charger] OCPPIdentity (control endpoint)
-             │           └─ Connector (physical socket)
-             └─ SiteAsset (no installation — OCPP-only or DC)
-                 └─ [when Charger] OCPPIdentity (control endpoint)
-                     └─ Connector (physical socket)
+Org (multi-role: csms_provider / operator / asset_owner / payer / retailer / dso / tso / ...)
+ └─ Property (physical building or parcel)
+     └─ Site (sublocation, with site_type: workplace/MDU/hotel/fleet/retail/standard)
+         ├─ [optional] Installation (vendor-managed grouping, AC)
+         │   ├─ [optional] Circuit (breaker-bound charger group)
+         │   │   └─ SiteAsset (polymorphic: charger / meter / modem / controller)
+        │   │       └─ [when Charger] ChargingStation/EVSE/Connector (target)
+        │   │           └─ optional control: OCPPIdentity / OEM API / External CPMS
+         │   └─ SiteAsset (no circuit — circuit is optional)
+        │       └─ [when Charger] physical connector(s) + optional control refs
+         └─ SiteAsset (no installation — OCPP-only or DC)
+            └─ [when Charger] physical connector(s) + optional control refs
 ```
 
-**Org** = the SaaS tenant on Straumvakt (the CPO).
-**Charger Host** = the operating entity that owns the charging
-experience at a location (the workplace, the MDU, the fleet, the hotel
-chain). One Org serves many Hosts under its brand.
+**Org** = a legal entity on Straumvakt — kennitala-keyed, multi-role.
+The same row may carry roles `[operator, asset_owner, payer]` (a
+typical CPO tenant), `[retailer]` (a pure söluaðili referenced by
+REPF tariff_definitions), `[dso]` (a distribution system operator
+referenced by DSOF tariff_definitions), `[csms_provider]` (Straumvakt
+itself), `[service_contractor]` (a maintenance partner — post-pilot
+Issue Engine routes work orders here), or any combination. See
+[ADR 0010](../adr/0010-organization-profile-enrichment.md) for the
+21-value `OrganizationRole` enum.
 **Property** = a physical building or site address.
 **Site** = a sublocation within a property (each floor of a car park;
 each depot bay).
@@ -94,16 +126,31 @@ a site. Holds a single credential set (OAuth token, basic auth, etc.)
 that covers every charger in the group. Used for AC vendor-managed
 hardware (Zaptec Pro, Easee One) where the vendor portal itself models
 installations. Not used for OCPP-only chargers or for DC hardware.
+**Circuit** (optional, per [ADR 0007](../adr/0007-circuit-asset-tier-back.md))
+= a breaker-bound grouping of chargers that share an ampere ceiling.
+Used when an operator needs to answer "what's on the same breaker?"
+or when a vendor portal exposes circuit data (Zaptec Pro circuits).
+Optional in two ways: a Site without explicit circuit modeling
+doesn't need one, and a Circuit can belong directly to a Site
+without an Installation. Future load-balancing intelligence is
+per-circuit math by definition.
 **SiteAsset** = anything physical at a site that the platform manages.
 On Day 1 the kinds are: `charger`, `meter`, `modem`, `controller`
 (Shelly-class onsite monitoring/switching). Battery and solar are
 deliberately absent from V3 but the polymorphic shape admits them
 later.
-**OCPPIdentity** = an OCPP control endpoint. Exists only when the
-SiteAsset is a charger. One charger may expose many identities or one
-identity may control many connectors. For DC hardware, OCPPIdentity
-also holds its own vendor API credentials (one set per identity).
-**Connector** = the socket an EV plugs into.
+**ChargingStation / EVSE / Connector** = the target physical model for
+charging equipment. The current Prisma schema has not yet been reshaped
+to these names, but new design work should treat physical connector
+identity as independent of OCPP control.
+**OCPPIdentity** = an optional OCPP control endpoint. It exists only
+when Straumvakt or an attached integration needs an OCPP identity. It
+is not the charger itself.
+**VendorAssetRef / ExternalCpmsRef** = optional references that map a
+physical charger/EVSE/connector to an OEM API or external CPMS.
+**Connector** = the socket an EV plugs into. A connector may be
+controlled by Straumvakt OCPP, an OEM API, an external CPMS, or not
+controlled by Straumvakt at all.
 
 Sitting alongside this hierarchy is the **Hardware Catalog**
 (`hardware` schema) — a platform-level registry of supported vendors
@@ -111,9 +158,11 @@ and models. A `SiteAsset` (charger, meter, modem, controller) links to
 a `HardwareModel`; the model's profile is the template for the
 asset's technical fields. See §10.
 
-## 5. Integration: three parallel tracks
+## 5. Integration: control-plane tracks
 
-Every integration with the outside world is one of three shapes.
+Every integration with the outside world is a control-plane or data
+plane track. All tracks emit canonical events into the same event log.
+Downstream modules consume Straumvakt events, not protocol vocabulary.
 
 **OCPP Track.** WebSocket connections from chargers into the OCPP
 Gateway Worker, routed to Durable Objects per `OCPPIdentity`. Messages
@@ -129,6 +178,28 @@ client, schemas, capabilities, dispatch, health. Vendor onboarding is a
 first-class flow — enter portal credentials, discover assets, set
 routing. Contract tests run nightly against vendor schemas.
 
+**External CPMS Overlay Track.** Existing CPMS/OCPP provider remains
+the control plane. Straumvakt imports assets, status, sessions, CDRs,
+and faults through APIs, exports, webhooks, or scheduled files. The
+operator still gets Straumvakt billing, issue tracking, reporting,
+cost allocation, and intelligence. No Straumvakt-owned OCPP identity is
+required for this mode.
+
+**Read-Only Intelligence Track.** The external system owns both
+control and operational execution. Straumvakt receives enough history
+and telemetry to provide reporting, allocation, anomaly/issue
+intelligence, audit, and management dashboards.
+
+> **Vendor API references live in the app.** The cloud-API surface and
+> OCPP integration notes for each supported vendor are in-app
+> reference pages — see [README §"Vendor APIs"](./README.md#vendor-apis-in-app-live).
+> Today: [`/reference/zaptec-api`](../../src/app/(app)/reference/zaptec-api/page.tsx)
+> (live OpenAPI table + Zaptec constants + OCPP 1.6J notes) and
+> [`/reference/easee-api`](../../src/app/(app)/reference/easee-api/page.tsx)
+> (curated reference until the Easee adapter ships). Real Zaptec
+> traffic is observable today via
+> [`/technical-read`](../../src/app/(app)/technical-read/page.tsx).
+
 *Where credentials attach* is declared by `HardwareModel.credential_scope`
 on the catalog row, so onboarding flows are data-driven rather than
 hardcoded per vendor:
@@ -137,13 +208,22 @@ hardcoded per vendor:
   credential set per `properties.installations` row covers every
   charger below it. Onboarding: create Installation → enter portal
   user/password → adapter exchanges for OAuth token → discovery
-  populates chargers → routing set to vendor as primary.
+  populates chargers → routing set to vendor as primary. Easee-style
+  API control may support authorize/start/stop directly; Zaptec-style
+  integrations may combine API enrichment, webhook auth, OCPP, or
+  imported history depending on installation capability.
 - **`identity`** — DC vendor-managed (Kempower, Tritium, ABB). One
   credential set per `ocpp.ocpp_identities` row. Onboarding: add OCPP
   identity → enter vendor user/password → adapter validates. The
   vendor backend is primary; OCPP is added as a third-party URL.
 - **`none`** — Generic OCPP charger with no vendor API. No
   credentials; OCPP is the only channel.
+
+**Control routing is data.** For each action (`authorize`, `start`,
+`stop`, `unlock`, `reset`, `read_status`, `read_configuration`,
+`import_session`, `import_cdr`), routing resolves against capability
+and policy. Lack of a control capability does not block read-only
+operations, billing allocation, issue tracking, or reporting.
 
 **OCPI Roaming Track.** Dual-role — we act as CPO (publishing our
 chargers, sessions, CDRs, tariffs to roaming partners) and as eMSP
@@ -156,7 +236,55 @@ All three tracks emit domain events into the same event log. Downstream
 modules — Issue Engine, billing, analytics, operations — cannot tell
 which track produced a given event.
 
-## 6. Commercial model — two contracts
+## 6. Commercial model — two contracts (legacy) + cost-center splitting (rev 3)
+
+> **Rev 3 amendment (2026-04-26, [ADR 0008](../adr/0008-cost-center-splitting.md)).**
+> The original two-contract model below remains in the schema (`billing.customer_plans`
+> + `hosts.charger_service_plans` from Sprint 0) but is **not** the
+> operational layer for pilot session-stop resolution. The rev-3
+> operational layer is:
+>
+> - **`billing.cost_factors`** — runtime catalog of factor codes
+>   (DSOF, REPF, USRF, USRF_PREM, XTRRF, SPVIVF, CHRGRF, WRKPF in
+>   pilot; extensible by Straumvakt platform admins).
+> - **`billing.tariff_definitions`** — rates per Org per factor, anchored
+>   on the entity that holds the contract (DSO contract on Site, retailer
+>   contract on Installation, rental contract on Charger, workplace fee
+>   on DriverContract).
+> - **`billing.contracts`** — per-tier inherited contracts
+>   (Org / Host / Property / Site / Installation / Charger), with
+>   `parent_contract_id` chains.
+> - **`billing.contract_factor_assignments`** — which cost center pays
+>   each factor's allocation (with `priority` for stacked rules).
+> - **`billing.driver_contracts`** — per-user overrides
+>   (workplace / family-group / self), with optional WRKPF tariff
+>   emission.
+> - **`billing.contract_period_accumulators`** — calendar-month state
+>   for kWh-cap allocation rules.
+> - **`billing.cost_centers`** — payers (`payer_org_id` /
+>   `payer_user_id`) + beneficiaries (`beneficiary_org_id` for
+>   inter-org transfers; settlement is post-pilot tag F).
+> - **`billing.billing_lines`** — resolver output; every factor
+>   reaches a cost center or session-stop fails.
+>
+> See [`cost_center_splitting_model.svg`](./cost_center_splitting_model.svg)
+> for the visual model and four worked scenarios. The legacy
+> CustomerPlan / ChargerServicePlan tables stay for now (no drop) —
+> they may be repurposed for post-pilot real-billing work
+> (ADR 0005 tag E) but are unused during pilot.
+>
+> **Three concepts the rev-3 model makes distinct on every charger:**
+> *Owner* (`assets.chargers.owner_org_id` — who physically owns the
+> hardware; gets paid CHRGRF; Issue Engine routes service tickets
+> here), *Operator* (`assets.chargers.org_id` — runs sessions, the
+> SaaS tenant on Straumvakt), *Payer* (resolved at session-stop via
+> contract chain → `cost_centers.payer_org_id` / `payer_user_id`).
+> Pilot examples — Krónan absorbs everything at workplace sites; N1
+> splits public sites driver-pays-DSOF / N1-absorbs-rest; rented
+> chargers route CHRGRF to whichever cost center the workplace
+> driver-contract designates.
+
+### 6.1 Legacy commercial template (Sprint 0 schema; not operational in pilot)
 
 **CustomerPlan** (driver ↔ Service Provider). Rich commercial template:
 - Products: setup fee, subscription fee, RFID card purchase, usage credit
@@ -245,15 +373,15 @@ Logical schema namespaces inside one Neon database:
 
 | Schema | Owns |
 |---|---|
-| `identity` | users, credentials |
-| `tenancy` | organizations, memberships, org-level config |
-| `hosts` | charger hosts, host service plans, host contracts |
-| `properties` | properties, sites, **installations** (vendor-managed groupings), site assets (charger/meter/modem/controller) |
-| `assets` | kind-specific asset extensions (chargers, meters, modems, controllers) |
+| `identity` | users (enriched per [ADR 0010](../adr/0010-organization-profile-enrichment.md): `kennitala`, `phone`, `locale`, `notes`), credentials, **platform admins** ([ADR 0008](../adr/0008-cost-center-splitting.md)) |
+| `tenancy` | organizations (enriched per [ADR 0010](../adr/0010-organization-profile-enrichment.md): `legal_name`, `legal_form`, `kennitala`, `vsk_nr`, `lei_code`, `default_currency`, `addresses` JSONB, `contacts` JSONB, `branding` JSONB, `regulator_licence_no`, `roles[]` enum, `notes`), memberships, org-level config |
+| `hosts` | *empty after [ADR 0009](../adr/0009-drop-charger-host-tier.md) drop. Schema reserved for future host-domain tables (e.g. `ServiceAgreement` when Issue Engine ships post-pilot).* |
+| `properties` | properties (now attached directly to Org per [ADR 0009](../adr/0009-drop-charger-host-tier.md)), sites (with `site_type` enum carrying the workplace/MDU/hotel/fleet/retail classifier formerly on Host), **installations** (vendor-managed groupings), **circuits** (breaker-bound, [ADR 0007](../adr/0007-circuit-asset-tier-back.md)), site assets (charger/meter/modem/controller). Sites carry `dso_tariff_id`, `usrf_tariff_id`, `usrf_prem_tariff_id`, `xtrrf_tariff_id`, `spvivf_tariff_id`; installations carry `retailer_tariff_id`. |
+| `assets` | kind-specific asset extensions (chargers, meters, modems, controllers). Chargers carry `owner_org_id` + `chrgrf_tariff_id` per [ADR 0008](../adr/0008-cost-center-splitting.md). |
 | `hardware` | **vendor + model catalog** (platform-level, not tenant-scoped); model profiles that template asset records |
-| `ocpp` | OCPP identities, outbound commands, routing policy, capability registry, **per-identity vendor credentials (DC)** |
-| `charging` | sessions, meter values, connector status, reservations |
-| `billing` | plans, tariffs, products, subscriptions, billing transactions, invoices, statements |
+| `ocpp` | OCPP identities, outbound commands, routing policy, capability registry, **per-identity vendor credentials (DC)**, **`configuration_keys` registry** populated by GetConfiguration / ChangeConfiguration round-trips ([ADR 0010](../adr/0010-organization-profile-enrichment.md)). Per [ADR 0011](../adr/0011-control-plane-optionality.md), this schema owns optional OCPP control endpoints, not the physical charger hierarchy. |
+| `charging` | sessions, meter values, connector status, reservations. Sessions carry `cost_ex_vat_minor` + `cost_inc_vat_minor` (rolled up from `billing.billing_lines` at session-stop). Target direction per ADR 0011: sessions anchor to physical station/EVSE/connector first, with optional OCPP/vendor/external CPMS transaction references. |
+| `billing` | legacy commercial template (plans, tariffs, products, subscriptions, transactions, invoices, statements) **plus rev-3 cost-center splitting**: `cost_factors` (runtime catalog), `tariff_definitions`, `cost_centers`, `contracts`, `contract_factor_assignments`, `driver_contracts`, `driver_contract_factor_overrides`, `contract_period_accumulators`, `billing_lines` ([ADR 0008](../adr/0008-cost-center-splitting.md)). `charger_service_plans` dropped per [ADR 0009](../adr/0009-drop-charger-host-tier.md) (legacy under `hosts.*` schema). |
 | `issues` | tickets, ticket events, detection rules |
 | `events` | event log, idempotency keys |
 | `audit` | actor-did-what log |
@@ -301,9 +429,18 @@ into the post-pilot backlog (per [ADR 0005](../adr/0005-pilot-scope-tightening-2
 - Kafka or dedicated event bus — Cloudflare Queues + Postgres suffice
 - MCP access for agent-friendly APIs (interesting; deferred past V3)
 
-### 11.2 Deferred from pilot to post-pilot (ADR 0005, tags A–F)
+### 11.2 Deferred from pilot to post-pilot
 
-The pilot is a **demonstrable platform**, not a commercial release.
+The pilot is **admin-functionality only — a demonstrable platform from
+the operator's seat**, not a commercial release. Scope tightened in
+two passes on 2026-04-25:
+[ADR 0005](../adr/0005-pilot-scope-tightening-2026-04-25.md) (rev 1)
+deferred six topical groups; [ADR 0006](../adr/0006-pilot-scope-rev2-2026-04-25.md)
+(rev 2) **expanded tags B and D** to absorb the entire Driver
+Experience and Issue Engine sprints, and reorganised the sprint
+sequence to add Sprint 2 (Admin Onboarding + Zaptec) and Sprint 4
+(Data Storage Lifecycle).
+
 The following items have schema and module boundaries already in
 place from earlier sprints — turning them on post-pilot is additive,
 not migrational. Tags match the
@@ -311,13 +448,20 @@ not migrational. Tags match the
 
 - **A · Roaming** — eMSP endpoints (`/ocpi/emsp/2.2.1/*`), OCPI token
   push to roaming partners, OCPP 2.0.1 adapter
-- **B · Driver login** — Auðkenni electronic-ID (OIDC) login flow,
-  QR-code session start
+- **B · Driver Experience** *(expanded in ADR 0006 — entire sprint)* —
+  driver self-signup + login (any kind), driver PWA shell, Auðkenni
+  electronic-ID (OIDC), QR-code session start, family groups,
+  employer reimbursement workflow. Pilot has admin-created driver
+  records only (inert, linked to OCPP idTags); no driver-facing
+  surface.
 - **C · Multi-currency** — EUR + per-locale variants (pilot is ISK
   only)
-- **D · Issue Engine v2** — advanced detection (anomaly + sequence
-  rules), smart routing (helper → contractor → escalation tiers),
-  ML categorization, helper reputation scoring
+- **D · Issue Engine** *(expanded in ADR 0006 — entire sprint)* —
+  five basic detection rules, ticket workflow, helper role, charger
+  lifetime history, operator console issue pages, advanced
+  detection (anomaly + sequence rules), smart routing, ML
+  categorization, helper reputation scoring. Pilot operator
+  diagnoses by hand from the raw event log.
 - **E · Real billing** — monthly invoice generation, billing
   transactions as committed ledger entries, statements, employer
   reimbursement workflow, PDF invoice rendering
