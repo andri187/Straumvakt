@@ -1,4 +1,4 @@
-import { SectionTabs, OPERATIONS_TABS } from "@/components/section-tabs";
+import { SectionTabs, OPERATIONS_TABS, CHARGERS_TABS } from "@/components/section-tabs";
 import { ActionBar } from "@/components/action-bar";
 import { listAllChargers } from "@/lib/repositories/chargers";
 
@@ -11,13 +11,14 @@ export default async function ChargersPage() {
   return (
     <div className="mx-auto max-w-6xl px-6 py-8">
       <SectionTabs tabs={OPERATIONS_TABS} />
+      <SectionTabs tabs={CHARGERS_TABS} />
       <ActionBar
-        title="Chargers"
-        description="Each row creates ChargingStation + EVSE + Connector + OCPP identity in one transaction. The OCPP Basic-Auth password is revealed once after create."
+        title="Onboarded chargers"
+        description="Each row corresponds to a ChargingStation + EVSE + Connector + OCPP identity. The OCPP Basic-Auth password is revealed once after create."
         primaryAction={{ href: "/chargers/new", label: "Add charger" }}
       />
 
-      <h2 className="mb-2 text-sm font-semibold uppercase tracking-brand text-ink-300">All chargers ({chargers.length})</h2>
+      <h2 className="mb-2 text-sm font-semibold uppercase tracking-brand text-ink-300">All onboarded ({chargers.length})</h2>
       {chargers.length === 0 ? (
         <div className="rounded border border-dashed border-bg-border p-6 text-center text-sm text-ink-500">No chargers yet.</div>
       ) : (

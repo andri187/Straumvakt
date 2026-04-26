@@ -61,6 +61,11 @@ export const TENANTS_TABS: SectionTab[] = [
   { href: "/people/users", label: "Users" },
 ];
 
+export const CHARGERS_TABS: SectionTab[] = [
+  { href: "/chargers", label: "Onboarded", exact: true },
+  { href: "/chargers/pending", label: "Pending onboarding" },
+];
+
 export const BILLING_TABS: SectionTab[] = [
   { href: "/billing", label: "All", exact: true },
   { href: "/billing/cost-factors", label: "Cost factors" },
