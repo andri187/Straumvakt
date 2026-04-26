@@ -1,123 +1,50 @@
 <svg width="1920" height="1080" viewBox="0 0 1920 1080" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1920" y2="1080" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#07111F"/>
-      <stop offset="0.48" stop-color="#0A1726"/>
-      <stop offset="1" stop-color="#071018"/>
-    </linearGradient>
-    <linearGradient id="core" x1="470" y1="370" x2="1450" y2="670" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#102F3B"/>
-      <stop offset="1" stop-color="#0F2438"/>
-    </linearGradient>
-    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#8EF5C7"/>
-      <stop offset="1" stop-color="#6FDCEA"/>
-    </linearGradient>
-    <filter id="softGlow" x="-30%" y="-30%" width="160%" height="160%">
-      <feGaussianBlur stdDeviation="14" result="blur"/>
-      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.34 0 0 0 0 0.96 0 0 0 0 0.80 0 0 0 0.45 0"/>
-      <feBlend in="SourceGraphic"/>
-    </filter>
-    <marker id="arrow" markerWidth="14" markerHeight="14" refX="10" refY="7" orient="auto" markerUnits="strokeWidth">
-      <path d="M2 2L11 7L2 12" stroke="#6FDCEA" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-    </marker>
+    <linearGradient id="bg" x1="0" y1="0" x2="1920" y2="1080" gradientUnits="userSpaceOnUse"><stop stop-color="#06111F"/><stop offset="0.56" stop-color="#082033"/><stop offset="1" stop-color="#041018"/></linearGradient>
+    <linearGradient id="brand" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#68F2A6"/><stop offset="0.52" stop-color="#22D3D7"/><stop offset="1" stop-color="#1D9BF0"/></linearGradient>
+    <linearGradient id="panel" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#0E2A34"/><stop offset="1" stop-color="#0B1F34"/></linearGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="14" result="b"/><feColorMatrix in="b" type="matrix" values="0 0 0 0 0.27 0 0 0 0 0.95 0 0 0 0 0.80 0 0 0 0.38 0"/><feBlend in="SourceGraphic"/></filter>
+    <marker id="arrow" markerWidth="14" markerHeight="14" refX="10" refY="7" orient="auto"><path d="M2 2L11 7L2 12" stroke="#22D3D7" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></marker>
+    <style>
+      .brand{fill:#F8FAFC;font-family:Inter,Segoe UI,Arial,sans-serif;font-size:32px;font-weight:800}
+      .kicker{fill:#75EAF2;font-family:Inter,Segoe UI,Arial,sans-serif;font-size:21px;font-weight:850;letter-spacing:4px}
+      .title{fill:#F8FAFC;font-family:Inter,Segoe UI,Arial,sans-serif;font-size:54px;font-weight:850}
+      .subtitle{fill:#AFC5D2;font-family:Inter,Segoe UI,Arial,sans-serif;font-size:25px;font-weight:430}
+      .h{fill:#F8FAFC;font-family:Inter,Segoe UI,Arial,sans-serif;font-size:30px;font-weight:800}
+      .m{fill:#AFC5D2;font-family:Inter,Segoe UI,Arial,sans-serif;font-size:22px;font-weight:430}
+      .s{fill:#78ECCA;font-family:Inter,Segoe UI,Arial,sans-serif;font-size:19px;font-weight:760}
+      .fine{fill:#7F98AC;font-family:Inter,Segoe UI,Arial,sans-serif;font-size:18px;font-weight:600}
+    </style>
   </defs>
-
   <rect width="1920" height="1080" fill="url(#bg)"/>
-  <rect x="56" y="56" width="1808" height="968" rx="38" stroke="#1B3348" stroke-width="2"/>
-
-  <text x="112" y="138" fill="#F8FAFC" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="58" font-weight="760">Straumvakt</text>
-  <text x="112" y="187" fill="#9FB3C8" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="25" font-weight="420">Operating and commercial layer for EV charging, independent of who owns control</text>
-  <text x="1710" y="133" fill="#6FDCEA" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="18" font-weight="700" text-anchor="end" letter-spacing="4">ADR 0011</text>
-
-  <!-- Control planes -->
+  <path d="M1560 80C1710 135 1795 265 1775 430C1750 640 1550 720 1420 850" stroke="#123A4A" stroke-width="2" opacity="0.7"/>
+  <path d="M270 950C430 820 470 690 400 520C340 375 210 315 115 210" stroke="#0E3344" stroke-width="2" opacity="0.75"/>
+  <rect x="56" y="56" width="1808" height="968" rx="38" stroke="#1C4B64" stroke-width="2"/>
+  <image href="investor_slides/assets/straumvakt-logo.png" x="90" y="70" width="150" height="96" preserveAspectRatio="xMidYMid meet"/>
+  <text x="258" y="128" class="brand">Straumvakt</text>
+  <text x="112" y="187" class="subtitle">Rekstrar- og viðskiptalag fyrir rafhleðslu, óháð því hver á stýringuna</text>
+  <text x="1710" y="133" class="kicker" text-anchor="end">ADR 0011</text>
+  <text x="960" y="271" fill="#CFE7F0" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="22" font-weight="800" text-anchor="middle" letter-spacing="3">STÝRILÖG</text>
   <g font-family="Inter, Segoe UI, Arial, sans-serif">
-    <text x="960" y="271" fill="#CFE7F0" font-size="22" font-weight="700" text-anchor="middle" letter-spacing="3">CONTROL PLANES</text>
-    <g>
-      <rect x="180" y="306" width="340" height="108" rx="18" fill="#101F31" stroke="#29445A"/>
-      <text x="350" y="350" fill="#F8FAFC" font-size="24" font-weight="720" text-anchor="middle">Native OCPP</text>
-      <text x="350" y="382" fill="#8DA3B7" font-size="17" font-weight="430" text-anchor="middle">Straumvakt gateway owns auth/control</text>
-    </g>
-    <g>
-      <rect x="590" y="306" width="340" height="108" rx="18" fill="#102431" stroke="#2A5260"/>
-      <text x="760" y="350" fill="#F8FAFC" font-size="24" font-weight="720" text-anchor="middle">OEM API</text>
-      <text x="760" y="382" fill="#8DA3B7" font-size="17" font-weight="430" text-anchor="middle">Easee, Zaptec, vendor portals</text>
-    </g>
-    <g>
-      <rect x="1000" y="306" width="340" height="108" rx="18" fill="#101F31" stroke="#29445A"/>
-      <text x="1170" y="350" fill="#F8FAFC" font-size="24" font-weight="720" text-anchor="middle">External CPMS</text>
-      <text x="1170" y="382" fill="#8DA3B7" font-size="17" font-weight="430" text-anchor="middle">Existing provider stays in control</text>
-    </g>
-    <g>
-      <rect x="1410" y="306" width="330" height="108" rx="18" fill="#102431" stroke="#2A5260"/>
-      <text x="1575" y="350" fill="#F8FAFC" font-size="24" font-weight="720" text-anchor="middle">Read-only</text>
-      <text x="1575" y="382" fill="#8DA3B7" font-size="17" font-weight="430" text-anchor="middle">Imports, reports, intelligence</text>
-    </g>
+    <rect x="180" y="306" width="340" height="108" rx="18" fill="url(#panel)" stroke="#24536A"/><text x="350" y="350" fill="#F8FAFC" font-size="24" font-weight="760" text-anchor="middle">Innfætt OCPP</text><text x="350" y="382" fill="#9CB2C2" font-size="17" text-anchor="middle">Straumvakt á auðkenningu/stýringu</text>
+    <rect x="590" y="306" width="340" height="108" rx="18" fill="url(#panel)" stroke="#24536A"/><text x="760" y="350" fill="#F8FAFC" font-size="24" font-weight="760" text-anchor="middle">OEM API</text><text x="760" y="382" fill="#9CB2C2" font-size="17" text-anchor="middle">Easee, Zaptec, birgjagáttir</text>
+    <rect x="1000" y="306" width="340" height="108" rx="18" fill="url(#panel)" stroke="#24536A"/><text x="1170" y="350" fill="#F8FAFC" font-size="24" font-weight="760" text-anchor="middle">Ytri CPMS</text><text x="1170" y="382" fill="#9CB2C2" font-size="17" text-anchor="middle">núverandi birgir heldur stýringu</text>
+    <rect x="1410" y="306" width="340" height="108" rx="18" fill="url(#panel)" stroke="#24536A"/><text x="1580" y="350" fill="#F8FAFC" font-size="24" font-weight="760" text-anchor="middle">Lesaðgangur</text><text x="1580" y="382" fill="#9CB2C2" font-size="17" text-anchor="middle">innflutningur, skýrslur, greind</text>
   </g>
-
-  <!-- Arrows into core -->
-  <path d="M350 426V488" stroke="#6FDCEA" stroke-width="3" marker-end="url(#arrow)" opacity="0.7"/>
-  <path d="M760 426V488" stroke="#6FDCEA" stroke-width="3" marker-end="url(#arrow)" opacity="0.7"/>
-  <path d="M1170 426V488" stroke="#6FDCEA" stroke-width="3" marker-end="url(#arrow)" opacity="0.7"/>
-  <path d="M1575 426V488" stroke="#6FDCEA" stroke-width="3" marker-end="url(#arrow)" opacity="0.7"/>
-
-  <!-- Core -->
-  <g filter="url(#softGlow)">
-    <rect x="420" y="480" width="1080" height="205" rx="34" fill="url(#core)" stroke="url(#accent)" stroke-width="3"/>
-  </g>
-  <text x="960" y="555" fill="#F8FAFC" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="48" font-weight="790" text-anchor="middle">Straumvakt Operating Layer</text>
-  <text x="960" y="601" fill="#B8D2DE" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="23" font-weight="430" text-anchor="middle">One asset registry, one event log, one billing truth, one operations console</text>
-  <text x="960" y="641" fill="#6FDCEA" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="19" font-weight="680" text-anchor="middle" letter-spacing="2">CONTROL IS OPTIONAL · OPERATIONS ARE THE PRODUCT</text>
-
-  <!-- Physical asset spine -->
+  <path d="M350 426V492" stroke="#22D3D7" stroke-width="4" marker-end="url(#arrow)"/><path d="M760 426V492" stroke="#22D3D7" stroke-width="4" marker-end="url(#arrow)"/><path d="M1170 426V492" stroke="#22D3D7" stroke-width="4" marker-end="url(#arrow)"/><path d="M1580 426V492" stroke="#22D3D7" stroke-width="4" marker-end="url(#arrow)"/>
+  <rect x="420" y="480" width="1080" height="206" rx="34" fill="url(#panel)" stroke="url(#brand)" stroke-width="3" filter="url(#glow)"/>
+  <text x="960" y="555" fill="#F8FAFC" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="48" font-weight="850" text-anchor="middle">Rekstrarlag Straumvakts</text>
+  <text x="960" y="603" fill="#B8D2DE" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="24" text-anchor="middle">ein eignaskrá · ein atburðaskrá · einn reikningssannleikur · eitt rekstrarborð</text>
+  <text x="960" y="646" fill="#75EAF2" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="19" font-weight="850" text-anchor="middle" letter-spacing="3">STÝRING ER VALKVÆÐ · REKSTURINN ER VARAN</text>
   <g font-family="Inter, Segoe UI, Arial, sans-serif">
-    <rect x="122" y="500" width="234" height="164" rx="22" fill="#0E1D2B" stroke="#29445A"/>
-    <text x="239" y="544" fill="#F8FAFC" font-size="23" font-weight="720" text-anchor="middle">Physical Assets</text>
-    <text x="239" y="582" fill="#9FB3C8" font-size="17" text-anchor="middle">Charging Station</text>
-    <text x="239" y="612" fill="#9FB3C8" font-size="17" text-anchor="middle">EVSE</text>
-    <text x="239" y="642" fill="#9FB3C8" font-size="17" text-anchor="middle">Connector</text>
-    <path d="M360 582H407" stroke="#6FDCEA" stroke-width="3" marker-end="url(#arrow)" opacity="0.72"/>
+    <rect x="120" y="500" width="236" height="164" rx="20" fill="#0B1F34" stroke="#24536A"/><text x="238" y="544" fill="#F8FAFC" font-size="24" font-weight="760" text-anchor="middle">Eignir</text><text x="238" y="582" fill="#9CB2C2" font-size="17" text-anchor="middle">hleðslustöð</text><text x="238" y="612" fill="#9CB2C2" font-size="17" text-anchor="middle">EVSE</text><text x="238" y="642" fill="#9CB2C2" font-size="17" text-anchor="middle">tengi</text>
+    <rect x="1564" y="500" width="236" height="164" rx="20" fill="#0B1F34" stroke="#24536A"/><text x="1682" y="544" fill="#F8FAFC" font-size="24" font-weight="760" text-anchor="middle">Úttak</text><text x="1682" y="582" fill="#9CB2C2" font-size="17" text-anchor="middle">rekstraraðilar</text><text x="1682" y="612" fill="#9CB2C2" font-size="17" text-anchor="middle">greiðendur</text><text x="1682" y="642" fill="#9CB2C2" font-size="17" text-anchor="middle">verktakar</text>
+    <path d="M358 582H410" stroke="#22D3D7" stroke-width="4" marker-end="url(#arrow)"/><path d="M1512 582H1560" stroke="#22D3D7" stroke-width="4" marker-end="url(#arrow)"/>
+    <text x="960" y="756" fill="#CFE7F0" font-size="22" font-weight="800" text-anchor="middle" letter-spacing="3">ÞAÐ SEM STRAUMVAKT Á</text>
+    <rect x="240" y="800" width="310" height="118" rx="20" fill="#0B1F34" stroke="#24536A"/><text x="395" y="846" fill="#F8FAFC" font-size="24" font-weight="760" text-anchor="middle">Rekstur</text><text x="395" y="880" fill="#9CB2C2" font-size="17" text-anchor="middle">eignir, staða, uppitími</text>
+    <rect x="610" y="800" width="310" height="118" rx="20" fill="#0B1F34" stroke="#24536A"/><text x="765" y="846" fill="#F8FAFC" font-size="24" font-weight="760" text-anchor="middle">Reikningar</text><text x="765" y="880" fill="#9CB2C2" font-size="17" text-anchor="middle">kostnaðarstöðvar, gjaldskrár</text>
+    <rect x="980" y="800" width="310" height="118" rx="20" fill="#0B1F34" stroke="#24536A"/><text x="1135" y="846" fill="#F8FAFC" font-size="24" font-weight="760" text-anchor="middle">Mál</text><text x="1135" y="880" fill="#9CB2C2" font-size="17" text-anchor="middle">bilanir, flæði, verktakar</text>
+    <rect x="1350" y="800" width="310" height="118" rx="20" fill="#0B1F34" stroke="#24536A"/><text x="1505" y="846" fill="#F8FAFC" font-size="24" font-weight="760" text-anchor="middle">Greind</text><text x="1505" y="880" fill="#9CB2C2" font-size="17" text-anchor="middle">innsýn, skýrslur, frávik</text>
   </g>
-
-  <!-- Outputs -->
-  <g font-family="Inter, Segoe UI, Arial, sans-serif">
-    <rect x="1564" y="500" width="234" height="164" rx="22" fill="#0E1D2B" stroke="#29445A"/>
-    <text x="1681" y="544" fill="#F8FAFC" font-size="23" font-weight="720" text-anchor="middle">Outputs</text>
-    <text x="1681" y="582" fill="#9FB3C8" font-size="17" text-anchor="middle">Operators</text>
-    <text x="1681" y="612" fill="#9FB3C8" font-size="17" text-anchor="middle">Payers</text>
-    <text x="1681" y="642" fill="#9FB3C8" font-size="17" text-anchor="middle">Contractors</text>
-    <path d="M1512 582H1550" stroke="#6FDCEA" stroke-width="3" marker-end="url(#arrow)" opacity="0.72"/>
-  </g>
-
-  <!-- Product modules -->
-  <g font-family="Inter, Segoe UI, Arial, sans-serif">
-    <text x="960" y="756" fill="#CFE7F0" font-size="22" font-weight="700" text-anchor="middle" letter-spacing="3">WHAT STRAUMVAKT OWNS</text>
-    <g>
-      <rect x="240" y="800" width="310" height="118" rx="18" fill="#0E1D2B" stroke="#284257"/>
-      <text x="395" y="846" fill="#F8FAFC" font-size="24" font-weight="720" text-anchor="middle">Operations</text>
-      <text x="395" y="880" fill="#8DA3B7" font-size="17" text-anchor="middle">assets, status, uptime, audit</text>
-    </g>
-    <g>
-      <rect x="610" y="800" width="310" height="118" rx="18" fill="#0E1D2B" stroke="#284257"/>
-      <text x="765" y="846" fill="#F8FAFC" font-size="24" font-weight="720" text-anchor="middle">Billing</text>
-      <text x="765" y="880" fill="#8DA3B7" font-size="17" text-anchor="middle">cost centers, tariffs, CDRs</text>
-    </g>
-    <g>
-      <rect x="980" y="800" width="310" height="118" rx="18" fill="#0E1D2B" stroke="#284257"/>
-      <text x="1135" y="846" fill="#F8FAFC" font-size="24" font-weight="720" text-anchor="middle">Issues</text>
-      <text x="1135" y="880" fill="#8DA3B7" font-size="17" text-anchor="middle">faults, workflow, contractors</text>
-    </g>
-    <g>
-      <rect x="1350" y="800" width="310" height="118" rx="18" fill="#0E1D2B" stroke="#284257"/>
-      <text x="1505" y="846" fill="#F8FAFC" font-size="24" font-weight="720" text-anchor="middle">Intelligence</text>
-      <text x="1505" y="880" fill="#8DA3B7" font-size="17" text-anchor="middle">insights, reports, anomalies</text>
-    </g>
-  </g>
-
-  <path d="M395 790V704" stroke="#31566D" stroke-width="2"/>
-  <path d="M765 790V704" stroke="#31566D" stroke-width="2"/>
-  <path d="M1135 790V704" stroke="#31566D" stroke-width="2"/>
-  <path d="M1505 790V704" stroke="#31566D" stroke-width="2"/>
-
-  <text x="960" y="986" fill="#6B8195" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="18" font-weight="500" text-anchor="middle">Native OCPP is supported. OEM APIs are supported. Existing CPMS lock-in is supported. Straumvakt owns the operating truth above them.</text>
+  <text x="960" y="986" class="fine" text-anchor="middle">OCPP er stutt. OEM API eru studd. Læsing í CPMS er studd. Straumvakt á rekstrarsannleikann ofan á þeim.</text>
 </svg>

@@ -1,0 +1,696 @@
+<svg viewBox="0 0 1800 3200" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0a1628"/>
+      <stop offset="100%" stop-color="#06101e"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0f1f3a" stop-opacity="0.7"/>
+      <stop offset="100%" stop-color="#0a1628" stop-opacity="0.3"/>
+    </linearGradient>
+    <linearGradient id="teal-fill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0d2a32"/>
+      <stop offset="100%" stop-color="#0a1f26"/>
+    </linearGradient>
+    <linearGradient id="blue-fill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0f2547"/>
+      <stop offset="100%" stop-color="#0a1c38"/>
+    </linearGradient>
+    <linearGradient id="amber-fill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#2d220d"/>
+      <stop offset="100%" stop-color="#1f1808"/>
+    </linearGradient>
+    <linearGradient id="purple-fill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#26183a"/>
+      <stop offset="100%" stop-color="#1a112a"/>
+    </linearGradient>
+    <linearGradient id="green-fill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0d2a1f"/>
+      <stop offset="100%" stop-color="#0a1f17"/>
+    </linearGradient>
+    <marker id="ar-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#3b82f6"/>
+    </marker>
+    <marker id="ar-teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2dd4bf"/>
+    </marker>
+    <marker id="ar-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#f59e0b"/>
+    </marker>
+    <marker id="ar-purple" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#a78bfa"/>
+    </marker>
+    <marker id="ar-mute" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#475569"/>
+    </marker>
+  </defs>
+
+  <rect width="1800" height="3200" fill="url(#bg)"/>
+
+  <!-- ========================================================================== -->
+  <!-- HEADER -->
+  <!-- ========================================================================== -->
+  <text x="900" y="58" text-anchor="middle" font-size="11" font-weight="600" fill="#3b82f6" letter-spacing="6">STRAUMVAKT · V3 + REV 3 (ADR 0008)</text>
+  <text x="900" y="92" text-anchor="middle" font-size="26" font-weight="500" fill="#f8fafc" letter-spacing="-0.3">Data Model — worked example</text>
+  <text x="900" y="118" text-anchor="middle" font-size="13" font-weight="300" fill="#94a3b8">Anna (Krónan employee) charges 30 kWh at the Krónan workplace site through an N1-owned rented charger</text>
+  <line x1="60" y1="148" x2="1740" y2="148" stroke="#1e3a5f" stroke-width="1" opacity="0.6"/>
+
+  <!-- ========================================================================== -->
+  <!-- SECTION 1 — TENANT + IDENTITY (top row) -->
+  <!-- ========================================================================== -->
+  <g transform="translate(60, 174)">
+    <text x="0" y="0" font-size="10" font-weight="700" fill="#2dd4bf" letter-spacing="3">1 · TENANCY · IDENTITY</text>
+    <text x="0" y="22" font-size="12" font-weight="300" fill="#94a3b8">Org is the SaaS tenant on Straumvakt. Users are humans across one or more orgs. Memberships carry the role.</text>
+
+    <!-- Org Krónan -->
+    <g transform="translate(0, 44)">
+      <rect width="380" height="124" rx="10" fill="url(#teal-fill)" stroke="#2dd4bf" stroke-width="1.5"/>
+      <text x="14" y="22" font-size="10" font-weight="700" fill="#2dd4bf" letter-spacing="2">tenancy.organizations</text>
+      <text x="14" y="46" font-size="14" font-weight="600" fill="#f8fafc">Krónan</text>
+      <text x="14" y="68" font-family="monospace" font-size="11" fill="#cbd5e1">id           org-kronan</text>
+      <text x="14" y="84" font-family="monospace" font-size="11" fill="#cbd5e1">slug         kronan</text>
+      <text x="14" y="100" font-family="monospace" font-size="11" fill="#cbd5e1">country_code IS · status active</text>
+      <text x="14" y="116" font-size="10" fill="#64748b" font-style="italic">SaaS tenant — owns every operational row via org_id</text>
+    </g>
+
+    <!-- ChargerHost -->
+    <g transform="translate(400, 44)">
+      <rect width="380" height="124" rx="10" fill="url(#teal-fill)" stroke="#2dd4bf" stroke-width="1.2" stroke-dasharray="4,3" opacity="0.85"/>
+      <text x="14" y="22" font-size="10" font-weight="700" fill="#2dd4bf" letter-spacing="2">hosts.charger_hosts</text>
+      <text x="14" y="46" font-size="14" font-weight="600" fill="#f8fafc">Krónan Workplace</text>
+      <text x="14" y="68" font-family="monospace" font-size="11" fill="#cbd5e1">id           host-kronan-ws</text>
+      <text x="14" y="84" font-family="monospace" font-size="11" fill="#cbd5e1">org_id   →   org-kronan</text>
+      <text x="14" y="100" font-family="monospace" font-size="11" fill="#cbd5e1">type         workplace</text>
+      <text x="14" y="116" font-size="10" fill="#94a3b8" font-style="italic">Vestigial in rev 3 — see ADR 0009 (proposed drop)</text>
+    </g>
+
+    <!-- User Anna -->
+    <g transform="translate(800, 44)">
+      <rect width="440" height="124" rx="10" fill="url(#purple-fill)" stroke="#a78bfa" stroke-width="1.5"/>
+      <text x="14" y="22" font-size="10" font-weight="700" fill="#a78bfa" letter-spacing="2">identity.users</text>
+      <text x="14" y="46" font-size="14" font-weight="600" fill="#f8fafc">Anna Jónsdóttir</text>
+      <text x="14" y="68" font-family="monospace" font-size="11" fill="#cbd5e1">id            u-anna-001</text>
+      <text x="14" y="84" font-family="monospace" font-size="11" fill="#cbd5e1">email         anna@kronan.is</text>
+      <text x="14" y="100" font-family="monospace" font-size="11" fill="#cbd5e1">status active · credentials NULL  (inert per ADR 0006)</text>
+      <text x="14" y="116" font-size="10" fill="#64748b" font-style="italic">Pilot driver = admin-created record, no signin</text>
+    </g>
+
+    <!-- Membership -->
+    <g transform="translate(1260, 44)">
+      <rect width="480" height="124" rx="10" fill="url(#purple-fill)" stroke="#a78bfa" stroke-width="1.5"/>
+      <text x="14" y="22" font-size="10" font-weight="700" fill="#a78bfa" letter-spacing="2">tenancy.memberships</text>
+      <text x="14" y="46" font-size="14" font-weight="600" fill="#f8fafc">Anna × Krónan · driver</text>
+      <text x="14" y="68" font-family="monospace" font-size="11" fill="#cbd5e1">org_id  →  org-kronan</text>
+      <text x="14" y="84" font-family="monospace" font-size="11" fill="#cbd5e1">user_id →  u-anna-001</text>
+      <text x="14" y="100" font-family="monospace" font-size="11" fill="#cbd5e1">role       driver</text>
+      <text x="14" y="116" font-size="10" fill="#64748b" font-style="italic">Composite PK (org_id, user_id) — same person can be driver in one org, operator in another</text>
+    </g>
+
+    <!-- FK arrows for row 1 -->
+    <line x1="380" y1="106" x2="400" y2="106" stroke="#475569" stroke-width="1.2" marker-end="url(#ar-mute)"/>
+    <line x1="1240" y1="106" x2="1260" y2="106" stroke="#475569" stroke-width="1.2" marker-end="url(#ar-mute)"/>
+    <path d="M 1500 168 q 0 18 -250 18 t -250 -18" fill="none" stroke="#a78bfa" stroke-width="1.2" stroke-dasharray="3,3" marker-end="url(#ar-purple)" opacity="0.6"/>
+    <text x="1450" y="200" font-size="10" fill="#a78bfa" opacity="0.8">membership.org_id → tenancy.organizations.id</text>
+  </g>
+
+  <line x1="60" y1="370" x2="1740" y2="370" stroke="#1e3a5f" stroke-width="1" opacity="0.6"/>
+
+  <!-- ========================================================================== -->
+  <!-- SECTION 2 — ASSET HIERARCHY (vertical, left) + HARDWARE CATALOG (right) -->
+  <!-- ========================================================================== -->
+  <g transform="translate(60, 396)">
+    <text x="0" y="0" font-size="10" font-weight="700" fill="#3b82f6" letter-spacing="3">2 · ASSET HIERARCHY</text>
+    <text x="0" y="22" font-size="12" font-weight="300" fill="#94a3b8">9 layers from Org down to Connector. Each tier scoped by org_id. Hardware Catalog is platform-wide (right).</text>
+
+    <!-- Vertical hierarchy on LEFT -->
+    <g transform="translate(0, 50)">
+      <!-- Property -->
+      <g transform="translate(0, 0)">
+        <rect width="800" height="78" rx="10" fill="url(#blue-fill)" stroke="#3b82f6" stroke-width="1.2"/>
+        <text x="14" y="22" font-size="10" font-weight="700" fill="#3b82f6" letter-spacing="2">properties.properties</text>
+        <text x="14" y="44" font-size="13" font-weight="600" fill="#f8fafc">Krónan Reykjavík HQ</text>
+        <text x="14" y="62" font-family="monospace" font-size="11" fill="#cbd5e1">id prop-rvk-hq · org_id → org-kronan · host_id → host-kronan-ws</text>
+        <text x="220" y="62" font-family="monospace" font-size="11" fill="#cbd5e1"></text>
+        <text x="14" y="74" font-size="10" fill="#64748b" font-style="italic">address: { street: "Bæjarháls 1", postal: "110", municipality: "Reykjavík" }</text>
+      </g>
+      <line x1="400" y1="78" x2="400" y2="100" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#ar-blue)" opacity="0.7"/>
+
+      <!-- Site -->
+      <g transform="translate(0, 100)">
+        <rect width="800" height="100" rx="10" fill="url(#blue-fill)" stroke="#3b82f6" stroke-width="1.5"/>
+        <text x="14" y="22" font-size="10" font-weight="700" fill="#3b82f6" letter-spacing="2">properties.sites    ◄── DSOF, USRF, USRF_PREM, XTRRF, SPVIVF anchor here</text>
+        <text x="14" y="44" font-size="13" font-weight="600" fill="#f8fafc">Krónan HQ Parking</text>
+        <text x="14" y="62" font-family="monospace" font-size="11" fill="#cbd5e1">id site-hq-parking · property_id → prop-rvk-hq</text>
+        <text x="14" y="78" font-family="monospace" font-size="11" fill="#cbd5e1">timezone Atlantic/Reykjavik · access_level private · power_class lt_50kw</text>
+        <text x="14" y="94" font-family="monospace" font-size="11" fill="#fbbf24">dso_tariff_id → tar-dsof-veitur     xtrrf_tariff_id → tar-xtrrf-kronan     spvivf_tariff_id → tar-spvivf-kronan</text>
+      </g>
+      <line x1="400" y1="200" x2="400" y2="222" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#ar-blue)" opacity="0.7"/>
+
+      <!-- Installation -->
+      <g transform="translate(0, 222)">
+        <rect width="800" height="92" rx="10" fill="url(#blue-fill)" stroke="#3b82f6" stroke-width="1.5"/>
+        <text x="14" y="22" font-size="10" font-weight="700" fill="#3b82f6" letter-spacing="2">properties.installations    ◄── REPF anchors here</text>
+        <text x="14" y="44" font-size="13" font-weight="600" fill="#f8fafc">AC Bay 1</text>
+        <text x="14" y="62" font-family="monospace" font-size="11" fill="#cbd5e1">id inst-ac-bay-1 · site_id → site-hq-parking</text>
+        <text x="14" y="78" font-family="monospace" font-size="11" fill="#cbd5e1">vendor_id → vendor-easee · model_id → model-easee-one · vendor_installation_ref easee-site-12345</text>
+        <text x="14" y="92" font-family="monospace" font-size="11" fill="#fbbf24">retailer_tariff_id → tar-repf-on   onboarding_status active</text>
+      </g>
+      <line x1="400" y1="314" x2="400" y2="336" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#ar-blue)" opacity="0.7"/>
+
+      <!-- Circuit -->
+      <g transform="translate(0, 336)">
+        <rect width="800" height="78" rx="10" fill="url(#blue-fill)" stroke="#475569" stroke-width="1.2"/>
+        <text x="14" y="22" font-size="10" font-weight="700" fill="#94a3b8" letter-spacing="2">properties.circuits  (optional, ADR 0007)</text>
+        <text x="14" y="44" font-size="13" font-weight="600" fill="#f8fafc">Bay 1 — Circuit A</text>
+        <text x="14" y="62" font-family="monospace" font-size="11" fill="#cbd5e1">id circ-bay1-a · installation_id → inst-ac-bay-1 · site_id → site-hq-parking</text>
+        <text x="14" y="74" font-size="10" fill="#64748b" font-style="italic">ampere_ceiling 32 · phase_count 3 · vendor_circuit_ref easee-circuit-67890</text>
+      </g>
+      <line x1="400" y1="414" x2="400" y2="436" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#ar-blue)" opacity="0.7"/>
+
+      <!-- SiteAsset + Charger (combined card) -->
+      <g transform="translate(0, 436)">
+        <rect width="800" height="120" rx="10" fill="url(#blue-fill)" stroke="#fbbf24" stroke-width="1.5"/>
+        <text x="14" y="22" font-size="10" font-weight="700" fill="#3b82f6" letter-spacing="2">properties.site_assets  +  assets.chargers   ◄── CHRGRF anchors here · OWNERSHIP lives here</text>
+        <text x="14" y="44" font-size="13" font-weight="600" fill="#f8fafc">N1RENT-007 · Easee One (rented hardware)</text>
+        <text x="14" y="62" font-family="monospace" font-size="11" fill="#cbd5e1">site_assets:   id sa-n1rent-007 · org_id → org-kronan (operator) · kind charger</text>
+        <text x="14" y="78" font-family="monospace" font-size="11" fill="#cbd5e1">chargers:      site_asset_id sa-n1rent-007 · model_id → model-easee-one · installation_id → inst-ac-bay-1</text>
+        <text x="14" y="94" font-family="monospace" font-size="11" fill="#fbbf24">               owner_org_id → org-n1   ◄── HARDWARE OWNED BY N1, OPERATED BY KRÓNAN</text>
+        <text x="14" y="110" font-family="monospace" font-size="11" fill="#fbbf24">               chrgrf_tariff_id → tar-chrgrf-n1-rental · serial ESN-12345 · firmware 4.2.1</text>
+      </g>
+      <line x1="400" y1="556" x2="400" y2="578" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#ar-blue)" opacity="0.7"/>
+
+      <!-- OCPPIdentity -->
+      <g transform="translate(0, 578)">
+        <rect width="800" height="78" rx="10" fill="url(#blue-fill)" stroke="#3b82f6" stroke-width="1.2"/>
+        <text x="14" y="22" font-size="10" font-weight="700" fill="#3b82f6" letter-spacing="2">ocpp.ocpp_identities</text>
+        <text x="14" y="44" font-size="13" font-weight="600" fill="#f8fafc">N1RENT-007-A</text>
+        <text x="14" y="62" font-family="monospace" font-size="11" fill="#cbd5e1">id ocpp-id-001 · charger_id → sa-n1rent-007 · ocpp_version ocpp_1_6 · status provisioned</text>
+        <text x="14" y="74" font-size="10" fill="#64748b" font-style="italic">identity_string N1RENT-007-A · auth_secret_hash sha256(…) · last_seen 2026-04-26T08:30Z</text>
+      </g>
+      <line x1="400" y1="656" x2="400" y2="678" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#ar-blue)" opacity="0.7"/>
+
+      <!-- Connector -->
+      <g transform="translate(0, 678)">
+        <rect width="800" height="68" rx="10" fill="url(#blue-fill)" stroke="#3b82f6" stroke-width="1.5"/>
+        <text x="14" y="22" font-size="10" font-weight="700" fill="#3b82f6" letter-spacing="2">ocpp.connectors    ◄── session lives here</text>
+        <text x="14" y="44" font-size="13" font-weight="600" fill="#f8fafc">CN-001-1 · Type2 · 22 kW</text>
+        <text x="14" y="62" font-family="monospace" font-size="11" fill="#cbd5e1">id conn-001-1 · ocpp_identity_id → ocpp-id-001 · connector_index 1 · status Available</text>
+      </g>
+    </g>
+
+    <!-- HARDWARE CATALOG sidebar on right -->
+    <g transform="translate(840, 50)">
+      <rect width="640" height="296" rx="10" fill="url(#amber-fill)" stroke="#f59e0b" stroke-width="1.2"/>
+      <text x="14" y="22" font-size="10" font-weight="700" fill="#fbbf24" letter-spacing="2">HARDWARE CATALOG · platform-wide</text>
+      <text x="14" y="44" font-size="11" font-weight="300" fill="#cbd5e1">Not tenant-scoped — all Orgs see the same vendors and models. Seeded by Sprint 0 + extended via the catalog admin.</text>
+
+      <!-- Vendor -->
+      <rect x="14" y="62" width="290" height="100" rx="6" fill="#1f1808" stroke="#f59e0b" stroke-width="1"/>
+      <text x="28" y="80" font-size="10" font-weight="700" fill="#fbbf24" letter-spacing="1">hardware.vendors</text>
+      <text x="28" y="100" font-size="13" font-weight="600" fill="#f8fafc">Easee</text>
+      <text x="28" y="118" font-family="monospace" font-size="11" fill="#cbd5e1">id      vendor-easee</text>
+      <text x="28" y="132" font-family="monospace" font-size="11" fill="#cbd5e1">slug    easee</text>
+      <text x="28" y="146" font-family="monospace" font-size="11" fill="#cbd5e1">api_kind oauth · kind charger_ac</text>
+
+      <!-- Model -->
+      <rect x="320" y="62" width="306" height="100" rx="6" fill="#1f1808" stroke="#f59e0b" stroke-width="1"/>
+      <text x="334" y="80" font-size="10" font-weight="700" fill="#fbbf24" letter-spacing="1">hardware.models</text>
+      <text x="334" y="100" font-size="13" font-weight="600" fill="#f8fafc">Easee One</text>
+      <text x="334" y="118" font-family="monospace" font-size="11" fill="#cbd5e1">id     model-easee-one</text>
+      <text x="334" y="132" font-family="monospace" font-size="11" fill="#cbd5e1">slug   easee-one · vendor_id → vendor-easee</text>
+      <text x="334" y="146" font-family="monospace" font-size="11" fill="#cbd5e1">credential_scope installation</text>
+
+      <!-- Profile -->
+      <rect x="14" y="172" width="612" height="110" rx="6" fill="#1f1808" stroke="#f59e0b" stroke-width="1"/>
+      <text x="28" y="190" font-size="10" font-weight="700" fill="#fbbf24" letter-spacing="1">hardware.models.profile  (JSONB — model template)</text>
+      <text x="28" y="210" font-family="monospace" font-size="11" fill="#cbd5e1">{</text>
+      <text x="44" y="226" font-family="monospace" font-size="11" fill="#cbd5e1">"rated_power_kw": 22, "phases": 3,</text>
+      <text x="44" y="242" font-family="monospace" font-size="11" fill="#cbd5e1">"connector_types": ["Type2"],</text>
+      <text x="44" y="258" font-family="monospace" font-size="11" fill="#cbd5e1">"ocpp_versions": ["1.6"]</text>
+      <text x="28" y="274" font-family="monospace" font-size="11" fill="#cbd5e1">}</text>
+    </g>
+
+    <!-- Hardware → SiteAsset / Installation links -->
+    <line x1="840" y1="200" x2="800" y2="290" stroke="#f59e0b" stroke-width="1.2" stroke-dasharray="3,3" marker-end="url(#ar-amber)" opacity="0.6"/>
+    <text x="700" y="280" font-size="10" fill="#fbbf24" opacity="0.8" text-anchor="end">model_id → models.id</text>
+
+    <!-- Driver-side stack on RIGHT, BELOW hardware catalog -->
+    <g transform="translate(840, 380)">
+      <text x="0" y="0" font-size="10" font-weight="700" fill="#a78bfa" letter-spacing="3">DRIVER CONTRACT (anchors WRKPF)</text>
+
+      <!-- DriverContract -->
+      <g transform="translate(0, 18)">
+        <rect width="640" height="118" rx="10" fill="url(#purple-fill)" stroke="#a78bfa" stroke-width="1.5"/>
+        <text x="14" y="22" font-size="10" font-weight="700" fill="#a78bfa" letter-spacing="2">billing.driver_contracts   ◄── WRKPF anchors here</text>
+        <text x="14" y="44" font-size="13" font-weight="600" fill="#f8fafc">KRONAN_EMPL_GLOBAL (Anna)</text>
+        <text x="14" y="62" font-family="monospace" font-size="11" fill="#cbd5e1">id dc-anna-empl · org_id → org-kronan · user_id → u-anna-001</text>
+        <text x="14" y="78" font-family="monospace" font-size="11" fill="#cbd5e1">scope null (global) · owner_type workplace · owner_id → org-kronan</text>
+        <text x="14" y="94" font-family="monospace" font-size="11" fill="#fbbf24">wrkpf_tariff_id → tar-wrkpf-kronan</text>
+        <text x="14" y="110" font-size="10" fill="#64748b" font-style="italic">When workplace + wrkpf_tariff set, resolver also emits a WRKPF line per session</text>
+      </g>
+
+      <!-- Override 1 -->
+      <g transform="translate(0, 152)">
+        <rect width="640" height="78" rx="10" fill="url(#purple-fill)" stroke="#a78bfa" stroke-width="1"/>
+        <text x="14" y="22" font-size="10" font-weight="700" fill="#a78bfa" letter-spacing="2">billing.driver_contract_factor_overrides   (priority 0)</text>
+        <text x="14" y="44" font-size="13" font-weight="600" fill="#f8fafc">REPF cap → KRONAN_WORKPLACE @ 200 kWh / calendar_month</text>
+        <text x="14" y="62" font-family="monospace" font-size="11" fill="#cbd5e1">cost_factor_id → cf-repf · cost_center_id → cc-kronan-workplace</text>
+        <text x="14" y="74" font-size="10" fill="#64748b" font-style="italic">allocation_rule {"type":"kwh_cap","cap_kwh":200,"period":"calendar_month"}</text>
+      </g>
+
+      <!-- Override 2 -->
+      <g transform="translate(0, 246)">
+        <rect width="640" height="68" rx="10" fill="url(#purple-fill)" stroke="#a78bfa" stroke-width="1"/>
+        <text x="14" y="22" font-size="10" font-weight="700" fill="#a78bfa" letter-spacing="2">billing.driver_contract_factor_overrides   (priority 1 — overflow)</text>
+        <text x="14" y="44" font-size="13" font-weight="600" fill="#f8fafc">REPF overflow → DRIVER_PAYS_ANNA @ all</text>
+        <text x="14" y="62" font-family="monospace" font-size="11" fill="#cbd5e1">cost_factor_id → cf-repf · cost_center_id → cc-driver-anna · {"type":"all"}</text>
+      </g>
+    </g>
+  </g>
+
+  <line x1="60" y1="1180" x2="1740" y2="1180" stroke="#1e3a5f" stroke-width="1" opacity="0.6"/>
+
+  <!-- ========================================================================== -->
+  <!-- SECTION 3 — COMMERCIAL LAYER (cost factors, tariff defs, cost centers, contracts) -->
+  <!-- ========================================================================== -->
+  <g transform="translate(60, 1206)">
+    <text x="0" y="0" font-size="10" font-weight="700" fill="#fbbf24" letter-spacing="3">3 · COMMERCIAL · COST FACTORS · TARIFFS · CONTRACTS · COST CENTERS</text>
+    <text x="0" y="22" font-size="12" font-weight="300" fill="#94a3b8">Rev 3 (ADR 0008). Factors are catalog rows. Tariff definitions live on anchor entities. Contracts inherit per scope.</text>
+
+    <!-- Cost Factor catalog -->
+    <g transform="translate(0, 50)">
+      <rect width="640" height="246" rx="10" fill="url(#amber-fill)" stroke="#f59e0b" stroke-width="1.2"/>
+      <text x="14" y="22" font-size="10" font-weight="700" fill="#fbbf24" letter-spacing="2">billing.cost_factors  (8 rows seeded by Sprint 2.10)</text>
+
+      <text x="14" y="48" font-size="9" font-weight="700" fill="#fbbf24" letter-spacing="1">CODE</text>
+      <text x="120" y="48" font-size="9" font-weight="700" fill="#fbbf24" letter-spacing="1">ANCHOR</text>
+      <text x="280" y="48" font-size="9" font-weight="700" fill="#fbbf24" letter-spacing="1">SHAPE</text>
+      <text x="500" y="48" font-size="9" font-weight="700" fill="#fbbf24" letter-spacing="1">VAT</text>
+      <line x1="14" y1="56" x2="626" y2="56" stroke="#f59e0b" opacity="0.4"/>
+
+      <text x="14" y="74" font-family="monospace" font-size="11" fill="#fbbf24">DSOF</text>
+      <text x="120" y="74" font-family="monospace" font-size="11" fill="#cbd5e1">site</text>
+      <text x="280" y="74" font-family="monospace" font-size="11" fill="#cbd5e1">tou_per_kwh</text>
+      <text x="500" y="74" font-family="monospace" font-size="11" fill="#cbd5e1">24</text>
+
+      <text x="14" y="90" font-family="monospace" font-size="11" fill="#fbbf24">REPF</text>
+      <text x="120" y="90" font-family="monospace" font-size="11" fill="#cbd5e1">installation</text>
+      <text x="280" y="90" font-family="monospace" font-size="11" fill="#cbd5e1">per_kwh</text>
+      <text x="500" y="90" font-family="monospace" font-size="11" fill="#cbd5e1">24</text>
+
+      <text x="14" y="106" font-family="monospace" font-size="11" fill="#fbbf24">USRF</text>
+      <text x="120" y="106" font-family="monospace" font-size="11" fill="#cbd5e1">site</text>
+      <text x="280" y="106" font-family="monospace" font-size="11" fill="#cbd5e1">per_session_flat</text>
+      <text x="500" y="106" font-family="monospace" font-size="11" fill="#cbd5e1">24</text>
+
+      <text x="14" y="122" font-family="monospace" font-size="11" fill="#fbbf24">USRF_PREM</text>
+      <text x="120" y="122" font-family="monospace" font-size="11" fill="#cbd5e1">site</text>
+      <text x="280" y="122" font-family="monospace" font-size="11" fill="#cbd5e1">per_session_flat</text>
+      <text x="500" y="122" font-family="monospace" font-size="11" fill="#cbd5e1">24</text>
+
+      <text x="14" y="138" font-family="monospace" font-size="11" fill="#fbbf24">XTRRF</text>
+      <text x="120" y="138" font-family="monospace" font-size="11" fill="#cbd5e1">site</text>
+      <text x="280" y="138" font-family="monospace" font-size="11" fill="#cbd5e1">per_minute_after_minutes</text>
+      <text x="500" y="138" font-family="monospace" font-size="11" fill="#cbd5e1">24</text>
+
+      <text x="14" y="154" font-family="monospace" font-size="11" fill="#fbbf24">SPVIVF</text>
+      <text x="120" y="154" font-family="monospace" font-size="11" fill="#cbd5e1">site</text>
+      <text x="280" y="154" font-family="monospace" font-size="11" fill="#cbd5e1">per_kwh</text>
+      <text x="500" y="154" font-family="monospace" font-size="11" fill="#cbd5e1">24</text>
+
+      <text x="14" y="170" font-family="monospace" font-size="11" fill="#fbbf24">CHRGRF</text>
+      <text x="120" y="170" font-family="monospace" font-size="11" fill="#cbd5e1">charger</text>
+      <text x="280" y="170" font-family="monospace" font-size="11" fill="#cbd5e1">per_session_flat</text>
+      <text x="500" y="170" font-family="monospace" font-size="11" fill="#cbd5e1">24</text>
+
+      <text x="14" y="186" font-family="monospace" font-size="11" fill="#fbbf24">WRKPF</text>
+      <text x="120" y="186" font-family="monospace" font-size="11" fill="#cbd5e1">driver_contract</text>
+      <text x="280" y="186" font-family="monospace" font-size="11" fill="#cbd5e1">open DSL</text>
+      <text x="500" y="186" font-family="monospace" font-size="11" fill="#cbd5e1">24</text>
+
+      <line x1="14" y1="200" x2="626" y2="200" stroke="#f59e0b" opacity="0.3" stroke-dasharray="3,3"/>
+      <text x="14" y="222" font-size="10" fill="#94a3b8" font-style="italic">Platform-admin extends with INSERT INTO cost_factors. Adding factor #9 post-pilot ≠ migration.</text>
+      <text x="14" y="236" font-size="10" fill="#94a3b8" font-style="italic">Tariff_definitions reference these rows; anchor entities reference tariff_definitions.</text>
+    </g>
+
+    <!-- Tariff Definitions for this session -->
+    <g transform="translate(660, 50)">
+      <rect width="500" height="246" rx="10" fill="url(#panel)" stroke="#f59e0b" stroke-width="1.2"/>
+      <text x="14" y="22" font-size="10" font-weight="700" fill="#fbbf24" letter-spacing="2">billing.tariff_definitions  (Krónan's per-factor rates)</text>
+
+      <text x="14" y="46" font-size="11" font-weight="600" fill="#f8fafc">tar-dsof-veitur</text>
+      <text x="14" y="62" font-family="monospace" font-size="10" fill="#cbd5e1">factor DSOF · ToU 1000 öre/kWh avg · attached to site.dso_tariff_id</text>
+
+      <text x="14" y="86" font-size="11" font-weight="600" fill="#f8fafc">tar-repf-on</text>
+      <text x="14" y="102" font-family="monospace" font-size="10" fill="#cbd5e1">factor REPF · 1500 öre/kWh flat · attached to installation.retailer_tariff_id</text>
+
+      <text x="14" y="126" font-size="11" font-weight="600" fill="#f8fafc">tar-xtrrf-kronan</text>
+      <text x="14" y="142" font-family="monospace" font-size="10" fill="#cbd5e1">factor XTRRF · 300 öre/min after 30 min · attached to site.xtrrf_tariff_id</text>
+
+      <text x="14" y="166" font-size="11" font-weight="600" fill="#f8fafc">tar-spvivf-kronan</text>
+      <text x="14" y="182" font-family="monospace" font-size="10" fill="#cbd5e1">factor SPVIVF · 200 öre/kWh · attached to site.spvivf_tariff_id</text>
+
+      <text x="14" y="206" font-size="11" font-weight="600" fill="#f8fafc">tar-chrgrf-n1-rental · tar-wrkpf-kronan</text>
+      <text x="14" y="222" font-family="monospace" font-size="10" fill="#cbd5e1">factor CHRGRF / WRKPF · 5000 öre per session each · attached to charger / driver_contract</text>
+      <text x="14" y="238" font-size="9" fill="#64748b" font-style="italic">compute_rule JSONB DSL drives the tariff engine</text>
+    </g>
+
+    <!-- Cost Centers -->
+    <g transform="translate(1180, 50)">
+      <rect width="560" height="246" rx="10" fill="url(#green-fill)" stroke="#16a34a" stroke-width="1.2"/>
+      <text x="14" y="22" font-size="10" font-weight="700" fill="#22c55e" letter-spacing="2">billing.cost_centers  (Krónan's payer buckets)</text>
+
+      <g transform="translate(14, 38)">
+        <circle cx="6" cy="14" r="5" fill="#22c55e"/>
+        <text x="20" y="18" font-size="11" font-weight="600" fill="#f8fafc">KRONAN_WORKPLACE</text>
+        <text x="20" y="32" font-family="monospace" font-size="10" fill="#cbd5e1">id cc-kronan-workplace · payer_org_id → org-kronan</text>
+      </g>
+
+      <g transform="translate(14, 88)">
+        <circle cx="6" cy="14" r="5" fill="#a78bfa"/>
+        <text x="20" y="18" font-size="11" font-weight="600" fill="#f8fafc">KRONAN_STRAUMVAKT_FEES</text>
+        <text x="20" y="32" font-family="monospace" font-size="10" fill="#cbd5e1">id cc-kronan-svk-fees · payer_org_id → org-kronan</text>
+        <text x="20" y="46" font-size="9" fill="#64748b" font-style="italic">Krónan owes Straumvakt for workplace routing service</text>
+      </g>
+
+      <g transform="translate(14, 142)">
+        <circle cx="6" cy="14" r="5" fill="#f59e0b"/>
+        <text x="20" y="18" font-size="11" font-weight="600" fill="#f8fafc">KRONAN_RENTAL_COVERAGE</text>
+        <text x="20" y="32" font-family="monospace" font-size="10" fill="#cbd5e1">id cc-rental · payer_org_id → org-kronan · beneficiary_org_id → org-n1</text>
+        <text x="20" y="46" font-size="9" fill="#64748b" font-style="italic">Krónan pays, money settles to N1 (CHRGRF for the rented charger)</text>
+      </g>
+
+      <g transform="translate(14, 196)">
+        <circle cx="6" cy="14" r="5" fill="#3b82f6"/>
+        <text x="20" y="18" font-size="11" font-weight="600" fill="#f8fafc">DRIVER_PAYS_ANNA</text>
+        <text x="20" y="32" font-family="monospace" font-size="10" fill="#cbd5e1">id cc-driver-anna · payer_user_id → u-anna-001</text>
+      </g>
+    </g>
+  </g>
+
+  <!-- Contracts row -->
+  <g transform="translate(60, 1500)">
+    <!-- Org root contract -->
+    <g transform="translate(0, 0)">
+      <rect width="540" height="98" rx="10" fill="url(#green-fill)" stroke="#16a34a" stroke-width="1.2" stroke-dasharray="3,3"/>
+      <text x="14" y="22" font-size="10" font-weight="700" fill="#22c55e" letter-spacing="2">billing.contracts  (org root)</text>
+      <text x="14" y="44" font-size="13" font-weight="600" fill="#f8fafc">KRONAN_ORG_ROOT</text>
+      <text x="14" y="62" font-family="monospace" font-size="11" fill="#cbd5e1">id ctr-kronan-root · scope_type org · scope_id NULL · parent NULL</text>
+      <text x="14" y="78" font-family="monospace" font-size="11" fill="#cbd5e1">status active · auto-created on Org create</text>
+      <text x="14" y="92" font-size="10" fill="#64748b" font-style="italic">No factor assignments at root — site contract supersedes</text>
+    </g>
+
+    <!-- Inheritance arrow -->
+    <line x1="270" y1="98" x2="270" y2="120" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#ar-blue)"/>
+    <text x="280" y="115" font-size="10" fill="#3b82f6">parent_contract_id</text>
+
+    <!-- Site contract -->
+    <g transform="translate(0, 120)">
+      <rect width="540" height="200" rx="10" fill="url(#green-fill)" stroke="#16a34a" stroke-width="1.5"/>
+      <text x="14" y="22" font-size="10" font-weight="700" fill="#22c55e" letter-spacing="2">billing.contracts  (site scope)</text>
+      <text x="14" y="44" font-size="13" font-weight="600" fill="#f8fafc">KRONAN_HQ_DEFAULT</text>
+      <text x="14" y="62" font-family="monospace" font-size="11" fill="#cbd5e1">id ctr-kronan-hq · scope_type site · scope_id → site-hq-parking</text>
+      <text x="14" y="78" font-family="monospace" font-size="11" fill="#cbd5e1">parent_contract_id → ctr-kronan-root · status active</text>
+
+      <line x1="14" y1="92" x2="526" y2="92" stroke="#16a34a" opacity="0.3" stroke-dasharray="3,3"/>
+      <text x="14" y="110" font-size="10" font-weight="700" fill="#22c55e" letter-spacing="2">contract_factor_assignments</text>
+
+      <text x="14" y="130" font-family="monospace" font-size="11" fill="#fbbf24">DSOF</text>
+      <text x="80" y="130" font-family="monospace" font-size="11" fill="#cbd5e1">→</text>
+      <text x="100" y="130" font-family="monospace" font-size="11" fill="#22c55e">KRONAN_WORKPLACE</text>
+      <text x="280" y="130" font-family="monospace" font-size="11" fill="#94a3b8">@ all · prio 0</text>
+
+      <text x="14" y="146" font-family="monospace" font-size="11" fill="#fbbf24">REPF</text>
+      <text x="80" y="146" font-family="monospace" font-size="11" fill="#cbd5e1">→</text>
+      <text x="100" y="146" font-family="monospace" font-size="11" fill="#22c55e">KRONAN_WORKPLACE</text>
+      <text x="280" y="146" font-family="monospace" font-size="11" fill="#94a3b8">@ all · prio 0  ◄── overridden by driver contract</text>
+
+      <text x="14" y="162" font-family="monospace" font-size="11" fill="#fbbf24">XTRRF</text>
+      <text x="80" y="162" font-family="monospace" font-size="11" fill="#cbd5e1">→</text>
+      <text x="100" y="162" font-family="monospace" font-size="11" fill="#22c55e">KRONAN_WORKPLACE</text>
+      <text x="280" y="162" font-family="monospace" font-size="11" fill="#94a3b8">@ all · prio 0</text>
+
+      <text x="14" y="178" font-family="monospace" font-size="11" fill="#fbbf24">SPVIVF</text>
+      <text x="80" y="178" font-family="monospace" font-size="11" fill="#cbd5e1">→</text>
+      <text x="100" y="178" font-family="monospace" font-size="11" fill="#22c55e">KRONAN_WORKPLACE</text>
+      <text x="280" y="178" font-family="monospace" font-size="11" fill="#94a3b8">@ all · prio 0</text>
+
+      <text x="14" y="194" font-family="monospace" font-size="11" fill="#fbbf24">CHRGRF</text>
+      <text x="80" y="194" font-family="monospace" font-size="11" fill="#cbd5e1">→</text>
+      <text x="100" y="194" font-family="monospace" font-size="11" fill="#f59e0b">KRONAN_RENTAL_COVERAGE</text>
+      <text x="320" y="194" font-family="monospace" font-size="11" fill="#94a3b8">@ all · prio 0  (beneficiary N1)</text>
+    </g>
+
+    <!-- Period accumulator -->
+    <g transform="translate(580, 120)">
+      <rect width="600" height="200" rx="10" fill="url(#purple-fill)" stroke="#a78bfa" stroke-width="1.2"/>
+      <text x="14" y="22" font-size="10" font-weight="700" fill="#a78bfa" letter-spacing="2">billing.contract_period_accumulators</text>
+      <text x="14" y="44" font-size="13" font-weight="600" fill="#f8fafc">Anna's REPF cap, this calendar month</text>
+      <text x="14" y="64" font-family="monospace" font-size="11" fill="#cbd5e1">driver_contract_id → dc-anna-empl · cost_factor_id → cf-repf</text>
+      <text x="14" y="80" font-family="monospace" font-size="11" fill="#cbd5e1">period_type calendar_month · period_start_date 2026-04-01</text>
+      <text x="14" y="98" font-family="monospace" font-size="11" fill="#cbd5e1">cumulative_kwh                0.00 / 200.00 cap   (fresh)</text>
+      <text x="14" y="114" font-family="monospace" font-size="11" fill="#cbd5e1">cumulative_amount_ex_vat_minor 0</text>
+      <text x="14" y="130" font-family="monospace" font-size="11" fill="#cbd5e1">cumulative_session_count       0</text>
+      <text x="14" y="150" font-size="10" fill="#64748b" font-style="italic">After this 30 kWh session: cumulative_kwh = 30.00 / 200.00.</text>
+      <text x="14" y="164" font-size="10" fill="#64748b" font-style="italic">Resolver reads + updates atomically with billing_lines write.</text>
+      <text x="14" y="186" font-size="10" font-weight="600" fill="#a78bfa">In this scenario the cap is NOT hit → all REPF goes to KRONAN_WORKPLACE</text>
+    </g>
+  </g>
+
+  <line x1="60" y1="1844" x2="1740" y2="1844" stroke="#1e3a5f" stroke-width="1" opacity="0.6"/>
+
+  <!-- ========================================================================== -->
+  <!-- SECTION 4 — CHARGE SESSION (the binding row) + BILLING LINES -->
+  <!-- ========================================================================== -->
+  <g transform="translate(60, 1870)">
+    <text x="0" y="0" font-size="10" font-weight="700" fill="#f8fafc" letter-spacing="3">4 · CHARGE SESSION · BINDING ROW</text>
+    <text x="0" y="22" font-size="12" font-weight="300" fill="#94a3b8">One row joins everything: User, Org, Site, Charger, OCPPIdentity, Connector, idTag. Resolver writes billing_lines on session-stop.</text>
+
+    <!-- ChargeSession row -->
+    <g transform="translate(0, 50)">
+      <rect width="1680" height="148" rx="10" fill="url(#panel)" stroke="#f8fafc" stroke-width="2"/>
+      <text x="14" y="22" font-size="10" font-weight="700" fill="#f8fafc" letter-spacing="2">charging.sessions</text>
+      <text x="14" y="46" font-size="14" font-weight="600" fill="#f8fafc">sess-001 · Anna at Krónan HQ Parking · 30 kWh · 2026-04-26</text>
+
+      <g transform="translate(14, 60)">
+        <text x="0" y="16" font-family="monospace" font-size="11" fill="#cbd5e1">id              sess-001</text>
+        <text x="0" y="32" font-family="monospace" font-size="11" fill="#cbd5e1">org_id        → org-kronan</text>
+        <text x="0" y="48" font-family="monospace" font-size="11" fill="#cbd5e1">site_id       → site-hq-parking</text>
+        <text x="0" y="64" font-family="monospace" font-size="11" fill="#cbd5e1">charger_id    → sa-n1rent-007</text>
+      </g>
+
+      <g transform="translate(360, 60)">
+        <text x="0" y="16" font-family="monospace" font-size="11" fill="#cbd5e1">ocpp_identity → ocpp-id-001</text>
+        <text x="0" y="32" font-family="monospace" font-size="11" fill="#cbd5e1">connector_id  → conn-001-1</text>
+        <text x="0" y="48" font-family="monospace" font-size="11" fill="#cbd5e1">user_id       → u-anna-001</text>
+        <text x="0" y="64" font-family="monospace" font-size="11" fill="#cbd5e1">id_tag          ANNA-RFID-001</text>
+      </g>
+
+      <g transform="translate(720, 60)">
+        <text x="0" y="16" font-family="monospace" font-size="11" fill="#cbd5e1">started_at      2026-04-26T08:30:00Z</text>
+        <text x="0" y="32" font-family="monospace" font-size="11" fill="#cbd5e1">ended_at        2026-04-26T09:15:00Z</text>
+        <text x="0" y="48" font-family="monospace" font-size="11" fill="#cbd5e1">energy_wh       30000  (30 kWh)</text>
+        <text x="0" y="64" font-family="monospace" font-size="11" fill="#cbd5e1">status          completed</text>
+      </g>
+
+      <g transform="translate(1080, 60)">
+        <text x="0" y="16" font-family="monospace" font-size="11" fill="#fbbf24">cost_ex_vat_minor   91000  (910.00 ISK)</text>
+        <text x="0" y="32" font-family="monospace" font-size="11" fill="#fbbf24">cost_inc_vat_minor 112840  (1128.40 ISK)</text>
+        <text x="0" y="48" font-family="monospace" font-size="11" fill="#cbd5e1">↑ rolled up from billing_lines below</text>
+      </g>
+
+      <text x="14" y="138" font-size="10" fill="#64748b" font-style="italic">FK targets resolved at OCPP Authorize: id_tag ANNA-RFID-001 → roaming.ocpi_tokens row → user_id u-anna-001</text>
+    </g>
+
+    <!-- billing_lines table -->
+    <g transform="translate(0, 220)">
+      <rect width="1680" height="290" rx="10" fill="url(#panel)" stroke="#f8fafc" stroke-width="1.5"/>
+      <text x="14" y="22" font-size="10" font-weight="700" fill="#f8fafc" letter-spacing="2">billing.billing_lines  (resolver output, atomic with accumulator update)</text>
+
+      <text x="14" y="46" font-size="9" font-weight="700" fill="#64748b" letter-spacing="2">FACTOR</text>
+      <text x="120" y="46" font-size="9" font-weight="700" fill="#64748b" letter-spacing="2">RAW (öre)</text>
+      <text x="280" y="46" font-size="9" font-weight="700" fill="#64748b" letter-spacing="2">RULE PATH</text>
+      <text x="610" y="46" font-size="9" font-weight="700" fill="#64748b" letter-spacing="2">COST CENTER</text>
+      <text x="1100" y="46" font-size="9" font-weight="700" fill="#64748b" letter-spacing="2" text-anchor="end">EX-VAT</text>
+      <text x="1240" y="46" font-size="9" font-weight="700" fill="#64748b" letter-spacing="2" text-anchor="end">VAT</text>
+      <text x="1380" y="46" font-size="9" font-weight="700" fill="#64748b" letter-spacing="2" text-anchor="end">INC-VAT (ISK)</text>
+      <line x1="14" y1="54" x2="1666" y2="54" stroke="#1e3a5f"/>
+
+      <!-- DSOF -->
+      <text x="14" y="74" font-family="monospace" font-size="11" fill="#fbbf24">DSOF</text>
+      <text x="120" y="74" font-family="monospace" font-size="11" fill="#cbd5e1">30 × 1000</text>
+      <text x="280" y="74" font-family="monospace" font-size="11" fill="#cbd5e1">site contract → KRONAN_WORKPLACE @ all</text>
+      <circle cx="600" cy="70" r="5" fill="#22c55e"/>
+      <text x="610" y="74" font-family="monospace" font-size="11" fill="#f8fafc">cc-kronan-workplace</text>
+      <text x="1100" y="74" font-family="monospace" font-size="11" fill="#cbd5e1" text-anchor="end">300.00</text>
+      <text x="1240" y="74" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">72.00</text>
+      <text x="1380" y="74" font-family="monospace" font-size="11" fill="#f8fafc" text-anchor="end">372.00</text>
+
+      <!-- REPF -->
+      <text x="14" y="92" font-family="monospace" font-size="11" fill="#fbbf24">REPF</text>
+      <text x="120" y="92" font-family="monospace" font-size="11" fill="#cbd5e1">30 × 1500</text>
+      <text x="280" y="92" font-family="monospace" font-size="11" fill="#cbd5e1">driver_contract p0 (cap, 30 of 200) → KRONAN_WORKPLACE</text>
+      <circle cx="600" cy="88" r="5" fill="#22c55e"/>
+      <text x="610" y="92" font-family="monospace" font-size="11" fill="#f8fafc">cc-kronan-workplace</text>
+      <text x="1100" y="92" font-family="monospace" font-size="11" fill="#cbd5e1" text-anchor="end">450.00</text>
+      <text x="1240" y="92" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">108.00</text>
+      <text x="1380" y="92" font-family="monospace" font-size="11" fill="#f8fafc" text-anchor="end">558.00</text>
+
+      <!-- XTRRF -->
+      <text x="14" y="110" font-family="monospace" font-size="11" fill="#fbbf24">XTRRF</text>
+      <text x="120" y="110" font-family="monospace" font-size="11" fill="#94a3b8">0 idle</text>
+      <text x="280" y="110" font-family="monospace" font-size="11" fill="#cbd5e1">site contract → KRONAN_WORKPLACE @ all</text>
+      <circle cx="600" cy="106" r="5" fill="#22c55e"/>
+      <text x="610" y="110" font-family="monospace" font-size="11" fill="#f8fafc">cc-kronan-workplace</text>
+      <text x="1100" y="110" font-family="monospace" font-size="11" fill="#cbd5e1" text-anchor="end">0.00</text>
+      <text x="1240" y="110" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">0.00</text>
+      <text x="1380" y="110" font-family="monospace" font-size="11" fill="#f8fafc" text-anchor="end">0.00</text>
+
+      <!-- SPVIVF -->
+      <text x="14" y="128" font-family="monospace" font-size="11" fill="#fbbf24">SPVIVF</text>
+      <text x="120" y="128" font-family="monospace" font-size="11" fill="#cbd5e1">30 × 200</text>
+      <text x="280" y="128" font-family="monospace" font-size="11" fill="#cbd5e1">site contract → KRONAN_WORKPLACE @ all</text>
+      <circle cx="600" cy="124" r="5" fill="#22c55e"/>
+      <text x="610" y="128" font-family="monospace" font-size="11" fill="#f8fafc">cc-kronan-workplace</text>
+      <text x="1100" y="128" font-family="monospace" font-size="11" fill="#cbd5e1" text-anchor="end">60.00</text>
+      <text x="1240" y="128" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">14.40</text>
+      <text x="1380" y="128" font-family="monospace" font-size="11" fill="#f8fafc" text-anchor="end">74.40</text>
+
+      <!-- CHRGRF -->
+      <text x="14" y="146" font-family="monospace" font-size="11" fill="#fbbf24">CHRGRF</text>
+      <text x="120" y="146" font-family="monospace" font-size="11" fill="#cbd5e1">flat 5000</text>
+      <text x="280" y="146" font-family="monospace" font-size="11" fill="#cbd5e1">site contract → KRONAN_RENTAL_COVERAGE → benef N1</text>
+      <circle cx="600" cy="142" r="5" fill="#f59e0b"/>
+      <text x="610" y="146" font-family="monospace" font-size="11" fill="#f8fafc">cc-rental (benef org-n1)</text>
+      <text x="1100" y="146" font-family="monospace" font-size="11" fill="#cbd5e1" text-anchor="end">50.00</text>
+      <text x="1240" y="146" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">12.00</text>
+      <text x="1380" y="146" font-family="monospace" font-size="11" fill="#f8fafc" text-anchor="end">62.00</text>
+
+      <!-- WRKPF -->
+      <text x="14" y="164" font-family="monospace" font-size="11" fill="#fbbf24">WRKPF</text>
+      <text x="120" y="164" font-family="monospace" font-size="11" fill="#cbd5e1">flat 5000</text>
+      <text x="280" y="164" font-family="monospace" font-size="11" fill="#cbd5e1">workplace driver_contract active → KRONAN_STRAUMVAKT_FEES</text>
+      <circle cx="600" cy="160" r="5" fill="#a78bfa"/>
+      <text x="610" y="164" font-family="monospace" font-size="11" fill="#f8fafc">cc-kronan-svk-fees</text>
+      <text x="1100" y="164" font-family="monospace" font-size="11" fill="#cbd5e1" text-anchor="end">50.00</text>
+      <text x="1240" y="164" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">12.00</text>
+      <text x="1380" y="164" font-family="monospace" font-size="11" fill="#f8fafc" text-anchor="end">62.00</text>
+
+      <line x1="14" y1="180" x2="1666" y2="180" stroke="#1e3a5f" stroke-dasharray="3,3"/>
+
+      <text x="14" y="206" font-size="10" font-weight="700" fill="#f8fafc" letter-spacing="2">TOTALS BY PAYER</text>
+
+      <circle cx="20" cy="226" r="5" fill="#22c55e"/>
+      <text x="32" y="230" font-size="11" fill="#f8fafc">Krónan workplace pays (DSOF + REPF + XTRRF + SPVIVF):</text>
+      <text x="1100" y="230" font-family="monospace" font-size="11" font-weight="600" fill="#22c55e" text-anchor="end">810.00</text>
+      <text x="1240" y="230" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">194.40</text>
+      <text x="1380" y="230" font-family="monospace" font-size="11" font-weight="600" fill="#22c55e" text-anchor="end">1004.40</text>
+
+      <circle cx="20" cy="248" r="5" fill="#f59e0b"/>
+      <text x="32" y="252" font-size="11" fill="#f8fafc">Krónan rental coverage → N1 (CHRGRF beneficiary):</text>
+      <text x="1100" y="252" font-family="monospace" font-size="11" font-weight="600" fill="#f59e0b" text-anchor="end">50.00</text>
+      <text x="1240" y="252" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">12.00</text>
+      <text x="1380" y="252" font-family="monospace" font-size="11" font-weight="600" fill="#f59e0b" text-anchor="end">62.00</text>
+
+      <circle cx="20" cy="266" r="5" fill="#a78bfa"/>
+      <text x="32" y="270" font-size="11" fill="#f8fafc">Krónan service-fees → Straumvakt (WRKPF):</text>
+      <text x="1100" y="270" font-family="monospace" font-size="11" font-weight="600" fill="#a78bfa" text-anchor="end">50.00</text>
+      <text x="1240" y="270" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">12.00</text>
+      <text x="1380" y="270" font-family="monospace" font-size="11" font-weight="600" fill="#a78bfa" text-anchor="end">62.00</text>
+
+      <line x1="14" y1="280" x2="1666" y2="280" stroke="#f8fafc" opacity="0.4"/>
+    </g>
+  </g>
+
+  <line x1="60" y1="2540" x2="1740" y2="2540" stroke="#1e3a5f" stroke-width="1" opacity="0.6"/>
+
+  <!-- ========================================================================== -->
+  <!-- LEGEND / WHERE-DATA-LIVES INDEX -->
+  <!-- ========================================================================== -->
+  <g transform="translate(60, 2566)">
+    <text x="0" y="0" font-size="10" font-weight="700" fill="#94a3b8" letter-spacing="3">WHERE THE DATA LIVES · POSTGRES SCHEMA INDEX</text>
+    <text x="0" y="22" font-size="12" font-weight="300" fill="#94a3b8">Each card above is one row. Same-coloured cards live in the same Postgres schema namespace.</text>
+
+    <!-- 4 columns -->
+    <g transform="translate(0, 50)">
+      <!-- col 1 -->
+      <rect width="400" height="240" rx="10" fill="url(#panel)" stroke="#1e3a5f"/>
+      <rect width="6" height="240" fill="#2dd4bf"/>
+      <text x="22" y="22" font-size="11" font-weight="700" fill="#2dd4bf">tenancy.*</text>
+      <text x="22" y="40" font-family="monospace" font-size="11" fill="#cbd5e1">organizations</text>
+      <text x="22" y="56" font-family="monospace" font-size="11" fill="#cbd5e1">memberships  (orgId, userId, role)</text>
+
+      <text x="22" y="86" font-size="11" font-weight="700" fill="#a78bfa">identity.*</text>
+      <text x="22" y="104" font-family="monospace" font-size="11" fill="#cbd5e1">users  (email, displayName, status)</text>
+      <text x="22" y="120" font-family="monospace" font-size="11" fill="#cbd5e1">user_credentials  (passwordHash, totpSecret)</text>
+      <text x="22" y="136" font-family="monospace" font-size="11" fill="#cbd5e1">platform_admins  (Straumvakt staff, ADR 0008)</text>
+
+      <text x="22" y="166" font-size="11" font-weight="700" fill="#2dd4bf">hosts.*</text>
+      <text x="22" y="184" font-family="monospace" font-size="11" fill="#cbd5e1">charger_hosts  (vestigial in rev 3)</text>
+      <text x="22" y="200" font-family="monospace" font-size="11" fill="#cbd5e1">charger_service_plans  (legacy, replaced by contracts)</text>
+      <text x="22" y="220" font-size="9" fill="#64748b" font-style="italic">See ADR 0009 (proposed Host drop)</text>
+    </g>
+
+    <g transform="translate(420, 50)">
+      <!-- col 2 -->
+      <rect width="400" height="240" rx="10" fill="url(#panel)" stroke="#1e3a5f"/>
+      <rect width="6" height="240" fill="#3b82f6"/>
+      <text x="22" y="22" font-size="11" font-weight="700" fill="#3b82f6">properties.*</text>
+      <text x="22" y="40" font-family="monospace" font-size="11" fill="#cbd5e1">properties  (street, postal, municipality)</text>
+      <text x="22" y="56" font-family="monospace" font-size="11" fill="#cbd5e1">sites  (timezone, access_level, +5 tariff FKs)</text>
+      <text x="22" y="72" font-family="monospace" font-size="11" fill="#cbd5e1">installations  (vendor_id, retailer_tariff_id)</text>
+      <text x="22" y="88" font-family="monospace" font-size="11" fill="#cbd5e1">circuits  (ampere_ceiling, vendor_circuit_ref)</text>
+      <text x="22" y="104" font-family="monospace" font-size="11" fill="#cbd5e1">site_assets  (polymorphic: charger/meter/modem/...)</text>
+
+      <text x="22" y="134" font-size="11" font-weight="700" fill="#3b82f6">assets.*</text>
+      <text x="22" y="152" font-family="monospace" font-size="11" fill="#cbd5e1">chargers  (model_id, owner_org_id, chrgrf_tariff_id)</text>
+      <text x="22" y="168" font-family="monospace" font-size="11" fill="#cbd5e1">meters · modems · controllers</text>
+
+      <text x="22" y="198" font-size="11" font-weight="700" fill="#3b82f6">ocpp.*</text>
+      <text x="22" y="216" font-family="monospace" font-size="11" fill="#cbd5e1">ocpp_identities · connectors</text>
+      <text x="22" y="232" font-family="monospace" font-size="11" fill="#cbd5e1">outbound_commands  (outbox)</text>
+    </g>
+
+    <g transform="translate(840, 50)">
+      <!-- col 3 -->
+      <rect width="420" height="240" rx="10" fill="url(#panel)" stroke="#1e3a5f"/>
+      <rect width="6" height="240" fill="#f59e0b"/>
+      <text x="22" y="22" font-size="11" font-weight="700" fill="#fbbf24">hardware.*</text>
+      <text x="22" y="40" font-family="monospace" font-size="11" fill="#cbd5e1">vendors  (slug, kind, api_kind)</text>
+      <text x="22" y="56" font-family="monospace" font-size="11" fill="#cbd5e1">models  (credential_scope, profile JSONB)</text>
+
+      <text x="22" y="86" font-size="11" font-weight="700" fill="#fbbf24">billing.*  (rev 3 layer)</text>
+      <text x="22" y="104" font-family="monospace" font-size="11" fill="#cbd5e1">cost_factors  (catalog, 8 rows)</text>
+      <text x="22" y="120" font-family="monospace" font-size="11" fill="#cbd5e1">tariff_definitions  (rates per anchor)</text>
+      <text x="22" y="136" font-family="monospace" font-size="11" fill="#cbd5e1">cost_centers  (payers + beneficiary)</text>
+      <text x="22" y="152" font-family="monospace" font-size="11" fill="#cbd5e1">contracts  (per-tier, inherited)</text>
+      <text x="22" y="168" font-family="monospace" font-size="11" fill="#cbd5e1">contract_factor_assignments</text>
+      <text x="22" y="184" font-family="monospace" font-size="11" fill="#cbd5e1">driver_contracts</text>
+      <text x="22" y="200" font-family="monospace" font-size="11" fill="#cbd5e1">driver_contract_factor_overrides</text>
+      <text x="22" y="216" font-family="monospace" font-size="11" fill="#cbd5e1">contract_period_accumulators</text>
+      <text x="22" y="232" font-family="monospace" font-size="11" fill="#cbd5e1">billing_lines  (resolver output)</text>
+    </g>
+
+    <g transform="translate(1280, 50)">
+      <!-- col 4 -->
+      <rect width="420" height="240" rx="10" fill="url(#panel)" stroke="#1e3a5f"/>
+      <rect width="6" height="240" fill="#f8fafc"/>
+      <text x="22" y="22" font-size="11" font-weight="700" fill="#f8fafc">charging.*</text>
+      <text x="22" y="40" font-family="monospace" font-size="11" fill="#cbd5e1">sessions  (the binding row)</text>
+      <text x="22" y="56" font-family="monospace" font-size="11" fill="#cbd5e1">meter_values · reservations</text>
+
+      <text x="22" y="86" font-size="11" font-weight="700" fill="#f8fafc">events.*</text>
+      <text x="22" y="104" font-family="monospace" font-size="11" fill="#cbd5e1">event_log  (append-only, retention class)</text>
+      <text x="22" y="120" font-family="monospace" font-size="11" fill="#cbd5e1">idempotency_keys</text>
+
+      <text x="22" y="150" font-size="11" font-weight="700" fill="#f8fafc">audit.* + roaming.* + ...</text>
+      <text x="22" y="168" font-family="monospace" font-size="11" fill="#cbd5e1">audit.actions  (actor-did-what)</text>
+      <text x="22" y="184" font-family="monospace" font-size="11" fill="#cbd5e1">roaming.ocpi_tokens  (RFID idTags → user)</text>
+      <text x="22" y="200" font-family="monospace" font-size="11" fill="#cbd5e1">people.family_groups · family_memberships</text>
+      <text x="22" y="216" font-family="monospace" font-size="11" fill="#cbd5e1">issues.* (post-pilot per ADR 0006 D)</text>
+      <text x="22" y="232" font-family="monospace" font-size="11" fill="#cbd5e1">webhooks.* (Sprint 7)</text>
+    </g>
+  </g>
+
+  <text x="900" y="3170" text-anchor="middle" font-size="11" font-weight="300" fill="#64748b">V3 + rev 3 (ADR 0008) · 9-tier asset hierarchy · runtime cost-factor catalog · contract inheritance · driver-contract overrides · every billing_line allocates or session-stop fails.</text>
+</svg>

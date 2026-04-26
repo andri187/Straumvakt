@@ -86,6 +86,26 @@ const nav: NavItem[] = [
         label: { is: "Skipulagsheildir", en: "Organizations" },
         icon: Network,
       },
+      {
+        kind: "leaf",
+        href: "/tenants/properties",
+        label: { is: "Properties", en: "Properties" },
+        icon: Building2,
+      },
+    ],
+  },
+  {
+    kind: "group",
+    basePath: "/sites",
+    label: { is: "Sites", en: "Sites" },
+    icon: MapPin,
+    children: [
+      {
+        kind: "leaf",
+        href: "/sites",
+        label: { is: "All sites", en: "All sites" },
+        icon: MapPin,
+      },
     ],
   },
   {

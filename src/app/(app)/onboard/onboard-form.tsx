@@ -242,10 +242,10 @@ export function OnboardForm() {
     <form onSubmit={onSubmit} className="space-y-6">
       <Section title="Organization">
         <Grid>
-          <Field label="Slug" required value={s.orgSlug} onChange={(v) => set("orgSlug", v)} placeholder="kronan-pilot" mono hint="lowercase, dashes only" />
-          <Field label="Display name" required value={s.orgDisplayName} onChange={(v) => set("orgDisplayName", v)} placeholder="Krónan ehf." />
+          <Field label="Slug" required value={s.orgSlug} onChange={(v) => set("orgSlug", v)} placeholder="straumvakt-pilot" mono hint="lowercase, dashes only" />
+          <Field label="Display name" required value={s.orgDisplayName} onChange={(v) => set("orgDisplayName", v)} placeholder="Straumvakt" />
           <Field label="Kennitala" required value={s.orgKennitala} onChange={(v) => set("orgKennitala", v)} placeholder="700101-9999" mono hint="DDMMYY-XXXX" />
-          <Field label="Legal name" required value={s.orgLegalName} onChange={(v) => set("orgLegalName", v)} placeholder="Krónan ehf." />
+          <Field label="Legal name" required value={s.orgLegalName} onChange={(v) => set("orgLegalName", v)} placeholder="Straumvakt ehf." />
           <Field label="Country code" value={s.orgCountryCode} onChange={(v) => set("orgCountryCode", v.toUpperCase().slice(0, 2))} placeholder="IS" mono />
           <Field label="Default currency" value={s.orgDefaultCurrency} onChange={(v) => set("orgDefaultCurrency", v.toUpperCase().slice(0, 3))} placeholder="ISK" mono />
           <Field label="Legal form" value={s.orgLegalForm} onChange={(v) => set("orgLegalForm", v)} placeholder="ehf. / hf. / sf." />
@@ -292,7 +292,7 @@ export function OnboardForm() {
 
       <Section title="Property">
         <Grid>
-          <Field label="Display name" required value={s.propertyDisplayName} onChange={(v) => set("propertyDisplayName", v)} placeholder="Krónan Akureyri" />
+          <Field label="Display name" required value={s.propertyDisplayName} onChange={(v) => set("propertyDisplayName", v)} placeholder="Straumvakt Reykjavík HQ" />
           <Field label="Street" value={s.propertyStreet} onChange={(v) => set("propertyStreet", v)} />
           <Field label="City" value={s.propertyCity} onChange={(v) => set("propertyCity", v)} />
           <Field label="Postal code" value={s.propertyPostalCode} onChange={(v) => set("propertyPostalCode", v)} />
@@ -339,7 +339,7 @@ export function OnboardForm() {
 
       <Section title="OCPP identity">
         <Grid cols={3}>
-          <Field label="Identity string" required value={s.identityString} onChange={(v) => set("identityString", v)} placeholder="kronan-akureyri-01" mono hint="alphanum + . _ : -" />
+          <Field label="Identity string" required value={s.identityString} onChange={(v) => set("identityString", v)} placeholder="straumvakt-test-01" mono hint="alphanum + . _ : -" />
           <Select label="OCPP version" value={s.ocppVersion} onChange={(v) => set("ocppVersion", v)} options={OCPP_VERSIONS} />
           <Select label="Asset class" value={s.assetClass} onChange={(v) => set("assetClass", v)} options={ASSET_CLASSES} />
         </Grid>

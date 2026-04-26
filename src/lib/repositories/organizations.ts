@@ -3,16 +3,9 @@
  *
  * Org rows ARE the tenant boundary every other table is scoped to. They
  * cannot themselves be `withOrgContext`-scoped — creating an Org IS the
- * one operation that crosses the tenant boundary by definition. Reads /
- * updates / archives are platform-admin actions too: only Straumvakt
- * staff lists "all orgs"; an Org's own admins use Org-scoped queries
- * elsewhere (Property / Site / etc.).
- *
- * This module is the only place outside `_context` where `prisma()` is
- * called directly. All other repositories must go through
- * `withOrgContext`.
+ * one operation that crosses the tenant boundary by definition.
  */
-import type { OrgStatus } from "@prisma/client";
+import type { OrgStatus, OrganizationRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
   OrgCreateInput,
@@ -26,8 +19,20 @@ export interface OrgSummary {
   displayName: string;
   countryCode: string;
   status: OrgStatus;
-  createdAt: string; // ISO
-  updatedAt: string; // ISO
+  kennitala: string | null;
+  legalName: string | null;
+  legalForm: string | null;
+  vskNr: string | null;
+  leiCode: string | null;
+  defaultCurrency: string;
+  regulatorLicenceNo: string | null;
+  notes: string | null;
+  roles: OrganizationRole[];
+  addresses: unknown;
+  contacts: unknown;
+  branding: unknown;
+  createdAt: string;
+  updatedAt: string;
 }
 
 function toSummary(row: {
@@ -36,6 +41,18 @@ function toSummary(row: {
   displayName: string;
   countryCode: string;
   status: OrgStatus;
+  kennitala: string | null;
+  legalName: string | null;
+  legalForm: string | null;
+  vskNr: string | null;
+  leiCode: string | null;
+  defaultCurrency: string;
+  regulatorLicenceNo: string | null;
+  notes: string | null;
+  roles: OrganizationRole[];
+  addresses: unknown;
+  contacts: unknown;
+  branding: unknown;
   createdAt: Date;
   updatedAt: Date;
 }): OrgSummary {
@@ -45,6 +62,18 @@ function toSummary(row: {
     displayName: row.displayName,
     countryCode: row.countryCode,
     status: row.status,
+    kennitala: row.kennitala,
+    legalName: row.legalName,
+    legalForm: row.legalForm,
+    vskNr: row.vskNr,
+    leiCode: row.leiCode,
+    defaultCurrency: row.defaultCurrency,
+    regulatorLicenceNo: row.regulatorLicenceNo,
+    notes: row.notes,
+    roles: row.roles,
+    addresses: row.addresses,
+    contacts: row.contacts,
+    branding: row.branding,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -83,10 +112,20 @@ export async function createOrg(
       slug: input.slug,
       displayName: input.displayName,
       countryCode: input.countryCode,
+      kennitala: input.kennitala,
+      legalName: input.legalName,
+      legalForm: input.legalForm,
+      vskNr: input.vskNr,
+      leiCode: input.leiCode,
+      defaultCurrency: input.defaultCurrency,
+      regulatorLicenceNo: input.regulatorLicenceNo,
+      notes: input.notes,
+      roles: input.roles,
+      addresses: input.addresses as object,
+      contacts: input.contacts as object,
+      branding: input.branding as object,
     },
   });
-  // Audit row scoped to the new Org itself — chicken-and-egg solved by
-  // writing the first audit action against the just-created id.
   await recordAuditAction({
     orgId: created.id,
     actorUserId,
@@ -107,7 +146,12 @@ export async function updateOrg(
   const db = prisma();
   const updated = await db.organization.update({
     where: { id: orgId },
-    data: patch,
+    data: {
+      ...patch,
+      addresses: patch.addresses as object | undefined,
+      contacts: patch.contacts as object | undefined,
+      branding: patch.branding as object | undefined,
+    },
   });
   await recordAuditAction({
     orgId,

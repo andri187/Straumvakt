@@ -45,7 +45,7 @@ export function CreateUserForm() {
         label="Email"
         value={email}
         onChange={setEmail}
-        placeholder="anna@kronan.is"
+        placeholder="admin@straumvakt.is"
         mono
       />
       <Field
