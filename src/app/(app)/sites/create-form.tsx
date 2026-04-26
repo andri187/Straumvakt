@@ -49,7 +49,7 @@ export function CreateSiteForm({ orgOptions }: { orgOptions: { id: string; label
         const b = (await res.json().catch(() => null)) as { error?: string; issues?: { path: (string | number)[]; message: string }[] } | null;
         throw new Error(b?.issues?.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ") || b?.error || `HTTP ${res.status}`);
       }
-      setDisplayName("");
+      router.push("/sites");
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));

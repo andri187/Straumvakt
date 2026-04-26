@@ -31,7 +31,7 @@ export function CreateCostCenterForm({ orgOptions }: { orgOptions: { id: string;
         const b = (await res.json().catch(() => null)) as { error?: string; issues?: { path: (string | number)[]; message: string }[] } | null;
         throw new Error(b?.issues?.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ") || b?.error || `HTTP ${res.status}`);
       }
-      setCode(""); setDisplayName(""); setPayerOrgId(""); setPayerUserId(""); setBeneficiaryOrgId("");
+      router.push("/billing/cost-centers");
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));

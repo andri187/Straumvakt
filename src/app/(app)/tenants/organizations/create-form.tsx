@@ -98,10 +98,7 @@ export function CreateOrgForm() {
         const msg = b?.issues?.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ") || b?.error || `HTTP ${res.status}`;
         throw new Error(msg);
       }
-      setSlug(""); setDisplayName(""); setKennitala(""); setLegalName("");
-      setLegalForm(""); setVskNr(""); setLeiCode(""); setRegulatorLicenceNo("");
-      setNotes(""); setRoles([]); setAddrStreet(""); setAddrCity(""); setAddrPostal("");
-      setContactName(""); setContactEmail(""); setContactPhone("");
+      router.push("/tenants/organizations");
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));

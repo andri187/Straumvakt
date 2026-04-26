@@ -50,7 +50,7 @@ export function CreateDriverContractForm({ orgOptions }: { orgOptions: { id: str
         const b = (await res.json().catch(() => null)) as { error?: string; issues?: { path: (string | number)[]; message: string }[] } | null;
         throw new Error(b?.issues?.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ") || b?.error || `HTTP ${res.status}`);
       }
-      setDisplayName(""); setValidUntil("");
+      router.push("/billing/driver-contracts");
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));

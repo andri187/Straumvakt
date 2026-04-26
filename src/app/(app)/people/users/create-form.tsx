@@ -29,8 +29,7 @@ export function CreateUserForm() {
           | null;
         throw new Error(body?.error ?? `HTTP ${res.status}`);
       }
-      setEmail("");
-      setDisplayName("");
+      router.push("/people/users");
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
