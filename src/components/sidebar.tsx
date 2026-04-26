@@ -24,6 +24,9 @@ import {
   Users,
   UserCog,
   PlusCircle,
+  Wallet,
+  Receipt,
+  FileText,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -57,10 +60,24 @@ const nav: NavItem[] = [
     icon: LayoutDashboard,
   },
   {
-    kind: "leaf",
-    href: "/onboard",
-    label: { is: "Innskráning", en: "Onboard" },
+    kind: "group",
+    basePath: "/onboard",
+    label: { is: "Onboard", en: "Onboard" },
     icon: PlusCircle,
+    children: [
+      {
+        kind: "leaf",
+        href: "/onboard",
+        label: { is: "Test chain (utility)", en: "Test chain (utility)" },
+        icon: PlusCircle,
+      },
+      {
+        kind: "leaf",
+        href: "/onboard/zaptec",
+        label: { is: "Zaptec wizard", en: "Zaptec wizard" },
+        icon: Zap,
+      },
+    ],
   },
   {
     kind: "leaf",
@@ -91,6 +108,44 @@ const nav: NavItem[] = [
         href: "/tenants/properties",
         label: { is: "Properties", en: "Properties" },
         icon: Building2,
+      },
+    ],
+  },
+  {
+    kind: "group",
+    basePath: "/billing",
+    label: { is: "Billing", en: "Billing" },
+    icon: Wallet,
+    children: [
+      {
+        kind: "leaf",
+        href: "/billing/cost-factors",
+        label: { is: "Cost factors", en: "Cost factors" },
+        icon: Receipt,
+      },
+      {
+        kind: "leaf",
+        href: "/billing/tariffs",
+        label: { is: "Tariffs", en: "Tariffs" },
+        icon: Receipt,
+      },
+      {
+        kind: "leaf",
+        href: "/billing/cost-centers",
+        label: { is: "Cost centers", en: "Cost centers" },
+        icon: Wallet,
+      },
+      {
+        kind: "leaf",
+        href: "/billing/contracts",
+        label: { is: "Contracts", en: "Contracts" },
+        icon: FileText,
+      },
+      {
+        kind: "leaf",
+        href: "/billing/driver-contracts",
+        label: { is: "Driver contracts", en: "Driver contracts" },
+        icon: FileText,
       },
     ],
   },

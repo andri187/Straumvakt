@@ -4,13 +4,13 @@ import { listPropertiesByOrg } from "@/lib/repositories/sites";
 
 export async function GET(
   _req: Request,
-  context: { params: Promise<{ orgId: string }> },
+  context: { params: Promise<{ id: string }> },
 ) {
   const session = await requireAdmin();
   if (!session) return unauthorized();
-  const { orgId } = await context.params;
+  const { id } = await context.params;
   try {
-    return NextResponse.json({ properties: await listPropertiesByOrg(orgId) });
+    return NextResponse.json({ properties: await listPropertiesByOrg(id) });
   } catch (err) {
     return apiError(err, 500);
   }

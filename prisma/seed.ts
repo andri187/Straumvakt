@@ -69,8 +69,41 @@ async function seedHardwareCatalog() {
   console.log("[seed] hardware catalog: Zaptec + Zaptec Pro upserted.");
 }
 
+// ── ADR 0008 — pilot cost-factor catalog ─────────────────────────────
+const COST_FACTORS = [
+  { code: "DSOF", displayName: "DSO Fee", anchorTier: "site" as const, description: "Distribution-system-operator network fee — anchored at the Site (DSO determined by address)." },
+  { code: "REPF", displayName: "Retailer Energy Price Fee", anchorTier: "installation" as const, description: "Electricity retailer commodity price — anchored at the Installation." },
+  { code: "USRF", displayName: "User Access Fee", anchorTier: "site" as const, description: "Per-session or per-month flat fee for site access." },
+  { code: "USRF_PREM", displayName: "Premium User Access Fee", anchorTier: "site" as const, description: "Higher-tier user access fee for differentiated pricing." },
+  { code: "XTRRF", displayName: "Extra Tariffs (Idle, etc.)", anchorTier: "site" as const, description: "Per-minute idle fees, surge pricing, etc." },
+  { code: "SPVIVF", displayName: "Service Provider / Installer / Vendor Fee", anchorTier: "site" as const, description: "Fee paid to the service contractor handling installation/maintenance." },
+  { code: "CHRGRF", displayName: "Charger Rental Fee", anchorTier: "charger" as const, description: "Hardware-rental fee when the charger is rented rather than owned." },
+  { code: "WRKPF", displayName: "Workplace Fee", anchorTier: "driver_contract" as const, description: "Workplace-charging fee billed to the employer." },
+];
+
+async function seedCostFactorCatalog() {
+  for (const f of COST_FACTORS) {
+    await prisma.costFactor.upsert({
+      where: { code: f.code },
+      update: {},
+      create: {
+        code: f.code,
+        displayName: f.displayName,
+        description: f.description,
+        anchorTier: f.anchorTier,
+        defaultVatRatePct: 24,
+        defaultCurrency: "ISK",
+        status: "active",
+      },
+    });
+  }
+  // eslint-disable-next-line no-console
+  console.log(`[seed] cost-factor catalog: ${COST_FACTORS.length} factors upserted.`);
+}
+
 async function main() {
   await seedHardwareCatalog();
+  await seedCostFactorCatalog();
 }
 
 main()
