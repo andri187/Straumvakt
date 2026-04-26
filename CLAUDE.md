@@ -114,6 +114,38 @@ webhook secret, or any Cloudflare environment value to the chat.
 **Never add entries to `wrangler.jsonc` `vars`** for anything sensitive.
 Production environment values live in the Cloudflare dashboard.
 
+### Carve-out A — deterministic non-secret substitution
+
+Claude **may** modify `.env.local` / `.env*` files via a non-interactive
+in-place substitution (`sed -i`, single-key Edit, or equivalent) when
+**all** of the following hold:
+
+1. **Both** the search and replace operands are non-secret values
+   (hostnames, port numbers, path prefixes, schema names, branch IDs,
+   endpoint IDs — values that already appear in chat or in public
+   documentation).
+2. The command does **not** print the file's contents to stdout
+   (no `cat`, `head`, `tail`, `grep` of secret-containing lines).
+3. The operator has named the substitution explicitly in the current
+   message (e.g., "swap `ep-A-pooler` for `ep-B-pooler` in the
+   DATABASE_URL host").
+4. After the substitution, Claude verifies via the redacting grep
+   pattern already permitted: `grep <KEY>= .env.local | sed -E
+   's|(://)[^@]+@|\1<creds>@|'`.
+
+This carve-out **does not** permit:
+
+- Inserting or replacing a secret value (passwords, tokens, keys).
+- Reading or echoing the password component of a connection string.
+- Writing a freshly-generated secret to disk via this path
+  (regenerated `AUTH_SECRET` / `OCPP_INGEST_SECRET` etc. remain
+  operator-only).
+
+If a swap requires changing both a non-secret component and a secret
+component (e.g., Neon branches with different role passwords), Carve-out
+A covers only the non-secret half — the operator handles the secret
+half.
+
 ---
 
 ## Rule 3 — Database operations
