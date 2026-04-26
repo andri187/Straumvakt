@@ -97,14 +97,32 @@ const nav: NavItem[] = [
   {
     kind: "group",
     basePath: "/sites",
-    label: { is: "Sites", en: "Sites" },
+    label: { is: "Operations", en: "Operations" },
     icon: MapPin,
     children: [
       {
         kind: "leaf",
         href: "/sites",
-        label: { is: "All sites", en: "All sites" },
+        label: { is: "Sites", en: "Sites" },
         icon: MapPin,
+      },
+      {
+        kind: "leaf",
+        href: "/installations",
+        label: { is: "Installations", en: "Installations" },
+        icon: Plug,
+      },
+      {
+        kind: "leaf",
+        href: "/circuits",
+        label: { is: "Circuits", en: "Circuits" },
+        icon: Cable,
+      },
+      {
+        kind: "leaf",
+        href: "/chargers",
+        label: { is: "Chargers", en: "Chargers" },
+        icon: Zap,
       },
     ],
   },

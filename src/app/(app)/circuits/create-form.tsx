@@ -1,0 +1,93 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+
+export function CreateCircuitForm({ orgOptions }: { orgOptions: { id: string; label: string }[] }) {
+  const router = useRouter();
+  const [orgId, setOrgId] = useState(orgOptions[0]?.id ?? "");
+  const [siteId, setSiteId] = useState("");
+  const [installationId, setInstallationId] = useState("");
+  const [sites, setSites] = useState<{ id: string; displayName: string }[]>([]);
+  const [installations, setInstallations] = useState<{ id: string; displayName: string }[]>([]);
+  const [displayName, setDisplayName] = useState("");
+  const [ampereCeiling, setAmpereCeiling] = useState("");
+  const [phaseCount, setPhaseCount] = useState("3");
+  const [vendorCircuitRef, setVendorCircuitRef] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!orgId) return;
+    fetch(`/api/admin/orgs/${orgId}/sites`).then((r) => r.json()).then((d: { sites?: { id: string; displayName: string }[] }) => {
+      const list = d.sites ?? [];
+      setSites(list);
+      setSiteId(list[0]?.id ?? "");
+    });
+  }, [orgId]);
+
+  useEffect(() => {
+    if (!siteId) { setInstallations([]); setInstallationId(""); return; }
+    fetch(`/api/admin/sites/${siteId}/installations`).then((r) => r.json()).then((d: { installations?: { id: string; displayName: string }[] }) => {
+      const list = d.installations ?? [];
+      setInstallations(list);
+      setInstallationId("");
+    });
+  }, [siteId]);
+
+  function toNum(v: string): number | undefined {
+    if (v.trim() === "") return undefined;
+    const n = Number(v); return Number.isFinite(n) ? n : undefined;
+  }
+
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault(); setError(null); setSubmitting(true);
+    try {
+      const res = await fetch("/api/admin/circuits", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          orgId, siteId, installationId: installationId || undefined,
+          displayName,
+          ampereCeiling: toNum(ampereCeiling),
+          phaseCount: Number(phaseCount) || 3,
+          vendorCircuitRef: vendorCircuitRef || undefined,
+        }),
+      });
+      if (!res.ok) {
+        const b = (await res.json().catch(() => null)) as { error?: string; issues?: { path: (string | number)[]; message: string }[] } | null;
+        throw new Error(b?.issues?.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ") || b?.error || `HTTP ${res.status}`);
+      }
+      setDisplayName(""); setAmpereCeiling(""); setVendorCircuitRef("");
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally { setSubmitting(false); }
+  }
+
+  const valid = orgId && siteId && displayName.length > 0;
+
+  return (
+    <form onSubmit={onSubmit} className="space-y-3">
+      <Select label="Organization" required value={orgId} onChange={setOrgId} options={orgOptions.map((o) => ({ value: o.id, label: o.label }))} />
+      <Select label="Site" required value={siteId} onChange={setSiteId} options={sites.map((s) => ({ value: s.id, label: s.displayName }))} placeholder={sites.length === 0 ? "(no sites)" : undefined} />
+      <Select label="Installation (optional)" value={installationId} onChange={setInstallationId} options={[{ value: "", label: "— site-level —" }, ...installations.map((i) => ({ value: i.id, label: i.displayName }))]} />
+      <Field label="Display name" required value={displayName} onChange={setDisplayName} placeholder="Circuit A — main panel" />
+      <Field label="Ampere ceiling" value={ampereCeiling} onChange={setAmpereCeiling} mono placeholder="63" />
+      <Select label="Phase count" value={phaseCount} onChange={setPhaseCount} options={[{ value: "1", label: "1" }, { value: "3", label: "3" }]} />
+      <Field label="Vendor circuit ref" value={vendorCircuitRef} onChange={setVendorCircuitRef} mono placeholder="(populated by Zaptec wizard)" />
+
+      {error && <div className="rounded border border-rose-700/40 bg-rose-950/30 p-2 text-xs text-rose-200">{error}</div>}
+      <button type="submit" disabled={submitting || !valid} className="w-full rounded-md bg-sv-green/20 px-3 py-2 text-sm font-medium text-sv-green ring-1 ring-sv-green/30 hover:bg-sv-green/30 disabled:cursor-not-allowed disabled:opacity-40">
+        {submitting ? "Creating…" : "Create circuit"}
+      </button>
+    </form>
+  );
+}
+
+function Field({ label, required, value, onChange, placeholder, mono }: { label: string; required?: boolean; value: string; onChange: (v: string) => void; placeholder?: string; mono?: boolean }) {
+  return <label className="block"><span className="block text-[11px] font-semibold uppercase tracking-brand text-ink-400">{label}{required && <span className="ml-0.5 text-rose-400">*</span>}</span><input type="text" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={"mt-1 w-full rounded-md border border-bg-border bg-bg-base/50 px-3 py-2 text-sm text-ink-50 focus:border-sv-sky focus:outline-none " + (mono ? "font-mono" : "")} /></label>;
+}
+function Select({ label, required, value, onChange, options, placeholder }: { label: string; required?: boolean; value: string; onChange: (v: string) => void; options: { value: string; label: string }[]; placeholder?: string }) {
+  return <label className="block"><span className="block text-[11px] font-semibold uppercase tracking-brand text-ink-400">{label}{required && <span className="ml-0.5 text-rose-400">*</span>}</span><select value={value} onChange={(e) => onChange(e.target.value)} className="mt-1 w-full rounded-md border border-bg-border bg-bg-base/50 px-3 py-2 text-sm text-ink-50 focus:border-sv-sky focus:outline-none">{placeholder && <option value="" disabled>{placeholder}</option>}{options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label>;
+}
