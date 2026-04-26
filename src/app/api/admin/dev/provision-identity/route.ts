@@ -113,17 +113,26 @@ export async function POST(req: Request) {
       select: { id: true },
     });
 
-    await tx.charger.create({
+    await tx.chargingStation.create({
       data: {
         siteAssetId: siteAsset.id,
         orgId: org.id,
       },
     });
 
+    const evse = await tx.eVSE.create({
+      data: {
+        orgId: org.id,
+        chargingStationId: siteAsset.id,
+        evseIndex: 1,
+      },
+      select: { id: true },
+    });
+
     const identity = await tx.ocppIdentity.create({
       data: {
         orgId: org.id,
-        chargerId: siteAsset.id,
+        chargingStationId: siteAsset.id,
         identityString: body.identityString,
         authSecretHash,
         ocppVersion: "ocpp_1_6",
@@ -135,7 +144,7 @@ export async function POST(req: Request) {
     const connector = await tx.connector.create({
       data: {
         orgId: org.id,
-        ocppIdentityId: identity.id,
+        evseId: evse.id,
         connectorIndex: 1,
         type: body.connectorType,
         maxPowerKw: body.maxPowerKw,
@@ -148,7 +157,8 @@ export async function POST(req: Request) {
       orgSlug: org.slug,
       propertyId: property.id,
       siteId: site.id,
-      chargerId: siteAsset.id,
+      chargingStationId: siteAsset.id,
+      evseId: evse.id,
       ocppIdentityId: identity.id,
       connectorId: connector.id,
     };

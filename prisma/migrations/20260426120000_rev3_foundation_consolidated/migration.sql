@@ -26,45 +26,58 @@ CREATE TYPE "billing"."DriverContractOwnerType" AS ENUM ('workplace', 'family_gr
 ALTER TABLE "hosts"."charger_hosts" DROP CONSTRAINT "charger_hosts_org_id_fkey";
 
 -- DropForeignKey
-ALTER TABLE "hosts"."charger_service_plans" DROP CONSTRAINT "charger_service_plans_host_id_fkey";
+ALTER TABLE "hosts"."charger_service_plans" DROP CONSTRAINT "charger_service_plans_org_id_fkey";
 
 -- DropForeignKey
-ALTER TABLE "hosts"."charger_service_plans" DROP CONSTRAINT "charger_service_plans_org_id_fkey";
+ALTER TABLE "hosts"."charger_service_plans" DROP CONSTRAINT "charger_service_plans_host_id_fkey";
 
 -- DropForeignKey
 ALTER TABLE "properties"."properties" DROP CONSTRAINT "properties_host_id_fkey";
 
+-- DropForeignKey
+ALTER TABLE "assets"."chargers" DROP CONSTRAINT "chargers_site_asset_id_fkey";
+
+-- DropForeignKey
+ALTER TABLE "assets"."chargers" DROP CONSTRAINT "chargers_org_id_fkey";
+
+-- DropForeignKey
+ALTER TABLE "assets"."chargers" DROP CONSTRAINT "chargers_model_id_fkey";
+
+-- DropForeignKey
+ALTER TABLE "assets"."chargers" DROP CONSTRAINT "chargers_installation_id_fkey";
+
+-- DropForeignKey
+ALTER TABLE "ocpp"."ocpp_identities" DROP CONSTRAINT "ocpp_identities_charger_id_fkey";
+
+-- DropForeignKey
+ALTER TABLE "ocpp"."connectors" DROP CONSTRAINT "connectors_org_id_fkey";
+
+-- DropForeignKey
+ALTER TABLE "ocpp"."connectors" DROP CONSTRAINT "connectors_ocpp_identity_id_fkey";
+
+-- DropForeignKey
+ALTER TABLE "charging"."sessions" DROP CONSTRAINT "sessions_charger_id_fkey";
+
+-- DropForeignKey
+ALTER TABLE "charging"."sessions" DROP CONSTRAINT "sessions_ocpp_identity_id_fkey";
+
+-- DropForeignKey
+ALTER TABLE "charging"."sessions" DROP CONSTRAINT "sessions_connector_id_fkey";
+
 -- DropIndex
 DROP INDEX "properties"."properties_org_id_host_id_idx";
 
--- AlterTable
-ALTER TABLE "assets"."chargers" ADD COLUMN     "chrgrf_tariff_id" UUID,
-ADD COLUMN     "circuit_id" UUID,
-ADD COLUMN     "owner_org_id" UUID;
+-- DropIndex
+DROP INDEX "ocpp"."ocpp_identities_org_id_charger_id_idx";
 
--- AlterTable
-ALTER TABLE "charging"."sessions" ADD COLUMN     "cost_ex_vat_minor" BIGINT,
-ADD COLUMN     "cost_inc_vat_minor" BIGINT;
+-- DropIndex
+DROP INDEX "charging"."sessions_charger_id_started_at_idx";
 
 -- AlterTable
 ALTER TABLE "identity"."users" ADD COLUMN     "kennitala" TEXT,
 ADD COLUMN     "locale" TEXT NOT NULL DEFAULT 'is',
 ADD COLUMN     "notes" TEXT,
 ADD COLUMN     "phone" TEXT;
-
--- AlterTable
-ALTER TABLE "properties"."installations" ADD COLUMN     "retailer_tariff_id" UUID;
-
--- AlterTable
-ALTER TABLE "properties"."properties" DROP COLUMN "host_id";
-
--- AlterTable
-ALTER TABLE "properties"."sites" ADD COLUMN     "dso_tariff_id" UUID,
-ADD COLUMN     "site_type" "properties"."SiteType" NOT NULL DEFAULT 'standard',
-ADD COLUMN     "spvivf_tariff_id" UUID,
-ADD COLUMN     "usrf_prem_tariff_id" UUID,
-ADD COLUMN     "usrf_tariff_id" UUID,
-ADD COLUMN     "xtrrf_tariff_id" UUID;
 
 -- AlterTable
 ALTER TABLE "tenancy"."organizations" ADD COLUMN     "addresses" JSONB NOT NULL DEFAULT '{}',
@@ -80,17 +93,195 @@ ADD COLUMN     "regulator_licence_no" TEXT,
 ADD COLUMN     "roles" "tenancy"."OrganizationRole"[] DEFAULT ARRAY[]::"tenancy"."OrganizationRole"[],
 ADD COLUMN     "vsk_nr" TEXT;
 
+-- AlterTable
+ALTER TABLE "properties"."properties" DROP COLUMN "host_id";
+
+-- AlterTable
+ALTER TABLE "properties"."sites" ADD COLUMN     "dso_tariff_id" UUID,
+ADD COLUMN     "site_type" "properties"."SiteType" NOT NULL DEFAULT 'standard',
+ADD COLUMN     "spvivf_tariff_id" UUID,
+ADD COLUMN     "usrf_prem_tariff_id" UUID,
+ADD COLUMN     "usrf_tariff_id" UUID,
+ADD COLUMN     "xtrrf_tariff_id" UUID;
+
+-- AlterTable
+ALTER TABLE "properties"."installations" ADD COLUMN     "retailer_tariff_id" UUID;
+
+-- AlterTable
+ALTER TABLE "ocpp"."ocpp_identities" DROP COLUMN "capabilities",
+DROP COLUMN "charger_id",
+DROP COLUMN "control_routing",
+ADD COLUMN     "charging_station_id" UUID NOT NULL;
+
+-- AlterTable
+ALTER TABLE "charging"."sessions" DROP COLUMN "charger_id",
+ADD COLUMN     "charging_station_id" UUID NOT NULL,
+ADD COLUMN     "cost_ex_vat_minor" BIGINT,
+ADD COLUMN     "cost_inc_vat_minor" BIGINT,
+ADD COLUMN     "evse_id" UUID NOT NULL,
+ALTER COLUMN "ocpp_identity_id" DROP NOT NULL,
+ALTER COLUMN "connector_id" DROP NOT NULL;
+
 -- DropTable
 DROP TABLE "hosts"."charger_hosts";
 
 -- DropTable
 DROP TABLE "hosts"."charger_service_plans";
 
--- DropEnum
-DROP TYPE "hosts"."HostStatus";
+-- DropTable
+DROP TABLE "assets"."chargers";
+
+-- DropTable
+DROP TABLE "ocpp"."connectors";
 
 -- DropEnum
 DROP TYPE "hosts"."HostType";
+
+-- DropEnum
+DROP TYPE "hosts"."HostStatus";
+
+-- CreateTable
+CREATE TABLE "assets"."charging_stations" (
+    "site_asset_id" UUID NOT NULL,
+    "org_id" UUID NOT NULL,
+    "model_id" UUID,
+    "installation_id" UUID,
+    "vendor" TEXT,
+    "model" TEXT,
+    "serial_number" TEXT,
+    "install_date" DATE,
+    "warranty_expires" DATE,
+    "firmware_version" TEXT,
+    "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(6) NOT NULL,
+    "circuit_id" UUID,
+    "owner_org_id" UUID,
+    "chrgrf_tariff_id" UUID,
+
+    CONSTRAINT "charging_stations_pkey" PRIMARY KEY ("site_asset_id")
+);
+
+-- CreateTable
+CREATE TABLE "assets"."evses" (
+    "id" UUID NOT NULL,
+    "org_id" UUID NOT NULL,
+    "charging_station_id" UUID NOT NULL,
+    "evse_index" INTEGER NOT NULL,
+    "max_power_kw" DECIMAL(8,2),
+    "phase_count" INTEGER,
+    "status" TEXT NOT NULL DEFAULT 'unknown',
+    "status_updated_at" TIMESTAMPTZ(6),
+    "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(6) NOT NULL,
+
+    CONSTRAINT "evses_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "assets"."connectors" (
+    "id" UUID NOT NULL,
+    "org_id" UUID NOT NULL,
+    "evse_id" UUID NOT NULL,
+    "connector_index" INTEGER NOT NULL,
+    "type" TEXT NOT NULL,
+    "max_power_kw" DECIMAL(8,2),
+    "status" TEXT NOT NULL DEFAULT 'unknown',
+    "status_updated_at" TIMESTAMPTZ(6),
+    "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(6) NOT NULL,
+
+    CONSTRAINT "connectors_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "assets"."capability_profiles" (
+    "id" UUID NOT NULL,
+    "org_id" UUID NOT NULL,
+    "charging_station_id" UUID NOT NULL,
+    "control_plane" TEXT NOT NULL,
+    "capabilities" JSONB NOT NULL,
+    "source" TEXT NOT NULL,
+    "observed_at" TIMESTAMPTZ(6),
+    "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(6) NOT NULL,
+
+    CONSTRAINT "capability_profiles_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "assets"."control_routing_policies" (
+    "id" UUID NOT NULL,
+    "org_id" UUID NOT NULL,
+    "charging_station_id" UUID NOT NULL,
+    "routing" JSONB NOT NULL,
+    "fallback_plane" TEXT,
+    "status" TEXT NOT NULL DEFAULT 'active',
+    "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(6) NOT NULL,
+
+    CONSTRAINT "control_routing_policies_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "charging"."protocol_transaction_refs" (
+    "id" UUID NOT NULL,
+    "org_id" UUID NOT NULL,
+    "session_id" UUID NOT NULL,
+    "source_kind" TEXT NOT NULL,
+    "source_id" TEXT NOT NULL,
+    "metadata" JSONB NOT NULL DEFAULT '{}',
+    "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "protocol_transaction_refs_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "charging"."imported_cdr_refs" (
+    "id" UUID NOT NULL,
+    "org_id" UUID NOT NULL,
+    "session_id" UUID NOT NULL,
+    "source_kind" TEXT NOT NULL,
+    "source_cdr_id" TEXT NOT NULL,
+    "imported_at" TIMESTAMPTZ(6) NOT NULL,
+    "raw_payload" JSONB,
+    "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "imported_cdr_refs_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "vendors"."vendor_asset_refs" (
+    "id" UUID NOT NULL,
+    "org_id" UUID NOT NULL,
+    "charging_station_id" UUID NOT NULL,
+    "vendor_slug" TEXT NOT NULL,
+    "vendor_asset_id" TEXT NOT NULL,
+    "credentials_ref" TEXT,
+    "capabilities" JSONB NOT NULL DEFAULT '{}',
+    "status" TEXT NOT NULL DEFAULT 'pending',
+    "last_synced_at" TIMESTAMPTZ(6),
+    "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(6) NOT NULL,
+
+    CONSTRAINT "vendor_asset_refs_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "roaming"."external_cpms_refs" (
+    "id" UUID NOT NULL,
+    "org_id" UUID NOT NULL,
+    "charging_station_id" UUID NOT NULL,
+    "external_cpms_slug" TEXT NOT NULL,
+    "external_asset_id" TEXT NOT NULL,
+    "import_mode" TEXT NOT NULL,
+    "credentials_ref" TEXT,
+    "status" TEXT NOT NULL DEFAULT 'pending',
+    "last_imported_at" TIMESTAMPTZ(6),
+    "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(6) NOT NULL,
+
+    CONSTRAINT "external_cpms_refs_pkey" PRIMARY KEY ("id")
+);
 
 -- CreateTable
 CREATE TABLE "identity"."platform_admins" (
@@ -290,6 +481,60 @@ CREATE TABLE "billing"."billing_lines" (
 );
 
 -- CreateIndex
+CREATE INDEX "charging_stations_model_id_idx" ON "assets"."charging_stations"("model_id");
+
+-- CreateIndex
+CREATE INDEX "charging_stations_installation_id_idx" ON "assets"."charging_stations"("installation_id");
+
+-- CreateIndex
+CREATE INDEX "charging_stations_circuit_id_idx" ON "assets"."charging_stations"("circuit_id");
+
+-- CreateIndex
+CREATE INDEX "charging_stations_owner_org_id_idx" ON "assets"."charging_stations"("owner_org_id");
+
+-- CreateIndex
+CREATE INDEX "evses_org_id_status_idx" ON "assets"."evses"("org_id", "status");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "evses_charging_station_id_evse_index_key" ON "assets"."evses"("charging_station_id", "evse_index");
+
+-- CreateIndex
+CREATE INDEX "connectors_org_id_idx" ON "assets"."connectors"("org_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "connectors_evse_id_connector_index_key" ON "assets"."connectors"("evse_id", "connector_index");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "capability_profiles_charging_station_id_control_plane_key" ON "assets"."capability_profiles"("charging_station_id", "control_plane");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "control_routing_policies_charging_station_id_key" ON "assets"."control_routing_policies"("charging_station_id");
+
+-- CreateIndex
+CREATE INDEX "protocol_transaction_refs_session_id_idx" ON "charging"."protocol_transaction_refs"("session_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "protocol_transaction_refs_source_kind_source_id_key" ON "charging"."protocol_transaction_refs"("source_kind", "source_id");
+
+-- CreateIndex
+CREATE INDEX "imported_cdr_refs_session_id_idx" ON "charging"."imported_cdr_refs"("session_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "imported_cdr_refs_source_kind_source_cdr_id_key" ON "charging"."imported_cdr_refs"("source_kind", "source_cdr_id");
+
+-- CreateIndex
+CREATE INDEX "vendor_asset_refs_org_id_vendor_slug_idx" ON "vendors"."vendor_asset_refs"("org_id", "vendor_slug");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "vendor_asset_refs_vendor_slug_vendor_asset_id_key" ON "vendors"."vendor_asset_refs"("vendor_slug", "vendor_asset_id");
+
+-- CreateIndex
+CREATE INDEX "external_cpms_refs_org_id_idx" ON "roaming"."external_cpms_refs"("org_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "external_cpms_refs_external_cpms_slug_external_asset_id_key" ON "roaming"."external_cpms_refs"("external_cpms_slug", "external_asset_id");
+
+-- CreateIndex
 CREATE INDEX "circuits_org_id_site_id_idx" ON "properties"."circuits"("org_id", "site_id");
 
 -- CreateIndex
@@ -338,19 +583,19 @@ CREATE INDEX "billing_lines_org_id_session_id_idx" ON "billing"."billing_lines"(
 CREATE INDEX "billing_lines_cost_center_id_created_at_idx" ON "billing"."billing_lines"("cost_center_id", "created_at" DESC);
 
 -- CreateIndex
-CREATE INDEX "chargers_circuit_id_idx" ON "assets"."chargers"("circuit_id");
-
--- CreateIndex
-CREATE INDEX "chargers_owner_org_id_idx" ON "assets"."chargers"("owner_org_id");
-
--- CreateIndex
 CREATE UNIQUE INDEX "users_kennitala_key" ON "identity"."users"("kennitala");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "organizations_kennitala_key" ON "tenancy"."organizations"("kennitala");
 
 -- CreateIndex
 CREATE INDEX "properties_org_id_idx" ON "properties"."properties"("org_id");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "organizations_kennitala_key" ON "tenancy"."organizations"("kennitala");
+CREATE INDEX "ocpp_identities_org_id_charging_station_id_idx" ON "ocpp"."ocpp_identities"("org_id", "charging_station_id");
+
+-- CreateIndex
+CREATE INDEX "sessions_evse_id_started_at_idx" ON "charging"."sessions"("evse_id", "started_at" DESC);
 
 -- AddForeignKey
 ALTER TABLE "properties"."sites" ADD CONSTRAINT "sites_dso_tariff_id_fkey" FOREIGN KEY ("dso_tariff_id") REFERENCES "billing"."tariff_definitions"("id") ON DELETE SET NULL ON UPDATE CASCADE;
@@ -371,13 +616,88 @@ ALTER TABLE "properties"."sites" ADD CONSTRAINT "sites_spvivf_tariff_id_fkey" FO
 ALTER TABLE "properties"."installations" ADD CONSTRAINT "installations_retailer_tariff_id_fkey" FOREIGN KEY ("retailer_tariff_id") REFERENCES "billing"."tariff_definitions"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "assets"."chargers" ADD CONSTRAINT "chargers_circuit_id_fkey" FOREIGN KEY ("circuit_id") REFERENCES "properties"."circuits"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "assets"."charging_stations" ADD CONSTRAINT "charging_stations_site_asset_id_fkey" FOREIGN KEY ("site_asset_id") REFERENCES "properties"."site_assets"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "assets"."chargers" ADD CONSTRAINT "chargers_owner_org_id_fkey" FOREIGN KEY ("owner_org_id") REFERENCES "tenancy"."organizations"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "assets"."charging_stations" ADD CONSTRAINT "charging_stations_org_id_fkey" FOREIGN KEY ("org_id") REFERENCES "tenancy"."organizations"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "assets"."chargers" ADD CONSTRAINT "chargers_chrgrf_tariff_id_fkey" FOREIGN KEY ("chrgrf_tariff_id") REFERENCES "billing"."tariff_definitions"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "assets"."charging_stations" ADD CONSTRAINT "charging_stations_model_id_fkey" FOREIGN KEY ("model_id") REFERENCES "hardware"."models"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assets"."charging_stations" ADD CONSTRAINT "charging_stations_installation_id_fkey" FOREIGN KEY ("installation_id") REFERENCES "properties"."installations"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assets"."charging_stations" ADD CONSTRAINT "charging_stations_circuit_id_fkey" FOREIGN KEY ("circuit_id") REFERENCES "properties"."circuits"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assets"."charging_stations" ADD CONSTRAINT "charging_stations_owner_org_id_fkey" FOREIGN KEY ("owner_org_id") REFERENCES "tenancy"."organizations"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assets"."charging_stations" ADD CONSTRAINT "charging_stations_chrgrf_tariff_id_fkey" FOREIGN KEY ("chrgrf_tariff_id") REFERENCES "billing"."tariff_definitions"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assets"."evses" ADD CONSTRAINT "evses_org_id_fkey" FOREIGN KEY ("org_id") REFERENCES "tenancy"."organizations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assets"."evses" ADD CONSTRAINT "evses_charging_station_id_fkey" FOREIGN KEY ("charging_station_id") REFERENCES "assets"."charging_stations"("site_asset_id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assets"."connectors" ADD CONSTRAINT "connectors_org_id_fkey" FOREIGN KEY ("org_id") REFERENCES "tenancy"."organizations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assets"."connectors" ADD CONSTRAINT "connectors_evse_id_fkey" FOREIGN KEY ("evse_id") REFERENCES "assets"."evses"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assets"."capability_profiles" ADD CONSTRAINT "capability_profiles_org_id_fkey" FOREIGN KEY ("org_id") REFERENCES "tenancy"."organizations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assets"."capability_profiles" ADD CONSTRAINT "capability_profiles_charging_station_id_fkey" FOREIGN KEY ("charging_station_id") REFERENCES "assets"."charging_stations"("site_asset_id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assets"."control_routing_policies" ADD CONSTRAINT "control_routing_policies_org_id_fkey" FOREIGN KEY ("org_id") REFERENCES "tenancy"."organizations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assets"."control_routing_policies" ADD CONSTRAINT "control_routing_policies_charging_station_id_fkey" FOREIGN KEY ("charging_station_id") REFERENCES "assets"."charging_stations"("site_asset_id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ocpp"."ocpp_identities" ADD CONSTRAINT "ocpp_identities_charging_station_id_fkey" FOREIGN KEY ("charging_station_id") REFERENCES "assets"."charging_stations"("site_asset_id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "charging"."sessions" ADD CONSTRAINT "sessions_charging_station_id_fkey" FOREIGN KEY ("charging_station_id") REFERENCES "assets"."charging_stations"("site_asset_id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "charging"."sessions" ADD CONSTRAINT "sessions_evse_id_fkey" FOREIGN KEY ("evse_id") REFERENCES "assets"."evses"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "charging"."sessions" ADD CONSTRAINT "sessions_connector_id_fkey" FOREIGN KEY ("connector_id") REFERENCES "assets"."connectors"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "charging"."sessions" ADD CONSTRAINT "sessions_ocpp_identity_id_fkey" FOREIGN KEY ("ocpp_identity_id") REFERENCES "ocpp"."ocpp_identities"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "charging"."protocol_transaction_refs" ADD CONSTRAINT "protocol_transaction_refs_org_id_fkey" FOREIGN KEY ("org_id") REFERENCES "tenancy"."organizations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "charging"."protocol_transaction_refs" ADD CONSTRAINT "protocol_transaction_refs_session_id_fkey" FOREIGN KEY ("session_id") REFERENCES "charging"."sessions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "charging"."imported_cdr_refs" ADD CONSTRAINT "imported_cdr_refs_org_id_fkey" FOREIGN KEY ("org_id") REFERENCES "tenancy"."organizations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "charging"."imported_cdr_refs" ADD CONSTRAINT "imported_cdr_refs_session_id_fkey" FOREIGN KEY ("session_id") REFERENCES "charging"."sessions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "vendors"."vendor_asset_refs" ADD CONSTRAINT "vendor_asset_refs_org_id_fkey" FOREIGN KEY ("org_id") REFERENCES "tenancy"."organizations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "vendors"."vendor_asset_refs" ADD CONSTRAINT "vendor_asset_refs_charging_station_id_fkey" FOREIGN KEY ("charging_station_id") REFERENCES "assets"."charging_stations"("site_asset_id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "roaming"."external_cpms_refs" ADD CONSTRAINT "external_cpms_refs_org_id_fkey" FOREIGN KEY ("org_id") REFERENCES "tenancy"."organizations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "roaming"."external_cpms_refs" ADD CONSTRAINT "external_cpms_refs_charging_station_id_fkey" FOREIGN KEY ("charging_station_id") REFERENCES "assets"."charging_stations"("site_asset_id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "identity"."platform_admins" ADD CONSTRAINT "platform_admins_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "identity"."users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -480,4 +800,3 @@ ALTER TABLE "billing"."billing_lines" ADD CONSTRAINT "billing_lines_cost_factor_
 
 -- AddForeignKey
 ALTER TABLE "billing"."billing_lines" ADD CONSTRAINT "billing_lines_cost_center_id_fkey" FOREIGN KEY ("cost_center_id") REFERENCES "billing"."cost_centers"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-

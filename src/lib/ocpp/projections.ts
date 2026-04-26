@@ -98,31 +98,42 @@ const onSessionStarted: ProjectionHandler = async (tx, event) => {
   const meterStartWh = numberField(event.payload, "meterStartWh");
   if (!connectorId) throw new Error("session.started payload missing connectorId");
 
+  // ADR 0012: connector anchors on EVSE; resolve station + identity via
+  // EVSE -> ChargingStation chain and look up the OCPP identity that
+  // posted this event by station.
   const connector = await tx.connector.findUnique({
     where: { id: connectorId },
     select: {
       orgId: true,
-      ocppIdentityId: true,
-      ocppIdentity: {
+      evseId: true,
+      evse: {
         select: {
-          chargerId: true,
-          charger: { select: { siteAsset: { select: { siteId: true } } } },
+          chargingStationId: true,
+          chargingStation: {
+            select: {
+              siteAsset: { select: { siteId: true } },
+              ocppIdentities: { select: { id: true }, take: 1 },
+            },
+          },
         },
       },
     },
   });
   if (!connector) throw new Error(`session.started: connector ${connectorId} not found`);
 
-  const siteId = connector.ocppIdentity.charger.siteAsset.siteId;
-  const chargerId = connector.ocppIdentity.chargerId;
+  const siteId = connector.evse.chargingStation.siteAsset.siteId;
+  const chargingStationId = connector.evse.chargingStationId;
+  const ocppIdentityId =
+    connector.evse.chargingStation.ocppIdentities[0]?.id ?? null;
 
   await tx.chargeSession.create({
     data: {
       id: event.aggregateId,
       orgId: event.orgId,
       siteId,
-      chargerId,
-      ocppIdentityId: connector.ocppIdentityId,
+      chargingStationId,
+      evseId: connector.evseId,
+      ocppIdentityId,
       connectorId,
       idTag: idTag ?? null,
       startedAt: new Date(event.occurredAt),

@@ -58,13 +58,22 @@ export async function POST(
     select: {
       id: true,
       orgId: true,
-      connectors: { where: { id: parsed.data.connectorId }, select: { id: true } },
+      chargingStationId: true,
     },
   });
   if (!identity) {
     return NextResponse.json({ error: "ocpp identity not found" }, { status: 404 });
   }
-  if (identity.connectors.length === 0) {
+  // Connector now anchors on EVSE not OcppIdentity (ADR 0012). Verify the
+  // requested connector is on the same charging station as this identity.
+  const connector = await prisma().connector.findFirst({
+    where: {
+      id: parsed.data.connectorId,
+      evse: { chargingStationId: identity.chargingStationId },
+    },
+    select: { id: true },
+  });
+  if (!connector) {
     return NextResponse.json(
       { error: "connector does not belong to this ocpp identity" },
       { status: 400 },

@@ -28,6 +28,7 @@ const CONNECTOR = "33333333-3333-3333-3333-333333333333";
 const CHARGER = "44444444-4444-4444-4444-444444444444";
 const SITE = "55555555-5555-5555-5555-555555555555";
 const SESSION = "66666666-6666-6666-6666-666666666666";
+const EVSE = "77777777-7777-7777-7777-777777777777";
 
 type MockTx = ReturnType<typeof makeTx>;
 
@@ -46,10 +47,13 @@ function makeTx() {
     connector: {
       findUnique: vi.fn(async () => ({
         orgId: ORG,
-        ocppIdentityId: IDENTITY,
-        ocppIdentity: {
-          chargerId: CHARGER,
-          charger: { siteAsset: { siteId: SITE } },
+        evseId: EVSE,
+        evse: {
+          chargingStationId: CHARGER,
+          chargingStation: {
+            siteAsset: { siteId: SITE },
+            ocppIdentities: [{ id: IDENTITY }],
+          },
         },
       })),
       update: vi.fn(async (args: unknown) => args),
@@ -134,10 +138,11 @@ describe("projections — per-event handlers", () => {
     }));
     expect(tx.connector.findUnique).toHaveBeenCalledOnce();
     expect(tx.chargeSession.create).toHaveBeenCalledOnce();
-    const call = tx.chargeSession.create.mock.calls[0][0] as { data: { id: string; siteId: string; chargerId: string; ocppIdentityId: string; connectorId: string; status: string } };
+    const call = tx.chargeSession.create.mock.calls[0][0] as { data: { id: string; siteId: string; chargingStationId: string; evseId: string; ocppIdentityId: string | null; connectorId: string; status: string } };
     expect(call.data.id).toBe(SESSION);
     expect(call.data.siteId).toBe(SITE);
-    expect(call.data.chargerId).toBe(CHARGER);
+    expect(call.data.chargingStationId).toBe(CHARGER);
+    expect(call.data.evseId).toBe(EVSE);
     expect(call.data.ocppIdentityId).toBe(IDENTITY);
     expect(call.data.connectorId).toBe(CONNECTOR);
     expect(call.data.status).toBe("in_progress");
