@@ -21,7 +21,6 @@ import {
   ChevronsUpDown,
   Network,
   Briefcase,
-  Users,
   UserCog,
   PlusCircle,
   Wallet,
@@ -56,51 +55,51 @@ const nav: NavItem[] = [
   {
     kind: "leaf",
     href: "/dashboard",
-    label: { is: "Mælaborð", en: "Dashboard" },
+    label: { is: "Dashboard", en: "Dashboard" },
     icon: LayoutDashboard,
   },
   {
     kind: "group",
-    basePath: "/onboard",
-    label: { is: "Onboard", en: "Onboard" },
-    icon: PlusCircle,
+    basePath: "/sites",
+    label: { is: "Operations", en: "Operations" },
+    icon: MapPin,
     children: [
       {
         kind: "leaf",
-        href: "/onboard",
-        label: { is: "Test chain (utility)", en: "Test chain (utility)" },
-        icon: PlusCircle,
+        href: "/sites",
+        label: { is: "Sites", en: "Sites" },
+        icon: MapPin,
       },
       {
         kind: "leaf",
-        href: "/onboard/zaptec",
-        label: { is: "Zaptec wizard", en: "Zaptec wizard" },
+        href: "/installations",
+        label: { is: "Installations", en: "Installations" },
+        icon: Plug,
+      },
+      {
+        kind: "leaf",
+        href: "/circuits",
+        label: { is: "Circuits", en: "Circuits" },
+        icon: Cable,
+      },
+      {
+        kind: "leaf",
+        href: "/chargers",
+        label: { is: "Chargers", en: "Chargers" },
         icon: Zap,
       },
     ],
   },
   {
-    kind: "leaf",
-    href: "/mobile-app",
-    label: { is: "Snjalltæki", en: "Mobile App" },
-    icon: Smartphone,
-  },
-  {
-    kind: "leaf",
-    href: "/technical-read",
-    label: { is: "Tæknilegur lestur", en: "Technical Read" },
-    icon: Wrench,
-  },
-  {
     kind: "group",
     basePath: "/tenants",
-    label: { is: "Leigjendur", en: "Tenants" },
+    label: { is: "Tenants", en: "Tenants" },
     icon: Briefcase,
     children: [
       {
         kind: "leaf",
         href: "/tenants/organizations",
-        label: { is: "Skipulagsheildir", en: "Organizations" },
+        label: { is: "Organizations", en: "Organizations" },
         icon: Network,
       },
       {
@@ -108,6 +107,12 @@ const nav: NavItem[] = [
         href: "/tenants/properties",
         label: { is: "Properties", en: "Properties" },
         icon: Building2,
+      },
+      {
+        kind: "leaf",
+        href: "/people/users",
+        label: { is: "Users", en: "Users" },
+        icon: UserCog,
       },
     ],
   },
@@ -151,54 +156,28 @@ const nav: NavItem[] = [
   },
   {
     kind: "group",
-    basePath: "/sites",
-    label: { is: "Operations", en: "Operations" },
-    icon: MapPin,
+    basePath: "/onboard",
+    label: { is: "Onboard", en: "Onboard" },
+    icon: PlusCircle,
     children: [
       {
         kind: "leaf",
-        href: "/sites",
-        label: { is: "Sites", en: "Sites" },
-        icon: MapPin,
+        href: "/onboard",
+        label: { is: "Test chain (utility)", en: "Test chain (utility)" },
+        icon: PlusCircle,
       },
       {
         kind: "leaf",
-        href: "/installations",
-        label: { is: "Installations", en: "Installations" },
-        icon: Plug,
-      },
-      {
-        kind: "leaf",
-        href: "/circuits",
-        label: { is: "Circuits", en: "Circuits" },
-        icon: Cable,
-      },
-      {
-        kind: "leaf",
-        href: "/chargers",
-        label: { is: "Chargers", en: "Chargers" },
+        href: "/onboard/zaptec",
+        label: { is: "Zaptec wizard", en: "Zaptec wizard" },
         icon: Zap,
       },
     ],
   },
   {
     kind: "group",
-    basePath: "/people",
-    label: { is: "Fólk", en: "People" },
-    icon: Users,
-    children: [
-      {
-        kind: "leaf",
-        href: "/people/users",
-        label: { is: "Notendur", en: "Users" },
-        icon: UserCog,
-      },
-    ],
-  },
-  {
-    kind: "group",
     basePath: "/reference",
-    label: { is: "Tilvísanir", en: "Reference" },
+    label: { is: "Reference", en: "Reference" },
     icon: BookOpen,
     children: [
       {
@@ -260,6 +239,18 @@ const nav: NavItem[] = [
         ],
       },
     ],
+  },
+  {
+    kind: "leaf",
+    href: "/mobile-app",
+    label: { is: "Mobile App", en: "Mobile App" },
+    icon: Smartphone,
+  },
+  {
+    kind: "leaf",
+    href: "/technical-read",
+    label: { is: "Technical Read", en: "Technical Read" },
+    icon: Wrench,
   },
 ];
 
