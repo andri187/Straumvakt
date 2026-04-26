@@ -1,3 +1,4 @@
+import { SectionTabs, ONBOARD_TABS } from "@/components/section-tabs";
 import { OnboardForm } from "./onboard-form";
 
 export const metadata = {
@@ -7,6 +8,7 @@ export const metadata = {
 export default function OnboardPage() {
   return (
     <div className="mx-auto max-w-4xl px-6 py-8">
+      <SectionTabs tabs={ONBOARD_TABS} />
       <header className="mb-6">
         <h1 className="text-2xl font-semibold text-ink-50">
           Onboard test chain

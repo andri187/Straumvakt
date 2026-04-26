@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
+import { SectionTabs, REFERENCE_TABS } from "@/components/section-tabs";
 import { adminSessionConfig, verifyAdminSession } from "@/lib/admin-session";
 
 export const metadata = { title: "Zaptec API" };
@@ -85,6 +86,7 @@ export default async function ZaptecPage() {
         title="Zaptec API & OCPP"
         description="Static reference of Zaptec's REST API surface plus OCPP 1.6J integration notes. Live data lands when the Zaptec vendor adapter ships in Sprint 2.7. Real diagnostics against this surface are visible under Technical Read (iframe of zaptec-test on :3100)."
       >
+        <SectionTabs tabs={REFERENCE_TABS} />
         {!synced ? (
           <div className="rounded-lg border border-bg-border bg-bg-surface/70 p-6 shadow-card backdrop-blur">
             <h2 className="text-sm font-semibold text-ink-50">Assets not synced yet</h2>

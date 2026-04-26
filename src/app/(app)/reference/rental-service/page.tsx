@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
+import { SectionTabs, REFERENCE_TABS } from "@/components/section-tabs";
 import { adminSessionConfig, verifyAdminSession } from "@/lib/admin-session";
 import { filterByRole, loadCatalogue } from "@/lib/reference/iceland-parties";
 import {
@@ -25,6 +26,7 @@ export default async function RentalServicePage() {
         title="Rental Service — Charger leasing operators"
         description="Operators who lease/sell charger hardware (home, MDU, workplace) — distinct from public CPOs. The CHRGRF cost factor anchors at the Charger and routes to the rental beneficiary via owner_org_id. Filtered from docs/reference/iceland-energy-parties.json (role=home_charging)."
       >
+        <SectionTabs tabs={REFERENCE_TABS} />
         {!cat ? (
           <CatalogueMissingNotice />
         ) : (

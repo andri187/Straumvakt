@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
+import { SectionTabs, REFERENCE_TABS } from "@/components/section-tabs";
 import { adminSessionConfig, verifyAdminSession } from "@/lib/admin-session";
 import { filterByRole, loadCatalogue } from "@/lib/reference/iceland-parties";
 import {
@@ -25,6 +26,7 @@ export default async function PublicChargingPage() {
         title="Public Charging — Icelandic CPOs"
         description="Public charging operators (CPOs) Straumvakt cares about for OCPI roaming and competitive context. Filtered from docs/reference/iceland-energy-parties.json (role=public_charging)."
       >
+        <SectionTabs tabs={REFERENCE_TABS} />
         {!cat ? (
           <CatalogueMissingNotice />
         ) : (

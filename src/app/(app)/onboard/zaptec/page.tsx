@@ -1,3 +1,4 @@
+import { SectionTabs, ONBOARD_TABS } from "@/components/section-tabs";
 import { ZaptecWizardForm } from "./wizard-form";
 import { listOrgs } from "@/lib/repositories/organizations";
 
@@ -10,6 +11,7 @@ export default async function ZaptecOnboardPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-8">
+      <SectionTabs tabs={ONBOARD_TABS} />
       <header className="mb-6">
         <h1 className="text-2xl font-semibold text-ink-50">Zaptec onboarding</h1>
         <p className="mt-1 text-sm text-ink-400">

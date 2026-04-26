@@ -61,6 +61,21 @@ export const TENANTS_TABS: SectionTab[] = [
   { href: "/people/users", label: "Users" },
 ];
 
+export const ONBOARD_TABS: SectionTab[] = [
+  { href: "/onboard", label: "Test chain", exact: true },
+  { href: "/onboard/zaptec", label: "Zaptec wizard" },
+];
+
+export const REFERENCE_TABS: SectionTab[] = [
+  { href: "/reference/electricity/dso", label: "DSO" },
+  { href: "/reference/electricity/retailers", label: "Retailers" },
+  { href: "/reference/electricity/tso", label: "TSO" },
+  { href: "/reference/public-charging", label: "Public charging" },
+  { href: "/reference/rental-service", label: "Rental" },
+  { href: "/reference/zaptec-api", label: "Zaptec API" },
+  { href: "/reference/easee-api", label: "Easee API" },
+];
+
 export const CHARGERS_TABS: SectionTab[] = [
   { href: "/chargers", label: "Onboarded", exact: true },
   { href: "/chargers/pending", label: "Pending onboarding" },

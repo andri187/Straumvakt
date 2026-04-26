@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
+import { SectionTabs, REFERENCE_TABS } from "@/components/section-tabs";
 import { adminSessionConfig, verifyAdminSession } from "@/lib/admin-session";
 import { filterByRole, loadCatalogue } from "@/lib/reference/iceland-parties";
 import {
@@ -25,6 +26,7 @@ export default async function TsoPage() {
         title="TSO — Landsnet"
         description="Iceland's transmission system operator. Single national TSO. No direct cost factor in pilot — Landsnet wholesale charges flow upstream to the DSO bill. Filtered from docs/reference/iceland-energy-parties.json (role=tso)."
       >
+        <SectionTabs tabs={REFERENCE_TABS} />
         {!cat ? (
           <CatalogueMissingNotice />
         ) : (

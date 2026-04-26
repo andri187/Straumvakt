@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
+import { SectionTabs, REFERENCE_TABS } from "@/components/section-tabs";
 import { adminSessionConfig, verifyAdminSession } from "@/lib/admin-session";
 import { filterByRole, loadCatalogue } from "@/lib/reference/iceland-parties";
 import {
@@ -25,6 +26,7 @@ export default async function DsoPage() {
         title="DSO — Distribution System Operators"
         description="Icelandic dreifiveitur. The DSOF cost factor anchors at the site level — one site, one DSO. Filtered from docs/reference/iceland-energy-parties.json (role=dso)."
       >
+        <SectionTabs tabs={REFERENCE_TABS} />
         {!cat ? (
           <CatalogueMissingNotice />
         ) : (

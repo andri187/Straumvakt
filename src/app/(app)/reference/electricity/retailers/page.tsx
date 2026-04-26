@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
+import { SectionTabs, REFERENCE_TABS } from "@/components/section-tabs";
 import { adminSessionConfig, verifyAdminSession } from "@/lib/admin-session";
 import { filterByRole, loadCatalogue } from "@/lib/reference/iceland-parties";
 import {
@@ -25,6 +26,7 @@ export default async function RetailersPage() {
         title="Electricity — Retailers"
         description="Icelandic söluaðilar. The REPF cost factor anchors at the installation level — siblings on the same site can be on different retailers. Filtered from docs/reference/iceland-energy-parties.json (role=retailer)."
       >
+        <SectionTabs tabs={REFERENCE_TABS} />
         {!cat ? (
           <CatalogueMissingNotice />
         ) : (

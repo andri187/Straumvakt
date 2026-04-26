@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
+import { SectionTabs, REFERENCE_TABS } from "@/components/section-tabs";
 import { adminSessionConfig, verifyAdminSession } from "@/lib/admin-session";
 
 export const metadata = { title: "Easee API" };
@@ -140,6 +141,7 @@ export default async function EaseeApiPage() {
         title="Easee API & OCPP"
         description="Easee Cloud API surface + OCPP 1.6J + 2.0.1 support. Sibling to the Zaptec adapter — no live data yet (Sprint 2.7 ships Zaptec first; Easee follows). Curated reference below mirrors the structure /reference/zaptec-api will use once an Easee OpenAPI snapshot is vendored."
       >
+        <SectionTabs tabs={REFERENCE_TABS} />
         <div className="grid gap-4">
           {/* Status banner */}
           <section className="rounded-lg border border-amber-700/40 bg-amber-950/20 p-5 shadow-card backdrop-blur">
