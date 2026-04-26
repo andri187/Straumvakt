@@ -64,8 +64,9 @@ operator during this session.
   `OCPP_ADMIN_SECRET`.
 
 `ADMIN_PASSWORD` was set to a value the operator typed in chat
-(`TMTNTPower123456!`). Should be rotated post-first-use because the
-plaintext touched chat history.
+(redacted from this file 2026-04-25 — value rotated; see
+"Outstanding cleanup" §1 below). Should be rotated post-first-use
+because the plaintext touched chat history.
 
 **`straumvakt-ocpp-staging`** (1 entry):
 - `OCPP_INGEST_SECRET` — same value as on `hlada-staging` (set from
