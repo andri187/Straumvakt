@@ -1,0 +1,379 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2000 1620" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0a1628"/>
+      <stop offset="100%" stop-color="#06101e"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0f1f3a" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#0a1628" stop-opacity="0.2"/>
+    </linearGradient>
+    <linearGradient id="teal-fill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0d2a32"/>
+      <stop offset="100%" stop-color="#0a1f26"/>
+    </linearGradient>
+    <marker id="ar-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#3b82f6" opacity="0.7"/>
+    </marker>
+    <marker id="ar-teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2dd4bf" opacity="0.7"/>
+    </marker>
+    <marker id="ar-mint" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#8EF5C7" opacity="0.7"/>
+    </marker>
+  </defs>
+
+  <rect width="2000" height="1620" fill="url(#bg)"/>
+
+  <!-- Header -->
+  <text x="1000" y="58" text-anchor="middle" font-size="11" font-weight="600" fill="#3b82f6" letter-spacing="6">STRAUMVAKT</text>
+  <text x="1000" y="92" text-anchor="middle" font-size="26" font-weight="500" fill="#f8fafc" letter-spacing="-0.3">Data Model — V3 Schema Map</text>
+  <text x="1000" y="118" text-anchor="middle" font-size="13" font-weight="300" fill="#64748b">18 Postgres namespaces · ~50 tables · org_id is the spine · ● = rows actually being written today</text>
+  <line x1="60" y1="148" x2="1940" y2="148" stroke="#1e3a5f" stroke-width="1" opacity="0.4"/>
+
+  <!-- ================================================================ -->
+  <!-- LEFT COLUMN — PEOPLE & TENANT  (x 60..640)                       -->
+  <!-- ================================================================ -->
+
+  <text x="80" y="180" font-size="10" font-weight="700" fill="#8EF5C7" letter-spacing="3">PEOPLE &amp; TENANT</text>
+
+  <!-- tenancy -->
+  <rect x="80" y="200" width="540" height="140" rx="8" fill="url(#teal-fill)" stroke="#2dd4bf" stroke-width="1.2"/>
+  <text x="100" y="226" font-size="11" font-weight="700" fill="#2dd4bf" letter-spacing="2">tenancy</text>
+  <text x="600" y="226" text-anchor="end" font-size="9" font-weight="500" fill="#3ee9a7" letter-spacing="2">● LIVE</text>
+  <text x="100" y="242" font-size="9" font-weight="300" fill="#64748b">SaaS tenant + role memberships · the org_id spine</text>
+  <g font-size="11" font-family="monospace" fill="#f8fafc">
+    <text x="100" y="266">organizations</text>
+    <text x="380" y="266" font-size="9" fill="#94a3b8">id, slug, display_name, country_code, status</text>
+    <text x="100" y="290">memberships</text>
+    <text x="380" y="290" font-size="9" fill="#94a3b8">(org_id, user_id) PK · role enum (7 roles)</text>
+  </g>
+  <text x="100" y="318" font-size="9" font-style="italic" fill="#475569">enums: OrgStatus, MembershipRole {owner, admin, operator, helper, contractor, driver, viewer}</text>
+
+  <!-- identity -->
+  <rect x="80" y="360" width="540" height="120" rx="8" fill="url(#teal-fill)" stroke="#2dd4bf" stroke-width="1.2"/>
+  <text x="100" y="386" font-size="11" font-weight="700" fill="#2dd4bf" letter-spacing="2">identity</text>
+  <text x="600" y="386" text-anchor="end" font-size="9" font-weight="500" fill="#3ee9a7" letter-spacing="2">● LIVE</text>
+  <text x="100" y="402" font-size="9" font-weight="300" fill="#64748b">users + credentials (HMAC session uses env, not these rows yet)</text>
+  <g font-size="11" font-family="monospace" fill="#f8fafc">
+    <text x="100" y="426">users</text>
+    <text x="380" y="426" font-size="9" fill="#94a3b8">id, email (citext), display_name, status</text>
+    <text x="100" y="450">user_credentials</text>
+    <text x="380" y="450" font-size="9" fill="#94a3b8">user_id PK · password_hash, totp_secret</text>
+  </g>
+
+  <!-- people -->
+  <rect x="80" y="500" width="540" height="120" rx="8" fill="url(#panel)" stroke="#1e3a5f" stroke-width="1"/>
+  <text x="100" y="526" font-size="11" font-weight="700" fill="#3b82f6" letter-spacing="2">people</text>
+  <text x="100" y="542" font-size="9" font-weight="300" fill="#64748b">family groups for AC user-based pricing (driver+family share one bill)</text>
+  <g font-size="11" font-family="monospace" fill="#f8fafc">
+    <text x="100" y="566">family_groups</text>
+    <text x="380" y="566" font-size="9" fill="#94a3b8">id, primary_user_id, display_name</text>
+    <text x="100" y="590">family_memberships</text>
+    <text x="380" y="590" font-size="9" fill="#94a3b8">(group_id, user_id) PK · member_kind</text>
+  </g>
+
+  <!-- entitlements -->
+  <rect x="80" y="640" width="540" height="120" rx="8" fill="url(#panel)" stroke="#1e3a5f" stroke-width="1"/>
+  <text x="100" y="666" font-size="11" font-weight="700" fill="#3b82f6" letter-spacing="2">entitlements</text>
+  <text x="100" y="682" font-size="9" font-weight="300" fill="#64748b">capability ≠ permission · feature flags + license tier</text>
+  <g font-size="11" font-family="monospace" fill="#f8fafc">
+    <text x="100" y="706">feature_flags</text>
+    <text x="380" y="706" font-size="9" fill="#94a3b8">scope_type/scope_id, source, valid_from</text>
+    <text x="100" y="730">enterprise_licenses</text>
+    <text x="380" y="730" font-size="9" fill="#94a3b8">tier, api_fair_use jsonb, features text[]</text>
+  </g>
+
+  <!-- audit -->
+  <rect x="80" y="780" width="540" height="100" rx="8" fill="url(#panel)" stroke="#1e3a5f" stroke-width="1"/>
+  <text x="100" y="806" font-size="11" font-weight="700" fill="#3b82f6" letter-spacing="2">audit</text>
+  <text x="100" y="822" font-size="9" font-weight="300" fill="#64748b">actor-did-what (distinct from event_log which is what-happened)</text>
+  <g font-size="11" font-family="monospace" fill="#f8fafc">
+    <text x="100" y="846">actions</text>
+    <text x="380" y="846" font-size="9" fill="#94a3b8">actor_user_id, actor_kind, action, target</text>
+  </g>
+
+  <!-- ================================================================ -->
+  <!-- CENTER COLUMN — PHYSICAL / HARDWARE  (x 680..1320)               -->
+  <!-- ================================================================ -->
+
+  <text x="700" y="180" font-size="10" font-weight="700" fill="#8EF5C7" letter-spacing="3">PHYSICAL &amp; HARDWARE</text>
+
+  <!-- hosts -->
+  <rect x="700" y="200" width="600" height="140" rx="8" fill="url(#panel)" stroke="#1e3a5f" stroke-width="1"/>
+  <text x="720" y="226" font-size="11" font-weight="700" fill="#3b82f6" letter-spacing="2">hosts</text>
+  <text x="720" y="242" font-size="9" font-weight="300" fill="#64748b">the business at the site + its contract with the SP</text>
+  <g font-size="11" font-family="monospace" fill="#f8fafc">
+    <text x="720" y="266">charger_hosts</text>
+    <text x="980" y="266" font-size="9" fill="#94a3b8">type {workplace, mdu, fleet, hotel, retail, standard} · branding jsonb</text>
+    <text x="720" y="290">charger_service_plans</text>
+    <text x="980" y="290" font-size="9" fill="#94a3b8">revenue_share, electricity_reimbursement, platform_fee</text>
+  </g>
+  <text x="720" y="318" font-size="9" font-style="italic" fill="#475569">enums: HostType, HostStatus</text>
+
+  <!-- properties -->
+  <rect x="700" y="360" width="600" height="178" rx="8" fill="url(#panel)" stroke="#1e3a5f" stroke-width="1"/>
+  <text x="720" y="386" font-size="11" font-weight="700" fill="#3b82f6" letter-spacing="2">properties</text>
+  <text x="720" y="402" font-size="9" font-weight="300" fill="#64748b">physical hierarchy · Installation is OPTIONAL (vendor-managed AC only)</text>
+  <g font-size="11" font-family="monospace" fill="#f8fafc">
+    <text x="720" y="426">properties</text>
+    <text x="980" y="426" font-size="9" fill="#94a3b8">host_id, address jsonb, lat/lng, external? (OCPI shadow)</text>
+    <text x="720" y="450">sites</text>
+    <text x="980" y="450" font-size="9" fill="#94a3b8">property_id, timezone, access_level, power_class</text>
+    <text x="720" y="474">site_assets  (polymorphic)</text>
+    <text x="980" y="474" font-size="9" fill="#94a3b8">kind {charger, meter, modem, controller}</text>
+    <text x="720" y="498">installations  (vendor-managed group)</text>
+    <text x="980" y="498" font-size="9" fill="#94a3b8">vendor_id?, model_id?, credentials_ref, onboarding_status</text>
+  </g>
+  <text x="720" y="524" font-size="9" font-style="italic" fill="#475569">enums: SiteAccessLevel, SitePowerClass, SiteAssetKind, InstallationOnboardingStatus</text>
+
+  <!-- hardware (catalog — not tenant-scoped) -->
+  <rect x="700" y="558" width="600" height="120" rx="8" fill="url(#teal-fill)" stroke="#2dd4bf" stroke-width="1.2"/>
+  <text x="720" y="584" font-size="11" font-weight="700" fill="#2dd4bf" letter-spacing="2">hardware</text>
+  <text x="1280" y="584" text-anchor="end" font-size="9" font-weight="500" fill="#3ee9a7" letter-spacing="2">● LIVE (zaptec + zaptec-pro seeded)</text>
+  <text x="720" y="600" font-size="9" font-weight="300" fill="#64748b">platform-level catalog · NOT tenant-scoped · model profiles template Charger fields</text>
+  <g font-size="11" font-family="monospace" fill="#f8fafc">
+    <text x="720" y="624">vendors</text>
+    <text x="980" y="624" font-size="9" fill="#94a3b8">slug, kind, api_kind {oauth, basic_auth, none}</text>
+    <text x="720" y="648">models</text>
+    <text x="980" y="648" font-size="9" fill="#94a3b8">vendor_id, slug, asset_class, credential_scope, profile</text>
+  </g>
+
+  <!-- assets -->
+  <rect x="700" y="698" width="600" height="170" rx="8" fill="url(#panel)" stroke="#1e3a5f" stroke-width="1"/>
+  <text x="720" y="724" font-size="11" font-weight="700" fill="#3b82f6" letter-spacing="2">assets</text>
+  <text x="720" y="740" font-size="9" font-weight="300" fill="#64748b">kind-specific extensions of SiteAsset · PK = site_asset_id (1:1)</text>
+  <g font-size="11" font-family="monospace" fill="#f8fafc">
+    <text x="720" y="764">chargers</text>
+    <text x="980" y="764" font-size="9" fill="#94a3b8">model_id?, installation_id?, vendor/model fallbacks, firmware</text>
+    <text x="720" y="788">meters</text>
+    <text x="980" y="788" font-size="9" fill="#94a3b8">meter_serial, meter_type, max_amps</text>
+    <text x="720" y="812">modems</text>
+    <text x="980" y="812" font-size="9" fill="#94a3b8">imei, carrier, iccid, last_seen_at</text>
+    <text x="720" y="836">controllers</text>
+    <text x="980" y="836" font-size="9" fill="#94a3b8">vendor (e.g. shelly), device_id, endpoint_url, capabilities</text>
+  </g>
+
+  <!-- ocpp -->
+  <rect x="700" y="888" width="600" height="170" rx="8" fill="url(#teal-fill)" stroke="#2dd4bf" stroke-width="1.5"/>
+  <text x="720" y="914" font-size="11" font-weight="700" fill="#2dd4bf" letter-spacing="2">ocpp</text>
+  <text x="1280" y="914" text-anchor="end" font-size="9" font-weight="500" fill="#3ee9a7" letter-spacing="2">● LIVE (DO per identity, outbox writing)</text>
+  <text x="720" y="930" font-size="9" font-weight="300" fill="#64748b">control endpoints + outbox · one DO per ocpp_identities row in gateway worker</text>
+  <g font-size="11" font-family="monospace" fill="#f8fafc">
+    <text x="720" y="954">ocpp_identities</text>
+    <text x="980" y="954" font-size="9" fill="#94a3b8">charger_id, identity_string, version, capabilities, control_routing</text>
+    <text x="720" y="978">connectors</text>
+    <text x="980" y="978" font-size="9" fill="#94a3b8">ocpp_identity_id, connector_index, type, max_power_kw, status</text>
+    <text x="720" y="1002">outbound_commands  (THE OUTBOX)</text>
+    <text x="980" y="1002" font-size="9" fill="#94a3b8">control_domain, routed_to, payload, status, retries</text>
+  </g>
+  <text x="720" y="1028" font-size="9" font-style="italic" fill="#475569">enums: OcppVersion {1.6, 2.0.1, 2.1}, AssetClass {ac, dc}, CommandStatus {pending, sent, acked, failed, cancelled}</text>
+
+  <!-- ================================================================ -->
+  <!-- RIGHT COLUMN — OPERATIONS & MONEY  (x 1360..1940)                -->
+  <!-- ================================================================ -->
+
+  <text x="1380" y="180" font-size="10" font-weight="700" fill="#8EF5C7" letter-spacing="3">OPERATIONS &amp; MONEY</text>
+
+  <!-- charging -->
+  <rect x="1360" y="200" width="580" height="160" rx="8" fill="url(#panel)" stroke="#1e3a5f" stroke-width="1"/>
+  <text x="1380" y="226" font-size="11" font-weight="700" fill="#3b82f6" letter-spacing="2">charging</text>
+  <text x="1380" y="242" font-size="9" font-weight="300" fill="#64748b">the binding row · session links org/site/charger/identity/connector/user</text>
+  <g font-size="11" font-family="monospace" fill="#f8fafc">
+    <text x="1380" y="266">sessions  (★ binding row)</text>
+    <text x="1660" y="266" font-size="9" fill="#94a3b8">6 FKs · started_at, ended_at, energy_wh, stop_reason, status</text>
+    <text x="1380" y="290">meter_values</text>
+    <text x="1660" y="290" font-size="9" fill="#94a3b8">session_id, measured_at, power, voltage, current, soc</text>
+    <text x="1380" y="314">reservations</text>
+    <text x="1660" y="314" font-size="9" fill="#94a3b8">connector_id, reserved_from / _until</text>
+  </g>
+  <text x="1380" y="340" font-size="9" font-style="italic" fill="#475569">enum: SessionStatus {in_progress, completed, aborted}</text>
+
+  <!-- events -->
+  <rect x="1360" y="380" width="580" height="140" rx="8" fill="url(#teal-fill)" stroke="#2dd4bf" stroke-width="1.5"/>
+  <text x="1380" y="406" font-size="11" font-weight="700" fill="#2dd4bf" letter-spacing="2">events</text>
+  <text x="1920" y="406" text-anchor="end" font-size="9" font-weight="500" fill="#3ee9a7" letter-spacing="2">● LIVE (every webhook lands here)</text>
+  <text x="1380" y="422" font-size="9" font-weight="300" fill="#64748b">append-only · source of truth · idempotency on the hot path</text>
+  <g font-size="11" font-family="monospace" fill="#f8fafc">
+    <text x="1380" y="446">event_log</text>
+    <text x="1660" y="446" font-size="9" fill="#94a3b8">aggregate_type/id, event_type, payload, retention_class</text>
+    <text x="1380" y="470">idempotency_keys</text>
+    <text x="1660" y="470" font-size="9" fill="#94a3b8">(scope, key) PK · result jsonb · expires_at</text>
+  </g>
+  <text x="1380" y="500" font-size="9" font-style="italic" fill="#475569">retention: financial · operational · raw_protocol (30-90d) · aggregate (12-24mo) · issue_history</text>
+
+  <!-- issues -->
+  <rect x="1360" y="540" width="580" height="160" rx="8" fill="url(#panel)" stroke="#1e3a5f" stroke-width="1"/>
+  <text x="1380" y="566" font-size="11" font-weight="700" fill="#3b82f6" letter-spacing="2">issues</text>
+  <text x="1380" y="582" font-size="9" font-weight="300" fill="#64748b">the moat · subject_type/id is polymorphic (charger / connector / session / etc.)</text>
+  <g font-size="11" font-family="monospace" fill="#f8fafc">
+    <text x="1380" y="606">tickets</text>
+    <text x="1660" y="606" font-size="9" fill="#94a3b8">subject_type/id, severity, status, sla_target, resolved_at</text>
+    <text x="1380" y="630">ticket_events</text>
+    <text x="1660" y="630" font-size="9" fill="#94a3b8">timeline · event_type, actor_user_id, payload</text>
+    <text x="1380" y="654">detection_rules</text>
+    <text x="1660" y="654" font-size="9" fill="#94a3b8">rule_key, config jsonb, enabled, version</text>
+  </g>
+  <text x="1380" y="680" font-size="9" font-style="italic" fill="#475569">enums: IssueSubject (7), IssueSeverity, IssueStatus (7)</text>
+
+  <!-- billing -->
+  <rect x="1360" y="720" width="580" height="280" rx="8" fill="url(#panel)" stroke="#1e3a5f" stroke-width="1"/>
+  <text x="1380" y="746" font-size="11" font-weight="700" fill="#3b82f6" letter-spacing="2">billing</text>
+  <text x="1380" y="762" font-size="9" font-weight="300" fill="#64748b">money in BIGINT minor units · two-contract model (driver + host)</text>
+  <g font-size="11" font-family="monospace" fill="#f8fafc">
+    <text x="1380" y="786">tariffs</text>
+    <text x="1660" y="786" font-size="9" fill="#94a3b8">rule jsonb, currency, valid_from / _until</text>
+    <text x="1380" y="810">customer_plans</text>
+    <text x="1660" y="810" font-size="9" fill="#94a3b8">code, balance_type, category, products, country/currency</text>
+    <text x="1380" y="834">subscriptions</text>
+    <text x="1660" y="834" font-size="9" fill="#94a3b8">user_id, plan_id, started_at, ended_at, status</text>
+    <text x="1380" y="858">billing_transactions</text>
+    <text x="1660" y="858" font-size="9" fill="#94a3b8">type, amount_minor, currency, occurred_at</text>
+    <text x="1380" y="882">invoices</text>
+    <text x="1660" y="882" font-size="9" fill="#94a3b8">user_id, period, total_minor, status, pdf_ref</text>
+    <text x="1380" y="906">invoice_lines</text>
+    <text x="1660" y="906" font-size="9" fill="#94a3b8">invoice_id, quantity, unit_price_minor, source</text>
+    <text x="1380" y="930">statements</text>
+    <text x="1660" y="930" font-size="9" fill="#94a3b8">subject_type/id, period, content jsonb</text>
+  </g>
+  <text x="1380" y="960" font-size="9" font-style="italic" fill="#475569">enums: BalanceType (5), PlanCategory (4), TerminationBehavior (3),</text>
+  <text x="1380" y="976" font-size="9" font-style="italic" fill="#475569">BillingTxType {payment, refund, penalty, credit, contract_charge, external_payment},</text>
+  <text x="1380" y="992" font-size="9" font-style="italic" fill="#475569">InvoiceStatus {draft, issued, paid, void}</text>
+
+  <!-- ================================================================ -->
+  <!-- BOTTOM ROW — CROSS-CUTTING & EXTERNAL  (x 60..1940, y 1080..1500) -->
+  <!-- ================================================================ -->
+  <line x1="60" y1="1100" x2="1940" y2="1100" stroke="#1e3a5f" stroke-width="1" opacity="0.4"/>
+  <text x="80" y="1132" font-size="10" font-weight="700" fill="#8EF5C7" letter-spacing="3">CROSS-CUTTING &amp; EXTERNAL</text>
+
+  <!-- vendors -->
+  <rect x="80" y="1150" width="370" height="140" rx="8" fill="url(#panel)" stroke="#1e3a5f" stroke-width="1"/>
+  <text x="100" y="1176" font-size="11" font-weight="700" fill="#3b82f6" letter-spacing="2">vendors</text>
+  <text x="100" y="1192" font-size="9" font-weight="300" fill="#64748b">adapter health + nightly contract tests</text>
+  <g font-size="11" font-family="monospace" fill="#f8fafc">
+    <text x="100" y="1216">adapter_health</text>
+    <text x="100" y="1232" font-size="9" fill="#94a3b8">vendor, window, error_rate, p50/p95 latency</text>
+    <text x="100" y="1256">contract_tests</text>
+    <text x="100" y="1272" font-size="9" fill="#94a3b8">vendor, test_name, result, run_at</text>
+  </g>
+
+  <!-- roaming -->
+  <rect x="470" y="1150" width="370" height="140" rx="8" fill="url(#panel)" stroke="#1e3a5f" stroke-width="1"/>
+  <text x="490" y="1176" font-size="11" font-weight="700" fill="#3b82f6" letter-spacing="2">roaming</text>
+  <text x="490" y="1192" font-size="9" font-weight="300" fill="#64748b">OCPI dual-role · CPO + eMSP from row one</text>
+  <g font-size="11" font-family="monospace" fill="#f8fafc">
+    <text x="490" y="1216">ocpi_tokens</text>
+    <text x="490" y="1232" font-size="9" fill="#94a3b8">token_uid, party_id, country_code, user_id?</text>
+    <text x="490" y="1252">hub_connections</text>
+    <text x="490" y="1268" font-size="9" fill="#94a3b8">hub {hubject, gireve, direct}</text>
+    <text x="490" y="1284" font-size="11">cdr_queue</text>
+  </g>
+
+  <!-- energy -->
+  <rect x="860" y="1150" width="370" height="140" rx="8" fill="url(#panel)" stroke="#1e3a5f" stroke-width="1"/>
+  <text x="880" y="1176" font-size="11" font-weight="700" fill="#3b82f6" letter-spacing="2">energy</text>
+  <text x="880" y="1192" font-size="9" font-weight="300" fill="#64748b">policies + planning · room for solar / FLEX later</text>
+  <g font-size="11" font-family="monospace" fill="#f8fafc">
+    <text x="880" y="1216">site_energy_policies</text>
+    <text x="880" y="1232" font-size="9" fill="#94a3b8">site_id, policy jsonb, valid_from</text>
+    <text x="880" y="1252">property_energy_policies</text>
+    <text x="880" y="1268" font-size="9" fill="#94a3b8">property_id, policy jsonb, valid_from</text>
+    <text x="880" y="1284" font-size="11">energy_planning_results</text>
+  </g>
+
+  <!-- webhooks -->
+  <rect x="1250" y="1150" width="370" height="140" rx="8" fill="url(#panel)" stroke="#1e3a5f" stroke-width="1"/>
+  <text x="1270" y="1176" font-size="11" font-weight="700" fill="#3b82f6" letter-spacing="2">webhooks</text>
+  <text x="1270" y="1192" font-size="9" font-weight="300" fill="#64748b">outbound delivery subsystem · DLQ included</text>
+  <g font-size="11" font-family="monospace" fill="#f8fafc">
+    <text x="1270" y="1216">subscriptions</text>
+    <text x="1270" y="1232" font-size="9" fill="#94a3b8">endpoint_url, signing_secret_ref, scopes[]</text>
+    <text x="1270" y="1252">deliveries</text>
+    <text x="1270" y="1268" font-size="9" fill="#94a3b8">attempt, status, response_code</text>
+    <text x="1270" y="1284" font-size="11">dead_letters</text>
+  </g>
+
+  <!-- coming next -->
+  <rect x="1640" y="1150" width="300" height="140" rx="8" fill="url(#panel)" stroke="#FBBF24" stroke-width="1.2" stroke-dasharray="4 3"/>
+  <text x="1660" y="1176" font-size="11" font-weight="700" fill="#FBBF24" letter-spacing="2">COMING NEXT</text>
+  <text x="1660" y="1192" font-size="9" font-weight="300" fill="#94a3b8">approved, ships in Sprint 2.6</text>
+  <g font-size="11" font-family="monospace" fill="#f8fafc">
+    <text x="1660" y="1216">properties.circuits</text>
+    <text x="1660" y="1232" font-size="9" fill="#94a3b8">parent_circuit_id (tree), max_amps, phases</text>
+    <text x="1660" y="1252">ocpp.charging_profiles</text>
+    <text x="1660" y="1268" font-size="9" fill="#94a3b8">stack_level, purpose, schedule, status</text>
+  </g>
+  <text x="1660" y="1283" font-size="9" font-style="italic" fill="#64748b">per ADR 0007</text>
+
+  <!-- ================================================================ -->
+  <!-- BIG-PICTURE FK ARROWS — connect the chain                         -->
+  <!-- ================================================================ -->
+
+  <!-- tenancy → identity (memberships have user_id) -->
+  <line x1="350" y1="340" x2="350" y2="360" stroke="#2dd4bf" stroke-width="1" opacity="0.5" marker-end="url(#ar-teal)"/>
+
+  <!-- tenancy → people (org_id everywhere) -->
+  <line x1="350" y1="480" x2="350" y2="500" stroke="#8EF5C7" stroke-width="1" opacity="0.5" marker-end="url(#ar-mint)"/>
+
+  <!-- tenancy → hosts (org_id) -->
+  <path d="M 620 270 Q 660 270 700 270" stroke="#2dd4bf" stroke-width="1.2" fill="none" opacity="0.5" marker-end="url(#ar-teal)"/>
+
+  <!-- hosts → properties (host_id) -->
+  <line x1="1000" y1="340" x2="1000" y2="360" stroke="#3b82f6" stroke-width="1" opacity="0.5" marker-end="url(#ar-blue)"/>
+
+  <!-- hardware → properties.installations & assets.chargers (model_id, vendor_id) -->
+  <line x1="1000" y1="678" x2="1000" y2="698" stroke="#2dd4bf" stroke-width="1" opacity="0.5" marker-end="url(#ar-teal)"/>
+
+  <!-- assets → ocpp (charger.identities) -->
+  <line x1="1000" y1="868" x2="1000" y2="888" stroke="#3b82f6" stroke-width="1" opacity="0.5" marker-end="url(#ar-blue)"/>
+
+  <!-- ocpp → charging (sessions reference identity + connector + charger) -->
+  <path d="M 1300 950 Q 1330 950 1360 280" stroke="#2dd4bf" stroke-width="1" fill="none" opacity="0.4" marker-end="url(#ar-teal)"/>
+
+  <!-- charging → events (event_log writes from /api/ocpp/events) -->
+  <line x1="1650" y1="360" x2="1650" y2="380" stroke="#2dd4bf" stroke-width="1" opacity="0.5" marker-end="url(#ar-teal)"/>
+
+  <!-- events → issues (detection rules consume event_log) -->
+  <line x1="1650" y1="520" x2="1650" y2="540" stroke="#3b82f6" stroke-width="1" opacity="0.5" marker-end="url(#ar-blue)"/>
+
+  <!-- charging → billing (sessions feed invoices) -->
+  <line x1="1500" y1="360" x2="1500" y2="720" stroke="#3b82f6" stroke-width="1" opacity="0.3" marker-end="url(#ar-blue)" stroke-dasharray="3 3"/>
+
+  <!-- people → billing (subscriptions reference users in family groups) -->
+  <path d="M 620 560 Q 980 560 1360 800" stroke="#8EF5C7" stroke-width="1" fill="none" opacity="0.3" marker-end="url(#ar-mint)" stroke-dasharray="3 3"/>
+
+  <!-- ================================================================ -->
+  <!-- FOOTER / LEGEND                                                   -->
+  <!-- ================================================================ -->
+  <line x1="60" y1="1330" x2="1940" y2="1330" stroke="#1e3a5f" stroke-width="1" opacity="0.4"/>
+
+  <text x="80" y="1360" font-size="10" font-weight="700" fill="#3b82f6" letter-spacing="3">LEGEND</text>
+  <g font-size="11" fill="#94a3b8">
+    <rect x="170" y="1350" width="14" height="14" rx="3" fill="url(#teal-fill)" stroke="#2dd4bf" stroke-width="1.5"/>
+    <text x="192" y="1361">live · rows being written today</text>
+
+    <rect x="430" y="1350" width="14" height="14" rx="3" fill="url(#panel)" stroke="#1e3a5f" stroke-width="1.5"/>
+    <text x="452" y="1361">schema-defined · code wires it later</text>
+
+    <rect x="730" y="1350" width="14" height="14" rx="3" fill="url(#panel)" stroke="#FBBF24" stroke-width="1.5" stroke-dasharray="4 3"/>
+    <text x="752" y="1361">approved, not yet shipped (ADR 0007)</text>
+
+    <line x1="1010" y1="1357" x2="1042" y2="1357" stroke="#2dd4bf" stroke-width="1.5" marker-end="url(#ar-teal)"/>
+    <text x="1050" y="1361">structural relation</text>
+
+    <line x1="1200" y1="1357" x2="1232" y2="1357" stroke="#3b82f6" stroke-width="1" marker-end="url(#ar-blue)" stroke-dasharray="3 3"/>
+    <text x="1240" y="1361">data-flow / projection</text>
+  </g>
+
+  <text x="80" y="1394" font-size="10" font-weight="700" fill="#2dd4bf" letter-spacing="3">SPINE</text>
+  <text x="170" y="1394" font-size="11" font-weight="300" fill="#94a3b8">Every operational table carries <tspan font-family="monospace" fill="#f8fafc">org_id</tspan>. The platform has 18 namespaces in one Neon Postgres database, applied via one migration so far (<tspan font-family="monospace" fill="#f8fafc">20260424090905_v3_foundation</tspan>).</text>
+
+  <text x="80" y="1422" font-size="10" font-weight="700" fill="#FBBF24" letter-spacing="3">REFERENCES</text>
+  <text x="190" y="1422" font-size="11" font-weight="300" fill="#94a3b8">prisma/schema.prisma · docs/architecture/STRAUMVAKT_ARCHITECTURE_V3.md §10 · ADRs 0001 (foundation), 0002 (catalog + installations), 0007 (circuit re-add)</text>
+
+  <text x="80" y="1450" font-size="10" font-weight="700" fill="#475569" letter-spacing="3">RUNTIME</text>
+  <text x="190" y="1450" font-size="11" font-weight="300" fill="#64748b">main app <tspan font-family="monospace" fill="#94a3b8">hlada</tspan> (Next.js + Prisma + Neon adapter) · gateway <tspan font-family="monospace" fill="#94a3b8">straumvakt-ocpp</tspan> (Cloudflare Worker + Durable Objects per OCPP Identity)</text>
+
+  <text x="80" y="1478" font-size="10" font-weight="700" fill="#475569" letter-spacing="3">OPEN AT</text>
+  <text x="190" y="1478" font-size="11" font-weight="400" fill="#94a3b8" font-family="monospace">http://localhost:3000/data-model.svg</text>
+</svg>
