@@ -159,6 +159,18 @@ const nav: NavItem[] = [
         label: { is: "Driver contracts", en: "Driver contracts" },
         icon: FileText,
       },
+      {
+        kind: "leaf",
+        href: "/billing/dso",
+        label: { is: "DSO rates", en: "DSO rates" },
+        icon: Cable,
+      },
+      {
+        kind: "leaf",
+        href: "/billing/electricity",
+        label: { is: "Electricity rates", en: "Electricity rates" },
+        icon: Lightbulb,
+      },
     ],
   },
   {
