@@ -39,6 +39,16 @@ Thumbs.db
 # LibreOffice / OpenOffice lock files
 .~lock.*#
 
+# package-lock.json — temporarily excluded.
+# Reason: npm install on Windows generates a lock that's inconsistent
+# under Cloudflare's strict npm ci on Linux (optional/platform-
+# conditional deps like @rolldown/binding-wasm32-wasi reference
+# transitive deps that Windows-resolved trees skip). Cloudflare falls
+# back to `npm install` when no lock is present, which works across
+# platforms. Re-introduce a Linux-generated lock once we have WSL or
+# Docker available.
+package-lock.json
+
 # TypeScript cache
 *.tsbuildinfo
 
