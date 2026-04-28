@@ -4,6 +4,18 @@ import { resolve } from "node:path";
 import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
 import { SectionTabs, REFERENCE_TABS } from "@/components/section-tabs";
+import {
+  TechSection,
+  SourceBadge,
+  InfoRow,
+} from "@/components/reference/tech-section";
+import {
+  CONSTANT_KEY_INFO,
+  OBSERVATION_INFO,
+  COMMAND_INFO,
+  OCPP_INFO,
+  VENDOR_INFO,
+} from "@/lib/reference/zaptec-info";
 import { adminSessionConfig, verifyAdminSession } from "@/lib/admin-session";
 
 export const metadata = { title: "Zaptec API" };
@@ -57,15 +69,27 @@ function loadOpenApiSummary(): OpenApiSummary | null {
   }
 }
 
-function loadConstants(): { totalKeys: number; sample: Array<[string, unknown]> } | null {
+function loadConstantTopKeys(): string[] | null {
   const path = resolve(process.cwd(), "public", "zaptec", "zaptec-constants.json");
   if (!existsSync(path)) return null;
   try {
     const raw = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
-    const keys = Object.keys(raw);
-    return { totalKeys: keys.length, sample: keys.slice(0, 8).map((k) => [k, raw[k]]) };
+    return Object.keys(raw);
   } catch {
     return null;
+  }
+}
+
+function methodPill(method: string): string {
+  switch (method) {
+    case "GET":
+      return "bg-emerald-950/40 text-emerald-300";
+    case "POST":
+      return "bg-sky-950/40 text-sky-300";
+    case "DELETE":
+      return "bg-rose-950/40 text-rose-300";
+    default:
+      return "bg-amber-950/40 text-amber-300";
   }
 }
 
@@ -76,17 +100,47 @@ export default async function ZaptecPage() {
   const email = session?.email;
 
   const api = loadOpenApiSummary();
-  const consts = loadConstants();
-  const synced = api !== null || consts !== null;
+  const constantKeys = loadConstantTopKeys();
+  const synced = api !== null || constantKeys !== null;
+
+  // Group observations by family for display — mirrors the Technical Read
+  // diagnostics drawer's grouping.
+  const observationGroups: Array<{
+    title: string;
+    ids: number[];
+  }> = [
+    { title: "Synthetic / connection", ids: [-3, -2, -1] },
+    { title: "Capabilities", ids: [100, 110, 152, 154] },
+    { title: "Electrical (live telemetry)", ids: [501, 502, 503, 507, 508, 509, 510, 511, 512, 513, 515, 518, 519, 520] },
+    { title: "Metering", ids: [553, 554, 555] },
+    { title: "Operation", ids: [701, 708, 710, 711, 712, 714, 715, 716, 718, 720, 721, 722, 723] },
+    { title: "Authentication", ids: [120, 750, 751, 752] },
+    { title: "Diagnostics & cloud", ids: [803, 804, 809, 810, 820, 821] },
+    { title: "OCPP Native (only when AuthType=3)", ids: [861, 862, 866] },
+    { title: "Versions", ids: [908, 909, 911, 912, 913, 914] },
+    { title: "Identifiers (MAC + LTE + MID)", ids: [950, 951, 952, 953, 962, 963, 980, 981, 982] },
+  ];
+
+  // Group commands by category
+  const commandGroups: Array<{
+    title: string;
+    ids: number[];
+  }> = [
+    { title: "Lifecycle (operator-facing)", ids: [102, 506, 507, 10001] },
+    { title: "Maintenance", ids: [104, 200, 261] },
+    { title: "Connector", ids: [708] },
+    { title: "Auth list", ids: [751] },
+  ];
 
   return (
     <>
       <Topbar title="Zaptec API" email={email} />
       <PageShell
         title="Zaptec API & OCPP"
-        description="Static reference of Zaptec's REST API surface plus OCPP 1.6J integration notes. Live data lands when the Zaptec vendor adapter ships in Sprint 2.7. Real diagnostics against this surface are visible under Technical Read (iframe of zaptec-test on :3100)."
+        description="Field-by-field reference of the Zaptec REST API and OCPP 1.6J integration. Each row describes what a value would mean, not what it currently is — for live telemetry against this surface, see Technical Read."
       >
         <SectionTabs tabs={REFERENCE_TABS} />
+
         {!synced ? (
           <div className="rounded-lg border border-bg-border bg-bg-surface/70 p-6 shadow-card backdrop-blur">
             <h2 className="text-sm font-semibold text-ink-50">Assets not synced yet</h2>
@@ -101,299 +155,253 @@ export default async function ZaptecPage() {
               <code className="font-mono text-xs">E:\Claude\zaptec-test</code> into{" "}
               <code className="font-mono text-xs">public/zaptec/</code>.
             </p>
-            <p className="mt-3 text-xs text-ink-400">
-              .env is intentionally not synced — Rule 2.
-            </p>
+            <p className="mt-3 text-xs text-ink-400">.env is intentionally not synced — Rule 2.</p>
           </div>
         ) : (
           <div className="grid gap-4">
-            {/* Live data placeholder — wired in Sprint 2 */}
-            <section className="rounded-lg border border-amber-700/40 bg-amber-950/20 p-5 shadow-card backdrop-blur">
-              <h2 className="text-xs font-semibold uppercase tracking-brand text-amber-300">
-                Live data
-              </h2>
-              <p className="mt-2 text-sm text-ink-100">
-                No active Zaptec adapter yet — Sprint 2.7 wires authenticated
-                calls into Straumvakt itself.
-              </p>
-              <p className="mt-1 text-xs text-ink-400">
-                Until then, this page displays the OpenAPI surface and constants pulled
-                from the local <code className="font-mono">zaptec-test</code> sandbox.
-                Real Zaptec installations + live OCPP traffic <em>are</em> already
-                observable today via{" "}
-                <a
-                  href="/technical-read"
-                  className="text-sv-green hover:text-sv-sky"
-                >
-                  Technical Read
-                </a>
-                {" "}(iframe of zaptec-test on{" "}
-                <code className="font-mono">:3100</code> — real OAuth credentials in
-                <code className="font-mono"> zaptec-test/.env</code>, not duplicated
-                to Straumvakt).
-              </p>
-            </section>
+            {/* Section header — mirrors the SectionDivider in the Technical Read */}
+            <div className="mt-2 flex items-center gap-3">
+              <div className="h-px flex-1 bg-bg-border/50" />
+              <div className="flex flex-col items-center gap-1 px-3">
+                <SourceBadge source="api" />
+                <p className="text-[11px] text-ink-300 text-center max-w-md">
+                  Vendor REST API · Zaptec
+                </p>
+                <p className="text-[10px] text-ink-500 text-center max-w-md leading-tight">
+                  Documentation view — every row below describes what the field means.
+                  For live values, open Technical Read.
+                </p>
+              </div>
+              <div className="h-px flex-1 bg-bg-border/50" />
+            </div>
 
             {/* Vendor identity */}
-            <section className="rounded-lg border border-bg-border bg-bg-surface/70 p-5 shadow-card backdrop-blur">
-              <h2 className="text-xs font-semibold uppercase tracking-brand text-sv-sky">
-                Vendor
-              </h2>
-              <dl className="mt-3 grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
-                <dt className="text-ink-400">Vendor name</dt>
-                <dd className="text-ink-100">Zaptec AS (Norway)</dd>
-                <dt className="text-ink-400">Cloud API base</dt>
-                <dd className="font-mono text-xs text-ink-100">https://api.zaptec.com</dd>
-                <dt className="text-ink-400">API style</dt>
-                <dd className="text-ink-100">REST + JSON; OAuth 2 password grant → bearer + refresh</dd>
-                <dt className="text-ink-400">Documentation</dt>
-                <dd>
-                  <a
-                    href="https://api.zaptec.com/help/index.html"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-sv-green hover:text-sv-sky"
-                  >
-                    api.zaptec.com/help ↗
-                  </a>
-                </dd>
-                <dt className="text-ink-400">Hardware models</dt>
-                <dd className="text-ink-100">
-                  Zaptec Pro (commercial / workplace, AC), Zaptec Go (home, AC),
-                  Zaptec Sense (smart-meter)
-                </dd>
-                <dt className="text-ink-400">OCPP versions</dt>
-                <dd className="text-ink-100">
-                  OCPP 1.6J on Zaptec Pro (default for V3 pilot); 2.0.1 on selected
-                  firmwares
-                </dd>
-                <dt className="text-ink-400">Native data model</dt>
-                <dd className="text-ink-100">
-                  Installation → Circuit → Charger (maps directly onto V3 hierarchy
-                  with ADR 0007)
-                </dd>
-                <dt className="text-ink-400">Credential scope</dt>
-                <dd className="text-ink-100">
-                  <code className="font-mono text-xs">installation</code> — one
-                  OAuth token per Zaptec installation covers all chargers
-                </dd>
+            <TechSection title="Vendor" source="api" hint="zaptec.no">
+              <dl>
+                {VENDOR_INFO.map((v) => (
+                  <InfoRow key={v.label} label={v.label} info={v.info} />
+                ))}
               </dl>
-            </section>
+            </TechSection>
 
-            {/* OpenAPI summary */}
-            {api && (
-              <section className="rounded-lg border border-bg-border bg-bg-surface/70 shadow-card backdrop-blur">
-                <header className="border-b border-bg-border bg-bg-base/40 px-5 py-4">
-                  <div className="flex items-baseline justify-between">
-                    <h2 className="text-base font-semibold text-ink-50">
-                      {api.title} <span className="ml-2 text-xs text-ink-400">v{api.version}</span>
-                    </h2>
-                    <span className="text-xs text-ink-300">
-                      {api.operations.length} operations · {api.pathCount} paths · {api.tags.length} tags
-                    </span>
-                  </div>
-                  {api.serverUrl && (
-                    <p className="mt-1 text-xs text-ink-300">
-                      Base:{" "}
-                      <code className="rounded bg-bg-base/60 px-1.5 py-0.5 font-mono text-xs">
-                        {api.serverUrl}
-                      </code>
-                    </p>
-                  )}
-                </header>
-                <div className="max-h-[55vh] overflow-y-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead className="sticky top-0 bg-bg-surface text-ink-400">
+            {/* OpenAPI surface — when snapshot vendored */}
+            {api ? (
+              <TechSection
+                title={`${api.title} v${api.version}`}
+                source="api"
+                hint={`${api.operations.length} operations · ${api.pathCount} paths · ${api.tags.length} tags`}
+              >
+                {api.serverUrl ? (
+                  <p className="mb-3 text-[11px] text-ink-400">
+                    Base:{" "}
+                    <code className="rounded bg-bg-base/60 px-1.5 py-0.5 font-mono text-xs">
+                      {api.serverUrl}
+                    </code>
+                  </p>
+                ) : null}
+                <div className="max-h-[55vh] overflow-y-auto rounded-md border border-bg-border/70">
+                  <table className="w-full text-left text-[11px]">
+                    <thead className="sticky top-0 bg-bg-inset/40 text-[10px] uppercase tracking-brand text-ink-500">
                       <tr>
-                        <th className="px-5 py-2 font-medium">Method</th>
-                        <th className="px-5 py-2 font-medium">Path</th>
-                        <th className="px-5 py-2 font-medium">Summary</th>
-                        <th className="px-5 py-2 font-medium">Tags</th>
+                        <th className="px-3 py-1.5 font-medium w-16">Method</th>
+                        <th className="px-3 py-1.5 font-medium">Path</th>
+                        <th className="px-3 py-1.5 font-medium">What it does</th>
                       </tr>
                     </thead>
-                    <tbody className="font-mono text-ink-100">
+                    <tbody className="divide-y divide-bg-border/40">
                       {api.operations.map((op, i) => (
-                        <tr key={i} className="border-t border-bg-border/40">
-                          <td className="whitespace-nowrap px-5 py-1.5 text-emerald-300">
-                            {op.method}
+                        <tr key={i} className="hover:bg-bg-raised/30">
+                          <td className="whitespace-nowrap px-3 py-1.5">
+                            <span
+                              className={
+                                "inline-flex w-12 justify-center rounded font-mono text-[10px] " +
+                                methodPill(op.method)
+                              }
+                            >
+                              {op.method}
+                            </span>
                           </td>
-                          <td className="whitespace-nowrap px-5 py-1.5">{op.path}</td>
-                          <td className="px-5 py-1.5 font-sans text-ink-200">
-                            {op.summary ?? ""}
+                          <td className="whitespace-nowrap px-3 py-1.5 font-mono text-ink-200">
+                            {op.path}
                           </td>
-                          <td className="px-5 py-1.5 text-sv-sky">{op.tags.join(", ")}</td>
+                          <td className="px-3 py-1.5 italic text-ink-300">
+                            {op.summary ?? "—"}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
-              </section>
-            )}
+              </TechSection>
+            ) : null}
 
-            {/* Constants summary */}
-            {consts && (
-              <section className="rounded-lg border border-bg-border bg-bg-surface/70 shadow-card backdrop-blur">
-                <header className="border-b border-bg-border bg-bg-base/40 px-5 py-4">
-                  <h2 className="text-base font-semibold text-ink-50">
-                    Constants{" "}
-                    <span className="ml-2 text-xs text-ink-400">
-                      {consts.totalKeys} top-level keys
-                    </span>
-                  </h2>
-                  <p className="mt-1 text-xs text-ink-300">
-                    First {consts.sample.length} samples shown — open{" "}
-                    <a
-                      href="/zaptec/zaptec-constants.json"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-sv-sky hover:underline"
-                    >
-                      raw JSON
-                    </a>{" "}
-                    for the full set.
-                  </p>
-                </header>
-                <div className="space-y-3 p-5">
-                  {consts.sample.map(([k, v]) => (
-                    <div key={k} className="rounded border border-bg-border bg-bg-base/30 p-3">
-                      <p className="font-mono text-xs text-sv-sky">{k}</p>
-                      <pre className="mt-1 overflow-x-auto whitespace-pre-wrap break-all font-mono text-[11px] text-ink-200">
-                        {JSON.stringify(v, null, 2).slice(0, 600)}
-                        {JSON.stringify(v).length > 600 ? "…" : ""}
-                      </pre>
-                    </div>
+            {/* Constants — brief descriptions instead of JSON dump */}
+            {constantKeys ? (
+              <TechSection
+                title="Constants"
+                source="api"
+                hint={`${constantKeys.length} top-level keys · /api/constants`}
+              >
+                <p className="mb-3 text-[11px] text-ink-400">
+                  Each key is a separate enum or lookup table. Click through to the{" "}
+                  <a
+                    href="/zaptec/zaptec-constants.json"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-sv-sky hover:underline"
+                  >
+                    raw JSON
+                  </a>{" "}
+                  for the full payload.
+                </p>
+                <dl>
+                  {constantKeys.map((k) => (
+                    <InfoRow
+                      key={k}
+                      label={k}
+                      info={CONSTANT_KEY_INFO[k] ?? "(no description yet — populate in zaptec-info.ts)"}
+                      mono
+                    />
                   ))}
-                </div>
-              </section>
-            )}
+                </dl>
+              </TechSection>
+            ) : null}
 
-            {/* OCPP support */}
-            <section className="rounded-lg border border-bg-border bg-bg-surface/70 p-5 shadow-card backdrop-blur">
-              <h2 className="text-xs font-semibold uppercase tracking-brand text-sv-sky">
-                OCPP support
-              </h2>
-              <dl className="mt-3 grid gap-x-6 gap-y-2 text-sm sm:grid-cols-[180px_1fr]">
-                <dt className="text-ink-400">Default version</dt>
-                <dd className="text-ink-100">
-                  OCPP 1.6J — secure WebSocket (wss://) with Basic-Auth identity
-                </dd>
-                <dt className="text-ink-400">2.0.1 readiness</dt>
-                <dd className="text-ink-100">
-                  Available on selected Zaptec Pro firmwares; deferred to
-                  post-pilot per ADR 0005 tag A. V3 translator boundary in{" "}
-                  <code className="font-mono text-xs">gateway/src/ocpp-frame.ts</code>
-                  {" "}admits 2.0.1 as a sibling module without rework.
-                </dd>
-                <dt className="text-ink-400">Identity convention</dt>
-                <dd className="text-ink-100">
-                  Charger serial as the OCPP identity string; auth_secret
-                  generated by Straumvakt and pushed to the device via the cloud
-                  API at onboarding (Sprint 2.7 wizard). SHA-256 hashed at rest
-                  in <code className="font-mono text-xs">ocpp_identities.auth_secret_hash</code>.
-                </dd>
-                <dt className="text-ink-400">Heartbeat</dt>
-                <dd className="text-ink-100">
-                  300 s default — adjusted via{" "}
-                  <code className="font-mono text-xs">ChangeConfiguration</code>
-                  {" "}from the operator console (Sprint 1.5 wired this end-to-end).
-                </dd>
-                <dt className="text-ink-400">MeterValues cadence</dt>
-                <dd className="text-ink-100">
-                  60 s default during active session (configurable). Energy
-                  accumulation via standard{" "}
-                  <code className="font-mono text-xs">Energy.Active.Import.Register</code>.
-                  Verified end-to-end against zaptec-test sandbox during Sprint 1.
-                </dd>
-                <dt className="text-ink-400">Vendor-specific extensions</dt>
-                <dd className="text-ink-100">
-                  Zaptec uses{" "}
-                  <code className="font-mono text-xs">DataTransfer</code> with
-                  vendor ID{" "}
-                  <code className="font-mono text-xs">com.zaptec</code> for
-                  installation-aware load-balancing payloads — passed through to{" "}
-                  <code className="font-mono text-xs">raw_protocol</code>{" "}
-                  retention class without translation.
-                </dd>
+            {/* State observations — grouped, with brief info per ID */}
+            <TechSection
+              title="State observations"
+              source="api"
+              hint={`${Object.keys(OBSERVATION_INFO).length} of 155 documented · /api/chargers/{id}/state`}
+            >
+              <p className="mb-3 text-[11px] text-ink-400">
+                Live telemetry observation IDs. The Technical Read tab shows the current{" "}
+                <code className="font-mono text-[10px]">ValueAsString</code> per row;
+                here we show what each ID means. Full 155-entry table lives in{" "}
+                <code className="font-mono text-[10px]">docs/reference/integrations/zaptec.md</code>{" "}
+                §13.1.
+              </p>
+              <div className="space-y-3">
+                {observationGroups.map((g) => (
+                  <div key={g.title}>
+                    <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-brand text-sv-sky">
+                      {g.title}
+                    </p>
+                    <dl>
+                      {g.ids.map((id) => {
+                        const o = OBSERVATION_INFO[id];
+                        if (!o) return null;
+                        return (
+                          <InfoRow
+                            key={id}
+                            label={`${id}  ${o.name}`}
+                            info={o.info}
+                            mono
+                          />
+                        );
+                      })}
+                    </dl>
+                  </div>
+                ))}
+              </div>
+            </TechSection>
+
+            {/* Commands — brief info instead of empty body documentation */}
+            <TechSection
+              title="Commands"
+              source="api"
+              hint={`${Object.keys(COMMAND_INFO).length} documented of 50 · POST /api/chargers/{id}/sendCommand/{commandId}`}
+            >
+              <p className="mb-3 text-[11px] text-ink-400">
+                Each <code className="font-mono">commandId</code> is invoked with an empty{" "}
+                <code className="font-mono">POST</code> body. Destructive commands are flagged.
+              </p>
+              <div className="space-y-3">
+                {commandGroups.map((g) => (
+                  <div key={g.title}>
+                    <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-brand text-sv-sky">
+                      {g.title}
+                    </p>
+                    <dl>
+                      {g.ids.map((id) => {
+                        const c = COMMAND_INFO[id];
+                        if (!c) return null;
+                        return (
+                          <div
+                            key={id}
+                            className="flex items-baseline justify-between gap-3 border-b border-bg-border/30 py-1 last:border-0"
+                          >
+                            <dt className="shrink-0 font-mono text-[11px] text-ink-200">
+                              {id}{" "}
+                              <span className={c.destructive ? "text-yellow-300" : "text-ink-400"}>
+                                {c.name}
+                              </span>
+                            </dt>
+                            <dd className="text-right text-[11px] italic text-ink-300">
+                              {c.info}
+                            </dd>
+                          </div>
+                        );
+                      })}
+                    </dl>
+                  </div>
+                ))}
+              </div>
+            </TechSection>
+
+            {/* OCPP section divider */}
+            <div className="mt-4 flex items-center gap-3">
+              <div className="h-px flex-1 bg-bg-border/50" />
+              <div className="flex flex-col items-center gap-1 px-3">
+                <SourceBadge source="ocpp" />
+                <p className="text-[11px] text-ink-300 text-center max-w-md">
+                  OCPP 1.6J · Zaptec implementation
+                </p>
+                <p className="text-[10px] text-ink-500 text-center max-w-md leading-tight">
+                  Protocol-side documentation. See{" "}
+                  <code className="font-mono text-[10px]">docs/reference/integrations/ocpp-1.6j.md</code>{" "}
+                  for the full vocabulary.
+                </p>
+              </div>
+              <div className="h-px flex-1 bg-bg-border/50" />
+            </div>
+
+            <TechSection title="OCPP integration" source="ocpp" hint="1.6J today · 2.0.1 admitted">
+              <dl>
+                {OCPP_INFO.map((r) => (
+                  <InfoRow key={r.label} label={r.label} info={r.info} mono={r.mono} />
+                ))}
               </dl>
-            </section>
-
-            {/* V3 integration */}
-            <section className="rounded-lg border border-bg-border bg-bg-surface/70 p-5 shadow-card backdrop-blur">
-              <h2 className="text-xs font-semibold uppercase tracking-brand text-sv-sky">
-                V3 integration
-              </h2>
-              <ul className="mt-3 space-y-2 text-sm text-ink-200">
-                <li>
-                  <strong className="text-ink-50">Hardware Catalog seed</strong>
-                  {" "}— Sprint 0 already ships{" "}
-                  <code className="font-mono text-[11px]">hardware.vendors.slug=zaptec</code>
-                  {" "}with model{" "}
-                  <code className="font-mono text-[11px]">zaptec-pro</code>{" "}
-                  (credential_scope=installation). Sprint 0.6 catalog seed is
-                  the source of truth.
-                </li>
-                <li>
-                  <strong className="text-ink-50">Vendor adapter module</strong>
-                  {" "}— ships in Sprint 2.7 at{" "}
-                  <code className="font-mono text-[11px]">src/lib/vendors/zaptec/</code>.
-                  OAuth tokens stored in Cloudflare KV keyed off{" "}
-                  <code className="font-mono text-[11px]">installations.credentials_ref</code>;
-                  never echoed to chat or committed to git per CLAUDE.md Rule 2.
-                </li>
-                <li>
-                  <strong className="text-ink-50">Onboarding wizard</strong>{" "}
-                  — Sprint 2.7 four-step wizard: enter Zaptec credentials → pick
-                  installation → preview pulled metadata → save. One transaction
-                  creates Installation + Circuits + Chargers + OCPPIdentities +
-                  Connectors with{" "}
-                  <code className="font-mono text-[11px]">vendor_circuit_ref</code>
-                  {" "}+{" "}
-                  <code className="font-mono text-[11px]">vendor_installation_ref</code>
-                  {" "}populated.
-                </li>
-                <li>
-                  <strong className="text-ink-50">OCPP path live since
-                  Sprint 1</strong> — Zaptec chargers connect to{" "}
-                  <code className="font-mono text-[11px]">straumvakt-ocpp</code>{" "}
-                  gateway Worker (per-identity Durable Objects, ADR 0004
-                  Service Binding). End-to-end verified via zaptec-test → real
-                  Zaptec API → gateway → main app event log.
-                </li>
-              </ul>
-            </section>
+            </TechSection>
 
             {/* Cross-link */}
-            <section className="rounded-lg border border-bg-border bg-bg-surface/70 p-5 shadow-card backdrop-blur">
-              <h2 className="text-xs font-semibold uppercase tracking-brand text-sv-sky">
-                See also
-              </h2>
-              <ul className="mt-3 space-y-1 text-sm text-ink-200">
+            <TechSection title="See also" source="none">
+              <ul className="space-y-1.5 text-xs">
                 <li>
-                  <a
-                    href="/technical-read"
-                    className="text-sv-green hover:text-sv-sky"
-                  >
+                  <a href="/technical-read" className="text-sv-green hover:text-sv-sky">
                     Technical Read
                   </a>
-                  <span className="ml-2 text-xs text-ink-400">
-                    live diagnostics — installation hierarchy, identity strip,
-                    API + OCPP cards. Real Zaptec credentials in{" "}
-                    <code className="font-mono text-[11px]">zaptec-test/.env</code>.
+                  <span className="ml-2 italic text-ink-400">
+                    iframe of zaptec-test on :3100 — same fields as above, but live
                   </span>
                 </li>
                 <li>
-                  <a
-                    href="/reference/easee-api"
-                    className="text-sv-green hover:text-sv-sky"
-                  >
+                  <a href="/reference/easee-api" className="text-sv-green hover:text-sv-sky">
                     Reference · API · Easee
                   </a>
-                  <span className="ml-2 text-xs text-ink-400">
-                    sibling vendor — curated reference until the adapter ships
+                  <span className="ml-2 italic text-ink-400">
+                    sibling AC vendor — same shape, different transport / observation IDs
+                  </span>
+                </li>
+                <li>
+                  <code className="rounded bg-bg-base/60 px-1.5 py-0.5 font-mono text-[10px]">
+                    docs/reference/integrations/zaptec.md
+                  </code>
+                  <span className="ml-2 italic text-ink-400">
+                    full 155-entry observation table, every command, every bitmask flag, OCMF parser, production-adapter checklist
                   </span>
                 </li>
               </ul>
-            </section>
+            </TechSection>
           </div>
         )}
       </PageShell>

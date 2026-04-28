@@ -4,6 +4,19 @@ import { resolve } from "node:path";
 import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
 import { SectionTabs, REFERENCE_TABS } from "@/components/section-tabs";
+import {
+  TechSection,
+  SourceBadge,
+  InfoRow,
+  PlaceholderRow,
+} from "@/components/reference/tech-section";
+import {
+  VENDOR_INFO,
+  ENDPOINT_GROUPS,
+  OBSERVATION_INFO,
+  OCPP_INFO,
+  ADAPTER_STATUS,
+} from "@/lib/reference/easee-info";
 import { adminSessionConfig, verifyAdminSession } from "@/lib/admin-session";
 
 export const metadata = { title: "Easee API" };
@@ -24,10 +37,6 @@ type OpenApiSummary = {
   tags: string[];
 };
 
-// Mirrors the loader in /reference/zaptec-api so when an Easee OpenAPI
-// snapshot is vendored to public/easee/openapi.json this page lights up
-// with the same surface table the Zaptec page renders. Until that file
-// exists the page falls back to the curated reference below.
 function loadOpenApiSummary(): OpenApiSummary | null {
   const path = resolve(process.cwd(), "public", "easee", "openapi.json");
   if (!existsSync(path)) return null;
@@ -61,70 +70,18 @@ function loadOpenApiSummary(): OpenApiSummary | null {
   }
 }
 
-type EndpointGroup = {
-  title: string;
-  path: string;
-  operations: { method: string; pathSuffix: string; summary: string }[];
-};
-
-const CURATED_ENDPOINTS: EndpointGroup[] = [
-  {
-    title: "Authentication",
-    path: "/api/accounts",
-    operations: [
-      { method: "POST", pathSuffix: "/login", summary: "Exchange username + password for accessToken + refreshToken" },
-      { method: "POST", pathSuffix: "/refresh_token", summary: "Refresh accessToken using a valid refreshToken" },
-      { method: "GET",  pathSuffix: "/profile", summary: "Read the authenticated user's profile" },
-    ],
-  },
-  {
-    title: "Sites",
-    path: "/api/accounts",
-    operations: [
-      { method: "GET",  pathSuffix: "/sites", summary: "List sites the authenticated account has access to" },
-      { method: "GET",  pathSuffix: "/sites/{siteId}", summary: "Detailed view of a single site (circuits + chargers nested)" },
-    ],
-  },
-  {
-    title: "Circuits",
-    path: "/api/sites/{siteId}",
-    operations: [
-      { method: "GET",  pathSuffix: "/circuits", summary: "List circuits at this site (Easee models circuit explicitly)" },
-      { method: "GET",  pathSuffix: "/circuits/{circuitId}", summary: "Detailed circuit including ampere ceiling + grid type" },
-      { method: "POST", pathSuffix: "/circuits/{circuitId}/settings", summary: "Update circuit-level settings (e.g. main fuse rating)" },
-    ],
-  },
-  {
-    title: "Chargers",
-    path: "/api/chargers",
-    operations: [
-      { method: "GET",  pathSuffix: "", summary: "List chargers visible to the authenticated account" },
-      { method: "GET",  pathSuffix: "/{chargerId}/details", summary: "Charger detail (firmware, serial, model, dynamic state)" },
-      { method: "GET",  pathSuffix: "/{chargerId}/state", summary: "Live state — output current, kW, voltages, status" },
-      { method: "POST", pathSuffix: "/{chargerId}/commands/start_charging", summary: "Start a charging session remotely" },
-      { method: "POST", pathSuffix: "/{chargerId}/commands/stop_charging", summary: "Stop the active session" },
-      { method: "POST", pathSuffix: "/{chargerId}/commands/pause_charging", summary: "Pause without ending the session" },
-      { method: "POST", pathSuffix: "/{chargerId}/settings", summary: "Update charger settings (max current, idle behaviour, etc.)" },
-    ],
-  },
-  {
-    title: "Sessions / CDRs",
-    path: "/api/chargers",
-    operations: [
-      { method: "GET", pathSuffix: "/{chargerId}/sessions/monthly", summary: "Monthly aggregate of charging sessions for a charger" },
-      { method: "GET", pathSuffix: "/{chargerId}/sessions/{sessionId}", summary: "Single charging session detail (energy, duration, cost)" },
-      { method: "GET", pathSuffix: "/{chargerId}/sessions/ongoing", summary: "Current in-progress session if any" },
-    ],
-  },
-  {
-    title: "Equalizer (smart-meter)",
-    path: "/api/equalizers",
-    operations: [
-      { method: "GET", pathSuffix: "", summary: "List Easee Equalizer devices linked to the account" },
-      { method: "GET", pathSuffix: "/{equalizerId}/state", summary: "Live grid-import state used by Easee's load balancer" },
-    ],
-  },
-];
+function methodPill(method: string): string {
+  switch (method) {
+    case "GET":
+      return "bg-emerald-950/40 text-emerald-300";
+    case "POST":
+      return "bg-sky-950/40 text-sky-300";
+    case "DELETE":
+      return "bg-rose-950/40 text-rose-300";
+    default:
+      return "bg-amber-950/40 text-amber-300";
+  }
+}
 
 export default async function EaseeApiPage() {
   const jar = await cookies();
@@ -134,298 +91,288 @@ export default async function EaseeApiPage() {
 
   const api = loadOpenApiSummary();
 
+  // Group observations by family for display — mirrors the Tech Read
+  // diagnostics-drawer grouping.
+  const observationGroups: Array<{ title: string; ids: number[] }> = [
+    { title: "Operation", ids: [31, 38, 41, 42, 44, 45, 47, 48, 96, 100, 103, 109, 110] },
+    { title: "Electrical (live telemetry)", ids: [22, 23, 24, 111, 112, 113, 114, 115, 116, 120] },
+    { title: "Energy / metering", ids: [121, 122, 124, 125, 126, 129] },
+    { title: "Connectivity", ids: [81, 130, 131, 132, 141, 220, 221] },
+    { title: "Site-level aggregates (master-only)", ids: [76, 77, 78, 79] },
+    { title: "Authentication", ids: [15, 16, 17, 28, 69, 108, 128] },
+    { title: "Diagnostics", ids: [89, 117, 118, 119, 219] },
+    { title: "Hardware identity", ids: [80, 90, 91, 107] },
+    { title: "Temperature", ids: [150, 151, 160, 161, 162, 163, 164, 165, 166, 170, 172] },
+    { title: "Cloud", ids: [250, 251] },
+  ];
+
   return (
     <>
       <Topbar title="Reference · API · Easee" email={email} />
       <PageShell
         title="Easee API & OCPP"
-        description="Easee Cloud API surface + OCPP 1.6J + 2.0.1 support. Sibling to the Zaptec adapter — no live data yet (Sprint 2.7 ships Zaptec first; Easee follows). Curated reference below mirrors the structure /reference/zaptec-api will use once an Easee OpenAPI snapshot is vendored."
+        description="Field-by-field reference of Easee Cloud API + OCPP 1.6J. Documentation view (label → brief info), styled to mirror Technical Read. No live data yet — adapter ships after Zaptec (Sprint 2.7+)."
       >
         <SectionTabs tabs={REFERENCE_TABS} />
+
         <div className="grid gap-4">
-          {/* Status banner */}
+          {/* Adapter status banner */}
           <section className="rounded-lg border border-amber-700/40 bg-amber-950/20 p-5 shadow-card backdrop-blur">
             <h2 className="text-xs font-semibold uppercase tracking-brand text-amber-300">
-              Adapter status
+              Adapter status — {ADAPTER_STATUS.state}
             </h2>
-            <p className="mt-2 text-sm text-ink-100">
-              Easee adapter is <span className="font-medium">not</span> wired
-              for pilot. Zaptec ships in Sprint 2.7 first; Easee plugs in via
-              the same vendor-credentials scaffolding when an Easee-shaped
-              installation enters scope.
-            </p>
-            <p className="mt-1 text-xs text-ink-300">
-              When the adapter lands, vendor the OpenAPI snapshot to{" "}
+            <p className="mt-2 text-sm text-ink-100">{ADAPTER_STATUS.description}</p>
+            <p className="mt-1 text-[11px] text-ink-400">
+              Vendor an OpenAPI snapshot to{" "}
               <code className="font-mono text-[11px]">public/easee/openapi.json</code>{" "}
-              (mirror of the Zaptec snapshot pattern) — the operations table
-              below auto-renders just like the Zaptec page.
+              and the operations table below auto-renders.
             </p>
           </section>
+
+          {/* Section divider — REST API */}
+          <div className="mt-2 flex items-center gap-3">
+            <div className="h-px flex-1 bg-bg-border/50" />
+            <div className="flex flex-col items-center gap-1 px-3">
+              <SourceBadge source="api" />
+              <p className="text-[11px] text-ink-300 text-center max-w-md">
+                Cloud REST API · Easee
+              </p>
+              <p className="text-[10px] text-ink-500 text-center max-w-md leading-tight">
+                Documentation view — every row below describes what the field means.
+                For live values, the Easee adapter must ship first.
+              </p>
+            </div>
+            <div className="h-px flex-1 bg-bg-border/50" />
+          </div>
 
           {/* Vendor identity */}
-          <section className="rounded-lg border border-bg-border bg-bg-surface/70 p-5 shadow-card backdrop-blur">
-            <h2 className="text-xs font-semibold uppercase tracking-brand text-sv-sky">
-              Vendor
-            </h2>
-            <dl className="mt-3 grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
-              <dt className="text-ink-400">Vendor name</dt>
-              <dd className="text-ink-100">Easee AS (Norway)</dd>
-              <dt className="text-ink-400">Cloud API base</dt>
-              <dd className="font-mono text-xs text-ink-100">https://api.easee.com</dd>
-              <dt className="text-ink-400">API style</dt>
-              <dd className="text-ink-100">REST + JSON; bearer token (OAuth-like password grant)</dd>
-              <dt className="text-ink-400">Documentation</dt>
-              <dd>
-                <a
-                  href="https://developer.easee.com"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-sv-green hover:text-sv-sky"
-                >
-                  developer.easee.com ↗
-                </a>
-              </dd>
-              <dt className="text-ink-400">Hardware models</dt>
-              <dd className="text-ink-100">Easee Home, Easee One, Easee Charge (legacy), Easee Equalizer (smart-meter)</dd>
-              <dt className="text-ink-400">OCPP versions</dt>
-              <dd className="text-ink-100">
-                OCPP 1.6J (default for Easee Home / One); OCPP 2.0.1 on selected firmwares
-              </dd>
-              <dt className="text-ink-400">Native data model</dt>
-              <dd className="text-ink-100">Site → Circuit → Charger (maps cleanly onto V3 hierarchy with ADR 0007)</dd>
-              <dt className="text-ink-400">Credential scope</dt>
-              <dd className="text-ink-100">
-                <code className="font-mono text-xs">installation</code> — one OAuth token
-                per Easee site covers all chargers
-              </dd>
+          <TechSection title="Vendor" source="api" hint="easee.com">
+            <dl>
+              {VENDOR_INFO.map((v) => (
+                <InfoRow key={v.label} label={v.label} info={v.info} />
+              ))}
             </dl>
-          </section>
+          </TechSection>
 
-          {/* Live OpenAPI table (only when snapshot is vendored) */}
-          {api && (
-            <section className="rounded-lg border border-bg-border bg-bg-surface/70 shadow-card backdrop-blur">
-              <header className="border-b border-bg-border bg-bg-base/40 px-5 py-4">
-                <div className="flex items-baseline justify-between">
-                  <h2 className="text-base font-semibold text-ink-50">
-                    {api.title}{" "}
-                    <span className="ml-2 text-xs text-ink-400">v{api.version}</span>
-                  </h2>
-                  <span className="text-xs text-ink-300">
-                    {api.operations.length} operations · {api.pathCount} paths · {api.tags.length} tags
-                  </span>
-                </div>
-                {api.serverUrl && (
-                  <p className="mt-1 text-xs text-ink-300">
-                    Base:{" "}
-                    <code className="rounded bg-bg-base/60 px-1.5 py-0.5 font-mono text-xs">
-                      {api.serverUrl}
-                    </code>
-                  </p>
-                )}
-              </header>
-              <div className="max-h-[55vh] overflow-y-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="sticky top-0 bg-bg-surface text-ink-400">
+          {/* Live OpenAPI table — only when snapshot is vendored */}
+          {api ? (
+            <TechSection
+              title={`${api.title} v${api.version}`}
+              source="api"
+              hint={`${api.operations.length} operations · ${api.pathCount} paths · ${api.tags.length} tags`}
+            >
+              {api.serverUrl ? (
+                <p className="mb-3 text-[11px] text-ink-400">
+                  Base:{" "}
+                  <code className="rounded bg-bg-base/60 px-1.5 py-0.5 font-mono text-xs">
+                    {api.serverUrl}
+                  </code>
+                </p>
+              ) : null}
+              <div className="max-h-[55vh] overflow-y-auto rounded-md border border-bg-border/70">
+                <table className="w-full text-left text-[11px]">
+                  <thead className="sticky top-0 bg-bg-inset/40 text-[10px] uppercase tracking-brand text-ink-500">
                     <tr>
-                      <th className="px-5 py-2 font-medium">Method</th>
-                      <th className="px-5 py-2 font-medium">Path</th>
-                      <th className="px-5 py-2 font-medium">Summary</th>
-                      <th className="px-5 py-2 font-medium">Tags</th>
+                      <th className="px-3 py-1.5 font-medium w-16">Method</th>
+                      <th className="px-3 py-1.5 font-medium">Path</th>
+                      <th className="px-3 py-1.5 font-medium">What it does</th>
                     </tr>
                   </thead>
-                  <tbody className="font-mono text-ink-100">
+                  <tbody className="divide-y divide-bg-border/40">
                     {api.operations.map((op, i) => (
-                      <tr key={i} className="border-t border-bg-border/40">
-                        <td className="whitespace-nowrap px-5 py-1.5 text-emerald-300">
-                          {op.method}
+                      <tr key={i} className="hover:bg-bg-raised/30">
+                        <td className="whitespace-nowrap px-3 py-1.5">
+                          <span
+                            className={
+                              "inline-flex w-12 justify-center rounded font-mono text-[10px] " +
+                              methodPill(op.method)
+                            }
+                          >
+                            {op.method}
+                          </span>
                         </td>
-                        <td className="whitespace-nowrap px-5 py-1.5">{op.path}</td>
-                        <td className="px-5 py-1.5 font-sans text-ink-200">
-                          {op.summary ?? ""}
+                        <td className="whitespace-nowrap px-3 py-1.5 font-mono text-ink-200">
+                          {op.path}
                         </td>
-                        <td className="px-5 py-1.5 text-sv-sky">{op.tags.join(", ")}</td>
+                        <td className="px-3 py-1.5 italic text-ink-300">
+                          {op.summary ?? "—"}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-            </section>
-          )}
+            </TechSection>
+          ) : null}
 
-          {/* Curated cloud-API reference (always visible) */}
-          <section className="rounded-lg border border-bg-border bg-bg-surface/70 shadow-card backdrop-blur">
-            <header className="border-b border-bg-border bg-bg-base/40 px-5 py-4">
-              <h2 className="text-base font-semibold text-ink-50">
-                Cloud API — curated reference
-              </h2>
-              <p className="mt-1 text-xs text-ink-300">
-                Hand-curated from Easee&apos;s public developer docs. Endpoints
-                we&apos;ll exercise from the Easee adapter when it ships. Replaced
-                automatically by the OpenAPI table above when the snapshot
-                lands.
-              </p>
-            </header>
-            <div className="divide-y divide-bg-border/40">
-              {CURATED_ENDPOINTS.map((group) => (
-                <div key={group.title} className="px-5 py-3">
-                  <div className="flex items-baseline justify-between">
-                    <h3 className="text-sm font-semibold text-ink-50">
-                      {group.title}
-                    </h3>
-                    <code className="font-mono text-[11px] text-ink-400">
-                      {group.path}
-                    </code>
+          {/* Curated endpoint surface (always visible) — info column shows what each does */}
+          <TechSection
+            title="Cloud API — curated reference"
+            source="api"
+            hint={`${ENDPOINT_GROUPS.reduce((n, g) => n + g.operations.length, 0)} operations across ${ENDPOINT_GROUPS.length} groups`}
+          >
+            <p className="mb-3 text-[11px] text-ink-400">
+              Hand-curated from Easee&apos;s public developer docs. Each operation
+              row carries a brief description of what it does. The OpenAPI table
+              above auto-replaces this once a snapshot is vendored.
+            </p>
+            <div className="space-y-3">
+              {ENDPOINT_GROUPS.map((g) => (
+                <div key={g.group}>
+                  <div className="mb-1.5 flex items-baseline justify-between">
+                    <p className="text-[10px] font-semibold uppercase tracking-brand text-sv-sky">
+                      {g.group}
+                    </p>
+                    <code className="font-mono text-[10px] text-ink-400">{g.basePath}</code>
                   </div>
-                  <ul className="mt-2 space-y-1">
-                    {group.operations.map((op, i) => (
-                      <li key={i} className="flex items-start gap-3 text-xs">
+                  <dl>
+                    {g.operations.map((op, i) => (
+                      <div
+                        key={i}
+                        className="flex items-baseline gap-3 border-b border-bg-border/30 py-1 last:border-0"
+                      >
                         <span
                           className={
-                            "inline-flex w-14 shrink-0 justify-center rounded font-mono " +
-                            (op.method === "GET"
-                              ? "bg-emerald-950/40 text-emerald-300"
-                              : op.method === "POST"
-                                ? "bg-sky-950/40 text-sky-300"
-                                : op.method === "DELETE"
-                                  ? "bg-rose-950/40 text-rose-300"
-                                  : "bg-amber-950/40 text-amber-300")
+                            "inline-flex w-12 shrink-0 justify-center rounded font-mono text-[10px] " +
+                            methodPill(op.method)
                           }
                         >
                           {op.method}
                         </span>
-                        <code className="font-mono text-ink-100">
-                          {group.path}
-                          <span className="text-ink-400">{op.pathSuffix}</span>
+                        <code className="shrink-0 font-mono text-[11px] text-ink-200">
+                          {op.suffix || "(base)"}
                         </code>
-                        <span className="text-ink-300">— {op.summary}</span>
-                      </li>
+                        <span className="ml-auto text-right text-[11px] italic text-ink-300">
+                          {op.info}
+                        </span>
+                      </div>
                     ))}
-                  </ul>
+                  </dl>
                 </div>
               ))}
             </div>
-          </section>
+          </TechSection>
 
-          {/* OCPP support */}
-          <section className="rounded-lg border border-bg-border bg-bg-surface/70 p-5 shadow-card backdrop-blur">
-            <h2 className="text-xs font-semibold uppercase tracking-brand text-sv-sky">
-              OCPP support
-            </h2>
-            <dl className="mt-3 grid gap-x-6 gap-y-2 text-sm sm:grid-cols-[180px_1fr]">
-              <dt className="text-ink-400">Default version</dt>
-              <dd className="text-ink-100">OCPP 1.6J — secure WebSocket (wss://) with Basic-Auth identity</dd>
-              <dt className="text-ink-400">2.0.1 readiness</dt>
-              <dd className="text-ink-100">
-                Available on selected Easee Home firmwares; deferred to
-                post-pilot per ADR 0005 tag A. V3 translator boundary admits
-                2.0.1 as a sibling module.
-              </dd>
-              <dt className="text-ink-400">Identity convention</dt>
-              <dd className="text-ink-100">
-                Charger serial as the OCPP identity string;{" "}
-                <code className="font-mono text-xs">auth_secret</code> generated
-                by Straumvakt and pushed to the device via the cloud API
-                (analogous to Zaptec Pro&apos;s pattern).
-              </dd>
-              <dt className="text-ink-400">Heartbeat</dt>
-              <dd className="text-ink-100">300 s default — adjusted via{" "}
-                <code className="font-mono text-xs">ChangeConfiguration</code>
-                {" "}if needed.
-              </dd>
-              <dt className="text-ink-400">MeterValues cadence</dt>
-              <dd className="text-ink-100">
-                60 s default during active session (configurable). Energy
-                accumulation stable; compatible with standard OCPP 1.6J{" "}
-                <code className="font-mono text-xs">Energy.Active.Import.Register</code>.
-              </dd>
-              <dt className="text-ink-400">Vendor-specific extensions</dt>
-              <dd className="text-ink-100">
-                Easee uses{" "}
-                <code className="font-mono text-xs">DataTransfer</code> with
-                vendor ID{" "}
-                <code className="font-mono text-xs">com.easee</code> for
-                Equalizer-aware load-balancing payloads — tracked but ignored
-                by V3&apos;s translator (passes through to{" "}
-                <code className="font-mono text-xs">raw_protocol</code>{" "}
-                retention class).
-              </dd>
+          {/* SignalR push — placeholder rows describing what would arrive */}
+          <TechSection
+            title="Real-time push (SignalR)"
+            source="api"
+            hint="WSS · /hubs/chargers"
+          >
+            <p className="mb-3 text-[11px] text-ink-400">
+              Easee uses Microsoft SignalR over WebSocket — distinct from
+              Zaptec&apos;s Service Bus AMQP. Negotiate, connect, send protocol
+              handshake, then subscribe per charger.
+            </p>
+            <dl>
+              <InfoRow label="Negotiate URL" info="POST /hubs/chargers/negotiate?negotiateVersion=1 — returns connectionToken" mono />
+              <InfoRow label="WebSocket URL" info="wss://api.easee.com/hubs/chargers?id={connectionToken}" mono />
+              <InfoRow label="Auth" info="Bearer JWT in Authorization header (or access_token query param)" />
+              <InfoRow label="Protocol handshake" info='{"protocol":"json","version":1} terminated by 0x1E record-separator' mono />
+              <InfoRow label="Subscribe" info='{"type":1,"target":"SubscribeWithCurrentState","arguments":["<chargerId>",true]}' mono />
+              <InfoRow label="Push frame" info='{"type":1,"target":"ProductUpdate","arguments":[{ Mid, DataType, Id, Value, Timestamp }]}' mono />
+              <InfoRow label="Keep-alive" info="Ping (Type 6) every ~15 s — server drops the conn after 30 s of silence" />
+              <PlaceholderRow
+                label="Live observations"
+                hint="Will arrive once the adapter is wired and an Easee Site enters scope"
+              />
             </dl>
-          </section>
+          </TechSection>
 
-          {/* V3 integration roadmap */}
-          <section className="rounded-lg border border-bg-border bg-bg-surface/70 p-5 shadow-card backdrop-blur">
-            <h2 className="text-xs font-semibold uppercase tracking-brand text-sv-sky">
-              V3 integration
-            </h2>
-            <ul className="mt-3 space-y-2 text-sm text-ink-200">
-              <li>
-                <strong className="text-ink-50">Hardware Catalog seed</strong> —
-                Sprint 2.10 adds <code className="font-mono text-[11px]">hardware.vendors</code>{" "}
-                row for{" "}
-                <code className="font-mono text-[11px]">slug=easee</code>{" "}
-                and model rows for{" "}
-                <code className="font-mono text-[11px]">easee-home</code>,{" "}
-                <code className="font-mono text-[11px]">easee-one</code>,{" "}
-                <code className="font-mono text-[11px]">easee-equalizer</code>.
-                Each model carries{" "}
-                <code className="font-mono text-[11px]">credential_scope=installation</code>.
-              </li>
-              <li>
-                <strong className="text-ink-50">Vendor adapter module</strong> —
-                lives at <code className="font-mono text-[11px]">src/lib/vendors/easee/</code>
-                {" "}sibling to the Zaptec adapter that ships in Sprint 2.7.
-                Uses the same secret-store contract for the OAuth token (KV
-                key on{" "}
-                <code className="font-mono text-[11px]">installations.credentials_ref</code>).
-              </li>
-              <li>
-                <strong className="text-ink-50">Onboarding wizard reuse</strong>{" "}
-                — the Sprint 2.7 wizard is generalised over the vendor adapter
-                contract; switching vendor in the dropdown lights up the
-                Easee path with no UI changes.
-              </li>
-              <li>
-                <strong className="text-ink-50">OCPP path</strong> — Easee
-                chargers connect to the same{" "}
-                <code className="font-mono text-[11px]">straumvakt-ocpp</code>{" "}
-                gateway Worker on staging / prod; identity strings + Basic-Auth
-                hashes set during onboarding.
-              </li>
-            </ul>
-          </section>
+          {/* State observations — grouped, with brief info per ID */}
+          <TechSection
+            title="ChargerStreamData observations"
+            source="api"
+            hint={`${Object.keys(OBSERVATION_INFO).length} of ~180 documented · ChargerStreamData enum (pyeasee)`}
+          >
+            <p className="mb-3 text-[11px] text-ink-400">
+              Live observation IDs Easee chargers push over SignalR. The
+              Technical Read tab would show the current{" "}
+              <code className="font-mono text-[10px]">Value</code> per row;
+              here we show what each ID means. Full list lives in{" "}
+              <code className="font-mono text-[10px]">docs/reference/integrations/easee.md</code>{" "}
+              §11.
+            </p>
+            <div className="space-y-3">
+              {observationGroups.map((g) => (
+                <div key={g.title}>
+                  <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-brand text-sv-sky">
+                    {g.title}
+                  </p>
+                  <dl>
+                    {g.ids.map((id) => {
+                      const o = OBSERVATION_INFO[id];
+                      if (!o) return null;
+                      return (
+                        <InfoRow
+                          key={id}
+                          label={`${id}  ${o.name}`}
+                          info={o.info}
+                          mono
+                        />
+                      );
+                    })}
+                  </dl>
+                </div>
+              ))}
+            </div>
+          </TechSection>
+
+          {/* OCPP section divider */}
+          <div className="mt-4 flex items-center gap-3">
+            <div className="h-px flex-1 bg-bg-border/50" />
+            <div className="flex flex-col items-center gap-1 px-3">
+              <SourceBadge source="ocpp" />
+              <p className="text-[11px] text-ink-300 text-center max-w-md">
+                OCPP 1.6J · Easee implementation
+              </p>
+              <p className="text-[10px] text-ink-500 text-center max-w-md leading-tight">
+                Same protocol as Zaptec — see{" "}
+                <code className="font-mono text-[10px]">docs/reference/integrations/ocpp-1.6j.md</code>{" "}
+                for the shared vocabulary.
+              </p>
+            </div>
+            <div className="h-px flex-1 bg-bg-border/50" />
+          </div>
+
+          <TechSection title="OCPP integration" source="ocpp" hint="1.6J today · 2.0.1 admitted">
+            <dl>
+              {OCPP_INFO.map((r) => (
+                <InfoRow key={r.label} label={r.label} info={r.info} />
+              ))}
+            </dl>
+          </TechSection>
 
           {/* Cross-link */}
-          <section className="rounded-lg border border-bg-border bg-bg-surface/70 p-5 shadow-card backdrop-blur">
-            <h2 className="text-xs font-semibold uppercase tracking-brand text-sv-sky">
-              See also
-            </h2>
-            <ul className="mt-3 space-y-1 text-sm text-ink-200">
+          <TechSection title="See also" source="none">
+            <ul className="space-y-1.5 text-xs">
               <li>
-                <a
-                  href="/reference/zaptec-api"
-                  className="text-sv-green hover:text-sv-sky"
-                >
+                <a href="/reference/zaptec-api" className="text-sv-green hover:text-sv-sky">
                   Reference · API · Zaptec
                 </a>
-                <span className="ml-2 text-xs text-ink-400">
-                  live OpenAPI table + constants from the local zaptec-test
-                  sandbox
+                <span className="ml-2 italic text-ink-400">
+                  sibling AC vendor — same shape, currently the live integration via
+                  zaptec-test
                 </span>
               </li>
               <li>
-                <a
-                  href="/technical-read"
-                  className="text-sv-green hover:text-sv-sky"
-                >
+                <a href="/technical-read" className="text-sv-green hover:text-sv-sky">
                   Technical Read
                 </a>
-                <span className="ml-2 text-xs text-ink-400">
-                  iframe of zaptec-test on :3100 — real Zaptec API + OCPP
-                  diagnostics. Easee equivalent ships when the adapter does.
+                <span className="ml-2 italic text-ink-400">
+                  Zaptec live diagnostics — Easee equivalent ships when the adapter does
+                </span>
+              </li>
+              <li>
+                <code className="rounded bg-bg-base/60 px-1.5 py-0.5 font-mono text-[10px]">
+                  docs/reference/integrations/easee.md
+                </code>
+                <span className="ml-2 italic text-ink-400">
+                  full ChargerStreamData (180+) + EqualizerStreamData enums, SignalR handshake, production-adapter checklist
                 </span>
               </li>
             </ul>
-          </section>
+          </TechSection>
         </div>
       </PageShell>
     </>

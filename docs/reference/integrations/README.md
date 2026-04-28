@@ -15,6 +15,17 @@
 
 When a vendor file says "(unverified)" against a value, that value is sourced from documentation or a community library, not first-hand observation. Mark verified after the first probe and remove the tag.
 
+## Shared protocol docs
+
+Cross-vendor references — both vendor files build on these:
+
+| File | Scope |
+|---|---|
+| [`ocpp-1.6j.md`](ocpp-1.6j.md) | OCPP 1.6J protocol — 28-message vocabulary, 38 standard config keys, JSON-RPC framing, security profiles, state machine, local-auth-list sync |
+| [`ocmf.md`](ocmf.md) | OCMF (Open Charge Metering Format) — wire format, JSON payload, signature verification (ECDSA-secp256r1), OBIS codes, status flags, time-stamp parsing quirks |
+
+The shared docs avoid restating spec material in every vendor file. Each vendor doc *references* the shared doc rather than re-embedding the protocol. If a vendor implements something non-standard relative to the shared spec, the deviation is captured in that vendor's "Live findings" section.
+
 ---
 
 ## Common shape
@@ -33,7 +44,7 @@ Org (CPO)
                          └─ Connector
 ```
 
-Each vendor doc covers **the same eleven sections** so cross-vendor work translates 1:1:
+Each vendor doc covers **the same core sections** so cross-vendor work translates 1:1:
 
 1. Vendor profile
 2. Authentication
@@ -45,9 +56,19 @@ Each vendor doc covers **the same eleven sections** so cross-vendor work transla
 8. OCPP integration (auth modes + local auth list semantics)
 9. Real-time push (transport + token shape)
 10. Live findings (what differs from public docs after probing real hardware)
-11. Sources + companion artifacts
+11. Companion docs (cross-references)
+12. Sources
 
-The Zaptec doc has all eleven populated; the Easee doc has §10 deferred until the first live probe and §11 listing planned scratch-app artifacts.
+Plus self-contained appendices that make the doc usable without leaving the file:
+
+- **Full enum reference** (every observation ID, command, bitmask flag, error code, role, datatype — verbatim from the vendor's own constants endpoint or canonical community library)
+- **Worked end-to-end examples** (curl invocations for auth, list, read state, send command, fetch history, get push credentials)
+- **Real-time push details** (transport, handshake, subscription, keep-alive, reconnect)
+- **Production-adapter checklist** (auth, pagination, error envelope, observation handling, OCPP, OCMF, idempotency, observability, secret hygiene)
+- **Reference TypeScript shapes** (drop-in types for an adapter)
+- **Reference client skeleton** (paginated fetch, SignalR connect, etc.)
+
+The Zaptec doc carries §13–§18 with embedded enums, examples, the production checklist, and TS shapes. The Easee doc carries §11–§22 with the full ChargerStreamData + EqualizerStreamData enums, the SignalR handshake, examples, and TS shapes.
 
 ---
 
