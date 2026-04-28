@@ -1,17 +1,26 @@
 import { PrismaClient } from "straumvakt-prisma-cf-client/client";
 import { PrismaNeon } from "@prisma/adapter-neon";
+import { cache } from "react";
 
-// PrismaClient is cached on the V8 isolate (Workers) / process (Node).
-// Re-creating it per request adds hundreds of ms because the Neon adapter
-// opens a fresh WebSocket and Prisma initializes its compiler against the
-// WASM module each time. Workers reuse isolates across requests, so a
-// module-scoped singleton is the documented Prisma + Workers pattern. The
-// same singleton dedupes across HMR reloads in dev.
-
-declare global {
-  // eslint-disable-next-line no-var
-  var __straumvakt_prisma__: PrismaClient | undefined;
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// Prisma client — Neon-adapted, edge-runtime-compatible
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Two runtimes need different lifetimes:
+//
+//   • Cloudflare Workers (production / staging): each request gets its own
+//     client. Workers' I/O isolation forbids reusing I/O objects (the Neon
+//     WebSocket connection counts) across requests — concurrent navigations
+//     would otherwise crash with "Cannot perform I/O on behalf of a different
+//     request". React's cache() scopes the client to one server-component
+//     render, which is one request.
+//
+//   • Node.js (local dev): Next dev server reuses the process across
+//     requests, so we cache on globalThis to avoid leaking connections
+//     during HMR reloads.
+//
+// The PrismaNeon adapter handles the WebSocket transport internally; no
+// `ws` shim required at this layer.
 
 function createClient(): PrismaClient {
   const databaseUrl = process.env.DATABASE_URL;
@@ -22,15 +31,27 @@ function createClient(): PrismaClient {
   return new PrismaClient({ adapter });
 }
 
-export function getPrisma(): PrismaClient {
+// Per-request client for Cloudflare / React Server Components.
+export const getPrisma = cache(() => createClient());
+
+// Dev-only fallback so HMR doesn't leak clients across reloads.
+declare global {
+  // eslint-disable-next-line no-var
+  var __straumvakt_prisma__: PrismaClient | undefined;
+}
+
+export function getPrismaDev(): PrismaClient {
+  if (process.env.NODE_ENV === "production") {
+    return getPrisma();
+  }
   if (!globalThis.__straumvakt_prisma__) {
     globalThis.__straumvakt_prisma__ = createClient();
   }
   return globalThis.__straumvakt_prisma__;
 }
 
-// Application code should prefer withOrgContext() from
-// src/lib/repositories/_context rather than calling prisma() directly.
+// Application code should prefer `withOrgContext()` from
+// `src/lib/repositories/_context` rather than calling `prisma()` directly.
 export function prisma(): PrismaClient {
-  return getPrisma();
+  return process.env.NODE_ENV === "production" ? getPrisma() : getPrismaDev();
 }
