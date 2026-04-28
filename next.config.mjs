@@ -9,6 +9,7 @@ const BUILD_TIME = new Date().toISOString().slice(0, 16).replace("T", " ") + " U
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: "standalone",
   reactStrictMode: true,
   poweredByHeader: false,
   typedRoutes: true,
@@ -17,6 +18,14 @@ const nextConfig = {
     cpus: 2,
   },
   turbopack: {},
+  webpack: (config) => {
+    config.experiments = {
+      ...(config.experiments ?? {}),
+      asyncWebAssembly: true,
+      topLevelAwait: true,
+    };
+    return config;
+  },
   env: {
     APP_VERSION: pkg.version,
     BUILD_TIME,
