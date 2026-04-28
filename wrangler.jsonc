@@ -52,7 +52,8 @@
       "hyperdrive": [
         {
           "binding": "HYPERDRIVE_DB",
-          "id": "d2d56ab1ffe241bbb64946ba78a52be5"
+          "id": "d2d56ab1ffe241bbb64946ba78a52be5",
+          "localConnectionString": "postgresql://placeholder:placeholder@localhost:5432/placeholder"
         }
       ]
     }
