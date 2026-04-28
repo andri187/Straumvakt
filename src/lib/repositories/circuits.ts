@@ -1,4 +1,3 @@
-import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { recordAuditAction } from "@/lib/repositories/audit-actions";
 import type { CircuitCreateInput } from "@/lib/repositories/_inputs/circuits";
@@ -134,11 +133,15 @@ export async function updateCircuit(
 ): Promise<CircuitSummary> {
   const db = prisma();
   const { metadata, ...rest } = patch;
+  // metadata is a Prisma Json field; the exact InputJsonValue type lives in
+  // a different package on the dev/staging branches (prisma-client-js vs
+  // prisma-client generator output), so we widen with `as never` rather
+  // than couple this file to either. The shape comes from the Zod schema.
   const updated = await db.circuit.update({
     where: { id },
     data: {
       ...rest,
-      ...(metadata !== undefined ? { metadata: metadata as Prisma.InputJsonValue } : {}),
+      ...(metadata !== undefined ? { metadata: metadata as never } : {}),
     },
     include: {
       organization: { select: { displayName: true } },
