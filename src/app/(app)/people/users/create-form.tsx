@@ -40,19 +40,21 @@ export function CreateUserForm() {
 
   return (
     <form onSubmit={onSubmit} className="space-y-3">
-      <Field
-        label="Email"
-        value={email}
-        onChange={setEmail}
-        placeholder="admin@straumvakt.is"
-        mono
-      />
-      <Field
-        label="Display name"
-        value={displayName}
-        onChange={setDisplayName}
-        placeholder="Anna Jónsdóttir"
-      />
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field
+          label="Email"
+          value={email}
+          onChange={setEmail}
+          placeholder="admin@straumvakt.is"
+          mono
+        />
+        <Field
+          label="Display name"
+          value={displayName}
+          onChange={setDisplayName}
+          placeholder="Anna Jónsdóttir"
+        />
+      </div>
 
       {error && (
         <div className="rounded border border-rose-700/40 bg-rose-950/30 p-2 text-xs text-rose-200">
@@ -63,7 +65,7 @@ export function CreateUserForm() {
       <button
         type="submit"
         disabled={submitting || email.length === 0}
-        className="w-full rounded-md bg-sv-green/20 px-3 py-2 text-sm font-medium text-sv-green ring-1 ring-sv-green/30 transition-colors hover:bg-sv-green/30 disabled:cursor-not-allowed disabled:opacity-40"
+        className="rounded-md bg-sv-green/20 px-4 py-2 text-sm font-medium text-sv-green ring-1 ring-sv-green/30 transition-colors hover:bg-sv-green/30 disabled:cursor-not-allowed disabled:opacity-40"
       >
         {submitting ? "Creating…" : "Create user"}
       </button>

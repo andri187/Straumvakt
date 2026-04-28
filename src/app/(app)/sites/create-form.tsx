@@ -62,17 +62,19 @@ export function CreateSiteForm({ orgOptions }: { orgOptions: { id: string; label
 
   return (
     <form onSubmit={onSubmit} className="space-y-3">
-      <Select label="Organization" required value={orgId} onChange={setOrgId} options={orgOptions.map((o) => ({ value: o.id, label: o.label }))} />
-      <Select label="Property" required value={propertyId} onChange={setPropertyId} options={properties.map((p) => ({ value: p.id, label: p.displayName }))} placeholder={properties.length === 0 ? "(no properties for this org)" : undefined} />
-      <Field label="Display name" required value={displayName} onChange={setDisplayName} placeholder="Reykjavík HQ parking" />
-      <Field label="Timezone" value={timezone} onChange={setTimezone} mono />
-      <Select label="Site type" required value={siteType} onChange={(v) => setSiteType(v as typeof SITE_TYPES[number])} options={SITE_TYPES.map((s) => ({ value: s, label: s }))} />
-      <Select label="Access level" required value={accessLevel} onChange={(v) => setAccessLevel(v as typeof ACCESS_LEVELS[number])} options={ACCESS_LEVELS.map((s) => ({ value: s, label: s }))} />
-      <Select label="Power class" value={powerClass} onChange={setPowerClass} options={POWER_CLASSES.map((s) => ({ value: s, label: s || "—" }))} />
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Select label="Organization" required value={orgId} onChange={setOrgId} options={orgOptions.map((o) => ({ value: o.id, label: o.label }))} />
+        <Select label="Property" required value={propertyId} onChange={setPropertyId} options={properties.map((p) => ({ value: p.id, label: p.displayName }))} placeholder={properties.length === 0 ? "(no properties for this org)" : undefined} />
+        <Field label="Display name" required value={displayName} onChange={setDisplayName} placeholder="Reykjavík HQ parking" />
+        <Field label="Timezone" value={timezone} onChange={setTimezone} mono />
+        <Select label="Site type" required value={siteType} onChange={(v) => setSiteType(v as typeof SITE_TYPES[number])} options={SITE_TYPES.map((s) => ({ value: s, label: s }))} />
+        <Select label="Access level" required value={accessLevel} onChange={(v) => setAccessLevel(v as typeof ACCESS_LEVELS[number])} options={ACCESS_LEVELS.map((s) => ({ value: s, label: s }))} />
+        <Select label="Power class" value={powerClass} onChange={setPowerClass} options={POWER_CLASSES.map((s) => ({ value: s, label: s || "—" }))} />
+      </div>
 
       {error && <div className="rounded border border-rose-700/40 bg-rose-950/30 p-2 text-xs text-rose-200">{error}</div>}
 
-      <button type="submit" disabled={submitting || !valid} className="w-full rounded-md bg-sv-green/20 px-3 py-2 text-sm font-medium text-sv-green ring-1 ring-sv-green/30 hover:bg-sv-green/30 disabled:cursor-not-allowed disabled:opacity-40">
+      <button type="submit" disabled={submitting || !valid} className="rounded-md bg-sv-green/20 px-4 py-2 text-sm font-medium text-sv-green ring-1 ring-sv-green/30 hover:bg-sv-green/30 disabled:cursor-not-allowed disabled:opacity-40">
         {submitting ? "Creating…" : "Create site"}
       </button>
     </form>

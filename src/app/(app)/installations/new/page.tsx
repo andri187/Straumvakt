@@ -11,7 +11,7 @@ export default async function NewInstallationPage() {
   const orgOptions = orgs.filter((o) => o.status !== "archived").map((o) => ({ id: o.id, label: `${o.displayName} (${o.slug})` }));
 
   return (
-    <div className="mx-auto max-w-2xl px-6 py-8">
+    <div className="mx-auto max-w-3xl px-6 py-8">
       <Link href="/installations" className="mb-4 inline-block text-xs text-ink-400 hover:text-sv-sky">
         ← Back to installations
       </Link>

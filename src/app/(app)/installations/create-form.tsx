@@ -60,15 +60,17 @@ export function CreateInstallationForm({
 
   return (
     <form onSubmit={onSubmit} className="space-y-3">
-      <Select label="Organization" required value={orgId} onChange={setOrgId} options={orgOptions.map((o) => ({ value: o.id, label: o.label }))} />
-      <Select label="Site" required value={siteId} onChange={setSiteId} options={sites.map((s) => ({ value: s.id, label: s.displayName }))} placeholder={sites.length === 0 ? "(no sites for this org)" : undefined} />
-      <Field label="Display name" required value={displayName} onChange={setDisplayName} placeholder="Reykjavík HQ Zaptec" />
-      <Select label="Vendor" value={vendorId} onChange={setVendorId} options={[{ value: "", label: "— none —" }, ...vendorOptions.map((v) => ({ value: v.id, label: v.displayName }))]} />
-      <Field label="Vendor installation ref" value={vendorInstallationRef} onChange={setVendorInstallationRef} mono placeholder="(populated by Zaptec wizard)" />
-      <Select label="Onboarding status" value={onboardingStatus} onChange={(v) => setOnboardingStatus(v as typeof STATUSES[number])} options={STATUSES.map((s) => ({ value: s, label: s }))} />
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Select label="Organization" required value={orgId} onChange={setOrgId} options={orgOptions.map((o) => ({ value: o.id, label: o.label }))} />
+        <Select label="Site" required value={siteId} onChange={setSiteId} options={sites.map((s) => ({ value: s.id, label: s.displayName }))} placeholder={sites.length === 0 ? "(no sites for this org)" : undefined} />
+        <Field label="Display name" required value={displayName} onChange={setDisplayName} placeholder="Reykjavík HQ Zaptec" />
+        <Select label="Vendor" value={vendorId} onChange={setVendorId} options={[{ value: "", label: "— none —" }, ...vendorOptions.map((v) => ({ value: v.id, label: v.displayName }))]} />
+        <Field label="Vendor installation ref" value={vendorInstallationRef} onChange={setVendorInstallationRef} mono placeholder="(populated by Zaptec wizard)" />
+        <Select label="Onboarding status" value={onboardingStatus} onChange={(v) => setOnboardingStatus(v as typeof STATUSES[number])} options={STATUSES.map((s) => ({ value: s, label: s }))} />
+      </div>
 
       {error && <div className="rounded border border-rose-700/40 bg-rose-950/30 p-2 text-xs text-rose-200">{error}</div>}
-      <button type="submit" disabled={submitting || !valid} className="w-full rounded-md bg-sv-green/20 px-3 py-2 text-sm font-medium text-sv-green ring-1 ring-sv-green/30 hover:bg-sv-green/30 disabled:cursor-not-allowed disabled:opacity-40">
+      <button type="submit" disabled={submitting || !valid} className="rounded-md bg-sv-green/20 px-4 py-2 text-sm font-medium text-sv-green ring-1 ring-sv-green/30 hover:bg-sv-green/30 disabled:cursor-not-allowed disabled:opacity-40">
         {submitting ? "Creating…" : "Create installation"}
       </button>
     </form>

@@ -12,7 +12,7 @@ export default async function NewContractPage() {
   const contractOptions = contracts.map((c) => ({ id: c.id, label: `${c.displayName} [${c.scopeType}]` }));
 
   return (
-    <div className="mx-auto max-w-2xl px-6 py-8">
+    <div className="mx-auto max-w-3xl px-6 py-8">
       <Link href="/billing/contracts" className="mb-4 inline-block text-xs text-ink-400 hover:text-sv-sky">
         ← Back to contracts
       </Link>

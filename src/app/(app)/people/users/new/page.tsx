@@ -6,7 +6,7 @@ export const metadata = { title: "New user" };
 
 export default function NewUserPage() {
   return (
-    <div className="mx-auto max-w-2xl px-6 py-8">
+    <div className="mx-auto max-w-3xl px-6 py-8">
       <Link href="/people/users" className="mb-4 inline-block text-xs text-ink-400 hover:text-sv-sky">
         ← Back to users
       </Link>

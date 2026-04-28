@@ -42,15 +42,17 @@ export function CreateCostCenterForm({ orgOptions }: { orgOptions: { id: string;
 
   return (
     <form onSubmit={onSubmit} className="space-y-3">
-      <Select label="Owner organization" required value={orgId} onChange={setOrgId} options={orgOptions.map((o) => ({ value: o.id, label: o.label }))} />
-      <Field label="Code" required value={code} onChange={(v) => setCode(v.toUpperCase())} mono placeholder="STRAUMVAKT_PAYS" hint="UPPER_SNAKE only" />
-      <Field label="Display name" required value={displayName} onChange={setDisplayName} placeholder="Straumvakt pays" />
-      <Select label="Payer organization (optional)" value={payerOrgId} onChange={setPayerOrgId} options={[{ value: "", label: "— none —" }, ...orgOptions.map((o) => ({ value: o.id, label: o.label }))]} />
-      <Field label="Payer user id (optional)" value={payerUserId} onChange={setPayerUserId} mono hint="UUID; mutually exclusive with payer org" />
-      <Select label="Beneficiary organization (optional)" value={beneficiaryOrgId} onChange={setBeneficiaryOrgId} options={[{ value: "", label: "— none —" }, ...orgOptions.map((o) => ({ value: o.id, label: o.label }))]} />
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Select label="Owner organization" required value={orgId} onChange={setOrgId} options={orgOptions.map((o) => ({ value: o.id, label: o.label }))} />
+        <Field label="Code" required value={code} onChange={(v) => setCode(v.toUpperCase())} mono placeholder="STRAUMVAKT_PAYS" hint="UPPER_SNAKE only" />
+        <Field label="Display name" required value={displayName} onChange={setDisplayName} placeholder="Straumvakt pays" />
+        <Select label="Payer organization (optional)" value={payerOrgId} onChange={setPayerOrgId} options={[{ value: "", label: "— none —" }, ...orgOptions.map((o) => ({ value: o.id, label: o.label }))]} />
+        <Field label="Payer user id (optional)" value={payerUserId} onChange={setPayerUserId} mono hint="UUID; mutually exclusive with payer org" />
+        <Select label="Beneficiary organization (optional)" value={beneficiaryOrgId} onChange={setBeneficiaryOrgId} options={[{ value: "", label: "— none —" }, ...orgOptions.map((o) => ({ value: o.id, label: o.label }))]} />
+      </div>
 
       {error && <div className="rounded border border-rose-700/40 bg-rose-950/30 p-2 text-xs text-rose-200">{error}</div>}
-      <button type="submit" disabled={submitting || !valid} className="w-full rounded-md bg-sv-green/20 px-3 py-2 text-sm font-medium text-sv-green ring-1 ring-sv-green/30 hover:bg-sv-green/30 disabled:cursor-not-allowed disabled:opacity-40">
+      <button type="submit" disabled={submitting || !valid} className="rounded-md bg-sv-green/20 px-4 py-2 text-sm font-medium text-sv-green ring-1 ring-sv-green/30 hover:bg-sv-green/30 disabled:cursor-not-allowed disabled:opacity-40">
         {submitting ? "Creating…" : "Create cost center"}
       </button>
     </form>

@@ -69,16 +69,18 @@ export function CreateCircuitForm({ orgOptions }: { orgOptions: { id: string; la
 
   return (
     <form onSubmit={onSubmit} className="space-y-3">
-      <Select label="Organization" required value={orgId} onChange={setOrgId} options={orgOptions.map((o) => ({ value: o.id, label: o.label }))} />
-      <Select label="Site" required value={siteId} onChange={setSiteId} options={sites.map((s) => ({ value: s.id, label: s.displayName }))} placeholder={sites.length === 0 ? "(no sites)" : undefined} />
-      <Select label="Installation (optional)" value={installationId} onChange={setInstallationId} options={[{ value: "", label: "— site-level —" }, ...installations.map((i) => ({ value: i.id, label: i.displayName }))]} />
-      <Field label="Display name" required value={displayName} onChange={setDisplayName} placeholder="Circuit A — main panel" />
-      <Field label="Ampere ceiling" value={ampereCeiling} onChange={setAmpereCeiling} mono placeholder="63" />
-      <Select label="Phase count" value={phaseCount} onChange={setPhaseCount} options={[{ value: "1", label: "1" }, { value: "3", label: "3" }]} />
-      <Field label="Vendor circuit ref" value={vendorCircuitRef} onChange={setVendorCircuitRef} mono placeholder="(populated by Zaptec wizard)" />
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Select label="Organization" required value={orgId} onChange={setOrgId} options={orgOptions.map((o) => ({ value: o.id, label: o.label }))} />
+        <Select label="Site" required value={siteId} onChange={setSiteId} options={sites.map((s) => ({ value: s.id, label: s.displayName }))} placeholder={sites.length === 0 ? "(no sites)" : undefined} />
+        <Select label="Installation (optional)" value={installationId} onChange={setInstallationId} options={[{ value: "", label: "— site-level —" }, ...installations.map((i) => ({ value: i.id, label: i.displayName }))]} />
+        <Field label="Display name" required value={displayName} onChange={setDisplayName} placeholder="Circuit A — main panel" />
+        <Field label="Ampere ceiling" value={ampereCeiling} onChange={setAmpereCeiling} mono placeholder="63" />
+        <Select label="Phase count" value={phaseCount} onChange={setPhaseCount} options={[{ value: "1", label: "1" }, { value: "3", label: "3" }]} />
+        <Field label="Vendor circuit ref" value={vendorCircuitRef} onChange={setVendorCircuitRef} mono placeholder="(populated by Zaptec wizard)" />
+      </div>
 
       {error && <div className="rounded border border-rose-700/40 bg-rose-950/30 p-2 text-xs text-rose-200">{error}</div>}
-      <button type="submit" disabled={submitting || !valid} className="w-full rounded-md bg-sv-green/20 px-3 py-2 text-sm font-medium text-sv-green ring-1 ring-sv-green/30 hover:bg-sv-green/30 disabled:cursor-not-allowed disabled:opacity-40">
+      <button type="submit" disabled={submitting || !valid} className="rounded-md bg-sv-green/20 px-4 py-2 text-sm font-medium text-sv-green ring-1 ring-sv-green/30 hover:bg-sv-green/30 disabled:cursor-not-allowed disabled:opacity-40">
         {submitting ? "Creating…" : "Create circuit"}
       </button>
     </form>

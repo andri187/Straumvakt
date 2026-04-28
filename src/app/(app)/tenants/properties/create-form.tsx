@@ -60,27 +60,29 @@ export function CreatePropertyForm({ orgOptions }: { orgOptions: { id: string; l
 
   return (
     <form onSubmit={onSubmit} className="space-y-3">
-      <label className="block">
-        <span className="block text-[11px] font-semibold uppercase tracking-brand text-ink-400">
-          Organization<span className="ml-0.5 text-rose-400">*</span>
-        </span>
-        <select value={orgId} onChange={(e) => setOrgId(e.target.value)} className="mt-1 w-full rounded-md border border-bg-border bg-bg-base/50 px-3 py-2 text-sm text-ink-50 focus:border-sv-sky focus:outline-none">
-          {orgOptions.map((o) => (
-            <option key={o.id} value={o.id}>{o.label}</option>
-          ))}
-        </select>
-      </label>
-      <Field label="Display name" required value={displayName} onChange={setDisplayName} placeholder="Straumvakt Reykjavík HQ" />
-      <Field label="Location type" value={locationType} onChange={setLocationType} placeholder="office / store / parking / depot" mono />
-      <Field label="Street" value={street} onChange={setStreet} />
-      <Field label="City" value={city} onChange={setCity} />
-      <Field label="Postal code" value={postalCode} onChange={setPostalCode} mono />
-      <Field label="Latitude" value={latitude} onChange={setLatitude} mono placeholder="64.1466" />
-      <Field label="Longitude" value={longitude} onChange={setLongitude} mono placeholder="-21.9426" />
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="block">
+          <span className="block text-[11px] font-semibold uppercase tracking-brand text-ink-400">
+            Organization<span className="ml-0.5 text-rose-400">*</span>
+          </span>
+          <select value={orgId} onChange={(e) => setOrgId(e.target.value)} className="mt-1 w-full rounded-md border border-bg-border bg-bg-base/50 px-3 py-2 text-sm text-ink-50 focus:border-sv-sky focus:outline-none">
+            {orgOptions.map((o) => (
+              <option key={o.id} value={o.id}>{o.label}</option>
+            ))}
+          </select>
+        </label>
+        <Field label="Display name" required value={displayName} onChange={setDisplayName} placeholder="Straumvakt Reykjavík HQ" />
+        <Field label="Location type" value={locationType} onChange={setLocationType} placeholder="office / store / parking / depot" mono />
+        <Field label="Street" value={street} onChange={setStreet} />
+        <Field label="City" value={city} onChange={setCity} />
+        <Field label="Postal code" value={postalCode} onChange={setPostalCode} mono />
+        <Field label="Latitude" value={latitude} onChange={setLatitude} mono placeholder="64.1466" />
+        <Field label="Longitude" value={longitude} onChange={setLongitude} mono placeholder="-21.9426" />
+      </div>
 
       {error && <div className="rounded border border-rose-700/40 bg-rose-950/30 p-2 text-xs text-rose-200">{error}</div>}
 
-      <button type="submit" disabled={submitting || !valid} className="w-full rounded-md bg-sv-green/20 px-3 py-2 text-sm font-medium text-sv-green ring-1 ring-sv-green/30 hover:bg-sv-green/30 disabled:cursor-not-allowed disabled:opacity-40">
+      <button type="submit" disabled={submitting || !valid} className="rounded-md bg-sv-green/20 px-4 py-2 text-sm font-medium text-sv-green ring-1 ring-sv-green/30 hover:bg-sv-green/30 disabled:cursor-not-allowed disabled:opacity-40">
         {submitting ? "Creating…" : "Create property"}
       </button>
     </form>

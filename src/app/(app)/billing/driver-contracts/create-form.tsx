@@ -61,18 +61,20 @@ export function CreateDriverContractForm({ orgOptions }: { orgOptions: { id: str
 
   return (
     <form onSubmit={onSubmit} className="space-y-3">
-      <Select label="Organization" required value={orgId} onChange={setOrgId} options={orgOptions.map((o) => ({ value: o.id, label: o.label }))} />
-      <Select label="Driver (user)" required value={userId} onChange={setUserId} options={users.map((u) => ({ value: u.id, label: u.label }))} placeholder={users.length === 0 ? "(no members)" : undefined} />
-      <Select label="Owner type" required value={ownerType} onChange={(v) => setOwnerType(v as typeof OWNER_TYPES[number])} options={OWNER_TYPES.map((o) => ({ value: o, label: o }))} />
-      <Field label="Owner id (UUID)" required value={ownerId} onChange={setOwnerId} mono hint="org id for workplace; family-group id; user id for self" />
-      <Field label="WRKPF tariff id (workplace only)" value={wrkpfTariffId} onChange={setWrkpfTariffId} mono />
-      <Field label="Display name" required value={displayName} onChange={setDisplayName} placeholder="Workplace contract for Anna" />
-      <Select label="Status" value={status} onChange={(v) => setStatus(v as typeof STATUSES[number])} options={STATUSES.map((s) => ({ value: s, label: s }))} />
-      <Field label="Valid from (YYYY-MM-DD)" required value={validFrom} onChange={setValidFrom} mono />
-      <Field label="Valid until (optional)" value={validUntil} onChange={setValidUntil} mono />
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Select label="Organization" required value={orgId} onChange={setOrgId} options={orgOptions.map((o) => ({ value: o.id, label: o.label }))} />
+        <Select label="Driver (user)" required value={userId} onChange={setUserId} options={users.map((u) => ({ value: u.id, label: u.label }))} placeholder={users.length === 0 ? "(no members)" : undefined} />
+        <Select label="Owner type" required value={ownerType} onChange={(v) => setOwnerType(v as typeof OWNER_TYPES[number])} options={OWNER_TYPES.map((o) => ({ value: o, label: o }))} />
+        <Field label="Owner id (UUID)" required value={ownerId} onChange={setOwnerId} mono hint="org id for workplace; family-group id; user id for self" />
+        <Field label="WRKPF tariff id (workplace only)" value={wrkpfTariffId} onChange={setWrkpfTariffId} mono />
+        <Field label="Display name" required value={displayName} onChange={setDisplayName} placeholder="Workplace contract for Anna" />
+        <Select label="Status" value={status} onChange={(v) => setStatus(v as typeof STATUSES[number])} options={STATUSES.map((s) => ({ value: s, label: s }))} />
+        <Field label="Valid from (YYYY-MM-DD)" required value={validFrom} onChange={setValidFrom} mono />
+        <Field label="Valid until (optional)" value={validUntil} onChange={setValidUntil} mono />
+      </div>
 
       {error && <div className="rounded border border-rose-700/40 bg-rose-950/30 p-2 text-xs text-rose-200">{error}</div>}
-      <button type="submit" disabled={submitting || !valid} className="w-full rounded-md bg-sv-green/20 px-3 py-2 text-sm font-medium text-sv-green ring-1 ring-sv-green/30 hover:bg-sv-green/30 disabled:cursor-not-allowed disabled:opacity-40">
+      <button type="submit" disabled={submitting || !valid} className="rounded-md bg-sv-green/20 px-4 py-2 text-sm font-medium text-sv-green ring-1 ring-sv-green/30 hover:bg-sv-green/30 disabled:cursor-not-allowed disabled:opacity-40">
         {submitting ? "Creating…" : "Create driver contract"}
       </button>
     </form>

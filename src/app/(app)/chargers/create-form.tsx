@@ -116,34 +116,58 @@ export function CreateChargerForm({ orgOptions }: { orgOptions: { id: string; la
   const valid = orgId && siteId && stationVendor.length > 0 && stationModel.length > 0 && stationSerialNumber.length > 0 && identityString.length >= 3;
 
   return (
-    <form onSubmit={onSubmit} className="space-y-3">
-      <Select label="Organization" required value={orgId} onChange={setOrgId} options={orgOptions.map((o) => ({ value: o.id, label: o.label }))} />
-      <Select label="Site" required value={siteId} onChange={setSiteId} options={sites.map((s) => ({ value: s.id, label: s.displayName }))} placeholder={sites.length === 0 ? "(no sites)" : undefined} />
-      <Select label="Installation (optional)" value={installationId} onChange={setInstallationId} options={[{ value: "", label: "— none —" }, ...installations.map((i) => ({ value: i.id, label: i.displayName }))]} />
-      <Select label="Circuit (optional)" value={circuitId} onChange={setCircuitId} options={[{ value: "", label: "— none —" }, ...circuits.map((c) => ({ value: c.id, label: c.displayName }))]} />
+    <form onSubmit={onSubmit} className="space-y-4">
+      <Section title="Location">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Select label="Organization" required value={orgId} onChange={setOrgId} options={orgOptions.map((o) => ({ value: o.id, label: o.label }))} />
+          <Select label="Site" required value={siteId} onChange={setSiteId} options={sites.map((s) => ({ value: s.id, label: s.displayName }))} placeholder={sites.length === 0 ? "(no sites)" : undefined} />
+          <Select label="Installation (optional)" value={installationId} onChange={setInstallationId} options={[{ value: "", label: "— none —" }, ...installations.map((i) => ({ value: i.id, label: i.displayName }))]} />
+          <Select label="Circuit (optional)" value={circuitId} onChange={setCircuitId} options={[{ value: "", label: "— none —" }, ...circuits.map((c) => ({ value: c.id, label: c.displayName }))]} />
+        </div>
+      </Section>
 
-      <Field label="Station vendor" required value={stationVendor} onChange={setStationVendor} placeholder="Zaptec" />
-      <Field label="Station model" required value={stationModel} onChange={setStationModel} placeholder="Pro" />
-      <Field label="Serial number" required value={stationSerialNumber} onChange={setStationSerialNumber} mono placeholder="ZAP-12345" />
-      <Field label="Firmware version" value={stationFirmwareVersion} onChange={setStationFirmwareVersion} mono />
+      <Section title="Charging station">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Vendor" required value={stationVendor} onChange={setStationVendor} placeholder="Zaptec" />
+          <Field label="Model" required value={stationModel} onChange={setStationModel} placeholder="Pro" />
+          <Field label="Serial number" required value={stationSerialNumber} onChange={setStationSerialNumber} mono placeholder="ZAP-12345" />
+          <Field label="Firmware version" value={stationFirmwareVersion} onChange={setStationFirmwareVersion} mono />
+        </div>
+      </Section>
 
-      <Field label="EVSE index" value={evseIndex} onChange={setEvseIndex} mono />
-      <Field label="EVSE max power (kW)" value={evseMaxPowerKw} onChange={setEvseMaxPowerKw} mono />
-      <Field label="EVSE phase count" value={evsePhaseCount} onChange={setEvsePhaseCount} mono placeholder="3" />
+      <Section title="EVSE & Connector">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Field label="EVSE index" value={evseIndex} onChange={setEvseIndex} mono />
+          <Field label="EVSE max kW" value={evseMaxPowerKw} onChange={setEvseMaxPowerKw} mono />
+          <Field label="EVSE phases" value={evsePhaseCount} onChange={setEvsePhaseCount} mono placeholder="3" />
+          <Field label="Connector index" value={connectorIndex} onChange={setConnectorIndex} mono />
+          <Select label="Connector type" required value={connectorType} onChange={(v) => setConnectorType(v as typeof CONNECTOR_TYPES[number])} options={CONNECTOR_TYPES.map((t) => ({ value: t, label: t }))} />
+          <Field label="Connector max kW" value={connectorMaxPowerKw} onChange={setConnectorMaxPowerKw} mono placeholder="22" />
+        </div>
+      </Section>
 
-      <Field label="Connector index" value={connectorIndex} onChange={setConnectorIndex} mono />
-      <Select label="Connector type" required value={connectorType} onChange={(v) => setConnectorType(v as typeof CONNECTOR_TYPES[number])} options={CONNECTOR_TYPES.map((t) => ({ value: t, label: t }))} />
-      <Field label="Connector max power (kW)" value={connectorMaxPowerKw} onChange={setConnectorMaxPowerKw} mono placeholder="22" />
-
-      <Field label="OCPP identity string" required value={identityString} onChange={setIdentityString} mono placeholder="straumvakt-test-01" />
-      <Select label="OCPP version" value={ocppVersion} onChange={(v) => setOcppVersion(v as typeof OCPP_VERSIONS[number])} options={OCPP_VERSIONS.map((v) => ({ value: v, label: v }))} />
-      <Select label="Asset class" value={assetClass} onChange={(v) => setAssetClass(v as typeof ASSET_CLASSES[number])} options={ASSET_CLASSES.map((v) => ({ value: v, label: v }))} />
+      <Section title="OCPP identity">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Field label="Identity string" required value={identityString} onChange={setIdentityString} mono placeholder="straumvakt-test-01" />
+          <Select label="OCPP version" value={ocppVersion} onChange={(v) => setOcppVersion(v as typeof OCPP_VERSIONS[number])} options={OCPP_VERSIONS.map((v) => ({ value: v, label: v }))} />
+          <Select label="Asset class" value={assetClass} onChange={(v) => setAssetClass(v as typeof ASSET_CLASSES[number])} options={ASSET_CLASSES.map((v) => ({ value: v, label: v }))} />
+        </div>
+      </Section>
 
       {error && <div className="rounded border border-rose-700/40 bg-rose-950/30 p-2 text-xs text-rose-200">{error}</div>}
       <button type="submit" disabled={submitting || !valid} className="w-full rounded-md bg-sv-green/20 px-3 py-2 text-sm font-medium text-sv-green ring-1 ring-sv-green/30 hover:bg-sv-green/30 disabled:cursor-not-allowed disabled:opacity-40">
         {submitting ? "Creating…" : "Create charger"}
       </button>
     </form>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <fieldset className="rounded-md border border-bg-border/60 p-3">
+      <legend className="px-1 text-[10px] font-semibold uppercase tracking-brand text-ink-300">{title}</legend>
+      {children}
+    </fieldset>
   );
 }
 

@@ -55,17 +55,19 @@ export function CreateContractForm({
 
   return (
     <form onSubmit={onSubmit} className="space-y-3">
-      <Select label="Organization" required value={orgId} onChange={setOrgId} options={orgOptions.map((o) => ({ value: o.id, label: o.label }))} />
-      <Field label="Display name" required value={displayName} onChange={setDisplayName} placeholder="Straumvakt root contract" />
-      <Select label="Scope type" required value={scopeType} onChange={(v) => setScopeType(v as typeof SCOPES[number])} options={SCOPES.map((s) => ({ value: s, label: s }))} />
-      <Field label="Scope id (optional UUID)" value={scopeId} onChange={setScopeId} mono hint="leave empty for org-root contract" />
-      <Select label="Parent contract (optional)" value={parentContractId} onChange={setParentContractId} options={[{ value: "", label: "— none (root) —" }, ...contractOptions.map((c) => ({ value: c.id, label: c.label }))]} />
-      <Select label="Status" value={status} onChange={(v) => setStatus(v as typeof STATUSES[number])} options={STATUSES.map((s) => ({ value: s, label: s }))} />
-      <Field label="Valid from (YYYY-MM-DD)" required value={validFrom} onChange={setValidFrom} mono />
-      <Field label="Valid until (optional)" value={validUntil} onChange={setValidUntil} mono />
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Select label="Organization" required value={orgId} onChange={setOrgId} options={orgOptions.map((o) => ({ value: o.id, label: o.label }))} />
+        <Field label="Display name" required value={displayName} onChange={setDisplayName} placeholder="Straumvakt root contract" />
+        <Select label="Scope type" required value={scopeType} onChange={(v) => setScopeType(v as typeof SCOPES[number])} options={SCOPES.map((s) => ({ value: s, label: s }))} />
+        <Field label="Scope id (optional UUID)" value={scopeId} onChange={setScopeId} mono hint="leave empty for org-root contract" />
+        <Select label="Parent contract (optional)" value={parentContractId} onChange={setParentContractId} options={[{ value: "", label: "— none (root) —" }, ...contractOptions.map((c) => ({ value: c.id, label: c.label }))]} />
+        <Select label="Status" value={status} onChange={(v) => setStatus(v as typeof STATUSES[number])} options={STATUSES.map((s) => ({ value: s, label: s }))} />
+        <Field label="Valid from (YYYY-MM-DD)" required value={validFrom} onChange={setValidFrom} mono />
+        <Field label="Valid until (optional)" value={validUntil} onChange={setValidUntil} mono />
+      </div>
 
       {error && <div className="rounded border border-rose-700/40 bg-rose-950/30 p-2 text-xs text-rose-200">{error}</div>}
-      <button type="submit" disabled={submitting || !valid} className="w-full rounded-md bg-sv-green/20 px-3 py-2 text-sm font-medium text-sv-green ring-1 ring-sv-green/30 hover:bg-sv-green/30 disabled:cursor-not-allowed disabled:opacity-40">
+      <button type="submit" disabled={submitting || !valid} className="rounded-md bg-sv-green/20 px-4 py-2 text-sm font-medium text-sv-green ring-1 ring-sv-green/30 hover:bg-sv-green/30 disabled:cursor-not-allowed disabled:opacity-40">
         {submitting ? "Creating…" : "Create contract"}
       </button>
     </form>

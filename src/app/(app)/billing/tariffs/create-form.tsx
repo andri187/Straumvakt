@@ -74,29 +74,31 @@ export function CreateTariffForm({
 
   return (
     <form onSubmit={onSubmit} className="space-y-3">
-      <Select label="Organization" required value={orgId} onChange={setOrgId} options={orgOptions.map((o) => ({ value: o.id, label: o.label }))} />
-      <Select label="Cost factor" required value={costFactorId} onChange={setCostFactorId} options={factorOptions.map((f) => ({ value: f.id, label: f.label }))} />
-      <Field label="Display name" required value={displayName} onChange={setDisplayName} placeholder="ON DSO Reykjavík" />
-      <Select label="Compute rule kind" required value={ruleKind} onChange={(v) => setRuleKind(v as typeof RULE_KINDS[number])} options={RULE_KINDS.map((k) => ({ value: k, label: k }))} />
-      {(ruleKind === "per_kwh" || ruleKind === "per_session_flat" || ruleKind === "per_calendar_month_flat" || ruleKind === "per_day_flat" || ruleKind === "per_minute_after_minutes") && (
-        <Field label="Amount (minor units)" value={amountMinor} onChange={setAmountMinor} mono placeholder="aurar / 100=ISK 1" />
-      )}
-      {ruleKind === "per_minute_after_minutes" && (
-        <Field label="Threshold minutes" value={thresholdMinutes} onChange={setThresholdMinutes} mono placeholder="60" />
-      )}
-      {ruleKind === "percent_of_factors" && (
-        <>
-          <Field label="Percent" value={percent} onChange={setPercent} mono placeholder="25" />
-          <Field label="Factor codes (comma-separated)" value={factorCodes} onChange={setFactorCodes} mono placeholder="DSOF,REPF" />
-        </>
-      )}
-      <Field label="VAT rate %" value={vatRatePct} onChange={setVatRatePct} mono />
-      <Field label="Currency" value={currency} onChange={(v) => setCurrency(v.toUpperCase().slice(0, 3))} mono />
-      <Field label="Valid from (YYYY-MM-DD)" required value={validFrom} onChange={setValidFrom} mono />
-      <Field label="Valid until (YYYY-MM-DD, optional)" value={validUntil} onChange={setValidUntil} mono />
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Select label="Organization" required value={orgId} onChange={setOrgId} options={orgOptions.map((o) => ({ value: o.id, label: o.label }))} />
+        <Select label="Cost factor" required value={costFactorId} onChange={setCostFactorId} options={factorOptions.map((f) => ({ value: f.id, label: f.label }))} />
+        <Field label="Display name" required value={displayName} onChange={setDisplayName} placeholder="ON DSO Reykjavík" />
+        <Select label="Compute rule kind" required value={ruleKind} onChange={(v) => setRuleKind(v as typeof RULE_KINDS[number])} options={RULE_KINDS.map((k) => ({ value: k, label: k }))} />
+        {(ruleKind === "per_kwh" || ruleKind === "per_session_flat" || ruleKind === "per_calendar_month_flat" || ruleKind === "per_day_flat" || ruleKind === "per_minute_after_minutes") && (
+          <Field label="Amount (minor units)" value={amountMinor} onChange={setAmountMinor} mono placeholder="aurar / 100=ISK 1" />
+        )}
+        {ruleKind === "per_minute_after_minutes" && (
+          <Field label="Threshold minutes" value={thresholdMinutes} onChange={setThresholdMinutes} mono placeholder="60" />
+        )}
+        {ruleKind === "percent_of_factors" && (
+          <>
+            <Field label="Percent" value={percent} onChange={setPercent} mono placeholder="25" />
+            <Field label="Factor codes (comma-separated)" value={factorCodes} onChange={setFactorCodes} mono placeholder="DSOF,REPF" />
+          </>
+        )}
+        <Field label="VAT rate %" value={vatRatePct} onChange={setVatRatePct} mono />
+        <Field label="Currency" value={currency} onChange={(v) => setCurrency(v.toUpperCase().slice(0, 3))} mono />
+        <Field label="Valid from (YYYY-MM-DD)" required value={validFrom} onChange={setValidFrom} mono />
+        <Field label="Valid until (YYYY-MM-DD, optional)" value={validUntil} onChange={setValidUntil} mono />
+      </div>
 
       {error && <div className="rounded border border-rose-700/40 bg-rose-950/30 p-2 text-xs text-rose-200">{error}</div>}
-      <button type="submit" disabled={submitting || !valid} className="w-full rounded-md bg-sv-green/20 px-3 py-2 text-sm font-medium text-sv-green ring-1 ring-sv-green/30 hover:bg-sv-green/30 disabled:cursor-not-allowed disabled:opacity-40">
+      <button type="submit" disabled={submitting || !valid} className="rounded-md bg-sv-green/20 px-4 py-2 text-sm font-medium text-sv-green ring-1 ring-sv-green/30 hover:bg-sv-green/30 disabled:cursor-not-allowed disabled:opacity-40">
         {submitting ? "Creating…" : "Create tariff"}
       </button>
     </form>

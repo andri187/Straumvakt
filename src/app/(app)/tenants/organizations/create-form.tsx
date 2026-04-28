@@ -111,20 +111,22 @@ export function CreateOrgForm() {
 
   return (
     <form onSubmit={onSubmit} className="space-y-3">
-      <Field label="Slug" required value={slug} onChange={setSlug} placeholder="straumvakt-pilot" mono hint="lowercase, dashes only" />
-      <Field label="Display name" required value={displayName} onChange={setDisplayName} placeholder="Straumvakt" />
-      <Field label="Country" required value={countryCode} onChange={(v) => setCountryCode(v.toUpperCase().slice(0, 2))} placeholder="IS" mono hint="ISO-3166-1 alpha-2" />
-      <Field label="Kennitala" value={kennitala} onChange={setKennitala} placeholder="700101-9999" mono hint="DDMMYY-XXXX" />
-      <Field label="Legal name" value={legalName} onChange={setLegalName} placeholder="Straumvakt ehf." />
-      <Field label="Legal form" value={legalForm} onChange={setLegalForm} placeholder="ehf. / hf. / sf." />
-      <Field label="VSK no" value={vskNr} onChange={setVskNr} mono />
-      <Field label="LEI code" value={leiCode} onChange={setLeiCode} mono />
-      <Field label="Default currency" value={defaultCurrency} onChange={(v) => setDefaultCurrency(v.toUpperCase().slice(0, 3))} mono />
-      <Field label="Regulator licence no" value={regulatorLicenceNo} onChange={setRegulatorLicenceNo} />
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Slug" required value={slug} onChange={setSlug} placeholder="straumvakt-pilot" mono hint="lowercase, dashes only" />
+        <Field label="Display name" required value={displayName} onChange={setDisplayName} placeholder="Straumvakt" />
+        <Field label="Country" required value={countryCode} onChange={(v) => setCountryCode(v.toUpperCase().slice(0, 2))} placeholder="IS" mono hint="ISO-3166-1 alpha-2" />
+        <Field label="Kennitala" value={kennitala} onChange={setKennitala} placeholder="700101-9999" mono hint="DDMMYY-XXXX" />
+        <Field label="Legal name" value={legalName} onChange={setLegalName} placeholder="Straumvakt ehf." />
+        <Field label="Legal form" value={legalForm} onChange={setLegalForm} placeholder="ehf. / hf. / sf." />
+        <Field label="VSK no" value={vskNr} onChange={setVskNr} mono />
+        <Field label="LEI code" value={leiCode} onChange={setLeiCode} mono />
+        <Field label="Default currency" value={defaultCurrency} onChange={(v) => setDefaultCurrency(v.toUpperCase().slice(0, 3))} mono />
+        <Field label="Regulator licence no" value={regulatorLicenceNo} onChange={setRegulatorLicenceNo} />
+      </div>
 
       <fieldset className="rounded border border-bg-border/60 p-2">
         <legend className="px-1 text-[10px] font-semibold uppercase tracking-brand text-ink-400">Roles</legend>
-        <div className="grid grid-cols-2 gap-1 sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-1 sm:grid-cols-3 md:grid-cols-4">
           {ROLES.map((r) => (
             <label key={r} className="flex cursor-pointer items-center gap-1.5 rounded px-1 py-0.5 text-[11px] text-ink-200 hover:bg-bg-base/40">
               <input type="checkbox" checked={roles.includes(r)} onChange={() => toggleRole(r)} className="h-3 w-3" />
@@ -134,23 +136,29 @@ export function CreateOrgForm() {
         </div>
       </fieldset>
 
-      <fieldset className="rounded border border-bg-border/60 p-2">
-        <legend className="px-1 text-[10px] font-semibold uppercase tracking-brand text-ink-400">Address</legend>
-        <div className="space-y-2">
-          <Field label="Street" value={addrStreet} onChange={setAddrStreet} compact />
-          <Field label="City" value={addrCity} onChange={setAddrCity} compact />
-          <Field label="Postal code" value={addrPostal} onChange={setAddrPostal} compact />
-        </div>
-      </fieldset>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <fieldset className="rounded border border-bg-border/60 p-2">
+          <legend className="px-1 text-[10px] font-semibold uppercase tracking-brand text-ink-400">Address</legend>
+          <div className="space-y-2">
+            <Field label="Street" value={addrStreet} onChange={setAddrStreet} compact />
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Field label="City" value={addrCity} onChange={setAddrCity} compact />
+              <Field label="Postal code" value={addrPostal} onChange={setAddrPostal} compact />
+            </div>
+          </div>
+        </fieldset>
 
-      <fieldset className="rounded border border-bg-border/60 p-2">
-        <legend className="px-1 text-[10px] font-semibold uppercase tracking-brand text-ink-400">Primary contact</legend>
-        <div className="space-y-2">
-          <Field label="Name" value={contactName} onChange={setContactName} compact />
-          <Field label="Email" value={contactEmail} onChange={setContactEmail} compact />
-          <Field label="Phone" value={contactPhone} onChange={setContactPhone} compact />
-        </div>
-      </fieldset>
+        <fieldset className="rounded border border-bg-border/60 p-2">
+          <legend className="px-1 text-[10px] font-semibold uppercase tracking-brand text-ink-400">Primary contact</legend>
+          <div className="space-y-2">
+            <Field label="Name" value={contactName} onChange={setContactName} compact />
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Field label="Email" value={contactEmail} onChange={setContactEmail} compact />
+              <Field label="Phone" value={contactPhone} onChange={setContactPhone} compact />
+            </div>
+          </div>
+        </fieldset>
+      </div>
 
       <label className="block">
         <span className="block text-[11px] font-semibold uppercase tracking-brand text-ink-400">Notes</span>
@@ -164,7 +172,7 @@ export function CreateOrgForm() {
       <button
         type="submit"
         disabled={submitting || !valid}
-        className="w-full rounded-md bg-sv-green/20 px-3 py-2 text-sm font-medium text-sv-green ring-1 ring-sv-green/30 transition-colors hover:bg-sv-green/30 disabled:cursor-not-allowed disabled:opacity-40"
+        className="rounded-md bg-sv-green/20 px-4 py-2 text-sm font-medium text-sv-green ring-1 ring-sv-green/30 transition-colors hover:bg-sv-green/30 disabled:cursor-not-allowed disabled:opacity-40"
       >
         {submitting ? "Creating…" : "Create organization"}
       </button>
