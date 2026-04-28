@@ -32,9 +32,13 @@ export default async function InstallationDetailPage({ params }: { params: Promi
         vendorOptions={vendors}
         initial={{
           displayName: installation.displayName,
-          vendorId: vendors.find((v) => v.slug === installation.vendorSlug)?.id ?? "",
+          vendorId: installation.vendorId ?? "",
+          modelId: installation.modelId ?? "",
           vendorInstallationRef: installation.vendorInstallationRef ?? "",
+          credentialsRef: installation.credentialsRef ?? "",
+          credentialsStatus: installation.credentialsStatus ?? "",
           onboardingStatus: installation.onboardingStatus,
+          retailerTariffId: installation.retailerTariffId ?? "",
         }}
       />
     </div>

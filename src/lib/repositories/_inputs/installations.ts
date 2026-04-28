@@ -25,7 +25,11 @@ export type InstallationCreateInput = z.infer<typeof InstallationCreateInput>;
 export const InstallationUpdateInput = z.object({
   displayName: z.string().min(1).max(120).optional(),
   vendorId: z.string().uuid().optional().nullable(),
+  modelId: z.string().uuid().optional().nullable(),
   vendorInstallationRef: optionalString(120),
+  credentialsRef: optionalString(200),
+  credentialsStatus: optionalString(40),
   onboardingStatus: OnboardingStatus.optional(),
+  retailerTariffId: z.string().uuid().optional().nullable(),
 });
 export type InstallationUpdateInput = z.infer<typeof InstallationUpdateInput>;

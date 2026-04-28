@@ -9,6 +9,7 @@ type Initial = {
   ampereCeiling: string;
   phaseCount: string;
   vendorCircuitRef: string;
+  metadataJson: string;
 };
 
 export function EditCircuitPanel({
@@ -36,6 +37,20 @@ export function EditCircuitPanel({
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault(); setError(null); setSubmitting(true); setSaved(false);
     try {
+      let metadata: Record<string, unknown> | undefined;
+      if (s.metadataJson.trim()) {
+        try {
+          const parsed: unknown = JSON.parse(s.metadataJson);
+          if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+            throw new Error("metadata must be a JSON object");
+          }
+          metadata = parsed as Record<string, unknown>;
+        } catch (err) {
+          throw new Error(`metadata: ${err instanceof Error ? err.message : "invalid JSON"}`);
+        }
+      } else {
+        metadata = {};
+      }
       const res = await fetch(`/api/admin/circuits/${circuitId}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
@@ -45,6 +60,7 @@ export function EditCircuitPanel({
           ampereCeiling: toNum(s.ampereCeiling) ?? null,
           phaseCount: toNum(s.phaseCount) ?? 3,
           vendorCircuitRef: s.vendorCircuitRef || undefined,
+          metadata,
         }),
       });
       if (!res.ok) {
@@ -73,6 +89,17 @@ export function EditCircuitPanel({
         </select>
       </label>
       <Field label="Vendor circuit ref" value={s.vendorCircuitRef} onChange={(v) => set("vendorCircuitRef", v)} mono />
+
+      <label className="block">
+        <span className="block text-[11px] font-semibold uppercase tracking-brand text-ink-400">Metadata (JSON object)</span>
+        <textarea
+          value={s.metadataJson}
+          onChange={(e) => set("metadataJson", e.target.value)}
+          rows={3}
+          placeholder='{"key": "value"}'
+          className="mt-1 w-full rounded-md border border-bg-border bg-bg-base/50 px-3 py-2 font-mono text-xs text-ink-50 focus:border-sv-sky focus:outline-none"
+        />
+      </label>
 
       {error && <div className="rounded border border-rose-700/40 bg-rose-950/30 p-2 text-xs text-rose-200">{error}</div>}
       {saved && <div className="rounded border border-sv-green/40 bg-sv-green/10 p-2 text-xs text-sv-green">Saved.</div>}

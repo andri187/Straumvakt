@@ -9,12 +9,56 @@ export interface InstallationSummary {
   siteId: string;
   siteDisplayName: string;
   displayName: string;
+  vendorId: string | null;
   vendorSlug: string | null;
   vendorDisplayName: string | null;
+  modelId: string | null;
   vendorInstallationRef: string | null;
+  credentialsRef: string | null;
+  credentialsStatus: string | null;
   onboardingStatus: string;
+  retailerTariffId: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+function toInstallationSummary(r: {
+  id: string;
+  orgId: string;
+  organization: { displayName: string };
+  siteId: string;
+  site: { displayName: string };
+  displayName: string;
+  vendorId: string | null;
+  vendor: { slug: string; displayName: string } | null;
+  modelId: string | null;
+  vendorInstallationRef: string | null;
+  credentialsRef: string | null;
+  credentialsStatus: string | null;
+  onboardingStatus: string;
+  retailerTariffId: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}): InstallationSummary {
+  return {
+    id: r.id,
+    orgId: r.orgId,
+    orgDisplayName: r.organization.displayName,
+    siteId: r.siteId,
+    siteDisplayName: r.site.displayName,
+    displayName: r.displayName,
+    vendorId: r.vendorId,
+    vendorSlug: r.vendor?.slug ?? null,
+    vendorDisplayName: r.vendor?.displayName ?? null,
+    modelId: r.modelId,
+    vendorInstallationRef: r.vendorInstallationRef,
+    credentialsRef: r.credentialsRef,
+    credentialsStatus: r.credentialsStatus,
+    onboardingStatus: r.onboardingStatus,
+    retailerTariffId: r.retailerTariffId,
+    createdAt: r.createdAt.toISOString(),
+    updatedAt: r.updatedAt.toISOString(),
+  };
 }
 
 export async function listAllInstallations(): Promise<InstallationSummary[]> {
@@ -27,20 +71,7 @@ export async function listAllInstallations(): Promise<InstallationSummary[]> {
       vendor: { select: { slug: true, displayName: true } },
     },
   });
-  return rows.map((r) => ({
-    id: r.id,
-    orgId: r.orgId,
-    orgDisplayName: r.organization.displayName,
-    siteId: r.siteId,
-    siteDisplayName: r.site.displayName,
-    displayName: r.displayName,
-    vendorSlug: r.vendor?.slug ?? null,
-    vendorDisplayName: r.vendor?.displayName ?? null,
-    vendorInstallationRef: r.vendorInstallationRef,
-    onboardingStatus: r.onboardingStatus,
-    createdAt: r.createdAt.toISOString(),
-    updatedAt: r.updatedAt.toISOString(),
-  }));
+  return rows.map(toInstallationSummary);
 }
 
 export async function listSitesByOrg(orgId: string): Promise<{ id: string; displayName: string }[]> {
@@ -80,20 +111,7 @@ export async function createInstallation(input: InstallationCreateInput, actorUs
     targetId: created.id,
     metadata: { displayName: created.displayName, vendor: created.vendor?.slug ?? null },
   });
-  return {
-    id: created.id,
-    orgId: created.orgId,
-    orgDisplayName: created.organization.displayName,
-    siteId: created.siteId,
-    siteDisplayName: created.site.displayName,
-    displayName: created.displayName,
-    vendorSlug: created.vendor?.slug ?? null,
-    vendorDisplayName: created.vendor?.displayName ?? null,
-    vendorInstallationRef: created.vendorInstallationRef,
-    onboardingStatus: created.onboardingStatus,
-    createdAt: created.createdAt.toISOString(),
-    updatedAt: created.updatedAt.toISOString(),
-  };
+  return toInstallationSummary(created);
 }
 
 import type { InstallationUpdateInput } from "@/lib/repositories/_inputs/installations";
@@ -109,20 +127,7 @@ export async function getInstallationById(id: string): Promise<InstallationSumma
     },
   });
   if (!r) return null;
-  return {
-    id: r.id,
-    orgId: r.orgId,
-    orgDisplayName: r.organization.displayName,
-    siteId: r.siteId,
-    siteDisplayName: r.site.displayName,
-    displayName: r.displayName,
-    vendorSlug: r.vendor?.slug ?? null,
-    vendorDisplayName: r.vendor?.displayName ?? null,
-    vendorInstallationRef: r.vendorInstallationRef,
-    onboardingStatus: r.onboardingStatus,
-    createdAt: r.createdAt.toISOString(),
-    updatedAt: r.updatedAt.toISOString(),
-  };
+  return toInstallationSummary(r);
 }
 
 export async function updateInstallation(
@@ -149,18 +154,5 @@ export async function updateInstallation(
     targetId: id,
     metadata: { fields: Object.keys(patch) },
   });
-  return {
-    id: updated.id,
-    orgId: updated.orgId,
-    orgDisplayName: updated.organization.displayName,
-    siteId: updated.siteId,
-    siteDisplayName: updated.site.displayName,
-    displayName: updated.displayName,
-    vendorSlug: updated.vendor?.slug ?? null,
-    vendorDisplayName: updated.vendor?.displayName ?? null,
-    vendorInstallationRef: updated.vendorInstallationRef,
-    onboardingStatus: updated.onboardingStatus,
-    createdAt: updated.createdAt.toISOString(),
-    updatedAt: updated.updatedAt.toISOString(),
-  };
+  return toInstallationSummary(updated);
 }
