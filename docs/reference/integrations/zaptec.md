@@ -520,7 +520,16 @@ OCMF|<json>|<signature>
 
 ---
 
-## 11. Sources
+## 11. Companion docs
+
+This file references two shared protocol docs in this folder:
+
+- [`ocpp-1.6j.md`](ocpp-1.6j.md) — the full OCPP 1.6J protocol reference (28 messages, 38 standard config keys, state machine, security profiles). Anywhere this file says "OCPP 1.6J" without further qualification, that doc is what's meant.
+- [`ocmf.md`](ocmf.md) — the OCMF signed-meter envelope reference. Required to parse and verify `SignedMeterValue` (StateId 554), `SignedMeterValueInterval` (555), and `SignedSession` inside completed sessions.
+
+---
+
+## 12. Sources
 
 - [Zaptec Developer Docs](https://docs.zaptec.com/) — primary docs portal.
 - [Zaptec OpenAPI spec](https://api.zaptec.com/swagger/v1/swagger.json) — authoritative endpoint list.
@@ -536,15 +545,868 @@ OCMF|<json>|<signature>
 
 ---
 
-## 12. Companion artifacts
+## 13. Full enum reference (embedded — no companion file required)
 
-| File | Where | Purpose |
+These tables mirror `https://api.zaptec.com/api/constants` verbatim as of 2026-04-26. **The constants file should be re-pulled and this section regenerated whenever Zaptec ships a new firmware track.** For a machine-readable copy, `zaptec-test/zaptec-constants.json` carries the same data.
+
+### 13.1 Complete observation catalogue (155 entries)
+
+```
+   -100  AuthorizationCache                  -3  IsOcppConnected
+     -2  IsOnline                            -1  Pulse
+      0  Unknown                              1  OfflineMode
+    100  Capabilities                       110  ProductName
+    111  ArenaId                            120  AuthenticationRequired
+    130  PaymentActive                      131  PaymentCurrency
+    132  PaymentSessionUnitPrice            133  PaymentEnergyUnitPrice
+    134  PaymentTimeUnitPrice               150  CommunicationMode
+    151  PermanentCableLock                 152  ProductCode
+    153  HmiBrightness                      154  LockCableWhenConnected
+    155  SoftStartDisabled                  156  FirmwareApiHost
+    157  DpsAssignedIotHub                  158  DpsScopeId
+    159  IoTHubOverride                     170  MIDBlinkEnabled
+    180  ProductionTesterEnabled            181  ProductionTestStationOverride
+    201  TemperatureInternal5               202  TemperatureInternal6
+    203  TemperatureInternalLimit           205  TemperaturePowerBoard
+    241  TemperatureInternalMaxLimit        270  Humidity
+    280  TamperCover                        501  VoltagePhase1
+    502  VoltagePhase2                      503  VoltagePhase3
+    507  CurrentPhase1                      508  CurrentPhase2
+    509  CurrentPhase3                      510  ChargerMaxCurrent
+    511  ChargerMinCurrent                  512  ActivePhases
+    513  TotalChargePower                   515  RcdCurrent
+    517  Internal12vCurrent                 518  PowerFactor
+    519  SetPhases                          520  MaxPhases
+    522  ChargerOfflinePhase                523  ChargerOfflineCurrent
+    540  RcdCalibration                     541  RcdCalibrationNoise
+    542  ManualRcdTest                      553  TotalChargePowerSession
+    554  SignedMeterValue                   555  SignedMeterValueInterval
+    560  SessionEnergyCountExportActive     561  SessionEnergyCountExportReactive
+    562  SessionEnergyCountImportActive     563  SessionEnergyCountImportReactive
+    570  SoftStartTime                      701  ChargeDuration
+    702  ChargeMode                         703  ChargePilotLevelInstant
+    704  ChargePilotLevelAverage            706  PilotVsProximityTime
+    708  ChargeCurrentSet                   710  ChargerOperationMode
+    711  IsEnabled                          712  IsStandAlone
+    713  ChargerCurrentUserUuidDeprecated   714  CableType
+    715  NetworkType                        716  DetectedCar
+    717  GridTestResult                     718  FinalStopActive
+    719  AuthorizationTimeout               720  TariffText
+    721  SessionIdentifier                  722  ChargerCurrentUserUuid
+    723  CompletedSession                   724  PlugAndChargeAuthorizeRequest
+    725  RejectedUserUuid                   750  NewChargeCard
+    751  AuthenticationListVersion          752  EnabledNfcTechnologies
+    753  LteRoamingDisabled                 760  Location
+    761  TimeZone                           762  TimeSchedule
+    763  NextScheduleEvent                  764  MaxStartDelay
+    800  InstallationId                     801  RoutingId
+    803  Notifications                      804  Warnings
+    805  DiagnosticsMode                    807  InternalDiagnosticsLog
+    808  DiagnosticsString                  809  CommunicationSignalStrength
+    810  CloudConnectionStatus              811  McuResetSource
+    812  McuRxErrors                        813  McuToVariscitePacketErrors
+    814  VarisciteToMcuPacketErrors         816  MIDFaultFlags
+    817  RelayWeldedFlags                   820  UptimeVariscite
+    821  UptimeMCU                          823  CertificateVersion
+    830  SecurityLog                        850  CarSessionLog
+    851  CommunicationModeConfigurationInconsistency
+    852  RawPilotMonitor                    853  IT3PhaseDiagnosticsLog
+    854  PilotTestResults                   855  UnconditionalNfcDetectionIndication
+    856  EnableLteDetailedSignalStrength    857  EnableLocalNetworkMaintenance
+    860  SessionController                  861  OcppNativeUrl
+    862  OcppNativeCbId                     866  OcppNativeConnected
+    867  OcppTunnelCall                     868  OcppNativeZaptecLoadBalancingEnabled
+    869  OcppNativeOnePhaseChargingPhase    899  EmcTestCounter
+    900  ProductionTestResults              901  PostProductionTestResults
+    908  SmartMainboardSoftwareApplicationVersion
+    909  SmartMainboardSoftwareBootloaderVersion
+    911  SmartComputerSoftwareApplicationVersion
+    912  SmartComputerSoftwareBootloaderVersion
+    913  SmartComputerHardwareVersion       914  MIDLegallyRelevantSoftwareIdentifier
+    920  PlcPibVersionGrid                  921  PlcPibVersionEV
+    930  AppliedImageUpdates                931  FailedImageUpdates
+    950  MacMain                            951  MacPlcModuleGrid
+    952  MacWiFi                            953  MacPlcModuleEv
+    960  LteImsi                            961  LteMsisdn
+    962  LteIccid                           963  LteImei
+    964  LteVersion                         965  LteDetailedSignalStrength
+    970  ProductionTestStationNumber        980  MIDCalibration
+    981  MIDPublicKey                       982  MIDCalibrationID
+```
+
+### 13.2 Complete commands catalogue (50 entries)
+
+```
+      0  Unknown                              1  InChargePingReply
+      2  OfflineModeOverride                102  RestartCharger
+    103  RestartMcu                         104  UpdateSettings
+    105  RestartNtp                         106  ExitAppWithCode
+    107  RestartApplication                 108  ReprovisionIotHub
+    109  ReprovisionDps                     200  UpgradeFirmware
+    201  UpgradeFirmwareForced              260  ResetComErrors
+    261  ResetNotifications                 262  ResetComWarnings
+    300  LocalSettings                      320  SetPlcNpw
+    321  SetPlcCCoMode                      322  SetPlcNmk
+    323  SetRemotePlcNmk                    324  SetRemotePlcNpw
+    501  StartCharging                      502  StopCharging
+    503  ReportChargingState                504  SetSessionId
+    505  SetUserUuid                        506  StopChargingFinal
+    507  ResumeCharging                     601  ShowGranted
+    602  ShowDenied                         603  IndicateAppConnect
+    700  RequestSignedMIDEventLog           708  UnlockConnector
+    750  ConfirmChargeCardAdded             751  SetAuthenticationList
+    752  OcppTunnelMessage                  800  Debug
+    801  GetPlcTopology                     802  ResetPlc
+    803  RemoteCommand                      804  RunGridTest
+    805  ClearObservationCache              901  RunPostProductionTest
+    902  GetFirmwareVersion                 950  DumpPilotCounter
+    951  RunPilotTest                     10000  CombinedMin
+  10001  DeauthorizeAndStop               10999  CombinedMax
+```
+
+`CombinedMin` / `CombinedMax` define the range reserved for "combined" commands — `DeauthorizeAndStop` (10001) is the only one defined today, but vendors can ship more in this range without conflicting with low-numbered IDs.
+
+### 13.3 `ChargerOperationMode` (StateId 710)
+
+```json
+{ "Unknown": 0, "Disconnected": 1, "Connected_Requesting": 2,
+  "Connected_Charging": 3, "Connected_Finished": 5 }
+```
+
+Note: `4` is reserved / unused. `6 = Connected_RequestingLimited` exists in the wild (DLB throttling) but is not in the Constants enum — assume it as an extension.
+
+### 13.4 `Phases` (used by StateId 512 / 519 / 520)
+
+```json
+{ "None": 0, "Phase_1": 1, "Phase_2": 2, "Phase_3": 4, "All": 7 }
+```
+
+Bitmask: `value & 1` ⇒ L1, `value & 2` ⇒ L2, `value & 4` ⇒ L3.
+
+### 13.5 `NetworkTypes` (StateId 715)
+
+```json
+{ "Unknown": 0, "IT_1_Phase": 1, "IT_3_Phase": 2,
+  "TN_1_Phase": 3, "TN_3_Phase": 4 }
+```
+
+### 13.6 `DeviceTypes`
+
+```json
+{ "Unknown": 0, "Smart": 1, "Portable": 2, "HomeApm": 3,
+  "Apollo": 4, "OtherApm": 5, "GenericApm": 6,
+  "HanApm": 7, "TicApm": 8 }
+```
+
+`Smart` is the Zaptec Pro family. `Apollo` is Zaptec Go / Go 2.
+
+### 13.7 `InstallationTypes`
+
+```json
+{
+  "Pro":   { "Id": 0, "Name": "Pro",   "DefaultFeatures": 183,                                "DefaultRoute": "default" },
+  "Smart": { "Id": 1, "Name": "Smart", "MaxCircuits": 1, "MaxCircuitCurrent": 32, "MaxChargers": 3, "DefaultFeatures": 471, "DefaultRoute": "default" }
+}
+```
+
+### 13.8 `InstallationCategories`
+
+```json
+[
+  { "Id": "5c624162-e595-4167-a8bb-8b33a1487b62", "Category": "Community_Installation_Category" },
+  { "Id": "c43d09c7-b734-4319-af16-9e8fac37d7ec", "Category": "Company_Installation_Category" },
+  { "Id": "d72d6374-7f73-4df5-8056-60635b177421", "Category": "Private_Installation_Category" },
+  { "Id": "08814e5f-bd84-45cd-9e0e-d225c8d675e1", "Category": "Public_Installation_Category" }
+]
+```
+
+Dalvegur 10–14 is `Company_Installation_Category` (`c43d09c7-...`).
+
+### 13.9 `InstallationAuthenticationType`
+
+```json
+{ "Native": 0, "WebHooks": 1, "Ocpp": 2, "OcppNative": 3 }
+```
+
+### 13.10 `Features` (installation `AvailableFeatures` / `EnabledFeatures` bitmask)
+
+```json
+{
+  "None": 0,
+  "Api_MessageSubscription": 1,
+  "Authentication_Internal": 2,
+  "PowerManagement_Apm": 4,
+  "PowerManagement_EcoMode": 8,
+  "PowerManagement_Schedule": 16,
+  "PowerManagement_Apm_PowerLimit": 32,
+  "Connectivity_4G": 64,
+  "Authentication_Ocpp": 128,
+  "PowerManagement_Apm_Tariff_PowerLimit": 256,
+  "Authentication_OcppNative": 512,
+  "PowerManagement_Apm_Tic": 65536,
+  "PowerManagement_Apm_SurplusMode": 131072
+}
+```
+
+Default `Pro` install gets `183 = 1+2+4+16+32+128` = MessageSubscription + Internal Auth + APM + Schedule + APM Power Limit + OCPP Auth.
+
+### 13.11 `SmartWarnings` (full bitmask)
+
+```json
+{
+  "WARNING_OK": 0,
+  "WARNING_HUMIDITY": 1,
+  "WARNING_TEMPERATURE": 2,
+  "WARNING_TEMPERATURE_ERROR": 4,
+  "WARNING_EMETER_NO_RESPONSE": 8,
+  "WARNING_MAX_SESSION_RESTART": 16,
+  "WARNING_CHARGE_OVERCURRENT": 32,
+  "WARNING_PILOT_STATE": 64,
+  "WARNING_RELAY_WELDED": 128,
+  "WARNING_PILOT_LOW_LEVEL": 256,
+  "WARNING_FPGA_COM_TIMEOUT": 512,
+  "WARNING_REBOOT": 1024,
+  "WARNING_DISABLED": 2048,
+  "WARNING_RCD_AC": 4096,
+  "WARNING_RCD_DC": 8192,
+  "WARNING_RCD_PEAK": 16384,
+  "WARNING_RCD_TEST_AC": 65536,
+  "WARNING_RCD_TEST_DC": 131072,
+  "WARNING_RCD_FAILURE": 262144,
+  "WARNING_RCD_TEST_TIMEOUT": 524288,
+  "WARNING_RCD": 1011712,
+  "WARNING_FPGA_VERSION": 1048576,
+  "WARNING_FPGA_UNEXPECTED_RELAY": 2097152,
+  "WARNING_FPGA_CHARGING_RESET": 4194304,
+  "WARNING_PILOT_NO_PROXIMITY": 8388608,
+  "WARNING_EMETER_ALARM": 16777216,
+  "WARNING_EMETER_LINK": 33554432,
+  "WARNING_NO_VOLTAGE_L1": 67108864,
+  "WARNING_NO_VOLTAGE_L2_L3": 134217728,
+  "WARNING_FPGA_WATCHDOG": 268435456,
+  "WARNING_EMETER_CAL": 536870912,
+  "WARNING_MID": 1073741824,
+  "WARNING_VARISCITE": 2147483648,
+  "WARNING_MCU_BOOTLOADER": 4294967296,
+  "WARNING_FPGA_INIT_FAILED": 8589934592,
+  "WARNING_VARISCITE_ILLEGAL_PHASE": 17179869184
+}
+```
+
+`WARNING_RCD = 1011712` is a convenience constant (OR of `RCD_AC | RCD_DC | RCD_PEAK | RCD_TEST_AC | RCD_TEST_DC | RCD_FAILURE | RCD_TEST_TIMEOUT`).
+
+> [!IMPORTANT]
+> The high bits (`WARNING_VARISCITE` = 2^31, `WARNING_MCU_BOOTLOADER` = 2^32, `WARNING_FPGA_INIT_FAILED` = 2^33, `WARNING_VARISCITE_ILLEGAL_PHASE` = 2^34) **exceed JavaScript's safe-integer range** (2^53 is fine but bitwise operators on `Number` are 32-bit). Decode with `BigInt`:
+> ```ts
+> const value = BigInt(raw);  // raw is the ValueAsString from StateId 803/804
+> for (const [name, bit] of Object.entries(SmartWarnings)) {
+>   if (bit !== 0 && (value & BigInt(bit)) !== 0n) yield name;
+> }
+> ```
+
+### 13.12 `VarisciteWarnings`
+
+```json
+{ "WARNING_MCU_BOOTLOADER": 1, "WARNING_FPGA_INIT_FAILED": 2,
+  "WARNING_VARISCITE_ILLEGAL_PHASE": 4 }
+```
+
+These overlap with `SmartWarnings` at the top end — when decoding, prefer the SmartWarnings name when both match.
+
+### 13.13 `ErrorCodes` (HTTP error envelope `code`)
+
+```json
+{
+  "Unknown": 500, "MissingRequiredData": 503, "UnknownSetting": 504,
+  "OperationFailedForUnknownReasons": 505, "NotApplicableForUser": 506,
+  "UnknownUser": 507, "RfidTokenInUse": 508, "SignUpTooManyRequests": 509,
+  "EmailInUse": 510, "CellPhoneInUse": 511, "UnknownObject": 512,
+  "InvalidPassword": 513, "IncorrectPassword": 514,
+  "UserActivationLinkExpired": 515, "LinkRequestExpired": 516,
+  "ChargerDeviceIdExists": 517, "UnknownDeviceId": 518,
+  "UnknownCommand": 519, "ErrorCommunicatingWithDevice": 520,
+  "StringIsNotAWellFormedVersion": 521, "FirmwareVersionExists": 522,
+  "FirmwareFileExists": 523, "CreateConflict": 524,
+  "DeviceFirmwareNotConfigured": 525, "FeatureNotEnabled": 526,
+  "NotSupported": 527, "DeviceCommandRejected": 528,
+  "InvalidFormat": 529, "MailSendFailed": 530, "ConcurrencyError": 531,
+  "ConfigurationError": 532, "Forbidden": 533,
+  "InstallationTypeViolation": 534, "PaymentFailed": 535,
+  "PaymentAuthorizationRequired": 536,
+  "OperationFailedActiveSubscriptions": 537,
+  "OperationFailedDueToChargerState": 538,
+  "InstallationConstraintViolation": 539, "UnknownInstallationId": 540,
+  "UnknownEnergySensorId": 541,
+  "UnauthorizedToPerformOcppNativeChanges": 542
+}
+```
+
+### 13.14 `MessageCodes`
+
+```json
+{ "Success": 0, "Error": 1, "Information": 2, "Warning": 3,
+  "KnownErrors": 500, "UnknownObject": 501 }
+```
+
+### 13.15 `UserRoles` (bitmask, used in `CurrentUserRoles` field on installation/charger)
+
+```json
+{ "None": 0, "User": 1, "Owner": 2, "Maintainer": 4, "Administrator": 8,
+  "Any": 15, "Onboarding": 16, "DeviceAdministrator": 32,
+  "PartnerAdministrator": 64, "Technical": 128, "InternalData": 256 }
+```
+
+`Any = 15` is `User | Owner | Maintainer | Administrator`.
+
+### 13.16 `Settings` map (writable observation IDs)
+
+A subset of observations is writable via `POST /api/installation/{id}/update` or `POST /api/chargers/{id}/update`. The full list (39 entries):
+
+```
+AuthenticationRequired = 120     PaymentActive = 130
+PaymentCurrency = 131            PaymentSessionUnitPrice = 132
+PaymentEnergyUnitPrice = 133     PaymentTimeUnitPrice = 134
+CommunicationMode = 150          PermanentCableLock = 151
+HmiBrightness = 153              LockCableWhenConnected = 154
+SoftStartDisabled = 155          MIDBlinkEnabled = 170
+CurrentInMaximum = 510           CurrentInMinimum = 511
+MaxPhases = 520                  DefaultOfflinePhase = 522
+DefaultOfflineCurrent = 523      SignedMeterValueInterval = 555
+IsEnabled = 711                  Standalone = 712
+NetworkType = 715                AuthorizationTimeout = 719
+TariffText = 720                 EnabledNfcTechnologies = 752
+LteRoamingDisabled = 753         InstallationId = 800
+RoutingId = 801                  ChargePointName = 802
+DiagnosticsMode = 805            DisableBLEChargePointName = 806
+```
+
+### 13.17 `DeviceLogTypes`
+
+```json
+{
+  "OcppIn": 0, "OcppOut": 1, "OcppError": 2, "OcppConnected": 3,
+  "OcppConnectionFailed": 4, "OcppClientClose": 5,
+  "IotCommandExecuted": 6, "IotCommandFailed": 7,
+  "IotCloudSettingUpdated": 8, "SessionCommit": 9,
+  "OfflineSessionCommit": 10, "AuthorizationRequest": 11,
+  "AuthorizationSuccess": 12, "AuthorizationError": 13,
+  "AuthorizationFailed": 14
+}
+```
+
+### 13.18 `SessionCommitMetadata` (bitmask on `chargehistory.CommitMetadata`)
+
+```json
+{ "None": 0, "Online": 1, "Offline": 2, "ReliableClock": 4,
+  "StoppedByRFID": 8, "Signed": 16, "Void": 32, "Aborted": 64,
+  "OcppNative": 128 }
+```
+
+`CommitMetadata = 5` (observed on Festi 5's last session) decodes to `Online | ReliableClock` — session was committed while online with a synchronised clock.
+
+### 13.19 `OcppCloudUrlVersions`
+
+```json
+{ "Legacy": 0, "Ocpp16Compliant": 1 }
+```
+
+### 13.20 `ObjectTypes`
+
+```json
+{ "Unknown": 0, "Installation": 1, "Circuit": 2, "Charger": 3,
+  "User": 4, "UserGroup": 5, "InactiveUser": 6, "InvitedUser": 7,
+  "Country": 8 }
+```
+
+### 13.21 `EntityTypes`
+
+```json
+{ "Unknown": 0, "Installation": 1, "Charger": 2 }
+```
+
+---
+
+## 14. Worked end-to-end examples
+
+All examples assume `ZAPTEC_USERNAME` and `ZAPTEC_PASSWORD` are set in the environment. Bearer tokens are stripped to `…`.
+
+### 14.1 Authenticate
+
+```sh
+curl -s -X POST https://api.zaptec.com/oauth/token \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  --data-urlencode "grant_type=password" \
+  --data-urlencode "username=$ZAPTEC_USERNAME" \
+  --data-urlencode "password=$ZAPTEC_PASSWORD" \
+  --data-urlencode "scope=openid"
+```
+
+Response:
+```json
+{
+  "access_token": "eyJhbGciOiJSUzI1NiIs…",
+  "token_type": "bearer",
+  "expires_in": 86399,
+  "refresh_token": "…"
+}
+```
+
+### 14.2 List installations
+
+```sh
+TOKEN="<access_token from 14.1>"
+curl -s https://api.zaptec.com/api/installation \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Response (envelope):
+```jsonc
+{
+  "Pages": 1,
+  "Data": [
+    { "Id": "7d722149-3c5f-4488-8bf2-e660503e11e9",
+      "Name": "Dalvegur 10 - 14",
+      "Address": "Dalvegur 8 - 12",
+      "City": "Kópavogur", "ZipCode": "200",
+      "ActiveChargerCount": 20,
+      "MaxCurrent": 100, "AvailableCurrent": 70,
+      "OcppCloudUrl": "wss://straumvakt-ocpp.straumvakt.workers.dev/ocpp/ZAP257533",
+      "MessagingEnabled": true,
+      "AuthenticationType": 2,
+      "NetworkType": 4,
+      "AvailableFeatures": 183, "EnabledFeatures": 0,
+      // ...50+ more fields...
+    },
+    { "Id": "fccccfac-b2c5-4273-9fd9-1e4ca64de8d6", "Name": "Dalvegur" }
+  ]
+}
+```
+
+### 14.3 List chargers in an installation
+
+```sh
+INST=7d722149-3c5f-4488-8bf2-e660503e11e9
+curl -s "https://api.zaptec.com/api/chargers?InstallationId=$INST&PageSize=100" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Same envelope: `{ Pages, Data: [...] }`. Pagination params:
+
+| Param | Default | Notes |
 |---|---|---|
-| `zaptec-test/zaptec-constants.json` | `E:\Claude\zaptec-test\` (scratch app) | Cached `/api/constants` response. Treat as read-only reference. |
-| `zaptec-test/openapi.json` | `E:\Claude\zaptec-test\` (scratch app) | Cached OpenAPI v1 spec. |
-| `zaptec-test/src/lib/zaptec.ts` | scratch app | Reference implementation of every endpoint listed in §3 + types. |
-| `zaptec-test/src/lib/zaptec-state.ts` | scratch app | Authoritative ID → name → group map, plus operation-mode + network-type decoders. |
-| `zaptec-test/src/lib/zaptec-enums.ts` | scratch app | SmartWarnings + Features bitmask decoders, comm-mode + uptime + cable-type formatters. |
-| `zaptec-test/src/lib/ocpp.ts` | scratch app | OCPP types + the 38-key standard config catalogue + 28-message vocabulary + 15-action transport-tagged catalogue. |
+| `PageSize` | server default ≈ 50 | Max ~100 reliably |
+| `PageIndex` | 0 | Zero-based |
+| `SortProperty` | server default | E.g. `Name`, `CreatedOnDate` |
+| `SortDescending` | false | Boolean |
+| `IncludeDisabled` | false | |
+| `NameFilter` | — | Server-side substring filter |
+| `Roles` | — | Bitmask filter against `UserRoles` |
+| `DeviceType` | — | Filter against `DeviceTypes` enum |
+| `InstallationType` | — | `0 = Pro`, `1 = Smart` |
+| `Exclude` | — | Array of charger UUIDs to exclude |
 
-The scratch app is the intended source of truth for the production Zaptec adapter; it has been reverse-engineered against live chargers and corrects several published mistakes (§10).
+### 14.4 Read live state observations
+
+```sh
+CHARGER=03278fc6-ab76-47af-9ccc-b84e90e07284
+curl -s "https://api.zaptec.com/api/chargers/$CHARGER/state" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Response is a flat array (no `Data` wrapper):
+```json
+[
+  { "ChargerId": "03278fc6-…", "StateId": -3,
+    "Timestamp": "2026-04-23T11:42:08.44", "ValueAsString": "1" },
+  { "ChargerId": "03278fc6-…", "StateId": 501,
+    "Timestamp": "2026-04-24T16:21:07.907", "ValueAsString": "0.6278" },
+  // ...80 entries...
+]
+```
+
+### 14.5 Charger detail
+
+```sh
+curl -s "https://api.zaptec.com/api/chargers/$CHARGER" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Returns ~30 fields including `SignedMeterValueKwh`, `SignedMeterValue` (the OCMF blob), `PropertyOcppUrl`, `PropertyAuthenticationDisabled`, `IsAuthorizationRequired`, `Pin`, `CircuitId`, `HasSessions`. **`OcppInitialChargePointPassword` may be present on this response — never display or log.**
+
+### 14.6 Stop a session (OCPP-equivalent RemoteStopTransaction via REST)
+
+```sh
+curl -s -X POST -H "Authorization: Bearer $TOKEN" \
+  "https://api.zaptec.com/api/chargers/$CHARGER/sendCommand/506"
+```
+
+Body is empty. Response is empty `200 OK` on success, or `4xx` with an `ErrorCodes` envelope on failure.
+
+### 14.7 Charge history (last 10 sessions for one charger)
+
+```sh
+curl -s "https://api.zaptec.com/api/chargehistory?ChargerId=$CHARGER&PageSize=10&SortProperty=StartDateTime&SortDescending=true" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Response:
+```jsonc
+{
+  "Pages": 438,
+  "Data": [
+    {
+      "Id": "67ddc10b-9d7b-4cf7-ad3c-7424819997af",
+      "ChargerId": "03278fc6-…", "DeviceId": "ZCS032822", "DeviceName": "Festi 5",
+      "StartDateTime": "2026-04-24T12:35:49.197",
+      "EndDateTime": "2026-04-24T16:21:07.057",
+      "CommitEndDateTime": "2026-04-24T16:21:07.057",
+      "Energy": 11.903,
+      "CommitMetadata": 5,
+      "ExternalId": "1410145234",
+      "ExternallyEnded": true,
+      "ChargerFirmwareVersion": { "Major": 3, "Minor": 2, "Build": 2, "Revision": 0,
+                                   "MajorRevision": 0, "MinorRevision": 0 },
+      "SignedSession": "OCMF|{\"FV\":\"1.0\",\"GI\":\"ZAPTEC PRO\",…}|<sig>"
+    }
+  ]
+}
+```
+
+### 14.8 Firmware fleet status
+
+```sh
+curl -s "https://api.zaptec.com/api/chargerFirmware/installation/$INST" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Response is a flat array, one entry per charger:
+```json
+[
+  { "ChargerId": "…", "DeviceId": "ZCS029369", "IsOnline": true,
+    "CurrentVersion": "3.2.2.0", "AvailableVersion": "3.2.2.0",
+    "DeviceType": 1, "IsUpToDate": true }
+]
+```
+
+### 14.9 Real-time push credentials
+
+```sh
+curl -s "https://api.zaptec.com/api/installation/$INST/messagingConnectionDetails" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Response (**Password is a SAS token — server-side only**):
+```json
+{
+  "Type": 0, "Host": "zap-p-installations-sbus.servicebus.windows.net",
+  "Port": 5671, "UseSSL": true,
+  "Username": "installation_<uuid>", "Password": "<SAS>",
+  "Topic": "installation_<uuid>", "Subscription": "default"
+}
+```
+
+---
+
+## 15. Real-time push — Service Bus AMQP subscription details
+
+The credentials returned in §14.9 plug into Azure Service Bus AMQP 1.0:
+
+| Field | Use |
+|---|---|
+| Host | TLS endpoint `<host>:5671` |
+| Username | SAS key name (e.g. `installation_<uuid>`) |
+| Password | SAS token (URL-encoded, time-bound) |
+| Topic | Subscription source path |
+| Subscription | Per-subscriber path under the topic |
+
+Subscriber pseudocode (using `rhea` or `azure-service-bus-amqp`):
+
+```ts
+const conn = createAmqpConnection({
+  hostname: details.Host,
+  port: details.Port,
+  transport: "tls",
+  username: details.Username,
+  password: details.Password,
+});
+const receiver = conn.createReceiver({
+  source: `${details.Topic}/Subscriptions/${details.Subscription}`,
+});
+receiver.on("message", (m) => {
+  // m.body is JSON: { ChargerId, StateId, Timestamp, ValueAsString }
+  // — same shape as one entry from /api/chargers/{id}/state
+});
+```
+
+**Token rotation:** SAS tokens expire (typically 1–4 hours). Re-call `/messagingConnectionDetails` and reconnect when:
+- The connection drops with `amqp:link:detach-forced`, OR
+- 80% of the token's `expiresOn` has elapsed (parse the `se=` query param of the SAS).
+
+---
+
+## 16. Production-adapter checklist
+
+Before turning a Zaptec adapter loose against a real fleet:
+
+### 16.1 Authentication
+- [ ] Bearer token cached in-process for ≥ 23 h; refresh proactively at the 23 h mark.
+- [ ] On `401 Unauthorized`, re-run the password grant exactly once before bubbling the error.
+- [ ] On `503 Service Temporarily Unavailable`, exponential backoff starting at 5 s, max 5 minutes, max 6 attempts.
+- [ ] Log a structured event when `503` happens (it indicates rate-limiting upstream, not a hard error).
+
+### 16.2 Pagination
+- [ ] Always set explicit `PageSize` (don't rely on server default).
+- [ ] Drive iteration by `Pages`; do not assume `TotalCount` is populated.
+- [ ] When page count > 100, use `Exclude` rather than re-fetching to deduplicate.
+
+### 16.3 Error envelope
+- [ ] Parse JSON body even on `4xx`; the `ErrorCodes` enum (§13.13) maps to specific recovery paths:
+  - `533 Forbidden` → user lacks role; surface to operator
+  - `538 OperationFailedDueToChargerState` → retry after `StatusNotification` change
+  - `534 InstallationTypeViolation` / `539 InstallationConstraintViolation` → schema validation failure; do not retry
+  - `540 UnknownInstallationId` → bad reference; re-fetch installations list
+  - `542 UnauthorizedToPerformOcppNativeChanges` → check `installation.AuthenticationType` first
+
+### 16.4 State observation handling
+- [ ] **Decode `Notifications` (803) and `Warnings` (804) with `BigInt`** — values exceed 2^32 (§13.11).
+- [ ] Accept `CommunicationMode` (150) as either numeric or label form (§10.2).
+- [ ] `UptimeVariscite` / `UptimeMCU` are decimal **hours** — multiply by 3600 to get seconds, do not multiply by 1000 (§10.3).
+- [ ] `ValueAsString` may be empty `""` or absent — do not coerce empty to `0`; treat as "no reading".
+
+### 16.5 OCPP-derived state
+- [ ] Treat `IsOcppConnected` (-3) as the source of truth for "is the protocol up". `IsOnline` (-2) is the device-cloud reachability — they can disagree (e.g. if the OCPP gateway is down but the Zaptec reporting channel is up).
+- [ ] **Re-read `OcppCloudUrl` every session** — it can change between sessions (see §10.4).
+- [ ] When `AuthenticationType = 3` (OcppNative), expect `OcppNativeUrl` (861), `OcppNativeCbId` (862), and `OcppNativeConnected` (866) to be populated; if they're missing, the charger hasn't completed the OcppNative provisioning step.
+
+### 16.6 OCMF
+- [ ] Verify every `SignedMeterValue` and `SignedSession` against `MIDPublicKey` (981) — see [`ocmf.md`](ocmf.md) §6.
+- [ ] Cache the public key per-charger in `assets.charger.metadata`; re-fetch only on firmware update or `MIDCalibration` change.
+- [ ] **Never bill against an unsigned reading.** If verification fails, write to event log and escalate.
+
+### 16.7 Idempotency
+- [ ] All write endpoints (`POST /update`, `sendCommand/{id}`) are not idempotent. Wrap in an outbox pattern: persist the intent, dispatch with retries, mark complete on success.
+- [ ] Use the V3 `events.idempotency_keys` table (scope = `vendor:zaptec`, key = `<charger>:<commandId>:<correlation-id>`).
+
+### 16.8 Observability
+- [ ] Tag every Zaptec HTTP call with `vendor=zaptec`, `endpoint=<path>`, `installationId=<id>` for log-aggregation grouping.
+- [ ] Track p50/p95 latency per endpoint; Zaptec's `/state` is reliably ~400 ms, `/chargehistory` ~600 ms, `/oauth/token` ~200 ms. Significant deviation = upstream incident.
+- [ ] Emit `vendors.adapter_health` rows on a 1-min window with error rate + p95.
+- [ ] Run nightly contract tests (`vendors.contract_tests`) against `/api/constants` — alert if the enum diff is non-empty (Zaptec ships breaking changes here).
+
+### 16.9 Secret hygiene
+- [ ] Zaptec credentials live in Cloudflare secrets / 1Password; never in `wrangler.jsonc`, never in repo.
+- [ ] **`OcppInitialChargePointPassword` is in the API response envelope** — strip before logging or storing.
+- [ ] Service Bus `Password` (SAS) is short-lived; do not persist beyond the live worker invocation.
+- [ ] `MIDPublicKey` is non-secret but `MIDPrivateKey` is **never** exposed by the API — it lives only in the meter's HSM.
+
+---
+
+## 17. Reference TypeScript shapes
+
+Drop into `src/lib/vendors/zaptec/types.ts`:
+
+```ts
+// ── Auth ────────────────────────────────────────────────────────────────
+export type ZaptecToken = {
+  access_token: string;
+  refresh_token?: string;
+  token_type: "bearer";
+  expires_in: number;
+};
+
+// ── Installation ────────────────────────────────────────────────────────
+export type Installation = {
+  Id: string;
+  Name?: string;
+  Address?: string;
+  City?: string;
+  ZipCode?: string;
+  CountryId?: string;
+  ActiveChargerCount?: number;
+  MaxCurrent?: number;
+  AvailableCurrent?: number;
+  AvailableCurrentPhase1?: number;
+  AvailableCurrentPhase2?: number;
+  AvailableCurrentPhase3?: number;
+  AvailableCurrentMode?: number;
+  AvailableCurrentScheduleWeekendActive?: boolean;
+  ThreeToOnePhaseSwitchCurrent?: number;
+  DefaultThreeToOneSwitchCurrent?: number;
+  InstallationType?: 0 | 1;
+  InstallationCategory?: string;
+  InstallationCategoryId?: string;
+  UseLoadBalancing?: boolean;
+  IsRequiredAuthentication?: boolean;
+  Latitude?: number;
+  Longitude?: number;
+  NetworkType?: 0 | 1 | 2 | 3 | 4;
+  Active?: boolean;
+  AuthenticationType?: 0 | 1 | 2 | 3;
+  MessagingEnabled?: boolean;
+  RoutingId?: string;
+  OcppCloudUrl?: string;
+  OcppCloudUrlVersion?: 0 | 1;
+  OcppInitialChargePointPassword?: string; // SECRET — strip
+  TimeZoneName?: string;
+  TimeZoneIanaName?: string;
+  AvailableFeatures?: number;
+  EnabledFeatures?: number;
+  Feature_PowerManagement_EcoMode_DepartureTime?: number;
+  Feature_PowerManagement_EcoMode_MinEnergy?: number;
+  Feature_PowerManagement_EcoMode_DeliveryArea?: number;
+  PropertyMainFuseCurrent?: number;
+  PropertyOcppDefaultIdTag?: string;
+  PropertyEnergySensorUniqueId?: string;
+  PropertyEnergySensorRippleEnabled?: boolean;
+  PropertyEnergySensorRippleNumBits?: number;
+  PropertyFirmwareAutomaticUpdates?: boolean;
+  PropertyOfflineModeAllowAnonymous?: boolean;
+  PropertyIsMinimumPowerOfflineMode?: boolean;
+  PropertySessionMaxStopCount?: number;
+  AvailableInternetAccessPLC?: boolean;
+  AvailableInternetAccessWiFi?: boolean;
+  SurplusMode?: { Active?: boolean };
+  CreatedOnDate?: string;
+  UpdatedOn?: string;
+};
+
+// ── Charger ─────────────────────────────────────────────────────────────
+export type Charger = {
+  Id: string;
+  Name: string;
+  SerialNo?: string;
+  DeviceId?: string;
+  MID?: string;
+  IsOnline?: boolean;
+  Active?: boolean;
+  DeviceType?: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+  CircuitId?: string;
+  InstallationId?: string;
+  InstallationName?: string;
+  AuthenticationType?: 0 | 1 | 2 | 3;
+  IsAuthorizationRequired?: boolean;
+  PropertyAuthenticationDisabled?: boolean;
+  PropertyOcppUrl?: string;
+  PropertyOcppDefaultIdTag?: string;
+  PropertyOfflinePhaseOverride?: number;
+  PropertyPinOfflinePhase?: boolean;
+  Pin?: string;
+  HasSessions?: boolean;
+  OperatingMode?: number;
+  SignedMeterValueKwh?: number;
+  SignedMeterValue?: string; // OCMF envelope (lifetime)
+  CurrentUserRoles?: number;
+  CreatedOnDate?: string;
+  UpdatedOn?: string;
+};
+
+// ── State observation ───────────────────────────────────────────────────
+export type StateObservation = {
+  ChargerId: string;
+  StateId: number;
+  Timestamp?: string;
+  ValueAsString?: string;
+};
+
+// ── Hierarchy (installation/{id}/hierarchy) ─────────────────────────────
+export type HierarchyCharger = {
+  Id: string;
+  Name?: string;
+  DeviceId?: string;
+  SerialNo?: string;
+  MID?: string;
+  Active?: boolean;
+  DeviceType?: number;
+};
+export type HierarchyCircuit = {
+  Id: string;
+  Name?: string;
+  MaxCurrent?: number;
+  IsActive?: boolean;
+  InstallationId: string;
+  InstallationName?: string;
+  Chargers?: HierarchyCharger[];
+};
+export type Hierarchy = {
+  Id: string;
+  Name?: string;
+  NetworkType?: number;
+  Circuits?: HierarchyCircuit[];
+};
+
+// ── Charge history ──────────────────────────────────────────────────────
+export type ChargeHistoryEntry = {
+  Id: string;
+  ChargerId: string;
+  DeviceId?: string;
+  DeviceName?: string;
+  StartDateTime: string;
+  EndDateTime?: string;
+  CommitEndDateTime?: string;
+  Energy: number;        // kWh
+  CommitMetadata?: number; // bitmask, see §13.18
+  ExternalId?: string;
+  ExternallyEnded?: boolean;
+  ChargerFirmwareVersion?: {
+    Major: number; Minor: number; Build: number; Revision: number;
+    MajorRevision: number; MinorRevision: number;
+  };
+  SignedSession?: string;  // OCMF envelope (T<n> pagination)
+};
+
+// ── Firmware ────────────────────────────────────────────────────────────
+export type ChargerFirmwareEntry = {
+  ChargerId: string;
+  DeviceId?: string;
+  IsOnline?: boolean;
+  CurrentVersion?: string;
+  AvailableVersion?: string;
+  DeviceType?: number;
+  IsUpToDate?: boolean;
+};
+
+// ── Messaging ───────────────────────────────────────────────────────────
+export type MessagingConnectionDetails = {
+  Type: number;
+  Host: string;
+  Port: number;
+  UseSSL: boolean;
+  Username: string;
+  Password: string;  // SAS — SECRET
+  Topic: string;
+  Subscription: string;
+};
+
+// ── Error envelope ──────────────────────────────────────────────────────
+export type ZaptecError = {
+  code?: number;        // matches ErrorCodes enum (§13.13)
+  message?: string;
+  details?: unknown;
+};
+```
+
+---
+
+## 18. Reference paginated-fetch helper
+
+```ts
+async function* listPaginated<T>(
+  fetchPage: (page: number) => Promise<{ Pages: number; Data: T[] }>,
+): AsyncGenerator<T> {
+  let page = 0;
+  while (true) {
+    const res = await fetchPage(page);
+    for (const item of res.Data) yield item;
+    if (++page >= res.Pages) return;
+  }
+}
+
+// Usage:
+for await (const session of listPaginated((p) =>
+  fetch(`/api/chargehistory?ChargerId=${id}&PageIndex=${p}&PageSize=100`)
+    .then((r) => r.json())
+)) {
+  await persistSession(session);
+}
+```
+
