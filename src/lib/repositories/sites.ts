@@ -98,3 +98,70 @@ export async function createSite(
     updatedAt: created.updatedAt.toISOString(),
   };
 }
+
+import type { SiteUpdateInput } from "@/lib/repositories/_inputs/sites";
+
+export async function getSiteById(id: string): Promise<SiteSummary | null> {
+  const db = prisma();
+  const r = await db.site.findUnique({
+    where: { id },
+    include: {
+      organization: { select: { displayName: true } },
+      property: { select: { displayName: true } },
+    },
+  });
+  if (!r) return null;
+  return {
+    id: r.id,
+    orgId: r.orgId,
+    orgDisplayName: r.organization.displayName,
+    propertyId: r.propertyId,
+    propertyDisplayName: r.property.displayName,
+    displayName: r.displayName,
+    timezone: r.timezone,
+    siteType: r.siteType,
+    accessLevel: r.accessLevel,
+    powerClass: r.powerClass,
+    createdAt: r.createdAt.toISOString(),
+    updatedAt: r.updatedAt.toISOString(),
+  };
+}
+
+export async function updateSite(
+  id: string,
+  patch: SiteUpdateInput,
+  actorUserId: string | null,
+): Promise<SiteSummary> {
+  const db = prisma();
+  const updated = await db.site.update({
+    where: { id },
+    data: patch,
+    include: {
+      organization: { select: { displayName: true } },
+      property: { select: { displayName: true } },
+    },
+  });
+  await recordAuditAction({
+    orgId: updated.orgId,
+    actorUserId,
+    actorKind: "user",
+    action: "site.update",
+    targetType: "site",
+    targetId: id,
+    metadata: { fields: Object.keys(patch) },
+  });
+  return {
+    id: updated.id,
+    orgId: updated.orgId,
+    orgDisplayName: updated.organization.displayName,
+    propertyId: updated.propertyId,
+    propertyDisplayName: updated.property.displayName,
+    displayName: updated.displayName,
+    timezone: updated.timezone,
+    siteType: updated.siteType,
+    accessLevel: updated.accessLevel,
+    powerClass: updated.powerClass,
+    createdAt: updated.createdAt.toISOString(),
+    updatedAt: updated.updatedAt.toISOString(),
+  };
+}

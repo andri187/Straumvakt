@@ -14,3 +14,12 @@ export const SiteCreateInput = z.object({
   powerClass: SitePowerClassEnum.optional(),
 });
 export type SiteCreateInput = z.infer<typeof SiteCreateInput>;
+
+export const SiteUpdateInput = z.object({
+  displayName: z.string().min(1).max(120).optional(),
+  timezone: z.string().optional(),
+  siteType: SiteTypeEnum.optional(),
+  accessLevel: SiteAccessLevelEnum.optional(),
+  powerClass: SitePowerClassEnum.optional().nullable(),
+});
+export type SiteUpdateInput = z.infer<typeof SiteUpdateInput>;

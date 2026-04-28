@@ -24,10 +24,14 @@ export default async function CircuitsPage() {
       ) : (
         <ul className="divide-y divide-bg-border/60 rounded-md border border-bg-border bg-bg-base/30">
           {circuits.map((c) => (
-            <li key={c.id} className="px-4 py-3">
+            <li key={c.id} className="px-4 py-3 hover:bg-bg-base/20">
               <div className="flex items-baseline justify-between">
                 <div>
-                  <div className="text-sm font-medium text-ink-50">{c.displayName}</div>
+                  <div className="text-sm font-medium text-ink-50">
+                    <Link href={`/circuits/${c.id}`} className="hover:text-sv-sky">
+                      {c.displayName}
+                    </Link>
+                  </div>
                   <div className="text-xs text-ink-500">
                     Org: <Link className="text-sv-sky hover:underline" href={`/tenants/organizations/${c.orgId}`}>{c.orgDisplayName}</Link>
                     {" · "}Site: <span className="text-ink-300">{c.siteDisplayName}</span>

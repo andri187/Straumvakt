@@ -168,3 +168,122 @@ export async function createCharger(
     ocppPassword: password,
   };
 }
+
+import type { ChargerUpdateInput } from "@/lib/repositories/_inputs/chargers";
+
+export interface ChargerDetail {
+  chargingStationId: string;
+  orgId: string;
+  orgDisplayName: string;
+  siteId: string;
+  siteDisplayName: string;
+  installationId: string | null;
+  installationDisplayName: string | null;
+  circuitId: string | null;
+  circuitDisplayName: string | null;
+  vendor: string | null;
+  model: string | null;
+  serialNumber: string | null;
+  firmwareVersion: string | null;
+  evses: { id: string; evseIndex: number; maxPowerKw: string | null; phaseCount: number | null; connectors: { id: string; connectorIndex: number; type: string; maxPowerKw: string | null }[] }[];
+  ocppIdentities: { id: string; identityString: string; ocppVersion: string }[];
+}
+
+export async function getChargerById(chargingStationId: string): Promise<ChargerDetail | null> {
+  const db = prisma();
+  const r = await db.chargingStation.findUnique({
+    where: { siteAssetId: chargingStationId },
+    include: {
+      organization: { select: { displayName: true } },
+      siteAsset: { select: { siteId: true, site: { select: { displayName: true } } } },
+      installation: { select: { displayName: true } },
+      circuit: { select: { displayName: true } },
+      evses: {
+        orderBy: { evseIndex: "asc" },
+        include: { connectors: { orderBy: { connectorIndex: "asc" } } },
+      },
+      ocppIdentities: { orderBy: { createdAt: "asc" } },
+    },
+  });
+  if (!r) return null;
+  return {
+    chargingStationId: r.siteAssetId,
+    orgId: r.orgId,
+    orgDisplayName: r.organization.displayName,
+    siteId: r.siteAsset.siteId,
+    siteDisplayName: r.siteAsset.site.displayName,
+    installationId: r.installationId,
+    installationDisplayName: r.installation?.displayName ?? null,
+    circuitId: r.circuitId,
+    circuitDisplayName: r.circuit?.displayName ?? null,
+    vendor: r.vendor,
+    model: r.model,
+    serialNumber: r.serialNumber,
+    firmwareVersion: r.firmwareVersion,
+    evses: r.evses.map((e) => ({
+      id: e.id,
+      evseIndex: e.evseIndex,
+      maxPowerKw: e.maxPowerKw?.toString() ?? null,
+      phaseCount: e.phaseCount,
+      connectors: e.connectors.map((c) => ({
+        id: c.id,
+        connectorIndex: c.connectorIndex,
+        type: c.type,
+        maxPowerKw: c.maxPowerKw?.toString() ?? null,
+      })),
+    })),
+    ocppIdentities: r.ocppIdentities.map((i) => ({
+      id: i.id,
+      identityString: i.identityString,
+      ocppVersion: i.ocppVersion,
+    })),
+  };
+}
+
+export async function updateCharger(
+  chargingStationId: string,
+  patch: ChargerUpdateInput,
+  actorUserId: string | null,
+): Promise<ChargerDetail> {
+  const db = prisma();
+  await db.$transaction(async (tx) => {
+    const stationData: Record<string, unknown> = {};
+    if (patch.stationVendor !== undefined) stationData.vendor = patch.stationVendor;
+    if (patch.stationModel !== undefined) stationData.model = patch.stationModel;
+    if (patch.stationSerialNumber !== undefined) stationData.serialNumber = patch.stationSerialNumber;
+    if (patch.stationFirmwareVersion !== undefined) stationData.firmwareVersion = patch.stationFirmwareVersion;
+    if (patch.installationId !== undefined) stationData.installationId = patch.installationId;
+    if (patch.circuitId !== undefined) stationData.circuitId = patch.circuitId;
+    if (Object.keys(stationData).length > 0) {
+      await tx.chargingStation.update({ where: { siteAssetId: chargingStationId }, data: stationData });
+    }
+    if (patch.evseId) {
+      const evseData: Record<string, unknown> = {};
+      if (patch.evseMaxPowerKw !== undefined) evseData.maxPowerKw = patch.evseMaxPowerKw;
+      if (patch.evsePhaseCount !== undefined) evseData.phaseCount = patch.evsePhaseCount;
+      if (Object.keys(evseData).length > 0) {
+        await tx.eVSE.update({ where: { id: patch.evseId }, data: evseData });
+      }
+    }
+    if (patch.connectorId) {
+      const connData: Record<string, unknown> = {};
+      if (patch.connectorType !== undefined) connData.type = patch.connectorType;
+      if (patch.connectorMaxPowerKw !== undefined) connData.maxPowerKw = patch.connectorMaxPowerKw;
+      if (Object.keys(connData).length > 0) {
+        await tx.connector.update({ where: { id: patch.connectorId }, data: connData });
+      }
+    }
+  });
+  const result = await getChargerById(chargingStationId);
+  if (!result) throw new Error("charger not found after update");
+  await recordAuditAction({
+    orgId: result.orgId,
+    actorUserId,
+    actorKind: "user",
+    action: "charger.update",
+    targetType: "charging_station",
+    targetId: chargingStationId,
+    metadata: { fields: Object.keys(patch) },
+  });
+  return result;
+}

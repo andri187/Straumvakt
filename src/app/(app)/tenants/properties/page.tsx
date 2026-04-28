@@ -27,10 +27,14 @@ export default async function PropertiesPage() {
       ) : (
         <ul className="divide-y divide-bg-border/60 rounded-md border border-bg-border bg-bg-base/30">
           {properties.map((p) => (
-            <li key={p.id} className="px-4 py-3">
+            <li key={p.id} className="px-4 py-3 hover:bg-bg-base/20">
               <div className="flex items-baseline justify-between">
                 <div>
-                  <div className="text-sm font-medium text-ink-50">{p.displayName}</div>
+                  <div className="text-sm font-medium text-ink-50">
+                    <Link href={`/tenants/properties/${p.id}`} className="hover:text-sv-sky">
+                      {p.displayName}
+                    </Link>
+                  </div>
                   <div className="text-xs text-ink-500">
                     Org:{" "}
                     <Link className="text-sv-sky hover:underline" href={`/tenants/organizations/${p.orgId}`}>

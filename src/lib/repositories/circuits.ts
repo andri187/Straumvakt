@@ -102,3 +102,74 @@ export async function createCircuit(
     updatedAt: created.updatedAt.toISOString(),
   };
 }
+
+import type { CircuitUpdateInput } from "@/lib/repositories/_inputs/circuits";
+
+export async function getCircuitById(id: string): Promise<CircuitSummary | null> {
+  const db = prisma();
+  const r = await db.circuit.findUnique({
+    where: { id },
+    include: {
+      organization: { select: { displayName: true } },
+      site: { select: { displayName: true } },
+      installation: { select: { displayName: true } },
+    },
+  });
+  if (!r) return null;
+  return {
+    id: r.id,
+    orgId: r.orgId,
+    orgDisplayName: r.organization.displayName,
+    siteId: r.siteId,
+    siteDisplayName: r.site.displayName,
+    installationId: r.installationId,
+    installationDisplayName: r.installation?.displayName ?? null,
+    displayName: r.displayName,
+    ampereCeiling: r.ampereCeiling,
+    phaseCount: r.phaseCount,
+    vendorCircuitRef: r.vendorCircuitRef,
+    createdAt: r.createdAt.toISOString(),
+    updatedAt: r.updatedAt.toISOString(),
+  };
+}
+
+export async function updateCircuit(
+  id: string,
+  patch: CircuitUpdateInput,
+  actorUserId: string | null,
+): Promise<CircuitSummary> {
+  const db = prisma();
+  const updated = await db.circuit.update({
+    where: { id },
+    data: patch,
+    include: {
+      organization: { select: { displayName: true } },
+      site: { select: { displayName: true } },
+      installation: { select: { displayName: true } },
+    },
+  });
+  await recordAuditAction({
+    orgId: updated.orgId,
+    actorUserId,
+    actorKind: "user",
+    action: "circuit.update",
+    targetType: "circuit",
+    targetId: id,
+    metadata: { fields: Object.keys(patch) },
+  });
+  return {
+    id: updated.id,
+    orgId: updated.orgId,
+    orgDisplayName: updated.organization.displayName,
+    siteId: updated.siteId,
+    siteDisplayName: updated.site.displayName,
+    installationId: updated.installationId,
+    installationDisplayName: updated.installation?.displayName ?? null,
+    displayName: updated.displayName,
+    ampereCeiling: updated.ampereCeiling,
+    phaseCount: updated.phaseCount,
+    vendorCircuitRef: updated.vendorCircuitRef,
+    createdAt: updated.createdAt.toISOString(),
+    updatedAt: updated.updatedAt.toISOString(),
+  };
+}

@@ -26,10 +26,14 @@ export default async function InstallationsPage() {
       ) : (
         <ul className="divide-y divide-bg-border/60 rounded-md border border-bg-border bg-bg-base/30">
           {installations.map((i) => (
-            <li key={i.id} className="px-4 py-3">
+            <li key={i.id} className="px-4 py-3 hover:bg-bg-base/20">
               <div className="flex items-baseline justify-between">
                 <div>
-                  <div className="text-sm font-medium text-ink-50">{i.displayName}</div>
+                  <div className="text-sm font-medium text-ink-50">
+                    <Link href={`/installations/${i.id}`} className="hover:text-sv-sky">
+                      {i.displayName}
+                    </Link>
+                  </div>
                   <div className="text-xs text-ink-500">
                     Org: <Link className="text-sv-sky hover:underline" href={`/tenants/organizations/${i.orgId}`}>{i.orgDisplayName}</Link>
                     {" · "}Site: <span className="text-ink-300">{i.siteDisplayName}</span>

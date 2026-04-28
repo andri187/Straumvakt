@@ -21,3 +21,11 @@ export const InstallationCreateInput = z.object({
   onboardingStatus: OnboardingStatus.default("pending_credentials"),
 });
 export type InstallationCreateInput = z.infer<typeof InstallationCreateInput>;
+
+export const InstallationUpdateInput = z.object({
+  displayName: z.string().min(1).max(120).optional(),
+  vendorId: z.string().uuid().optional().nullable(),
+  vendorInstallationRef: optionalString(120),
+  onboardingStatus: OnboardingStatus.optional(),
+});
+export type InstallationUpdateInput = z.infer<typeof InstallationUpdateInput>;

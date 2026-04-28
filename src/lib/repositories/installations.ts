@@ -95,3 +95,72 @@ export async function createInstallation(input: InstallationCreateInput, actorUs
     updatedAt: created.updatedAt.toISOString(),
   };
 }
+
+import type { InstallationUpdateInput } from "@/lib/repositories/_inputs/installations";
+
+export async function getInstallationById(id: string): Promise<InstallationSummary | null> {
+  const db = prisma();
+  const r = await db.installation.findUnique({
+    where: { id },
+    include: {
+      organization: { select: { displayName: true } },
+      site: { select: { displayName: true } },
+      vendor: { select: { slug: true, displayName: true } },
+    },
+  });
+  if (!r) return null;
+  return {
+    id: r.id,
+    orgId: r.orgId,
+    orgDisplayName: r.organization.displayName,
+    siteId: r.siteId,
+    siteDisplayName: r.site.displayName,
+    displayName: r.displayName,
+    vendorSlug: r.vendor?.slug ?? null,
+    vendorDisplayName: r.vendor?.displayName ?? null,
+    vendorInstallationRef: r.vendorInstallationRef,
+    onboardingStatus: r.onboardingStatus,
+    createdAt: r.createdAt.toISOString(),
+    updatedAt: r.updatedAt.toISOString(),
+  };
+}
+
+export async function updateInstallation(
+  id: string,
+  patch: InstallationUpdateInput,
+  actorUserId: string | null,
+): Promise<InstallationSummary> {
+  const db = prisma();
+  const updated = await db.installation.update({
+    where: { id },
+    data: patch,
+    include: {
+      organization: { select: { displayName: true } },
+      site: { select: { displayName: true } },
+      vendor: { select: { slug: true, displayName: true } },
+    },
+  });
+  await recordAuditAction({
+    orgId: updated.orgId,
+    actorUserId,
+    actorKind: "user",
+    action: "installation.update",
+    targetType: "installation",
+    targetId: id,
+    metadata: { fields: Object.keys(patch) },
+  });
+  return {
+    id: updated.id,
+    orgId: updated.orgId,
+    orgDisplayName: updated.organization.displayName,
+    siteId: updated.siteId,
+    siteDisplayName: updated.site.displayName,
+    displayName: updated.displayName,
+    vendorSlug: updated.vendor?.slug ?? null,
+    vendorDisplayName: updated.vendor?.displayName ?? null,
+    vendorInstallationRef: updated.vendorInstallationRef,
+    onboardingStatus: updated.onboardingStatus,
+    createdAt: updated.createdAt.toISOString(),
+    updatedAt: updated.updatedAt.toISOString(),
+  };
+}

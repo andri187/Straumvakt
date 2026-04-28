@@ -13,3 +13,12 @@ export const CircuitCreateInput = z.object({
   vendorCircuitRef: optionalString(120),
 });
 export type CircuitCreateInput = z.infer<typeof CircuitCreateInput>;
+
+export const CircuitUpdateInput = z.object({
+  displayName: z.string().min(1).max(120).optional(),
+  installationId: z.string().uuid().optional().nullable(),
+  ampereCeiling: z.number().int().min(1).max(2000).optional().nullable(),
+  phaseCount: z.number().int().min(1).max(3).optional(),
+  vendorCircuitRef: optionalString(120),
+});
+export type CircuitUpdateInput = z.infer<typeof CircuitUpdateInput>;

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { SectionTabs, OPERATIONS_TABS, CHARGERS_TABS } from "@/components/section-tabs";
 import { ActionBar } from "@/components/action-bar";
 import { listAllChargers } from "@/lib/repositories/chargers";
@@ -24,10 +25,14 @@ export default async function ChargersPage() {
       ) : (
         <ul className="divide-y divide-bg-border/60 rounded-md border border-bg-border bg-bg-base/30">
           {chargers.map((c) => (
-            <li key={c.chargingStationId} className="px-4 py-3">
+            <li key={c.chargingStationId} className="px-4 py-3 hover:bg-bg-base/20">
               <div className="flex items-baseline justify-between">
                 <div>
-                  <div className="text-sm font-medium text-ink-50">{c.identityString}</div>
+                  <div className="text-sm font-medium text-ink-50">
+                    <Link href={`/chargers/${c.chargingStationId}`} className="hover:text-sv-sky">
+                      {c.identityString}
+                    </Link>
+                  </div>
                   <div className="text-xs text-ink-500">
                     {c.orgDisplayName} · {c.siteDisplayName}
                     {c.vendor && c.model && <> · <span className="text-ink-300">{c.vendor} {c.model}</span></>}
