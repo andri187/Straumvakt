@@ -1,11 +1,14 @@
-import { existsSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import catalogue from "../../../docs/reference/iceland-energy-parties.json";
 
 // Loader for docs/reference/iceland-energy-parties.json — read by the
 // Reference > Electricity / Public Charging / Rental Service subsection
 // pages. The catalogue is the single source of truth for party identity,
 // kennitala, contacts, and tariff_source while a future migration seeds
 // energy.parties + energy.tariff_catalogue.
+//
+// JSON is imported as a module so webpack bundles it into the worker —
+// Cloudflare Workers have no fs.readFile of arbitrary paths and the docs/
+// directory is not part of the deployed bundle.
 
 export type IcelandRole =
   | "retailer"
@@ -85,28 +88,8 @@ export type Catalogue = {
   parties: Party[];
 };
 
-let cache: Catalogue | null | undefined;
-
 export function loadCatalogue(): Catalogue | null {
-  if (cache !== undefined) return cache;
-  const path = resolve(
-    process.cwd(),
-    "docs",
-    "reference",
-    "iceland-energy-parties.json",
-  );
-  if (!existsSync(path)) {
-    cache = null;
-    return null;
-  }
-  try {
-    const raw = JSON.parse(readFileSync(path, "utf8")) as Catalogue;
-    cache = raw;
-    return raw;
-  } catch {
-    cache = null;
-    return null;
-  }
+  return catalogue as Catalogue;
 }
 
 export function filterByRole(parties: Party[], role: IcelandRole): Party[] {
