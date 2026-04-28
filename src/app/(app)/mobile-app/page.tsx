@@ -1,82 +1,92 @@
 import { cookies } from "next/headers";
-import { existsSync } from "node:fs";
-import { resolve } from "node:path";
 import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
 import { adminSessionConfig, verifyAdminSession } from "@/lib/admin-session";
+import { AppScreenshotCarousel } from "./carousel";
 
 export const metadata = { title: "Mobile App" };
 
-/**
- * Detour panel — embeds the Flutter Web mock of the driver app from
- * E:\Claude\CPMS\mobile-app\mock1\build\web. The static build is
- * synced into public/mobile-app-mock/ via `npm run sync:detour-assets`
- * (gitignored — refresh after Flutter rebuilds).
- *
- * This is operator-only preview, not the deployed driver app.
- */
+// Side-by-side gallery of the driver-app screenshots captured at the
+// designed flow — Login → Start charge (3 hero variants) → Prechecks →
+// Active charging. Position 01 (Start charge) carries three hero
+// variants and is rendered as a swipe carousel; the other positions
+// are single static frames.
+//
+// Source images live in docs/app/ for reference and are mirrored into
+// public/app-screenshots/ so the worker can serve them.
+
+const FRAMES: Frame[] = [
+  {
+    label: "Login",
+    images: ["/app-screenshots/00_login_pixel9.png"],
+  },
+  {
+    label: "Start charge",
+    images: [
+      "/app-screenshots/01_start_charge_after_login_pixel9.png",
+      "/app-screenshots/01_start_hero_2_on_pixel9.png",
+      "/app-screenshots/01_start_hero_3_isorka_pixel9.png",
+    ],
+  },
+  {
+    label: "Prechecks",
+    images: ["/app-screenshots/02_prechecks_pixel9.png"],
+  },
+  {
+    label: "Active charging",
+    images: ["/app-screenshots/03_active_charging_pixel9.png"],
+  },
+];
+
+type Frame = {
+  label: string;
+  images: string[];
+};
+
 export default async function MobileAppPage() {
   const jar = await cookies();
   const token = jar.get(adminSessionConfig.SESSION_COOKIE_NAME)?.value;
   const session = await verifyAdminSession(token);
-  const email = session?.email;
-
-  const mockPresent = existsSync(
-    resolve(process.cwd(), "public", "mobile-app-mock", "index.html"),
-  );
 
   return (
     <>
-      <Topbar title="Mobile App" email={email} />
+      <Topbar title="Mobile App" email={session?.email} />
       <PageShell
-        title="Mobile App preview"
-        description="Embedded Flutter Web build of the driver app mock. Updated by `npm run sync:detour-assets`."
+        title="Mobile App"
+        description="Designed driver-app flow — Pixel 9 frames captured at four key states. Swipe through the Start charge variants to see the hero alternates."
       >
-        {!mockPresent ? (
-          <div className="rounded-lg border border-bg-border bg-bg-surface/70 p-6 shadow-card backdrop-blur">
-            <h2 className="text-sm font-semibold text-ink-50">
-              Mock not synced yet
-            </h2>
-            <p className="mt-2 text-sm text-ink-300">
-              The Flutter Web build hasn&apos;t been copied into{" "}
-              <code className="rounded bg-bg-base/60 px-1.5 py-0.5 font-mono text-xs">
-                public/mobile-app-mock/
-              </code>
-              . Run:
-            </p>
-            <pre className="mt-3 overflow-x-auto rounded bg-bg-base/60 p-3 font-mono text-xs text-ink-100">
-              npm run sync:detour-assets
-            </pre>
-            <p className="mt-3 text-xs text-ink-400">
-              Source:{" "}
-              <code className="font-mono">
-                E:\Claude\CPMS\mobile-app\mock1\build\web
-              </code>
-            </p>
-          </div>
-        ) : (
-          <div className="overflow-hidden rounded-lg border border-bg-border bg-bg-surface/70 shadow-card backdrop-blur">
-            <div className="flex items-center justify-between border-b border-bg-border bg-bg-base/40 px-4 py-2">
-              <span className="text-xs font-semibold uppercase tracking-brand text-sv-sky">
-                Live preview
-              </span>
-              <a
-                href="/mobile-app-mock/index.html"
-                target="_blank"
-                rel="noreferrer"
-                className="text-xs text-ink-300 hover:text-ink-50"
-              >
-                Open in new tab ↗
-              </a>
-            </div>
-            <iframe
-              src="/mobile-app-mock/index.html"
-              title="Driver app mock"
-              className="block h-[80vh] w-full border-0 bg-white"
-            />
-          </div>
-        )}
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {FRAMES.map((frame, i) => (
+            <FramePanel key={i} index={i} frame={frame} />
+          ))}
+        </div>
       </PageShell>
     </>
+  );
+}
+
+function FramePanel({ index, frame }: { index: number; frame: Frame }) {
+  const idx = String(index).padStart(2, "0");
+  const isCarousel = frame.images.length > 1;
+  return (
+    <figure className="rounded-lg border border-bg-border bg-bg-surface/70 p-3 shadow-card backdrop-blur">
+      <figcaption className="mb-2 flex items-baseline justify-between">
+        <span className="font-mono text-[10px] text-ink-500">{idx}</span>
+        <span className="text-xs font-semibold text-ink-100">{frame.label}</span>
+        <span className="font-mono text-[10px] text-ink-500">
+          {isCarousel ? `${frame.images.length} variants` : "static"}
+        </span>
+      </figcaption>
+      {isCarousel ? (
+        <AppScreenshotCarousel images={frame.images} label={frame.label} />
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={frame.images[0]}
+          alt={frame.label}
+          className="block w-full rounded-md border border-bg-border/40"
+        />
+      )}
+    </figure>
   );
 }
