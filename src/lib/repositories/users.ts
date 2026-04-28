@@ -14,7 +14,7 @@
  * The `password` argument is preserved for post-pilot use; today it's
  * always undefined and `user_credentials` rows stay null.
  */
-import type { UserStatus } from "@prisma/client";
+import type { UserStatus } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
   UserCreateInput,

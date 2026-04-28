@@ -19,7 +19,7 @@
  * `notBefore` set to a retry floor by the claim, so the next tick
  * picks it up after a breathing window.
  */
-import type { CommandStatus, Prisma } from "@prisma/client";
+import type { CommandStatus, Prisma } from "@/generated/prisma/client";
 import { withOrgContext } from "./_context";
 
 export interface EnqueueCommand {

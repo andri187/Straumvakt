@@ -16,7 +16,7 @@
  * columns the projection target requires. These lookups use the
  * transaction client (`tx`) so they are consistent with the write.
  */
-import type { Prisma } from "@prisma/client";
+import type { Prisma } from "@/generated/prisma/client";
 import {
   registerProjection,
   type IngestResult as _IngestResult,

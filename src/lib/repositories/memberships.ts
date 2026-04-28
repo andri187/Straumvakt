@@ -5,7 +5,7 @@
  * post-pilot; in pilot all roles are inert beyond audit-trail
  * categorisation per ADR 0006.
  */
-import type { MembershipRole } from "@prisma/client";
+import type { MembershipRole } from "@/generated/prisma/client";
 import { withOrgContext } from "./_context";
 import {
   MembershipCreateInput,

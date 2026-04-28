@@ -5,7 +5,7 @@
  * cannot themselves be `withOrgContext`-scoped — creating an Org IS the
  * one operation that crosses the tenant boundary by definition.
  */
-import type { OrgStatus, OrganizationRole } from "@prisma/client";
+import type { OrgStatus, OrganizationRole } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
   OrgCreateInput,

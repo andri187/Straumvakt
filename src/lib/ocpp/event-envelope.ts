@@ -15,7 +15,7 @@
  * protocol traces vs. operational state changes vs. financial events
  * without the main app having to classify them from the event type.
  */
-import type { RetentionClass } from "@prisma/client";
+import type { RetentionClass } from "@/generated/prisma/client";
 
 export const RETENTION_CLASSES = [
   "financial",

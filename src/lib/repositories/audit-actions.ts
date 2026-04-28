@@ -1,4 +1,4 @@
-import type { ActorKind } from "@prisma/client";
+import type { ActorKind } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 
 /**

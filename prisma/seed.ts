@@ -18,7 +18,7 @@
  * OCPP — deferred per the operator's instruction ("to be defined
  * later"). ADR 0002 governs the catalog design.
  */
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient } from "./generated/node-client/client";
 import { PrismaNeon } from "@prisma/adapter-neon";
 
 const databaseUrl = process.env.DATABASE_URL;

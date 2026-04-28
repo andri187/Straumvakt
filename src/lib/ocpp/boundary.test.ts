@@ -27,6 +27,7 @@ const FORBIDDEN_TOKENS = [
 
 function* walk(dir: string): Generator<string> {
   for (const name of readdirSync(dir)) {
+    if (name === "generated") continue;
     const full = join(dir, name);
     const s = statSync(full);
     if (s.isDirectory()) {

@@ -27,7 +27,7 @@
  * or nothing does. A crash mid-flight leaves no event log row and no
  * idempotency record, so the next retry replays cleanly.
  */
-import type { Prisma, PrismaClient } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@/generated/prisma/client";
 import { withOrgContext } from "./_context";
 import type { IngestEvent } from "@/lib/ocpp/event-envelope";
 

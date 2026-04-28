@@ -22,7 +22,7 @@
  * of silently dropping.
  */
 import { z } from "zod";
-import type { RetentionClass } from "@prisma/client";
+import type { RetentionClass } from "@/generated/prisma/client";
 import type { IngestEvent } from "./event-envelope";
 
 // ─────────────────────────────────────────────────────────────────────────────

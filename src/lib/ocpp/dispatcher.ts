@@ -19,7 +19,7 @@
  *   backoff_ms = min(BASE * 2^(attempts - 1), CAP)
  * After MAX_ATTEMPTS the command is marked `failed`.
  */
-import type { PrismaClient, Prisma } from "@prisma/client";
+import type { PrismaClient, Prisma } from "@/generated/prisma/client";
 import {
   markAcked,
   markFailed,

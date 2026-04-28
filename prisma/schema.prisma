@@ -16,7 +16,18 @@
 //   vendors, roaming, energy, webhooks
 
 generator client {
-  provider        = "prisma-client-js"
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma"
+  runtime         = "cloudflare"
+  moduleFormat    = "esm"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+generator nodeClient {
+  provider        = "prisma-client"
+  output          = "../prisma/generated/node-client"
+  runtime         = "nodejs"
+  moduleFormat    = "esm"
   previewFeatures = ["postgresqlExtensions"]
 }
 
