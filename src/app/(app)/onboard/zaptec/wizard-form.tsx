@@ -20,35 +20,40 @@ export function ZaptecWizardForm() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [discovered, setDiscovered] = useState<DiscoveredInstallation[]>([]);
-  const [stubAck, setStubAck] = useState(false);
 
   async function onConnect(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
     setSubmitting(true);
     try {
-      // Real implementation will exchange creds for an OAuth refresh token
-      // server-side (POST /api/admin/zaptec/auth) and pull /installations
-      // from the Zaptec API. The credentials never leave the server after
-      // exchange — only the refresh token is persisted (Cloudflare KV under
-      // the credentials_ref key).
+      // Server-side exchanges the credentials for a Zaptec OAuth token
+      // (one-shot, not persisted), lists installations, returns the
+      // summary rows. Persistence happens at the per-installation import
+      // step (milestone 2.7) where a refresh-token reference lands under
+      // `installations.credentials_ref`.
       const res = await fetch("/api/admin/zaptec/discover", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ username: zaptecUser, password: zaptecPass }),
-      }).catch(() => null);
-
-      if (res && res.ok) {
-        const body = (await res.json()) as { installations?: DiscoveredInstallation[] };
-        setDiscovered(body.installations ?? []);
-        setStubAck(false);
-      } else {
-        // Stub path until milestone 2.7 lands. Surface the wiring gap and
-        // proceed to the empty installations view so the operator sees
-        // what the page will look like once the integration is live.
-        setStubAck(true);
-        setDiscovered([]);
+      });
+      const body = (await res.json().catch(() => null)) as
+        | { installations?: DiscoveredInstallation[]; error?: string }
+        | null;
+      if (!res.ok) {
+        const msg =
+          body?.error === "invalid_credentials"
+            ? "Invalid Zaptec credentials."
+            : body?.error === "zaptec_unreachable"
+              ? "Could not reach api.zaptec.com — check network and retry."
+              : body?.error === "zaptec_oauth_error" || body?.error === "zaptec_oauth_no_token"
+                ? "Zaptec OAuth rejected the credentials."
+                : body?.error === "zaptec_list_error"
+                  ? "Authenticated, but listing installations failed at Zaptec."
+                  : `Discover failed (HTTP ${res.status}).`;
+        setError(msg);
+        return;
       }
+      setDiscovered(body?.installations ?? []);
       setStep("installations");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -121,9 +126,7 @@ export function ZaptecWizardForm() {
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <p className="text-xs text-ink-400">
-              {stubAck
-                ? "Real Zaptec OAuth not wired yet (milestone 2.7). The table below is the shape the live response lands in."
-                : `Discovered ${discovered.length} installation${discovered.length === 1 ? "" : "s"} accessible to ${zaptecUser}.`}
+              {`Discovered ${discovered.length} installation${discovered.length === 1 ? "" : "s"} accessible to ${zaptecUser}.`}
             </p>
             <button
               type="button"
@@ -150,9 +153,7 @@ export function ZaptecWizardForm() {
                 {discovered.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="px-3 py-6 text-center text-[11px] italic text-ink-500">
-                      {stubAck
-                        ? "Live discovery will populate this table — one row per Zaptec installation the credentials grant access to."
-                        : "No installations returned by Zaptec for these credentials."}
+                      No installations returned by Zaptec for these credentials.
                     </td>
                   </tr>
                 ) : (
