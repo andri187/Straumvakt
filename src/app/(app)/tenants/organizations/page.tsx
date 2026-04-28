@@ -5,7 +5,8 @@ import { PageShell } from "@/components/page-shell";
 import { SectionTabs, TENANTS_TABS } from "@/components/section-tabs";
 import { ActionBar } from "@/components/action-bar";
 import { adminSessionConfig, verifyAdminSession } from "@/lib/admin-session";
-import { listOrgs } from "@/lib/repositories/organizations";
+import { apiFetchServerJson } from "@/lib/api-client-server";
+import type { OrgSummary } from "@straumvakt/shared/domain/orgs";
 
 export const metadata = { title: "Tenants · Organizations" };
 
@@ -20,7 +21,9 @@ export default async function OrganizationsPage({
 
   const sp = await searchParams;
   const includeArchived = sp.archived === "1";
-  const orgs = await listOrgs({ includeArchived });
+  const { orgs } = await apiFetchServerJson<{ orgs: OrgSummary[] }>(
+    `/api/admin/orgs${includeArchived ? "?includeArchived=true" : ""}`,
+  );
 
   return (
     <>

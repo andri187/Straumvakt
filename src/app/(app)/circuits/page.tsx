@@ -1,13 +1,16 @@
 import Link from "next/link";
 import { SectionTabs, OPERATIONS_TABS } from "@/components/section-tabs";
 import { ActionBar } from "@/components/action-bar";
-import { listAllCircuits } from "@/lib/repositories/circuits";
+import { apiFetchServerJson } from "@/lib/api-client-server";
+import type { CircuitSummary } from "@straumvakt/shared/domain/circuits";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Circuits" };
 
 export default async function CircuitsPage() {
-  const circuits = await listAllCircuits();
+  const { circuits } = await apiFetchServerJson<{ circuits: CircuitSummary[] }>(
+    "/api/admin/circuits",
+  );
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-8">

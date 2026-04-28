@@ -1,13 +1,16 @@
 import Link from "next/link";
 import { SectionTabs, OPERATIONS_TABS } from "@/components/section-tabs";
 import { ActionBar } from "@/components/action-bar";
-import { listAllSites } from "@/lib/repositories/sites";
+import { apiFetchServerJson } from "@/lib/api-client-server";
+import type { SiteSummary } from "@straumvakt/shared/domain/sites";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Sites" };
 
 export default async function SitesPage() {
-  const sites = await listAllSites();
+  const { sites } = await apiFetchServerJson<{ sites: SiteSummary[] }>(
+    "/api/admin/sites",
+  );
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-8">

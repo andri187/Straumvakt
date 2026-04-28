@@ -1,13 +1,16 @@
 import Link from "next/link";
 import { SectionTabs, OPERATIONS_TABS } from "@/components/section-tabs";
 import { ActionBar } from "@/components/action-bar";
-import { listAllInstallations } from "@/lib/repositories/installations";
+import { apiFetchServerJson } from "@/lib/api-client-server";
+import type { InstallationSummary } from "@straumvakt/shared/domain/installations";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Installations" };
 
 export default async function InstallationsPage() {
-  const installations = await listAllInstallations();
+  const { installations } = await apiFetchServerJson<{
+    installations: InstallationSummary[];
+  }>("/api/admin/installations");
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-8">

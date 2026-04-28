@@ -5,7 +5,8 @@ import { PageShell } from "@/components/page-shell";
 import { SectionTabs, TENANTS_TABS } from "@/components/section-tabs";
 import { ActionBar } from "@/components/action-bar";
 import { adminSessionConfig, verifyAdminSession } from "@/lib/admin-session";
-import { listUsers } from "@/lib/repositories/users";
+import { apiFetchServerJson } from "@/lib/api-client-server";
+import type { UserSummary } from "@straumvakt/shared/domain/users";
 
 export const metadata = { title: "Tenants · Users" };
 
@@ -20,7 +21,9 @@ export default async function UsersPage({
 
   const sp = await searchParams;
   const includeDeleted = sp.deleted === "1";
-  const users = await listUsers({ includeDeleted });
+  const { users } = await apiFetchServerJson<{ users: UserSummary[] }>(
+    `/api/admin/users${includeDeleted ? "?includeDeleted=true" : ""}`,
+  );
 
   return (
     <>

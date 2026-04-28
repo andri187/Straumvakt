@@ -1,13 +1,16 @@
 import Link from "next/link";
 import { SectionTabs, TENANTS_TABS } from "@/components/section-tabs";
 import { ActionBar } from "@/components/action-bar";
-import { listAllProperties } from "@/lib/repositories/properties";
+import { apiFetchServerJson } from "@/lib/api-client-server";
+import type { PropertySummary } from "@straumvakt/shared/domain/properties";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Properties" };
 
 export default async function PropertiesPage() {
-  const properties = await listAllProperties();
+  const { properties } = await apiFetchServerJson<{ properties: PropertySummary[] }>(
+    "/api/admin/properties",
+  );
   return (
     <div className="mx-auto max-w-6xl px-6 py-8">
       <SectionTabs tabs={TENANTS_TABS} />
