@@ -5,14 +5,16 @@
  *
  * Exchanges the credentials for a Zaptec OAuth access token (one-shot,
  * not persisted), lists installations the credentials grant access to,
- * and returns them in the shape the onboarding wizard renders.
+ * fetches each installation's circuit+charger hierarchy in parallel,
+ * and returns a nested tree the onboarding wizard renders as
+ * expandable rows.
  *
  * Security:
  *   - Admin session required.
  *   - Username/password are read once, used to mint the OAuth token,
  *     and never logged, persisted, or echoed back.
- *   - Only the Zaptec installation summary is returned — no token, no
- *     credentials, no internal IDs.
+ *   - Only the Zaptec installation summary + hierarchy is returned —
+ *     no token, no credentials, no internal IDs.
  *
  * Pre-import: this endpoint does not write any rows to Neon. Persistence
  * happens at the per-installation import step (milestone 2.7), which
@@ -29,7 +31,7 @@ const Body = z.object({
   password: z.string().min(1).max(200),
 });
 
-type ZaptecInstallation = {
+type ZaptecInstallationSummary = {
   Id?: string;
   Name?: string;
   Address?: string;
@@ -38,6 +40,29 @@ type ZaptecInstallation = {
   ActiveChargerCount?: number;
   MaxCurrent?: number;
   TimeZoneIanaName?: string;
+};
+
+type ZaptecHierarchyCharger = {
+  Id?: string;
+  Name?: string | null;
+  SerialNo?: string | null;
+  DeviceId?: string | null;
+  MID?: string | null;
+  Active?: boolean | null;
+  DeviceType?: number | null;
+};
+
+type ZaptecHierarchyCircuit = {
+  Id?: string;
+  Name?: string | null;
+  MaxCurrent?: number;
+  IsActive?: boolean;
+  Chargers?: ZaptecHierarchyCharger[] | null;
+};
+
+type ZaptecHierarchy = {
+  Id?: string;
+  Circuits?: ZaptecHierarchyCircuit[] | null;
 };
 
 export async function POST(req: NextRequest) {
@@ -73,10 +98,7 @@ export async function POST(req: NextRequest) {
   }).catch(() => null);
 
   if (!tokenRes) {
-    return NextResponse.json(
-      { error: "zaptec_unreachable" },
-      { status: 502 },
-    );
+    return NextResponse.json({ error: "zaptec_unreachable" }, { status: 502 });
   }
   if (!tokenRes.ok) {
     if (tokenRes.status === 400 || tokenRes.status === 401) {
@@ -109,10 +131,7 @@ export async function POST(req: NextRequest) {
   }).catch(() => null);
 
   if (!instRes) {
-    return NextResponse.json(
-      { error: "zaptec_unreachable" },
-      { status: 502 },
-    );
+    return NextResponse.json({ error: "zaptec_unreachable" }, { status: 502 });
   }
   if (!instRes.ok) {
     return NextResponse.json(
@@ -121,24 +140,79 @@ export async function POST(req: NextRequest) {
     );
   }
   const instJson = (await instRes.json().catch(() => null)) as
-    | { Data?: ZaptecInstallation[] }
+    | { Data?: ZaptecInstallationSummary[] }
     | null;
-  const rawInstallations = instJson?.Data ?? [];
-
-  const installations = rawInstallations
-    .filter((i): i is ZaptecInstallation & { Id: string; Name: string } =>
+  const rawInstallations = (instJson?.Data ?? []).filter(
+    (i): i is ZaptecInstallationSummary & { Id: string; Name: string } =>
       typeof i.Id === "string" && typeof i.Name === "string",
-    )
-    .map((i) => ({
+  );
+
+  // Step 3 — fetch each installation's hierarchy in parallel. One missing
+  // hierarchy doesn't fail the whole response; that installation just
+  // surfaces with an empty circuits[] so the wizard can still render it.
+  const hierarchies = await Promise.all(
+    rawInstallations.map(async (i) => {
+      try {
+        const r = await fetch(
+          `${ZAPTEC_BASE}/api/installation/${i.Id}/hierarchy`,
+          {
+            headers: { Authorization: `Bearer ${accessToken}` },
+            cache: "no-store",
+          },
+        );
+        if (!r.ok) return { id: i.Id, hierarchy: null };
+        const h = (await r.json().catch(() => null)) as ZaptecHierarchy | null;
+        return { id: i.Id, hierarchy: h };
+      } catch {
+        return { id: i.Id, hierarchy: null };
+      }
+    }),
+  );
+  const hierarchyById = new Map(hierarchies.map((h) => [h.id, h.hierarchy]));
+
+  const installations = rawInstallations.map((i) => {
+    const h = hierarchyById.get(i.Id);
+    const circuits = (h?.Circuits ?? [])
+      .filter((c): c is ZaptecHierarchyCircuit & { Id: string } =>
+        typeof c.Id === "string",
+      )
+      .map((c) => ({
+        id: c.Id,
+        name: c.Name ?? "(unnamed circuit)",
+        maxCurrent: c.MaxCurrent ?? null,
+        isActive: c.IsActive ?? true,
+        chargers: (c.Chargers ?? [])
+          .filter(
+            (ch): ch is ZaptecHierarchyCharger & { Id: string } =>
+              typeof ch.Id === "string",
+          )
+          .map((ch) => ({
+            id: ch.Id,
+            name: ch.Name ?? "(unnamed charger)",
+            serialNo: ch.SerialNo ?? null,
+            deviceId: ch.DeviceId ?? null,
+            mid: ch.MID ?? null,
+            active: ch.Active ?? null,
+          })),
+      }));
+
+    const chargerCount =
+      i.ActiveChargerCount ??
+      circuits.reduce((sum, c) => sum + c.chargers.length, 0);
+
+    return {
       id: i.Id,
       name: i.Name,
       address:
-        [i.Address, i.City, i.ZipCode].filter((s): s is string => !!s).join(", ") ||
-        null,
-      activeChargerCount: i.ActiveChargerCount ?? null,
+        [i.Address, i.City, i.ZipCode]
+          .filter((s): s is string => !!s)
+          .join(", ") || null,
+      activeChargerCount: chargerCount,
       maxCurrent: i.MaxCurrent ?? null,
       timezone: i.TimeZoneIanaName ?? null,
-    }));
+      circuits,
+    };
+  });
 
   return NextResponse.json({ installations });
 }
