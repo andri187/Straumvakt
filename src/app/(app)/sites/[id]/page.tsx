@@ -1,15 +1,18 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { SectionTabs, OPERATIONS_TABS } from "@/components/section-tabs";
-import { getSiteById } from "@/lib/repositories/sites";
+import { apiFetchServer } from "@/lib/api-client-server";
+import type { SiteSummary } from "@straumvakt/shared/domain/sites";
 import { EditSitePanel } from "./edit-panel";
 
 export const dynamic = "force-dynamic";
 
 export default async function SiteDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const site = await getSiteById(id);
-  if (!site) notFound();
+  const res = await apiFetchServer(`/api/admin/sites/${id}`);
+  if (res.status === 404) notFound();
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const { site } = (await res.json()) as { site: SiteSummary };
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-8">

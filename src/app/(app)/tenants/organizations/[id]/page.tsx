@@ -4,7 +4,8 @@ import { notFound } from "next/navigation";
 import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
 import { adminSessionConfig, verifyAdminSession } from "@/lib/admin-session";
-import { getOrgById } from "@/lib/repositories/organizations";
+import { apiFetchServer } from "@/lib/api-client-server";
+import type { OrgSummary } from "@straumvakt/shared/domain/orgs";
 import { OrgEditPanel } from "./edit-panel";
 
 export const metadata = { title: "Organization detail" };
@@ -19,8 +20,10 @@ export default async function OrganizationDetailPage({
   const session = await verifyAdminSession(token);
 
   const { id } = await params;
-  const org = await getOrgById(id);
-  if (!org) notFound();
+  const res = await apiFetchServer(`/api/admin/orgs/${id}`);
+  if (res.status === 404) notFound();
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const { org } = (await res.json()) as { org: OrgSummary };
 
   return (
     <>

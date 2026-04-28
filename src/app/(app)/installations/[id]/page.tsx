@@ -1,15 +1,22 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { SectionTabs, OPERATIONS_TABS } from "@/components/section-tabs";
-import { getInstallationById, listVendors } from "@/lib/repositories/installations";
+import { apiFetchServer, apiFetchServerJson } from "@/lib/api-client-server";
+import type { InstallationSummary } from "@straumvakt/shared/domain/installations";
 import { EditInstallationPanel } from "./edit-panel";
 
 export const dynamic = "force-dynamic";
 
 export default async function InstallationDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [installation, vendors] = await Promise.all([getInstallationById(id), listVendors()]);
-  if (!installation) notFound();
+  const detailRes = await apiFetchServer(`/api/admin/installations/${id}`);
+  if (detailRes.status === 404) notFound();
+  if (!detailRes.ok) throw new Error(`HTTP ${detailRes.status}`);
+  const { installation } = (await detailRes.json()) as { installation: InstallationSummary };
+  // GET /installations returns the vendors list alongside; reuse it here.
+  const { vendors } = await apiFetchServerJson<{
+    vendors: { id: string; slug: string; displayName: string }[];
+  }>("/api/admin/installations");
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-8">

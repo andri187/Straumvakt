@@ -4,11 +4,12 @@ import { notFound } from "next/navigation";
 import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
 import { adminSessionConfig, verifyAdminSession } from "@/lib/admin-session";
-import {
-  getUserById,
-  listUserMemberships,
-} from "@/lib/repositories/users";
-import { listOrgs } from "@/lib/repositories/organizations";
+import { apiFetchServer, apiFetchServerJson } from "@/lib/api-client-server";
+import type {
+  UserSummary,
+  UserMembershipSummary,
+} from "@straumvakt/shared/domain/users";
+import type { OrgSummary } from "@straumvakt/shared/domain/orgs";
 import { UserEditPanel } from "./edit-panel";
 import { MembershipsPanel } from "./memberships-panel";
 
@@ -24,12 +25,16 @@ export default async function UserDetailPage({
   const session = await verifyAdminSession(token);
 
   const { id } = await params;
-  const [user, memberships, orgs] = await Promise.all([
-    getUserById(id),
-    listUserMemberships(id),
-    listOrgs({ includeArchived: false }),
-  ]);
-  if (!user) notFound();
+  const detailRes = await apiFetchServer(`/api/admin/users/${id}`);
+  if (detailRes.status === 404) notFound();
+  if (!detailRes.ok) throw new Error(`HTTP ${detailRes.status}`);
+  const { user, memberships } = (await detailRes.json()) as {
+    user: UserSummary;
+    memberships: UserMembershipSummary[];
+  };
+  const { orgs } = await apiFetchServerJson<{ orgs: OrgSummary[] }>(
+    "/api/admin/orgs",
+  );
 
   const memberOrgIds = new Set(memberships.map((m) => m.orgId));
   const availableOrgs = orgs.filter((o) => !memberOrgIds.has(o.id));
