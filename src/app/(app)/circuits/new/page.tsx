@@ -1,12 +1,13 @@
 import Link from "next/link";
-import { listOrgs } from "@/lib/repositories/organizations";
+import { apiFetchServerJson } from "@/lib/api-client-server";
+import type { OrgSummary } from "@straumvakt/shared/domain/orgs";
 import { CreateCircuitForm } from "../create-form";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "New circuit" };
 
 export default async function NewCircuitPage() {
-  const orgs = await listOrgs();
+  const { orgs } = await apiFetchServerJson<{ orgs: OrgSummary[] }>("/api/admin/orgs");
   const orgOptions = orgs.filter((o) => o.status !== "archived").map((o) => ({ id: o.id, label: `${o.displayName} (${o.slug})` }));
 
   return (

@@ -1,13 +1,18 @@
 import Link from "next/link";
-import { listVendors } from "@/lib/repositories/installations";
-import { listOrgs } from "@/lib/repositories/organizations";
+import { apiFetchServerJson } from "@/lib/api-client-server";
+import type { OrgSummary } from "@straumvakt/shared/domain/orgs";
 import { CreateInstallationForm } from "../create-form";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "New installation" };
 
+type Vendor = { id: string; slug: string; displayName: string };
+
 export default async function NewInstallationPage() {
-  const [orgs, vendors] = await Promise.all([listOrgs(), listVendors()]);
+  const [{ orgs }, { vendors }] = await Promise.all([
+    apiFetchServerJson<{ orgs: OrgSummary[] }>("/api/admin/orgs"),
+    apiFetchServerJson<{ vendors: Vendor[] }>("/api/admin/installations"),
+  ]);
   const orgOptions = orgs.filter((o) => o.status !== "archived").map((o) => ({ id: o.id, label: `${o.displayName} (${o.slug})` }));
 
   return (

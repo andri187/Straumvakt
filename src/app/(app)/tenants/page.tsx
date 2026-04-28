@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { SectionTabs, TENANTS_TABS } from "@/components/section-tabs";
-import { listOrgs } from "@/lib/repositories/organizations";
-import { listAllProperties } from "@/lib/repositories/properties";
-import { listUsers } from "@/lib/repositories/users";
+import { apiFetchServerJson } from "@/lib/api-client-server";
+import type { OrgSummary } from "@straumvakt/shared/domain/orgs";
+import type { PropertySummary } from "@straumvakt/shared/domain/properties";
+import type { UserSummary } from "@straumvakt/shared/domain/users";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Tenants" };
@@ -18,10 +19,10 @@ type Row = {
 };
 
 export default async function TenantsPage() {
-  const [orgs, properties, users] = await Promise.all([
-    listOrgs({ includeArchived: true }),
-    listAllProperties(),
-    listUsers({ includeDeleted: true }),
+  const [{ orgs }, { properties }, { users }] = await Promise.all([
+    apiFetchServerJson<{ orgs: OrgSummary[] }>("/api/admin/orgs?includeArchived=true"),
+    apiFetchServerJson<{ properties: PropertySummary[] }>("/api/admin/properties"),
+    apiFetchServerJson<{ users: UserSummary[] }>("/api/admin/users?includeDeleted=true"),
   ]);
 
   const rows: Row[] = [
