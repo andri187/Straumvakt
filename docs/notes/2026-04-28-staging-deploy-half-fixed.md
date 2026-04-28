@@ -80,3 +80,4 @@ Both commits represent **real progress** on the deploy-pipeline problem. Reverti
 ## Recommended next session
 
 Pick option 2 (`serverExternalPackages` + `node_modules` output) for the first attempt — smallest blast radius, no generator-output patching. Budget 2 hours; if it does not pan out, fall back to option 1 (`wasm_modules` binding with a postinstall patch). Avoid option 3 unless options 1 and 2 both fail.
+
