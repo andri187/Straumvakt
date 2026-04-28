@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
-import { existsSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import zaptecOpenApi from "../../../../../public/zaptec/openapi.json";
+import zaptecConstants from "../../../../../public/zaptec/zaptec-constants.json";
 import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
 import { SectionTabs, REFERENCE_TABS } from "@/components/section-tabs";
@@ -37,10 +37,8 @@ type OpenApiSummary = {
 };
 
 function loadOpenApiSummary(): OpenApiSummary | null {
-  const path = resolve(process.cwd(), "public", "zaptec", "openapi.json");
-  if (!existsSync(path)) return null;
   try {
-    const raw = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+    const raw = zaptecOpenApi as Record<string, unknown>;
     const info = (raw.info ?? {}) as { title?: string; version?: string };
     const servers = (raw.servers ?? []) as Array<{ url?: string }>;
     const paths = (raw.paths ?? {}) as Record<string, Record<string, unknown>>;
@@ -70,14 +68,7 @@ function loadOpenApiSummary(): OpenApiSummary | null {
 }
 
 function loadConstantTopKeys(): string[] | null {
-  const path = resolve(process.cwd(), "public", "zaptec", "zaptec-constants.json");
-  if (!existsSync(path)) return null;
-  try {
-    const raw = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
-    return Object.keys(raw);
-  } catch {
-    return null;
-  }
+  return Object.keys(zaptecConstants as Record<string, unknown>);
 }
 
 function methodPill(method: string): string {
