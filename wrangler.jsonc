@@ -48,6 +48,12 @@
           "binding": "OCPP_GATEWAY",
           "service": "straumvakt-ocpp-staging"
         }
+      ],
+      "hyperdrive": [
+        {
+          "binding": "HYPERDRIVE_DB",
+          "id": "d2d56ab1ffe241bbb64946ba78a52be5"
+        }
       ]
     }
   }

@@ -10,24 +10,52 @@ import { cache } from "react";
 //
 //   • Cloudflare Workers (production / staging): each request gets its own
 //     client. Workers' I/O isolation forbids reusing I/O objects (the Neon
-//     WebSocket connection counts) across requests — concurrent navigations
-//     would otherwise crash with "Cannot perform I/O on behalf of a different
+//     WebSocket counts) across requests — concurrent navigations would
+//     otherwise crash with "Cannot perform I/O on behalf of a different
 //     request". React's cache() scopes the client to one server-component
-//     render, which is one request.
+//     render, which is one request. Connection pooling happens via
+//     Cloudflare Hyperdrive (binding HYPERDRIVE_DB on the staging Worker).
+//     Hyperdrive multiplexes onto warm Postgres connections so the
+//     per-request cost drops from ~hundreds of ms to ~tens of ms.
 //
 //   • Node.js (local dev): Next dev server reuses the process across
 //     requests, so we cache on globalThis to avoid leaking connections
-//     during HMR reloads.
-//
-// The PrismaNeon adapter handles the WebSocket transport internally; no
-// `ws` shim required at this layer.
+//     during HMR reloads. Hyperdrive is not used locally — DATABASE_URL
+//     points at Neon directly via the pooler.
+
+type HyperdriveBinding = { connectionString: string };
+
+function getDatabaseUrl(): string {
+  // On Workers, the Hyperdrive binding gives us a pooled connection string.
+  // The binding only exists at runtime in workerd, so we have to look it up
+  // through OpenNext's runtime accessor — process.env does not expose
+  // bindings.
+  if (typeof process === "undefined" || process.env.NODE_ENV !== "development") {
+    try {
+      // Lazy require so local Node dev does not fail on missing module.
+      // OpenNext exposes getCloudflareContext from its runtime adapter.
+      const adapter = require("@opennextjs/cloudflare") as {
+        getCloudflareContext?: () => { env?: Record<string, unknown> };
+      };
+      const ctx = adapter.getCloudflareContext?.();
+      const hd = ctx?.env?.HYPERDRIVE_DB as HyperdriveBinding | undefined;
+      if (hd?.connectionString) return hd.connectionString;
+    } catch {
+      // Not running under OpenNext / Cloudflare — fall through.
+    }
+  }
+
+  const fromEnv = process.env.DATABASE_URL;
+  if (!fromEnv) {
+    throw new Error(
+      "DATABASE_URL is required (or HYPERDRIVE_DB binding on Workers)",
+    );
+  }
+  return fromEnv;
+}
 
 function createClient(): PrismaClient {
-  const databaseUrl = process.env.DATABASE_URL;
-  if (!databaseUrl) {
-    throw new Error("DATABASE_URL is required to create a Prisma client");
-  }
-  const adapter = new PrismaNeon({ connectionString: databaseUrl });
+  const adapter = new PrismaNeon({ connectionString: getDatabaseUrl() });
   return new PrismaClient({ adapter });
 }
 
