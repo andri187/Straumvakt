@@ -20,5 +20,9 @@ export const CircuitUpdateInput = z.object({
   ampereCeiling: z.number().int().min(1).max(2000).optional().nullable(),
   phaseCount: z.number().int().min(1).max(3).optional(),
   vendorCircuitRef: optionalString(120),
+  // Prisma's Json field accepts any JSON-serializable value; z.unknown coerces
+  // cleanly without TypeScript fighting Record<string, unknown> at the call
+  // site. The repository layer passes this straight through.
+  metadata: z.unknown().optional(),
 });
 export type CircuitUpdateInput = z.infer<typeof CircuitUpdateInput>;

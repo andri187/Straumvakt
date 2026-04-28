@@ -37,6 +37,10 @@ export default async function CircuitDetailPage({ params }: { params: Promise<{ 
           ampereCeiling: circuit.ampereCeiling?.toString() ?? "",
           phaseCount: circuit.phaseCount.toString(),
           vendorCircuitRef: circuit.vendorCircuitRef ?? "",
+          metadataJson:
+            circuit.metadata && Object.keys(circuit.metadata as Record<string, unknown>).length > 0
+              ? JSON.stringify(circuit.metadata, null, 2)
+              : "",
         }}
       />
     </div>

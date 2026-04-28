@@ -13,8 +13,56 @@ export interface SiteSummary {
   siteType: string;
   accessLevel: string;
   powerClass: string | null;
+  provisioningStatus: string;
+  dsoTariffId: string | null;
+  usrfTariffId: string | null;
+  usrfPremTariffId: string | null;
+  xtrrfTariffId: string | null;
+  spvivfTariffId: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+function toSiteSummary(r: {
+  id: string;
+  orgId: string;
+  organization: { displayName: string };
+  propertyId: string;
+  property: { displayName: string };
+  displayName: string;
+  timezone: string;
+  siteType: string;
+  accessLevel: string;
+  powerClass: string | null;
+  provisioningStatus: string;
+  dsoTariffId: string | null;
+  usrfTariffId: string | null;
+  usrfPremTariffId: string | null;
+  xtrrfTariffId: string | null;
+  spvivfTariffId: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}): SiteSummary {
+  return {
+    id: r.id,
+    orgId: r.orgId,
+    orgDisplayName: r.organization.displayName,
+    propertyId: r.propertyId,
+    propertyDisplayName: r.property.displayName,
+    displayName: r.displayName,
+    timezone: r.timezone,
+    siteType: r.siteType,
+    accessLevel: r.accessLevel,
+    powerClass: r.powerClass,
+    provisioningStatus: r.provisioningStatus,
+    dsoTariffId: r.dsoTariffId,
+    usrfTariffId: r.usrfTariffId,
+    usrfPremTariffId: r.usrfPremTariffId,
+    xtrrfTariffId: r.xtrrfTariffId,
+    spvivfTariffId: r.spvivfTariffId,
+    createdAt: r.createdAt.toISOString(),
+    updatedAt: r.updatedAt.toISOString(),
+  };
 }
 
 export async function listAllSites(): Promise<SiteSummary[]> {
@@ -26,20 +74,7 @@ export async function listAllSites(): Promise<SiteSummary[]> {
       property: { select: { displayName: true } },
     },
   });
-  return rows.map((r) => ({
-    id: r.id,
-    orgId: r.orgId,
-    orgDisplayName: r.organization.displayName,
-    propertyId: r.propertyId,
-    propertyDisplayName: r.property.displayName,
-    displayName: r.displayName,
-    timezone: r.timezone,
-    siteType: r.siteType,
-    accessLevel: r.accessLevel,
-    powerClass: r.powerClass,
-    createdAt: r.createdAt.toISOString(),
-    updatedAt: r.updatedAt.toISOString(),
-  }));
+  return rows.map(toSiteSummary);
 }
 
 export async function listPropertiesByOrg(
@@ -83,20 +118,7 @@ export async function createSite(
     targetId: created.id,
     metadata: { displayName: created.displayName },
   });
-  return {
-    id: created.id,
-    orgId: created.orgId,
-    orgDisplayName: created.organization.displayName,
-    propertyId: created.propertyId,
-    propertyDisplayName: created.property.displayName,
-    displayName: created.displayName,
-    timezone: created.timezone,
-    siteType: created.siteType,
-    accessLevel: created.accessLevel,
-    powerClass: created.powerClass,
-    createdAt: created.createdAt.toISOString(),
-    updatedAt: created.updatedAt.toISOString(),
-  };
+  return toSiteSummary(created);
 }
 
 import type { SiteUpdateInput } from "@/lib/repositories/_inputs/sites";
@@ -111,20 +133,7 @@ export async function getSiteById(id: string): Promise<SiteSummary | null> {
     },
   });
   if (!r) return null;
-  return {
-    id: r.id,
-    orgId: r.orgId,
-    orgDisplayName: r.organization.displayName,
-    propertyId: r.propertyId,
-    propertyDisplayName: r.property.displayName,
-    displayName: r.displayName,
-    timezone: r.timezone,
-    siteType: r.siteType,
-    accessLevel: r.accessLevel,
-    powerClass: r.powerClass,
-    createdAt: r.createdAt.toISOString(),
-    updatedAt: r.updatedAt.toISOString(),
-  };
+  return toSiteSummary(r);
 }
 
 export async function updateSite(
@@ -150,18 +159,5 @@ export async function updateSite(
     targetId: id,
     metadata: { fields: Object.keys(patch) },
   });
-  return {
-    id: updated.id,
-    orgId: updated.orgId,
-    orgDisplayName: updated.organization.displayName,
-    propertyId: updated.propertyId,
-    propertyDisplayName: updated.property.displayName,
-    displayName: updated.displayName,
-    timezone: updated.timezone,
-    siteType: updated.siteType,
-    accessLevel: updated.accessLevel,
-    powerClass: updated.powerClass,
-    createdAt: updated.createdAt.toISOString(),
-    updatedAt: updated.updatedAt.toISOString(),
-  };
+  return toSiteSummary(updated);
 }

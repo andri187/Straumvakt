@@ -102,8 +102,13 @@ export default async function UserDetailPage({
               <UserEditPanel
                 userId={user.id}
                 initial={{
+                  email: user.email,
                   displayName: user.displayName ?? "",
                   status: user.status,
+                  kennitala: user.kennitala ?? "",
+                  phone: user.phone ?? "",
+                  locale: user.locale,
+                  notes: user.notes ?? "",
                 }}
               />
             </div>

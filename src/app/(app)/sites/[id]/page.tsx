@@ -34,6 +34,12 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ id:
           siteType: site.siteType,
           accessLevel: site.accessLevel,
           powerClass: site.powerClass ?? "",
+          provisioningStatus: site.provisioningStatus,
+          dsoTariffId: site.dsoTariffId ?? "",
+          usrfTariffId: site.usrfTariffId ?? "",
+          usrfPremTariffId: site.usrfPremTariffId ?? "",
+          xtrrfTariffId: site.xtrrfTariffId ?? "",
+          spvivfTariffId: site.spvivfTariffId ?? "",
         }}
       />
     </div>

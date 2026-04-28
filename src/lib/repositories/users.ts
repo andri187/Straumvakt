@@ -26,6 +26,10 @@ export interface UserSummary {
   email: string;
   displayName: string | null;
   status: UserStatus;
+  kennitala: string | null;
+  phone: string | null;
+  locale: string;
+  notes: string | null;
   hasCredentials: boolean;
   createdAt: string;
   updatedAt: string;
@@ -44,6 +48,10 @@ function toSummary(row: {
   email: string;
   displayName: string | null;
   status: UserStatus;
+  kennitala: string | null;
+  phone: string | null;
+  locale: string;
+  notes: string | null;
   createdAt: Date;
   updatedAt: Date;
   credentials: { passwordHash: string | null } | null;
@@ -53,6 +61,10 @@ function toSummary(row: {
     email: row.email,
     displayName: row.displayName,
     status: row.status,
+    kennitala: row.kennitala,
+    phone: row.phone,
+    locale: row.locale,
+    notes: row.notes,
     hasCredentials: !!row.credentials?.passwordHash,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -123,8 +135,13 @@ export async function updateUser(
   const updated = await db.user.update({
     where: { id: userId },
     data: {
+      email: patch.email?.toLowerCase(),
       displayName: patch.displayName,
       status: patch.status,
+      kennitala: patch.kennitala,
+      phone: patch.phone,
+      locale: patch.locale,
+      notes: patch.notes,
     },
     include: { credentials: true },
   });

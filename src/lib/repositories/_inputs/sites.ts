@@ -21,5 +21,11 @@ export const SiteUpdateInput = z.object({
   siteType: SiteTypeEnum.optional(),
   accessLevel: SiteAccessLevelEnum.optional(),
   powerClass: SitePowerClassEnum.optional().nullable(),
+  provisioningStatus: z.string().min(1).max(40).optional(),
+  dsoTariffId: z.string().uuid().nullable().optional(),
+  usrfTariffId: z.string().uuid().nullable().optional(),
+  usrfPremTariffId: z.string().uuid().nullable().optional(),
+  xtrrfTariffId: z.string().uuid().nullable().optional(),
+  spvivfTariffId: z.string().uuid().nullable().optional(),
 });
 export type SiteUpdateInput = z.infer<typeof SiteUpdateInput>;

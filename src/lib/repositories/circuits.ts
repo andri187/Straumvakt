@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { recordAuditAction } from "@/lib/repositories/audit-actions";
 import type { CircuitCreateInput } from "@/lib/repositories/_inputs/circuits";
@@ -14,8 +15,43 @@ export interface CircuitSummary {
   ampereCeiling: number | null;
   phaseCount: number;
   vendorCircuitRef: string | null;
+  metadata: unknown;
   createdAt: string;
   updatedAt: string;
+}
+
+function toCircuitSummary(r: {
+  id: string;
+  orgId: string;
+  organization: { displayName: string };
+  siteId: string;
+  site: { displayName: string };
+  installationId: string | null;
+  installation: { displayName: string } | null;
+  displayName: string;
+  ampereCeiling: number | null;
+  phaseCount: number;
+  vendorCircuitRef: string | null;
+  metadata: unknown;
+  createdAt: Date;
+  updatedAt: Date;
+}): CircuitSummary {
+  return {
+    id: r.id,
+    orgId: r.orgId,
+    orgDisplayName: r.organization.displayName,
+    siteId: r.siteId,
+    siteDisplayName: r.site.displayName,
+    installationId: r.installationId,
+    installationDisplayName: r.installation?.displayName ?? null,
+    displayName: r.displayName,
+    ampereCeiling: r.ampereCeiling,
+    phaseCount: r.phaseCount,
+    vendorCircuitRef: r.vendorCircuitRef,
+    metadata: r.metadata,
+    createdAt: r.createdAt.toISOString(),
+    updatedAt: r.updatedAt.toISOString(),
+  };
 }
 
 export async function listAllCircuits(): Promise<CircuitSummary[]> {
@@ -28,21 +64,7 @@ export async function listAllCircuits(): Promise<CircuitSummary[]> {
       installation: { select: { displayName: true } },
     },
   });
-  return rows.map((r) => ({
-    id: r.id,
-    orgId: r.orgId,
-    orgDisplayName: r.organization.displayName,
-    siteId: r.siteId,
-    siteDisplayName: r.site.displayName,
-    installationId: r.installationId,
-    installationDisplayName: r.installation?.displayName ?? null,
-    displayName: r.displayName,
-    ampereCeiling: r.ampereCeiling,
-    phaseCount: r.phaseCount,
-    vendorCircuitRef: r.vendorCircuitRef,
-    createdAt: r.createdAt.toISOString(),
-    updatedAt: r.updatedAt.toISOString(),
-  }));
+  return rows.map(toCircuitSummary);
 }
 
 export async function listInstallationsBySite(
@@ -86,21 +108,7 @@ export async function createCircuit(
     targetId: created.id,
     metadata: { displayName: created.displayName },
   });
-  return {
-    id: created.id,
-    orgId: created.orgId,
-    orgDisplayName: created.organization.displayName,
-    siteId: created.siteId,
-    siteDisplayName: created.site.displayName,
-    installationId: created.installationId,
-    installationDisplayName: created.installation?.displayName ?? null,
-    displayName: created.displayName,
-    ampereCeiling: created.ampereCeiling,
-    phaseCount: created.phaseCount,
-    vendorCircuitRef: created.vendorCircuitRef,
-    createdAt: created.createdAt.toISOString(),
-    updatedAt: created.updatedAt.toISOString(),
-  };
+  return toCircuitSummary(created);
 }
 
 import type { CircuitUpdateInput } from "@/lib/repositories/_inputs/circuits";
@@ -116,21 +124,7 @@ export async function getCircuitById(id: string): Promise<CircuitSummary | null>
     },
   });
   if (!r) return null;
-  return {
-    id: r.id,
-    orgId: r.orgId,
-    orgDisplayName: r.organization.displayName,
-    siteId: r.siteId,
-    siteDisplayName: r.site.displayName,
-    installationId: r.installationId,
-    installationDisplayName: r.installation?.displayName ?? null,
-    displayName: r.displayName,
-    ampereCeiling: r.ampereCeiling,
-    phaseCount: r.phaseCount,
-    vendorCircuitRef: r.vendorCircuitRef,
-    createdAt: r.createdAt.toISOString(),
-    updatedAt: r.updatedAt.toISOString(),
-  };
+  return toCircuitSummary(r);
 }
 
 export async function updateCircuit(
@@ -139,9 +133,13 @@ export async function updateCircuit(
   actorUserId: string | null,
 ): Promise<CircuitSummary> {
   const db = prisma();
+  const { metadata, ...rest } = patch;
   const updated = await db.circuit.update({
     where: { id },
-    data: patch,
+    data: {
+      ...rest,
+      ...(metadata !== undefined ? { metadata: metadata as Prisma.InputJsonValue } : {}),
+    },
     include: {
       organization: { select: { displayName: true } },
       site: { select: { displayName: true } },
@@ -157,19 +155,5 @@ export async function updateCircuit(
     targetId: id,
     metadata: { fields: Object.keys(patch) },
   });
-  return {
-    id: updated.id,
-    orgId: updated.orgId,
-    orgDisplayName: updated.organization.displayName,
-    siteId: updated.siteId,
-    siteDisplayName: updated.site.displayName,
-    installationId: updated.installationId,
-    installationDisplayName: updated.installation?.displayName ?? null,
-    displayName: updated.displayName,
-    ampereCeiling: updated.ampereCeiling,
-    phaseCount: updated.phaseCount,
-    vendorCircuitRef: updated.vendorCircuitRef,
-    createdAt: updated.createdAt.toISOString(),
-    updatedAt: updated.updatedAt.toISOString(),
-  };
+  return toCircuitSummary(updated);
 }
