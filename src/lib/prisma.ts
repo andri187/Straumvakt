@@ -1,4 +1,4 @@
-import { PrismaClient } from "@/generated/prisma/client";
+import { PrismaClient } from "straumvakt-prisma-cf-client/client";
 import { PrismaNeon } from "@prisma/adapter-neon";
 import { cache } from "react";
 

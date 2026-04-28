@@ -22,7 +22,7 @@
  * of silently dropping.
  */
 import { z } from "zod";
-import type { RetentionClass } from "@/generated/prisma/client";
+import type { RetentionClass } from "straumvakt-prisma-cf-client/client";
 import type { IngestEvent } from "./event-envelope";
 
 // ─────────────────────────────────────────────────────────────────────────────

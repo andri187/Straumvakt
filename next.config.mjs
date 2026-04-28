@@ -18,12 +18,21 @@ const nextConfig = {
     cpus: 2,
   },
   turbopack: {},
-  webpack: (config) => {
+  webpack: (config, { isServer }) => {
     config.experiments = {
       ...(config.experiments ?? {}),
-      asyncWebAssembly: true,
       topLevelAwait: true,
     };
+    if (isServer) {
+      const existing = config.externals;
+      const cfExternal = ({ request }, callback) => {
+        if (request === "straumvakt-prisma-cf-client" || request?.startsWith("straumvakt-prisma-cf-client/")) {
+          return callback(null, "module " + request);
+        }
+        callback();
+      };
+      config.externals = Array.isArray(existing) ? [...existing, cfExternal] : [existing, cfExternal];
+    }
     return config;
   },
   env: {

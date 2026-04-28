@@ -17,7 +17,7 @@
 
 generator client {
   provider        = "prisma-client"
-  output          = "../src/generated/prisma"
+  output          = "../node_modules/straumvakt-prisma-cf-client"
   runtime         = "cloudflare"
   moduleFormat    = "esm"
   previewFeatures = ["postgresqlExtensions"]

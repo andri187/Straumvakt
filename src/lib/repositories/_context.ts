@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@/generated/prisma/client";
+import type { PrismaClient } from "straumvakt-prisma-cf-client/client";
 import { prisma } from "@/lib/prisma";
 import { asOrgId, OrgId, TenantContextError } from "./_types";
 

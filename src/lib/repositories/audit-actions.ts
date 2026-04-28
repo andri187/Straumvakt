@@ -1,4 +1,4 @@
-import type { ActorKind } from "@/generated/prisma/client";
+import type { ActorKind } from "straumvakt-prisma-cf-client/client";
 import { prisma } from "@/lib/prisma";
 
 /**
