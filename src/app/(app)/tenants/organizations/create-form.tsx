@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { apiFetch } from "@/lib/api-client";
 
 const ROLES = [
   "csms_provider",
@@ -86,7 +87,7 @@ export function CreateOrgForm() {
         contacts,
         branding: {},
       };
-      const res = await fetch("/api/admin/orgs", {
+      const res = await apiFetch("/api/admin/orgs", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),

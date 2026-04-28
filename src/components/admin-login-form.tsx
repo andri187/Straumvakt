@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/components/language-provider";
+import { apiFetch } from "@/lib/api-client";
 
 export function AdminLoginForm({ compact = false }: { compact?: boolean }) {
   const { language } = useLanguage();
@@ -17,7 +18,7 @@ export function AdminLoginForm({ compact = false }: { compact?: boolean }) {
     setError(null);
     setLoading(true);
     try {
-      const res = await fetch("/api/admin/login", {
+      const res = await apiFetch("/api/admin/login", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ email, password }),

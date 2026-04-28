@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { MEMBERSHIP_ROLES } from "@/lib/repositories/_inputs/memberships";
 import type { UserMembershipSummary } from "@/lib/repositories/users";
+import { apiFetch } from "@/lib/api-client";
 
 const ROLE_TONE: Record<string, string> = {
   owner: "bg-violet-950/40 text-violet-300 border-violet-700/40",
@@ -88,7 +89,7 @@ export function MembershipsPanel({
     setError(null);
     setBusyKey("add");
     try {
-      const res = await fetch(`/api/admin/orgs/${addOrgId}/memberships`, {
+      const res = await apiFetch(`/api/admin/orgs/${addOrgId}/memberships`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ userId, role: addRole }),

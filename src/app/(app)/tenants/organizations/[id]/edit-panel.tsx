@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { apiFetch } from "@/lib/api-client";
 
 const ROLES = [
   "csms_provider",
@@ -115,7 +116,7 @@ export function OrgEditPanel({ orgId, initial }: { orgId: string; initial: OrgIn
         return;
       }
 
-      const res = await fetch(`/api/admin/orgs/${orgId}`, {
+      const res = await apiFetch(`/api/admin/orgs/${orgId}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(patch),
@@ -137,7 +138,7 @@ export function OrgEditPanel({ orgId, initial }: { orgId: string; initial: OrgIn
     setError(null);
     setBusy("archiving");
     try {
-      const res = await fetch(`/api/admin/orgs/${orgId}/archive`, { method: "POST" });
+      const res = await apiFetch(`/api/admin/orgs/${orgId}/archive`, { method: "POST" });
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as { error?: string } | null;
         throw new Error(body?.error ?? `HTTP ${res.status}`);

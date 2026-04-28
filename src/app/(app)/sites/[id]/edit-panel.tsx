@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { apiFetch } from "@/lib/api-client";
 
 const SITE_TYPES = ["standard", "workplace", "mdu", "hotel", "fleet", "retail"] as const;
 const ACCESS_LEVELS = ["public", "private", "taxi_only"] as const;
@@ -47,7 +48,7 @@ export function EditSitePanel({ siteId, initial }: { siteId: string; initial: In
         setSubmitting(false);
         return;
       }
-      const res = await fetch(`/api/admin/sites/${siteId}`, {
+      const res = await apiFetch(`/api/admin/sites/${siteId}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(patch),

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { apiFetch } from "@/lib/api-client";
 
 const STATUSES = ["pending_credentials", "discovering", "active", "suspended", "error"] as const;
 
@@ -50,7 +51,7 @@ export function EditInstallationPanel({
         setSubmitting(false);
         return;
       }
-      const res = await fetch(`/api/admin/installations/${installationId}`, {
+      const res = await apiFetch(`/api/admin/installations/${installationId}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(patch),

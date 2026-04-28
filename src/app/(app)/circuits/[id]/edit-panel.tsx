@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { apiFetch } from "@/lib/api-client";
 
 type Initial = {
   displayName: string;
@@ -51,7 +52,7 @@ export function EditCircuitPanel({
       } else {
         metadata = {};
       }
-      const res = await fetch(`/api/admin/circuits/${circuitId}`, {
+      const res = await apiFetch(`/api/admin/circuits/${circuitId}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({

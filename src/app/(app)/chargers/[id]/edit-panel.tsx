@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { apiFetch } from "@/lib/api-client";
 
 const CONNECTOR_TYPES = ["Type2", "CCS2", "CHAdeMO", "Schuko"] as const;
 
@@ -65,7 +66,7 @@ export function EditChargerPanel({
         body.connectorType = s.connectorType;
         body.connectorMaxPowerKw = toNum(s.connectorMaxPowerKw) ?? null;
       }
-      const res = await fetch(`/api/admin/charging-stations/${chargingStationId}`, {
+      const res = await apiFetch(`/api/admin/charging-stations/${chargingStationId}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),

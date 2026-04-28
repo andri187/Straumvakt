@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { apiFetch } from "@/lib/api-client";
 
 type Initial = {
   displayName: string;
@@ -46,7 +47,7 @@ export function EditPropertyPanel({ propertyId, initial }: { propertyId: string;
         latitude: toNum(s.latitude),
         longitude: toNum(s.longitude),
       };
-      const res = await fetch(`/api/admin/properties/${propertyId}`, {
+      const res = await apiFetch(`/api/admin/properties/${propertyId}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { apiFetch } from "@/lib/api-client";
 
 const STATUSES = ["active", "suspended", "deleted"] as const;
 type UserStatusValue = (typeof STATUSES)[number];
@@ -46,7 +47,7 @@ export function UserEditPanel({ userId, initial }: { userId: string; initial: In
         setBusy(false);
         return;
       }
-      const res = await fetch(`/api/admin/users/${userId}`, {
+      const res = await apiFetch(`/api/admin/users/${userId}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(patch),

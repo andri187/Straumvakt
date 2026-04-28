@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { apiFetch } from "@/lib/api-client";
 
 export function CreatePropertyForm({ orgOptions }: { orgOptions: { id: string; label: string }[] }) {
   const router = useRouter();
@@ -38,7 +39,7 @@ export function CreatePropertyForm({ orgOptions }: { orgOptions: { id: string; l
         latitude: toNum(latitude),
         longitude: toNum(longitude),
       };
-      const res = await fetch("/api/admin/properties", {
+      const res = await apiFetch("/api/admin/properties", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),

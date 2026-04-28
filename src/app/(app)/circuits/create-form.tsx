@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { apiFetch } from "@/lib/api-client";
 
 export function CreateCircuitForm({ orgOptions }: { orgOptions: { id: string; label: string }[] }) {
   const router = useRouter();
@@ -19,7 +20,7 @@ export function CreateCircuitForm({ orgOptions }: { orgOptions: { id: string; la
 
   useEffect(() => {
     if (!orgId) return;
-    fetch(`/api/admin/orgs/${orgId}/sites`).then((r) => r.json()).then((d: { sites?: { id: string; displayName: string }[] }) => {
+    apiFetch(`/api/admin/orgs/${orgId}/sites`).then((r) => r.json()).then((d: { sites?: { id: string; displayName: string }[] }) => {
       const list = d.sites ?? [];
       setSites(list);
       setSiteId(list[0]?.id ?? "");
@@ -28,7 +29,7 @@ export function CreateCircuitForm({ orgOptions }: { orgOptions: { id: string; la
 
   useEffect(() => {
     if (!siteId) { setInstallations([]); setInstallationId(""); return; }
-    fetch(`/api/admin/sites/${siteId}/installations`).then((r) => r.json()).then((d: { installations?: { id: string; displayName: string }[] }) => {
+    apiFetch(`/api/admin/sites/${siteId}/installations`).then((r) => r.json()).then((d: { installations?: { id: string; displayName: string }[] }) => {
       const list = d.installations ?? [];
       setInstallations(list);
       setInstallationId("");
@@ -43,7 +44,7 @@ export function CreateCircuitForm({ orgOptions }: { orgOptions: { id: string; la
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault(); setError(null); setSubmitting(true);
     try {
-      const res = await fetch("/api/admin/circuits", {
+      const res = await apiFetch("/api/admin/circuits", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
