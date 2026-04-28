@@ -5,29 +5,42 @@
 // eventually the driver app and the OCPI gateway). No UI rendering, no
 // Next.js, no OpenNext — Wrangler+esbuild bundles this directly so the
 // Prisma 7 prisma-client generator's `runtime: "cloudflare"` output works
-// without any of the externalize gymnastics the monolith needed.
+// without any externalize gymnastics the monolith needed.
 
 import { Hono } from "hono";
+import { adminAuth } from "./routes/admin/auth";
 import { adminOrgs } from "./routes/admin/orgs";
+import { adminProperties } from "./routes/admin/properties";
+import { adminSites } from "./routes/admin/sites";
+import { adminInstallations } from "./routes/admin/installations";
+import { adminCircuits } from "./routes/admin/circuits";
+import { adminUsers } from "./routes/admin/users";
+import { adminMemberships } from "./routes/admin/memberships";
 import type { Env } from "./bindings";
 
 const app = new Hono<{ Bindings: Env }>();
 
-// Health check — useful for Cloudflare's deployment verification and for
-// catching basic plumbing problems without touching the database.
 app.get("/health", (c) => c.json({ ok: true, service: "hlada-api" }));
 
-// Admin endpoints — operator-only, gated by the admin HMAC session that
-// the UI mints on /api/admin/login. Login itself lands when the auth
-// route is migrated; for now the orgs routes assume an authenticated
-// caller (the UI passes the cookie through).
-app.route("/api/admin/orgs", adminOrgs);
+// Auth — login mints the admin HMAC cookie, logout clears it. Required
+// by every other admin route via the requireAdmin middleware.
+app.route("/api/admin", adminAuth);
 
-// 404 for anything else under /api/ — keeps the Worker's error surface
-// predictable for the UI.
+// Admin entity routes — all gated by requireAdmin inside their files.
+app.route("/api/admin/orgs", adminOrgs);
+app.route("/api/admin/properties", adminProperties);
+app.route("/api/admin/sites", adminSites);
+app.route("/api/admin/installations", adminInstallations);
+app.route("/api/admin/circuits", adminCircuits);
+app.route("/api/admin/users", adminUsers);
+app.route("/api/admin/memberships", adminMemberships);
+// /api/admin/charging-stations + /api/admin/chargers — multi-table create
+// transaction (SiteAsset + ChargingStation + EVSE + Connector + OcppIdentity)
+// stays on the monolith until next port pass. List/detail/update will land
+// in a follow-up commit on this branch.
+
 app.notFound((c) => c.json({ error: "not_found", path: c.req.path }, 404));
 
-// Generic error handler — returns shape the UI knows how to render.
 app.onError((err, c) => {
   console.error(err);
   return c.json(
