@@ -8,6 +8,7 @@
 // without any externalize gymnastics the monolith needed.
 
 import { Hono } from "hono";
+import { cors } from "hono/cors";
 import { adminAuth } from "./routes/admin/auth";
 import { adminOrgs } from "./routes/admin/orgs";
 import { adminProperties } from "./routes/admin/properties";
@@ -19,6 +20,29 @@ import { adminMemberships } from "./routes/admin/memberships";
 import type { Env } from "./bindings";
 
 const app = new Hono<{ Bindings: Env }>();
+
+// CORS — the API Worker is reachable from the UI's origin
+// (localhost:3000 in dev, hlada-staging.straumvakt.workers.dev in
+// staging, the future Pages domain in prod). credentials: include
+// is required so the admin session cookie is sent on cross-origin
+// fetches; that mandates Access-Control-Allow-Origin to echo the
+// request origin (not "*"). The list below is the operator's known
+// surfaces; new origins land here.
+const ALLOWED_ORIGINS = [
+  "http://localhost:3000",
+  "https://hlada-staging.straumvakt.workers.dev",
+  "https://hlada.straumvakt.workers.dev",
+];
+
+app.use(
+  "/api/*",
+  cors({
+    origin: (origin) => (ALLOWED_ORIGINS.includes(origin) ? origin : null),
+    credentials: true,
+    allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allowHeaders: ["Content-Type"],
+  }),
+);
 
 app.get("/health", (c) => c.json({ ok: true, service: "hlada-api" }));
 

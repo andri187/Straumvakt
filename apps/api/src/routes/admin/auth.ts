@@ -34,17 +34,30 @@ adminAuth.post("/login", async (c) => {
   }
 
   const token = await createAdminSession(c.env.AUTH_SECRET, email, "admin");
+  // Cookie scoped to the parent host so both the UI subdomain and the
+  // API subdomain see it. On localhost we let the browser default to
+  // host-only since cross-port (3000 → API) doesn't share by domain.
+  // SameSite=None + Secure required for cross-origin credentialed
+  // fetches in modern browsers.
+  const host = new URL(c.req.url).host;
+  const isLocal = host.startsWith("localhost") || host.startsWith("127.0.0.1");
   setCookie(c, adminSessionConfig.SESSION_COOKIE_NAME, token, {
     path: "/",
     httpOnly: true,
-    secure: true,
-    sameSite: "Lax",
+    secure: !isLocal,
+    sameSite: isLocal ? "Lax" : "None",
+    domain: isLocal ? undefined : "straumvakt.workers.dev",
     maxAge: adminSessionConfig.SESSION_TTL_SECONDS,
   });
   return c.json({ ok: true, email });
 });
 
 adminAuth.post("/logout", (c) => {
-  deleteCookie(c, adminSessionConfig.SESSION_COOKIE_NAME, { path: "/" });
+  const host = new URL(c.req.url).host;
+  const isLocal = host.startsWith("localhost") || host.startsWith("127.0.0.1");
+  deleteCookie(c, adminSessionConfig.SESSION_COOKIE_NAME, {
+    path: "/",
+    domain: isLocal ? undefined : "straumvakt.workers.dev",
+  });
   return c.json({ ok: true });
 });
