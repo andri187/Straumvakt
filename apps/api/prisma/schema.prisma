@@ -1,0 +1,2028 @@
+// Straumvakt — V3 Foundation Schema
+//
+// Sprint 0 deliverable. Supersedes the empty stub.
+//
+// Conventions (see docs/architecture/STRAUMVAKT_ARCHITECTURE_V3.md §10):
+//   • UUIDv7 primary keys (Postgres gen_random_uuid() is acceptable through v7 adoption)
+//   • Every operational row carries org_id (the tenant)
+//   • Money as BIGINT minor units — no Float, no Decimal ambiguity
+//   • JSONB for "shape may grow" fields; regular columns for things that must index
+//   • Soft delete only where strictly required (users for compliance); otherwise status columns
+//   • Audit columns (created_at / updated_at) on every operational table
+//
+// Schema namespaces (18) map 1:1 to Postgres schemas via multiSchema:
+//   identity, tenancy, hosts, properties, assets, hardware, ocpp,
+//   charging, billing, issues, events, audit, entitlements, people,
+//   vendors, roaming, energy, webhooks
+
+// Prisma 7 prisma-client generator with runtime: cloudflare. Wrangler+esbuild
+// bundles the WASM via the static `?module` import natively — no externalize
+// shim, no compile-cf-prisma.sh, no post-opennext-cf-prisma.sh, no `as never`
+// casts. Output lands in src/generated/prisma/ and is gitignored.
+generator client {
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma"
+  runtime         = "cloudflare"
+  moduleFormat    = "esm"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  schemas    = ["identity", "tenancy", "hosts", "properties", "assets", "hardware", "ocpp", "charging", "billing", "issues", "events", "audit", "entitlements", "people", "vendors", "roaming", "energy", "webhooks"]
+  extensions = [citext]
+}
+
+// Connection URL lives in prisma.config.ts (Prisma 7 requirement).
+// Runtime client passes a PrismaNeon adapter to PrismaClient — see src/lib/prisma.ts.
+
+// ─────────────────────────────────────────────────────────────────────────────
+// identity — users and their credentials
+// ─────────────────────────────────────────────────────────────────────────────
+
+model User {
+  // ── Sprint 0 (ADR 0001) ──────────────────────────────────────────
+  id             String           @id @default(uuid()) @db.Uuid
+  email          String           @unique @db.Citext
+  displayName    String?          @map("display_name")
+  status         UserStatus       @default(active)
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // ── Profile enrichment per ADR 0010 (Sprint 2.6) ─────────────────
+  kennitala      String?          @unique
+  phone          String?
+  locale         String           @default("is")
+  notes          String?          @db.Text
+
+  // ── Existing relations ───────────────────────────────────────────
+  credentials    UserCredential?
+  memberships    Membership[]
+  primaryFamily  FamilyGroup[]    @relation("FamilyGroupPrimary")
+  familyMember   FamilyMembership[]
+  sessions       ChargeSession[]
+  auditActions   AuditAction[]
+  commandsAsked  OutboundCommand[] @relation("OutboundCommandRequester")
+  ocpiTokens     OcpiToken[]
+
+  // ── Rev-3 / Rev-4 relations (ADRs 0008 + 0010) ───────────────────
+  platformAdminGrant      PlatformAdmin?   @relation("PlatformAdminUser")
+  platformAdminGrantsMade PlatformAdmin[]  @relation("PlatformAdminGrantedBy")
+  configKeysSet           OcppConfigurationKey[] @relation("ConfigKeySetBy")
+  costCentersAsPayer      CostCenter[]     @relation("CostCenterPayerUser")
+  driverContracts         DriverContract[]
+
+  @@map("users")
+  @@schema("identity")
+}
+
+enum UserStatus {
+  active
+  suspended
+  deleted
+
+  @@schema("identity")
+}
+
+model UserCredential {
+  userId        String   @id @map("user_id") @db.Uuid
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  passwordHash  String?  @map("password_hash")
+  totpSecret    String?  @map("totp_secret")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("user_credentials")
+  @@schema("identity")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// tenancy — organizations (SaaS tenants / CPOs) and memberships
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Organization {
+  // ── Sprint 0 (ADR 0001) ──────────────────────────────────────────
+  id                  String              @id @default(uuid()) @db.Uuid
+  slug                String              @unique
+  displayName         String              @map("display_name")
+  countryCode         String              @map("country_code") // ISO 3166-1 alpha-2
+  status              OrgStatus           @default(active)
+  createdAt           DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // ── Profile enrichment per ADR 0010 (Sprint 2.6) ─────────────────
+  legalName           String?             @map("legal_name")
+  legalForm           String?             @map("legal_form")
+  kennitala           String?             @unique
+  vskNr               String?             @map("vsk_nr")
+  leiCode             String?             @map("lei_code")
+  defaultCurrency     String              @map("default_currency") @default("ISK")
+  addresses           Json                @default("{}") @db.JsonB
+  contacts            Json                @default("{}") @db.JsonB
+  branding            Json                @default("{}") @db.JsonB
+  regulatorLicenceNo  String?             @map("regulator_licence_no")
+  roles               OrganizationRole[]  @default([])
+  notes               String?             @db.Text
+
+  // ── Existing relations (ChargerHost / ChargerServicePlan dropped per ADR 0009) ─
+  memberships         Membership[]
+  properties          Property[]
+  sites               Site[]
+  installations       Installation[]
+  circuits            Circuit[]
+  siteAssets          SiteAsset[]
+  // Rev-5 (ADR 0012) — Charger renamed to ChargingStation
+  chargingStations         ChargingStation[]    @relation("StationOperator")
+  chargingStationsOwned    ChargingStation[]    @relation("StationOwner")
+  evses                    EVSE[]
+  ocppIdentities      OcppIdentity[]
+  connectors          Connector[]
+  outboundCommands    OutboundCommand[]
+  chargeSessions      ChargeSession[]
+  meterValues         MeterValue[]
+  reservations        Reservation[]
+  // Rev-5 (ADR 0012) — control-plane attachments + protocol/import refs
+  vendorAssetRefs         VendorAssetRef[]
+  externalCpmsRefs        ExternalCpmsRef[]
+  capabilityProfiles      CapabilityProfile[]
+  controlRoutingPolicies  ControlRoutingPolicy[]
+  protocolTransactionRefs ProtocolTransactionRef[]
+  importedCdrRefs         ImportedCdrRef[]
+  tariffs             Tariff[]
+  customerPlans       CustomerPlan[]
+  subscriptions       Subscription[]
+  billingTransactions BillingTransaction[]
+  invoices            Invoice[]
+  statements          Statement[]
+  tickets             IssueTicket[]
+  detectionRules      DetectionRule[]
+  eventLog            EventLogEntry[]
+  auditActions        AuditAction[]
+  featureFlags        FeatureFlag[]
+  enterpriseLicenses  EnterpriseLicense[]
+  familyGroups        FamilyGroup[]
+  ocpiTokens          OcpiToken[]
+  hubConnections      HubConnection[]
+  cdrQueueEntries     CdrQueueEntry[]
+  siteEnergyPolicies  SiteEnergyPolicy[]
+  propertyEnergyPolicies PropertyEnergyPolicy[]
+  energyPlanningResults EnergyPlanningResult[]
+  webhookSubscriptions WebhookSubscription[]
+
+  // ── Rev-3 billing relations (ADR 0008) ──────────────────────────
+  tariffDefinitions   TariffDefinition[]
+  costCenters         CostCenter[]         @relation("CostCenterOrg")
+  costCentersAsPayer  CostCenter[]         @relation("CostCenterPayer")
+  costCentersAsBeneficiary CostCenter[]    @relation("CostCenterBeneficiary")
+  contracts           Contract[]
+  contractAccumulators ContractPeriodAccumulator[]
+  driverContracts     DriverContract[]
+  billingLines        BillingLine[]
+  configurationKeys   OcppConfigurationKey[]
+
+  @@map("organizations")
+  @@schema("tenancy")
+}
+
+enum OrgStatus {
+  active
+  suspended
+  archived
+
+  @@schema("tenancy")
+}
+
+model Membership {
+  orgId        String         @map("org_id") @db.Uuid
+  userId       String         @map("user_id") @db.Uuid
+  role         MembershipRole
+  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization Organization   @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([orgId, userId])
+  @@map("memberships")
+  @@schema("tenancy")
+}
+
+enum MembershipRole {
+  owner
+  admin
+  operator
+  helper
+  contractor
+  driver
+  viewer
+
+  @@schema("tenancy")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// hosts — schema namespace reserved for future host-domain tables
+// (e.g. ServiceAgreement when Issue Engine ships post-pilot).
+// ChargerHost + ChargerServicePlan dropped per ADR 0009 (2026-04-26).
+// HostType enum moved to properties.SiteType.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────────────────
+// properties — physical locations and their sublocations
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Property {
+  id                 String         @id @default(uuid()) @db.Uuid
+  orgId              String         @map("org_id") @db.Uuid
+  // ChargerHost dropped per ADR 0009 — Property attaches directly to Org.
+  // host_id column dropped in the consolidated migration.
+  displayName        String         @map("display_name")
+  address            Json           @default("{}") @db.JsonB
+  locationType       String?        @map("location_type")
+  latitude           Decimal?       @db.Decimal(9, 6)
+  longitude          Decimal?       @db.Decimal(9, 6)
+  provisioningStatus String         @map("provisioning_status") @default("provisioned")
+  external           Boolean        @default(false) // shadow record from OCPI roaming partner
+  createdAt          DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization       Organization   @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  sites              Site[]
+  energyPolicies     PropertyEnergyPolicy[]
+
+  @@index([orgId])
+  @@map("properties")
+  @@schema("properties")
+}
+
+model Site {
+  // ── Sprint 0 (ADR 0001) ──────────────────────────────────────────
+  id                 String          @id @default(uuid()) @db.Uuid
+  orgId              String          @map("org_id") @db.Uuid
+  propertyId         String          @map("property_id") @db.Uuid
+  displayName        String          @map("display_name")
+  timezone           String          @default("Atlantic/Reykjavik")
+  accessLevel        SiteAccessLevel @map("access_level") @default(private)
+  powerClass         SitePowerClass? @map("power_class")
+  provisioningStatus String          @map("provisioning_status") @default("provisioned")
+  external           Boolean         @default(false)
+  createdAt          DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // ── Rev-4 (ADR 0009 — HostType moved here as site_type) ──────────
+  siteType           SiteType        @map("site_type") @default(standard)
+
+  // ── Rev-3 tariff anchor FKs (ADR 0008) ───────────────────────────
+  dsoTariffId        String?         @map("dso_tariff_id") @db.Uuid
+  usrfTariffId       String?         @map("usrf_tariff_id") @db.Uuid
+  usrfPremTariffId   String?         @map("usrf_prem_tariff_id") @db.Uuid
+  xtrrfTariffId      String?         @map("xtrrf_tariff_id") @db.Uuid
+  spvivfTariffId     String?         @map("spvivf_tariff_id") @db.Uuid
+
+  // ── Existing relations ───────────────────────────────────────────
+  organization       Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  property           Property        @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  assets             SiteAsset[]
+  installations      Installation[]
+  circuits           Circuit[]
+  sessions           ChargeSession[]
+  energyPolicies     SiteEnergyPolicy[]
+  energyPlanningResults EnergyPlanningResult[]
+
+  // ── Tariff-definition relations (rev-3) ──────────────────────────
+  dsoTariff          TariffDefinition? @relation("SiteDsoTariff", fields: [dsoTariffId], references: [id])
+  usrfTariff         TariffDefinition? @relation("SiteUsrfTariff", fields: [usrfTariffId], references: [id])
+  usrfPremTariff     TariffDefinition? @relation("SiteUsrfPremTariff", fields: [usrfPremTariffId], references: [id])
+  xtrrfTariff        TariffDefinition? @relation("SiteXtrrfTariff", fields: [xtrrfTariffId], references: [id])
+  spvivfTariff       TariffDefinition? @relation("SiteSpvivfTariff", fields: [spvivfTariffId], references: [id])
+
+  @@index([orgId, propertyId])
+  @@map("sites")
+  @@schema("properties")
+}
+
+enum SiteAccessLevel {
+  public
+  private
+  taxi_only
+
+  @@schema("properties")
+}
+
+enum SitePowerClass {
+  lt_50kw
+  between_50_150kw
+  between_150_500kw
+  gt_500kw
+
+  @@schema("properties")
+}
+
+// SiteAsset is the polymorphic "thing at a site". Specific kinds (charger,
+// meter, modem, controller) extend this via separate rows in `assets`.
+model SiteAsset {
+  id            String        @id @default(uuid()) @db.Uuid
+  orgId         String        @map("org_id") @db.Uuid
+  siteId        String        @map("site_id") @db.Uuid
+  kind          SiteAssetKind
+  displayName   String        @map("display_name")
+  status        String        @default("active")
+  metadata      Json          @default("{}") @db.JsonB
+  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization  Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  site          Site          @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  chargingStation ChargingStation?
+  meter         Meter?
+  modem         Modem?
+  controller    Controller?
+
+  @@index([orgId, siteId])
+  @@index([kind, status])
+  @@map("site_assets")
+  @@schema("properties")
+}
+
+enum SiteAssetKind {
+  charger
+  meter
+  modem
+  controller
+
+  @@schema("properties")
+}
+
+// Installation — optional grouping between Site and charger-kind SiteAssets.
+// Used for AC vendor-managed hardware (Zaptec Pro, Easee One) where the vendor
+// portal models an installation and credentials cover the whole group.
+// OCPP-only chargers and DC chargers typically have no Installation.
+model Installation {
+  // ── Sprint 0 (ADR 0001 + ADR 0002) ───────────────────────────────
+  id                     String                        @id @default(uuid()) @db.Uuid
+  orgId                  String                        @map("org_id") @db.Uuid
+  siteId                 String                        @map("site_id") @db.Uuid
+  vendorId               String?                       @map("vendor_id") @db.Uuid
+  modelId                String?                       @map("model_id") @db.Uuid
+  displayName            String                        @map("display_name")
+  vendorInstallationRef  String?                       @map("vendor_installation_ref")
+  credentialsRef         String?                       @map("credentials_ref")
+  credentialsStatus      String?                       @map("credentials_status")
+  onboardingStatus       InstallationOnboardingStatus  @map("onboarding_status") @default(pending_credentials)
+  metadata               Json                          @default("{}") @db.JsonB
+  createdAt              DateTime                      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime                      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // ── Rev-3 (ADR 0008 — REPF anchor) ───────────────────────────────
+  retailerTariffId       String?                       @map("retailer_tariff_id") @db.Uuid
+
+  // ── Existing relations ───────────────────────────────────────────
+  organization           Organization                  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  site                   Site                          @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  vendor                 HardwareVendor?               @relation(fields: [vendorId], references: [id])
+  model                  HardwareModel?                @relation(fields: [modelId], references: [id])
+  chargingStations       ChargingStation[]
+  circuits               Circuit[]
+
+  // ── Tariff-definition relation (rev-3) ───────────────────────────
+  retailerTariff         TariffDefinition?             @relation("InstallationRetailerTariff", fields: [retailerTariffId], references: [id])
+
+  @@index([orgId, siteId])
+  @@index([vendorId])
+  @@map("installations")
+  @@schema("properties")
+}
+
+enum InstallationOnboardingStatus {
+  pending_credentials
+  discovering
+  active
+  suspended
+  error
+
+  @@schema("properties")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// assets — kind-specific hardware records, extending SiteAsset
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── Rev-5 (ADR 0012) — Charger renamed to ChargingStation ──────────
+// Physical equipment lives independently of the control plane. EVSE +
+// Connector are split out below. Control attachments (ocpp.identities,
+// vendors.vendor_asset_refs, roaming.external_cpms_refs) anchor here.
+
+model ChargingStation {
+  // Inherits ID from SiteAsset (preserves the Sprint 0 invariant that
+  // every physical asset has a SiteAsset row).
+  siteAssetId      String        @id @map("site_asset_id") @db.Uuid
+  orgId            String        @map("org_id") @db.Uuid             // operator (the SaaS tenant)
+  modelId          String?       @map("model_id") @db.Uuid
+  installationId   String?       @map("installation_id") @db.Uuid
+  vendor           String?
+  model            String?
+  serialNumber     String?       @map("serial_number")
+  installDate      DateTime?     @map("install_date") @db.Date
+  warrantyExpires  DateTime?     @map("warranty_expires") @db.Date
+  firmwareVersion  String?       @map("firmware_version")
+  createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // ── Rev-3 (ADRs 0007 + 0008) ────────────────────────────────────
+  circuitId        String?       @map("circuit_id") @db.Uuid
+  ownerOrgId       String?       @map("owner_org_id") @db.Uuid
+  chrgrfTariffId   String?       @map("chrgrf_tariff_id") @db.Uuid
+
+  // ── Existing relations ───────────────────────────────────────────
+  siteAsset        SiteAsset     @relation(fields: [siteAssetId], references: [id], onDelete: Cascade)
+  organization     Organization  @relation("StationOperator", fields: [orgId], references: [id])
+  hardwareModel    HardwareModel? @relation(fields: [modelId], references: [id])
+  installation     Installation? @relation(fields: [installationId], references: [id])
+
+  // ── Rev-5 (ADR 0012) — physical children + control attachments ───
+  evses              EVSE[]
+  ocppIdentities     OcppIdentity[]
+  vendorAssetRefs    VendorAssetRef[]
+  externalCpmsRefs   ExternalCpmsRef[]
+  capabilityProfiles CapabilityProfile[]
+  controlRoutingPolicy ControlRoutingPolicy?
+  sessions           ChargeSession[]
+
+  // ── Rev-3 / Rev-4 relations ──────────────────────────────────────
+  circuit          Circuit?      @relation("CircuitStations", fields: [circuitId], references: [id])
+  ownerOrg         Organization? @relation("StationOwner", fields: [ownerOrgId], references: [id])
+  chrgrfTariff     TariffDefinition? @relation("StationChrgrfTariff", fields: [chrgrfTariffId], references: [id])
+
+  @@index([modelId])
+  @@index([installationId])
+  @@index([circuitId])
+  @@index([ownerOrgId])
+  @@map("charging_stations")
+  @@schema("assets")
+}
+
+// ── Rev-5 (ADR 0012) — EVSE: an electric vehicle supply equipment
+// unit inside a ChargingStation. OCPP 2.0.1 native concept; for OCPP
+// 1.6 chargers, one EVSE per connector.
+
+model EVSE {
+  id                  String   @id @default(uuid()) @db.Uuid
+  orgId               String   @map("org_id") @db.Uuid
+  chargingStationId   String   @map("charging_station_id") @db.Uuid
+  evseIndex           Int      @map("evse_index")
+  maxPowerKw          Decimal? @map("max_power_kw") @db.Decimal(8, 2)
+  phaseCount          Int?     @map("phase_count")
+  status              String   @default("unknown")
+  statusUpdatedAt     DateTime? @map("status_updated_at") @db.Timestamptz(6)
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization        Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  chargingStation     ChargingStation  @relation(fields: [chargingStationId], references: [siteAssetId], onDelete: Cascade)
+  connectors          Connector[]
+  sessions            ChargeSession[]
+
+  @@unique([chargingStationId, evseIndex])
+  @@index([orgId, status])
+  @@map("evses")
+  @@schema("assets")
+}
+
+// ── Rev-5 (ADR 0012) — Connector moved from ocpp schema to assets.
+// Anchors on EVSE, not on OcppIdentity.
+
+model Connector {
+  id              String          @id @default(uuid()) @db.Uuid
+  orgId           String          @map("org_id") @db.Uuid
+  evseId          String          @map("evse_id") @db.Uuid
+  connectorIndex  Int             @map("connector_index")
+  type            String          // Type2 / CCS2 / CHAdeMO / Schuko
+  maxPowerKw      Decimal?        @map("max_power_kw") @db.Decimal(8, 2)
+  status          String          @default("unknown")
+  statusUpdatedAt DateTime?       @map("status_updated_at") @db.Timestamptz(6)
+  createdAt       DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization    Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  evse            EVSE            @relation(fields: [evseId], references: [id], onDelete: Cascade)
+  sessions        ChargeSession[]
+  reservations    Reservation[]
+
+  @@unique([evseId, connectorIndex])
+  @@index([orgId])
+  @@map("connectors")
+  @@schema("assets")
+}
+
+// ── Rev-5 (ADR 0012) — control-plane policy + capability tables.
+// Live in `assets` schema because they describe asset-level routing,
+// not protocol-level state.
+
+model CapabilityProfile {
+  id                String   @id @default(uuid()) @db.Uuid
+  orgId             String   @map("org_id") @db.Uuid
+  chargingStationId String   @map("charging_station_id") @db.Uuid
+  controlPlane      String   @map("control_plane")
+  capabilities      Json     @db.JsonB
+  source            String   // 'declared' / 'observed' / 'imported'
+  observedAt        DateTime? @map("observed_at") @db.Timestamptz(6)
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization      Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  chargingStation   ChargingStation @relation(fields: [chargingStationId], references: [siteAssetId], onDelete: Cascade)
+
+  @@unique([chargingStationId, controlPlane])
+  @@map("capability_profiles")
+  @@schema("assets")
+}
+
+model ControlRoutingPolicy {
+  id                String   @id @default(uuid()) @db.Uuid
+  orgId             String   @map("org_id") @db.Uuid
+  chargingStationId String   @unique @map("charging_station_id") @db.Uuid
+  routing           Json     @db.JsonB
+  fallback          String?  @map("fallback_plane")
+  status            String   @default("active")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization      Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  chargingStation   ChargingStation @relation(fields: [chargingStationId], references: [siteAssetId], onDelete: Cascade)
+
+  @@map("control_routing_policies")
+  @@schema("assets")
+}
+
+model Meter {
+  siteAssetId   String      @id @map("site_asset_id") @db.Uuid
+  meterSerial   String?     @map("meter_serial")
+  meterType     String?     @map("meter_type") // grid / submeter / pv / battery
+  maxAmps       Int?        @map("max_amps")
+  createdAt     DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  siteAsset     SiteAsset   @relation(fields: [siteAssetId], references: [id], onDelete: Cascade)
+
+  @@map("meters")
+  @@schema("assets")
+}
+
+model Modem {
+  siteAssetId  String     @id @map("site_asset_id") @db.Uuid
+  imei         String?    @unique
+  carrier      String?
+  iccid        String?
+  lastSeenAt   DateTime?  @map("last_seen_at") @db.Timestamptz(6)
+  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  siteAsset    SiteAsset  @relation(fields: [siteAssetId], references: [id], onDelete: Cascade)
+
+  @@map("modems")
+  @@schema("assets")
+}
+
+model Controller {
+  siteAssetId    String     @id @map("site_asset_id") @db.Uuid
+  vendor         String?    // e.g. "shelly"
+  deviceId       String?    @map("device_id")
+  endpointUrl    String?    @map("endpoint_url")
+  capabilities   Json       @default("{}") @db.JsonB
+  lastSeenAt     DateTime?  @map("last_seen_at") @db.Timestamptz(6)
+  createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  siteAsset      SiteAsset  @relation(fields: [siteAssetId], references: [id], onDelete: Cascade)
+
+  @@map("controllers")
+  @@schema("assets")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// hardware — platform-level catalog of supported vendors and models.
+// Not tenant-scoped: all Orgs see the same catalog. Model profiles are the
+// template for charger / meter / modem / controller records. Credential
+// scope on the model drives where adapter credentials attach (installation
+// vs. OCPP identity vs. none).
+// ─────────────────────────────────────────────────────────────────────────────
+
+model HardwareVendor {
+  id             String              @id @default(uuid()) @db.Uuid
+  slug           String              @unique // e.g. "zaptec", "easee", "kempower", "shelly", "generic-ocpp"
+  displayName    String              @map("display_name")
+  kind           HardwareVendorKind
+  website        String?
+  apiKind        VendorApiKind       @map("api_kind") @default(none)
+  supportContact Json                @default("{}") @map("support_contact") @db.JsonB
+  status         String              @default("active")
+  createdAt      DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  models         HardwareModel[]
+  installations  Installation[]
+
+  @@map("vendors")
+  @@schema("hardware")
+}
+
+enum HardwareVendorKind {
+  charger_ac
+  charger_dc
+  meter
+  modem
+  controller
+  multi // vendors that span kinds (e.g. Shelly: modem + controller)
+
+  @@schema("hardware")
+}
+
+enum VendorApiKind {
+  oauth       // Zaptec Pro style — exchange user/pass for token, then refresh
+  basic_auth  // Easee-style user/pass sent per request, or per-identity DC
+  none        // no vendor API; OCPP-only
+
+  @@schema("hardware")
+}
+
+model HardwareModel {
+  id               String                @id @default(uuid()) @db.Uuid
+  vendorId         String                @map("vendor_id") @db.Uuid
+  slug             String                // unique per vendor, e.g. "zaptec-pro", "easee-one"
+  displayName      String                @map("display_name")
+  kind             HardwareVendorKind
+  assetClass       AssetClass?           @map("asset_class") // ac/dc for chargers; null for non-chargers
+  credentialScope  VendorCredentialScope @map("credential_scope") @default(none)
+  profile          Json                  @default("{}") @db.JsonB // technical spec template: power, phases, connectors, OCPP versions
+  status           String                @default("active")
+  createdAt        DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  vendor           HardwareVendor        @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  chargingStations ChargingStation[]
+  installations    Installation[]
+
+  @@unique([vendorId, slug])
+  @@index([kind, status])
+  @@map("models")
+  @@schema("hardware")
+}
+
+enum VendorCredentialScope {
+  installation // AC vendor-managed: creds on properties.installations
+  identity     // DC vendor-managed: creds on ocpp.ocpp_identities
+  none         // OCPP-only: no vendor API
+
+  @@schema("hardware")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ocpp — OCPP identities (control endpoints), connectors, outbound commands
+// ─────────────────────────────────────────────────────────────────────────────
+
+model OcppIdentity {
+  // ── Rev-5 (ADR 0012) ──────────────────────────────────────────────
+  // Now a control attachment on ChargingStation, not the parent of the
+  // physical hierarchy. Capabilities + control routing moved to
+  // assets.capability_profiles + assets.control_routing_policies.
+  id                   String         @id @default(uuid()) @db.Uuid
+  orgId                String         @map("org_id") @db.Uuid
+  chargingStationId    String         @map("charging_station_id") @db.Uuid
+  identityString       String         @map("identity_string")
+  authSecretHash       String         @map("auth_secret_hash")
+  ocppVersion          OcppVersion    @map("ocpp_version")
+  assetClass           AssetClass     @map("asset_class") @default(ac)
+  vendor               String?
+  vendorResourceId     String?        @map("vendor_resource_id")
+  credentialsRef       String?        @map("credentials_ref")
+  credentialsStatus    String?        @map("credentials_status")
+  status               String         @default("provisioned")
+  lastSeenAt           DateTime?      @map("last_seen_at") @db.Timestamptz(6)
+  createdAt            DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization         Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  chargingStation      ChargingStation  @relation(fields: [chargingStationId], references: [siteAssetId], onDelete: Cascade)
+  outboundCommands     OutboundCommand[]
+  configurationKeys    OcppConfigurationKey[]
+  sessions             ChargeSession[]
+
+  @@unique([orgId, identityString])
+  @@index([orgId, chargingStationId])
+  @@map("ocpp_identities")
+  @@schema("ocpp")
+}
+
+enum OcppVersion {
+  ocpp_1_6
+  ocpp_2_0_1
+  ocpp_2_1
+
+  @@schema("ocpp")
+}
+
+enum AssetClass {
+  ac
+  dc
+
+  @@schema("ocpp")
+}
+
+// ── Rev-5 (ADR 0012) — Connector moved to assets schema (defined
+// above near ChargingStation/EVSE). Old definition removed.
+
+model OutboundCommand {
+  id              String       @id @default(uuid()) @db.Uuid
+  orgId           String       @map("org_id") @db.Uuid
+  identityId      String       @map("identity_id") @db.Uuid
+  controlDomain   String       @map("control_domain")
+  routedTo        String       @map("routed_to") // 'ocpp' or 'vendor:<name>'
+  payload         Json         @db.JsonB
+  status          CommandStatus @default(pending)
+  attempts        Int          @default(0)
+  notBefore       DateTime     @map("not_before") @db.Timestamptz(6)
+  lastAttemptAt   DateTime?    @map("last_attempt_at") @db.Timestamptz(6)
+  result          Json?        @db.JsonB
+  correlationId   String       @map("correlation_id") @db.Uuid
+  requestedBy     String?      @map("requested_by") @db.Uuid
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  identity        OcppIdentity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+  requester       User?        @relation("OutboundCommandRequester", fields: [requestedBy], references: [id])
+
+  @@index([status, notBefore])
+  @@index([orgId, identityId])
+  @@map("outbound_commands")
+  @@schema("ocpp")
+}
+
+enum CommandStatus {
+  pending
+  sent
+  acked
+  failed
+  cancelled
+
+  @@schema("ocpp")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// charging — sessions, meter values, reservations
+// ─────────────────────────────────────────────────────────────────────────────
+
+model ChargeSession {
+  // ── Rev-5 (ADR 0012) — anchors on EVSE; ocppIdentity/connector now optional ─
+  id                String        @id @default(uuid()) @db.Uuid
+  orgId             String        @map("org_id") @db.Uuid
+  siteId            String        @map("site_id") @db.Uuid
+  chargingStationId String        @map("charging_station_id") @db.Uuid
+  evseId            String        @map("evse_id") @db.Uuid
+  connectorId       String?       @map("connector_id") @db.Uuid
+  ocppIdentityId    String?       @map("ocpp_identity_id") @db.Uuid
+  userId            String?       @map("user_id") @db.Uuid
+  idTag             String?       @map("id_tag")
+  startedAt         DateTime      @map("started_at") @db.Timestamptz(6)
+  endedAt           DateTime?     @map("ended_at") @db.Timestamptz(6)
+  energyWh          BigInt?       @map("energy_wh")
+  stopReason        String?       @map("stop_reason")
+  status            SessionStatus @default(in_progress)
+  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // ── Rev-3 (ADR 0008) — rolled-up summary from billing_lines at session-stop ─
+  costExVatMinor    BigInt?   @map("cost_ex_vat_minor")
+  costIncVatMinor   BigInt?   @map("cost_inc_vat_minor")
+
+  organization      Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  site              Site             @relation(fields: [siteId], references: [id])
+  chargingStation   ChargingStation  @relation(fields: [chargingStationId], references: [siteAssetId])
+  evse              EVSE             @relation(fields: [evseId], references: [id])
+  connector         Connector?       @relation(fields: [connectorId], references: [id])
+  ocppIdentity      OcppIdentity?    @relation(fields: [ocppIdentityId], references: [id])
+  user              User?            @relation(fields: [userId], references: [id])
+  meterValues       MeterValue[]
+  billingLines      BillingLine[]
+  protocolTransactionRefs ProtocolTransactionRef[]
+  importedCdrRefs   ImportedCdrRef[]
+
+  @@index([orgId, startedAt(sort: Desc)])
+  @@index([evseId, startedAt(sort: Desc)])
+  @@index([userId, startedAt(sort: Desc)])
+  @@map("sessions")
+  @@schema("charging")
+}
+
+enum SessionStatus {
+  in_progress
+  completed
+  aborted
+
+  @@schema("charging")
+}
+
+model MeterValue {
+  id          String        @id @default(uuid()) @db.Uuid
+  orgId       String        @map("org_id") @db.Uuid
+  sessionId   String        @map("session_id") @db.Uuid
+  measuredAt  DateTime      @map("measured_at") @db.Timestamptz(6)
+  energyWh    BigInt?       @map("energy_wh")
+  powerW      Int?          @map("power_w")
+  voltageV    Decimal?      @map("voltage_v") @db.Decimal(6, 2)
+  currentA    Decimal?      @map("current_a") @db.Decimal(6, 2)
+  socPercent  Decimal?      @map("soc_percent") @db.Decimal(5, 2)
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  session     ChargeSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, measuredAt])
+  @@map("meter_values")
+  @@schema("charging")
+}
+
+model Reservation {
+  id            String    @id @default(uuid()) @db.Uuid
+  orgId         String    @map("org_id") @db.Uuid
+  connectorId   String    @map("connector_id") @db.Uuid
+  userId        String?   @map("user_id") @db.Uuid
+  reservedFrom  DateTime  @map("reserved_from") @db.Timestamptz(6)
+  reservedUntil DateTime  @map("reserved_until") @db.Timestamptz(6)
+  status        String    @default("confirmed")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  connector     Connector    @relation(fields: [connectorId], references: [id])
+
+  @@index([orgId, reservedFrom])
+  @@map("reservations")
+  @@schema("charging")
+}
+
+// ── Rev-5 (ADR 0012) — protocol-side and import-side session refs.
+// Allow zero-or-many per session. A native-OCPP session has one
+// ProtocolTransactionRef. An imported CDR has one ImportedCdrRef and
+// zero ProtocolTransactionRefs.
+
+model ProtocolTransactionRef {
+  id           String   @id @default(uuid()) @db.Uuid
+  orgId        String   @map("org_id") @db.Uuid
+  sessionId    String   @map("session_id") @db.Uuid
+  sourceKind   String   @map("source_kind")
+  sourceId     String   @map("source_id")
+  metadata     Json     @default("{}") @db.JsonB
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  session      ChargeSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceKind, sourceId])
+  @@index([sessionId])
+  @@map("protocol_transaction_refs")
+  @@schema("charging")
+}
+
+model ImportedCdrRef {
+  id            String   @id @default(uuid()) @db.Uuid
+  orgId         String   @map("org_id") @db.Uuid
+  sessionId     String   @map("session_id") @db.Uuid
+  sourceKind    String   @map("source_kind")
+  sourceCdrId   String   @map("source_cdr_id")
+  importedAt    DateTime @map("imported_at") @db.Timestamptz(6)
+  rawPayload    Json?    @map("raw_payload") @db.JsonB
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization  Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  session       ChargeSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceKind, sourceCdrId])
+  @@index([sessionId])
+  @@map("imported_cdr_refs")
+  @@schema("charging")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// billing — plans, tariffs, subscriptions, invoices
+// Money is BIGINT minor units (aurar / öre / cents). No floats, no decimals.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Tariff {
+  id           String     @id @default(uuid()) @db.Uuid
+  orgId        String     @map("org_id") @db.Uuid
+  displayName  String     @map("display_name")
+  rule         Json       @db.JsonB // interpreted by the tariff engine
+  currency     String     // ISO 4217
+  validFrom    DateTime   @map("valid_from") @db.Timestamptz(6)
+  validUntil   DateTime?  @map("valid_until") @db.Timestamptz(6)
+  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  customerPlans CustomerPlan[]
+
+  @@index([orgId])
+  @@map("tariffs")
+  @@schema("billing")
+}
+
+model CustomerPlan {
+  id                   String        @id @default(uuid()) @db.Uuid
+  orgId                String        @map("org_id") @db.Uuid
+  code                 String
+  displayName          String        @map("display_name")
+  description          String?
+  balanceType          BalanceType   @map("balance_type")
+  category             PlanCategory
+  products             Json          @default("[]") @db.JsonB // setup/subscription/RFID/usage credit
+  defaultTariffId      String?       @map("default_tariff_id") @db.Uuid
+  terminationBehavior  TerminationBehavior @map("termination_behavior") @default(evergreen)
+  minCommitmentMonths  Int?          @map("min_commitment_months")
+  costFactor           Decimal?      @map("cost_factor") @db.Decimal(8, 4)
+  country              String?
+  currency             String?
+  locale               String?
+  validFrom            DateTime      @map("valid_from") @db.Timestamptz(6)
+  validUntil           DateTime?     @map("valid_until") @db.Timestamptz(6)
+  status               String        @default("active")
+  createdAt            DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization         Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  defaultTariff        Tariff?       @relation(fields: [defaultTariffId], references: [id])
+  subscriptions        Subscription[]
+
+  @@unique([orgId, code])
+  @@map("customer_plans")
+  @@schema("billing")
+}
+
+enum BalanceType {
+  prepaid
+  postpaid
+  non_paying
+  pay_immediately
+  postpaid_immediately
+
+  @@schema("billing")
+}
+
+enum PlanCategory {
+  single_tariff
+  membership
+  roaming
+  guest_otp
+
+  @@schema("billing")
+}
+
+enum TerminationBehavior {
+  terminate
+  evergreen
+  rollover
+
+  @@schema("billing")
+}
+
+model Subscription {
+  id         String       @id @default(uuid()) @db.Uuid
+  orgId      String       @map("org_id") @db.Uuid
+  userId     String       @map("user_id") @db.Uuid
+  planId     String       @map("plan_id") @db.Uuid
+  startedAt  DateTime     @map("started_at") @db.Timestamptz(6)
+  endedAt    DateTime?    @map("ended_at") @db.Timestamptz(6)
+  status     String       @default("active")
+  createdAt  DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  plan       CustomerPlan @relation(fields: [planId], references: [id])
+
+  @@index([orgId, userId])
+  @@map("subscriptions")
+  @@schema("billing")
+}
+
+model BillingTransaction {
+  id             String       @id @default(uuid()) @db.Uuid
+  orgId          String       @map("org_id") @db.Uuid
+  userId         String?      @map("user_id") @db.Uuid
+  type           BillingTxType
+  amountMinor    BigInt       @map("amount_minor") // can be negative (refunds)
+  currency       String
+  description    String?
+  metadata       Json         @default("{}") @db.JsonB
+  occurredAt     DateTime     @map("occurred_at") @db.Timestamptz(6)
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, occurredAt(sort: Desc)])
+  @@map("billing_transactions")
+  @@schema("billing")
+}
+
+enum BillingTxType {
+  payment
+  refund
+  penalty
+  credit
+  contract_charge
+  external_payment
+
+  @@schema("billing")
+}
+
+model Invoice {
+  id              String        @id @default(uuid()) @db.Uuid
+  orgId           String        @map("org_id") @db.Uuid
+  userId          String        @map("user_id") @db.Uuid
+  periodStart     DateTime      @map("period_start") @db.Date
+  periodEnd       DateTime      @map("period_end") @db.Date
+  currency        String
+  totalMinor      BigInt        @map("total_minor")
+  status          InvoiceStatus @default(draft)
+  issuedAt        DateTime?     @map("issued_at") @db.Timestamptz(6)
+  paidAt          DateTime?     @map("paid_at") @db.Timestamptz(6)
+  externalRef     String?       @map("external_ref")
+  pdfRef          String?       @map("pdf_ref")
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization    Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  lines           InvoiceLine[]
+
+  @@index([orgId, userId, periodStart])
+  @@map("invoices")
+  @@schema("billing")
+}
+
+enum InvoiceStatus {
+  draft
+  issued
+  paid
+  void
+
+  @@schema("billing")
+}
+
+model InvoiceLine {
+  id             String  @id @default(uuid()) @db.Uuid
+  invoiceId      String  @map("invoice_id") @db.Uuid
+  description    String
+  quantity       Decimal @db.Decimal(12, 4)
+  unitPriceMinor BigInt  @map("unit_price_minor")
+  amountMinor    BigInt  @map("amount_minor")
+  sourceType     String  @map("source_type")
+  sourceId       String? @map("source_id") @db.Uuid
+
+  invoice        Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@map("invoice_lines")
+  @@schema("billing")
+}
+
+model Statement {
+  id           String       @id @default(uuid()) @db.Uuid
+  orgId        String       @map("org_id") @db.Uuid
+  subjectType  String       @map("subject_type") // user / host
+  subjectId    String       @map("subject_id") @db.Uuid
+  periodStart  DateTime     @map("period_start") @db.Date
+  periodEnd    DateTime     @map("period_end") @db.Date
+  content      Json         @db.JsonB
+  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, subjectType, subjectId])
+  @@map("statements")
+  @@schema("billing")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// issues — tickets, timeline, detection rules (Issue Engine moat)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model IssueTicket {
+  id                    String        @id @default(uuid()) @db.Uuid
+  orgId                 String        @map("org_id") @db.Uuid
+  subjectType           IssueSubject  @map("subject_type")
+  subjectId             String?       @map("subject_id") @db.Uuid
+  category              String
+  severity              IssueSeverity @default(medium)
+  status                IssueStatus   @default(open)
+  detectedBy            String        @map("detected_by")
+  assignedToUserId      String?       @map("assigned_to_user_id") @db.Uuid
+  assignedToContractorId String?      @map("assigned_to_contractor_id") @db.Uuid
+  slaTargetAt           DateTime?     @map("sla_target_at") @db.Timestamptz(6)
+  resolvedAt            DateTime?     @map("resolved_at") @db.Timestamptz(6)
+  resolutionSummary     String?       @map("resolution_summary")
+  createdAt             DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization          Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  events                TicketEvent[]
+
+  @@index([orgId, status, severity])
+  @@index([subjectType, subjectId])
+  @@map("tickets")
+  @@schema("issues")
+}
+
+enum IssueSubject {
+  charger
+  ocpp_identity
+  connector
+  session
+  site
+  user
+  other
+
+  @@schema("issues")
+}
+
+enum IssueSeverity {
+  low
+  medium
+  high
+  critical
+
+  @@schema("issues")
+}
+
+enum IssueStatus {
+  open
+  triaged
+  assigned
+  in_progress
+  waiting
+  resolved
+  closed
+
+  @@schema("issues")
+}
+
+model TicketEvent {
+  id           String      @id @default(uuid()) @db.Uuid
+  ticketId     String      @map("ticket_id") @db.Uuid
+  eventType    String      @map("event_type")
+  actorUserId  String?     @map("actor_user_id") @db.Uuid
+  payload      Json        @default("{}") @db.JsonB
+  occurredAt   DateTime    @default(now()) @map("occurred_at") @db.Timestamptz(6)
+
+  ticket       IssueTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId, occurredAt])
+  @@map("ticket_events")
+  @@schema("issues")
+}
+
+model DetectionRule {
+  id          String       @id @default(uuid()) @db.Uuid
+  orgId       String       @map("org_id") @db.Uuid
+  ruleKey     String       @map("rule_key")
+  config      Json         @default("{}") @db.JsonB
+  enabled     Boolean      @default(true)
+  version     Int          @default(1)
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, ruleKey])
+  @@map("detection_rules")
+  @@schema("issues")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// events — append-only event log (source of truth) + idempotency
+// ─────────────────────────────────────────────────────────────────────────────
+
+model EventLogEntry {
+  id              String          @id @default(uuid()) @db.Uuid // UUIDv7 when driver lands it
+  orgId           String          @map("org_id") @db.Uuid
+  aggregateType   String          @map("aggregate_type")
+  aggregateId    String           @map("aggregate_id") @db.Uuid
+  eventType       String          @map("event_type")
+  schemaVersion   Int             @map("schema_version") @default(1)
+  payload         Json            @db.JsonB
+  metadata        Json            @default("{}") @db.JsonB
+  retentionClass  RetentionClass  @map("retention_class") @default(operational)
+  occurredAt      DateTime        @map("occurred_at") @db.Timestamptz(6)
+  recordedAt      DateTime        @default(now()) @map("recorded_at") @db.Timestamptz(6)
+
+  organization    Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, occurredAt(sort: Desc)])
+  @@index([aggregateType, aggregateId, occurredAt])
+  @@index([eventType, occurredAt(sort: Desc)])
+  @@map("event_log")
+  @@schema("events")
+}
+
+enum RetentionClass {
+  financial     // indefinite, hot
+  operational   // indefinite, hot, small
+  raw_protocol  // 30–90 days, then deleted
+  aggregate     // 12–24 months
+  issue_history // indefinite
+
+  @@schema("events")
+}
+
+model IdempotencyKey {
+  scope      String   // 'ocpp:<identity>', 'api', 'webhook:<partner>'
+  key        String
+  result     Json?    @db.JsonB
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  expiresAt  DateTime @map("expires_at") @db.Timestamptz(6)
+
+  @@id([scope, key])
+  @@index([expiresAt])
+  @@map("idempotency_keys")
+  @@schema("events")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// audit — actor-did-what log (distinct from events which is what-happened)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model AuditAction {
+  id           String        @id @default(uuid()) @db.Uuid
+  orgId        String        @map("org_id") @db.Uuid
+  actorUserId  String?       @map("actor_user_id") @db.Uuid
+  actorKind    ActorKind     @map("actor_kind")
+  action       String
+  targetType   String?       @map("target_type")
+  targetId     String?       @map("target_id") @db.Uuid
+  metadata     Json          @default("{}") @db.JsonB
+  occurredAt   DateTime      @default(now()) @map("occurred_at") @db.Timestamptz(6)
+
+  organization Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  actor        User?         @relation(fields: [actorUserId], references: [id])
+
+  @@index([orgId, occurredAt(sort: Desc)])
+  @@index([targetType, targetId, occurredAt(sort: Desc)])
+  @@map("actions")
+  @@schema("audit")
+}
+
+enum ActorKind {
+  user
+  system
+  vendor_webhook
+  ocpp_worker
+
+  @@schema("audit")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// entitlements — feature flags + enterprise licenses (capability vs permission)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model FeatureFlag {
+  id          String       @id @default(uuid()) @db.Uuid
+  orgId       String       @map("org_id") @db.Uuid
+  featureKey  String       @map("feature_key")
+  scopeType   String       @map("scope_type") // org/site/identity/user
+  scopeId     String?      @map("scope_id") @db.Uuid
+  enabled     Boolean      @default(true)
+  source      String       // enterprise_license/addon/trial/manual
+  sourceRef   String?      @map("source_ref") @db.Uuid
+  validFrom   DateTime     @map("valid_from") @db.Timestamptz(6)
+  validUntil  DateTime?    @map("valid_until") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, scopeType, scopeId, featureKey])
+  @@map("feature_flags")
+  @@schema("entitlements")
+}
+
+model EnterpriseLicense {
+  id          String       @id @default(uuid()) @db.Uuid
+  orgId       String       @map("org_id") @db.Uuid
+  tier        String       // standard/enterprise/enterprise_plus
+  apiFairUse  Json         @map("api_fair_use") @default("{}") @db.JsonB
+  features    String[]     // array of feature_keys this tier grants
+  validFrom   DateTime     @map("valid_from") @db.Timestamptz(6)
+  validUntil  DateTime?    @map("valid_until") @db.Timestamptz(6)
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@map("enterprise_licenses")
+  @@schema("entitlements")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// people — family groups (primary driver + family members for AC pricing)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model FamilyGroup {
+  id             String            @id @default(uuid()) @db.Uuid
+  orgId          String            @map("org_id") @db.Uuid
+  displayName    String            @map("display_name")
+  primaryUserId  String            @map("primary_user_id") @db.Uuid
+  createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization   Organization      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  primaryUser    User              @relation("FamilyGroupPrimary", fields: [primaryUserId], references: [id])
+  members        FamilyMembership[]
+
+  @@index([orgId])
+  @@map("family_groups")
+  @@schema("people")
+}
+
+model FamilyMembership {
+  familyGroupId String       @map("family_group_id") @db.Uuid
+  userId        String       @map("user_id") @db.Uuid
+  memberKind    MemberKind   @map("member_kind")
+  joinedAt      DateTime     @default(now()) @map("joined_at") @db.Timestamptz(6)
+
+  familyGroup   FamilyGroup  @relation(fields: [familyGroupId], references: [id], onDelete: Cascade)
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([familyGroupId, userId])
+  @@map("family_memberships")
+  @@schema("people")
+}
+
+enum MemberKind {
+  primary
+  family_user
+
+  @@schema("people")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// vendors — adapter health + contract test results
+// ─────────────────────────────────────────────────────────────────────────────
+
+model VendorAdapterHealth {
+  id            String   @id @default(uuid()) @db.Uuid
+  vendor        String
+  windowStart   DateTime @map("window_start") @db.Timestamptz(6)
+  windowEnd     DateTime @map("window_end") @db.Timestamptz(6)
+  errorRate     Decimal  @map("error_rate") @db.Decimal(6, 4)
+  p50LatencyMs  Int      @map("p50_latency_ms")
+  p95LatencyMs  Int      @map("p95_latency_ms")
+  lastSuccessAt DateTime? @map("last_success_at") @db.Timestamptz(6)
+
+  @@index([vendor, windowStart])
+  @@map("adapter_health")
+  @@schema("vendors")
+}
+
+model VendorContractTest {
+  id        String   @id @default(uuid()) @db.Uuid
+  vendor    String
+  testName  String   @map("test_name")
+  result    String   // pass/fail/skip
+  runAt     DateTime @map("run_at") @db.Timestamptz(6)
+  details   Json     @default("{}") @db.JsonB
+
+  @@index([vendor, runAt(sort: Desc)])
+  @@map("contract_tests")
+  @@schema("vendors")
+}
+
+// ── Rev-5 (ADR 0012) — vendor API control attachment.
+// Anchors a ChargingStation to its OEM API resource (Easee, Zaptec,
+// Monta) when control flows through the vendor API rather than OCPP.
+
+model VendorAssetRef {
+  id                  String   @id @default(uuid()) @db.Uuid
+  orgId               String   @map("org_id") @db.Uuid
+  chargingStationId   String   @map("charging_station_id") @db.Uuid
+  vendorSlug          String   @map("vendor_slug")
+  vendorAssetId       String   @map("vendor_asset_id")
+  credentialsRef      String?  @map("credentials_ref")
+  capabilities        Json     @default("{}") @db.JsonB
+  status              String   @default("pending")
+  lastSyncedAt        DateTime? @map("last_synced_at") @db.Timestamptz(6)
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization        Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  chargingStation     ChargingStation  @relation(fields: [chargingStationId], references: [siteAssetId], onDelete: Cascade)
+
+  @@unique([vendorSlug, vendorAssetId])
+  @@index([orgId, vendorSlug])
+  @@map("vendor_asset_refs")
+  @@schema("vendors")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// roaming — OCPI tokens, hub connections, CDR queue
+// ─────────────────────────────────────────────────────────────────────────────
+
+model OcpiToken {
+  id          String       @id @default(uuid()) @db.Uuid
+  orgId       String       @map("org_id") @db.Uuid
+  tokenUid    String       @map("token_uid")
+  tokenType   String       @map("token_type") // RFID/APP_USER/AD_HOC_USER/OTHER
+  partyId     String       @map("party_id")
+  countryCode String       @map("country_code")
+  valid       Boolean      @default(true)
+  userId      String?      @map("user_id") @db.Uuid
+  expiresAt   DateTime?    @map("expires_at") @db.Timestamptz(6)
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user        User?        @relation(fields: [userId], references: [id])
+
+  @@unique([countryCode, partyId, tokenUid])
+  @@index([orgId])
+  @@map("ocpi_tokens")
+  @@schema("roaming")
+}
+
+model HubConnection {
+  id              String       @id @default(uuid()) @db.Uuid
+  orgId           String       @map("org_id") @db.Uuid
+  hub             HubKind
+  partyId         String       @map("party_id")
+  countryCode     String       @map("country_code")
+  endpointUrl     String       @map("endpoint_url")
+  credentialsRef  String       @map("credentials_ref") // secret store key
+  status          String       @default("active")
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, hub])
+  @@map("hub_connections")
+  @@schema("roaming")
+}
+
+enum HubKind {
+  hubject
+  gireve
+  direct
+
+  @@schema("roaming")
+}
+
+model CdrQueueEntry {
+  id          String       @id @default(uuid()) @db.Uuid
+  orgId       String       @map("org_id") @db.Uuid
+  direction   CdrDirection
+  partnerRef  String       @map("partner_ref")
+  payload     Json         @db.JsonB
+  status      String       @default("pending")
+  attempts    Int          @default(0)
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, status])
+  @@map("cdr_queue")
+  @@schema("roaming")
+}
+
+enum CdrDirection {
+  inbound
+  outbound
+
+  @@schema("roaming")
+}
+
+// ── Rev-5 (ADR 0012) — external CPMS overlay attachment.
+// Anchors a ChargingStation to an externally-operated CPMS asset when
+// Straumvakt is the operating/commercial layer above another CPMS.
+
+model ExternalCpmsRef {
+  id                  String   @id @default(uuid()) @db.Uuid
+  orgId               String   @map("org_id") @db.Uuid
+  chargingStationId   String   @map("charging_station_id") @db.Uuid
+  externalCpmsSlug    String   @map("external_cpms_slug")
+  externalAssetId     String   @map("external_asset_id")
+  importMode          String   @map("import_mode")
+  credentialsRef      String?  @map("credentials_ref")
+  status              String   @default("pending")
+  lastImportedAt      DateTime? @map("last_imported_at") @db.Timestamptz(6)
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization        Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  chargingStation     ChargingStation  @relation(fields: [chargingStationId], references: [siteAssetId], onDelete: Cascade)
+
+  @@unique([externalCpmsSlug, externalAssetId])
+  @@index([orgId])
+  @@map("external_cpms_refs")
+  @@schema("roaming")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// energy — site/property policies and planning results
+// ─────────────────────────────────────────────────────────────────────────────
+
+model SiteEnergyPolicy {
+  id         String       @id @default(uuid()) @db.Uuid
+  orgId      String       @map("org_id") @db.Uuid
+  siteId     String       @map("site_id") @db.Uuid
+  policy     Json         @db.JsonB
+  validFrom  DateTime     @map("valid_from") @db.Timestamptz(6)
+  validUntil DateTime?    @map("valid_until") @db.Timestamptz(6)
+  createdAt  DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  site       Site         @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, siteId])
+  @@map("site_energy_policies")
+  @@schema("energy")
+}
+
+model PropertyEnergyPolicy {
+  id          String       @id @default(uuid()) @db.Uuid
+  orgId       String       @map("org_id") @db.Uuid
+  propertyId  String       @map("property_id") @db.Uuid
+  policy      Json         @db.JsonB
+  validFrom   DateTime     @map("valid_from") @db.Timestamptz(6)
+  validUntil  DateTime?    @map("valid_until") @db.Timestamptz(6)
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  property    Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, propertyId])
+  @@map("property_energy_policies")
+  @@schema("energy")
+}
+
+model EnergyPlanningResult {
+  id           String       @id @default(uuid()) @db.Uuid
+  orgId        String       @map("org_id") @db.Uuid
+  siteId       String       @map("site_id") @db.Uuid
+  calculatedAt DateTime     @default(now()) @map("calculated_at") @db.Timestamptz(6)
+  result       Json         @db.JsonB
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  site         Site         @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, siteId, calculatedAt(sort: Desc)])
+  @@map("energy_planning_results")
+  @@schema("energy")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// webhooks — outbound delivery subsystem
+// ─────────────────────────────────────────────────────────────────────────────
+
+model WebhookSubscription {
+  id               String       @id @default(uuid()) @db.Uuid
+  orgId            String       @map("org_id") @db.Uuid
+  name             String
+  endpointUrl      String       @map("endpoint_url")
+  signingSecretRef String       @map("signing_secret_ref")
+  scopes           String[]     // event_type filters; empty = all
+  status           String       @default("active")
+  createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization     Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  deliveries       WebhookDelivery[]
+  deadLetters      WebhookDeadLetter[]
+
+  @@index([orgId])
+  @@map("subscriptions")
+  @@schema("webhooks")
+}
+
+model WebhookDelivery {
+  id             String              @id @default(uuid()) @db.Uuid
+  subscriptionId String              @map("subscription_id") @db.Uuid
+  eventId        String              @map("event_id") @db.Uuid
+  attempt        Int
+  status         String
+  responseCode   Int?                @map("response_code")
+  responseBody   String?             @map("response_body")
+  deliveredAt    DateTime?           @map("delivered_at") @db.Timestamptz(6)
+  createdAt      DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  subscription   WebhookSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId, createdAt(sort: Desc)])
+  @@map("deliveries")
+  @@schema("webhooks")
+}
+
+model WebhookDeadLetter {
+  id             String              @id @default(uuid()) @db.Uuid
+  subscriptionId String              @map("subscription_id") @db.Uuid
+  eventId        String              @map("event_id") @db.Uuid
+  payload        Json                @db.JsonB
+  lastError      String?             @map("last_error")
+  movedAt        DateTime            @default(now()) @map("moved_at") @db.Timestamptz(6)
+
+  subscription   WebhookSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId, movedAt(sort: Desc)])
+  @@map("dead_letters")
+  @@schema("webhooks")
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// REV-3 / REV-4 ADDITIONS — ADRs 0007 + 0008 + 0009 + 0010 (Sprint 2.6)
+// ═════════════════════════════════════════════════════════════════════════════
+
+// ─────────────────────────────────────────────────────────────────────────────
+// tenancy — OrganizationRole enum (ADR 0010)
+// 21-value enum supporting multi-role Org rows.
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum OrganizationRole {
+  csms_provider
+  operator
+  service_contractor
+  installer
+  vendor
+  asset_owner
+  payer
+  beneficiary
+  customer
+  retailer
+  dso
+  tso
+  producer
+  aggregator
+  public_charging
+  home_charging
+  emsp
+  roaming_hub
+  payment_processor
+  insurance_provider
+  regulator
+
+  @@schema("tenancy")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// identity — PlatformAdmin (ADR 0008)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model PlatformAdmin {
+  userId          String              @id @map("user_id") @db.Uuid
+  level           PlatformAdminLevel
+  grantedAt       DateTime            @default(now()) @map("granted_at") @db.Timestamptz(6)
+  grantedByUserId String?             @map("granted_by_user_id") @db.Uuid
+
+  user            User                @relation("PlatformAdminUser", fields: [userId], references: [id], onDelete: Cascade)
+  grantedBy       User?               @relation("PlatformAdminGrantedBy", fields: [grantedByUserId], references: [id])
+
+  @@map("platform_admins")
+  @@schema("identity")
+}
+
+enum PlatformAdminLevel {
+  read_only
+  superuser
+
+  @@schema("identity")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// properties — SiteType enum (ADR 0009 — moved here from hosts.HostType)
+// + Circuit model (ADR 0007)
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum SiteType {
+  standard
+  workplace
+  mdu
+  hotel
+  fleet
+  retail
+
+  @@schema("properties")
+}
+
+model Circuit {
+  id                String        @id @default(uuid()) @db.Uuid
+  orgId             String        @map("org_id") @db.Uuid
+  siteId            String        @map("site_id") @db.Uuid
+  installationId    String?       @map("installation_id") @db.Uuid
+  displayName       String        @map("display_name")
+  ampereCeiling     Int?          @map("ampere_ceiling")
+  phaseCount        Int           @map("phase_count") @default(3)
+  vendorCircuitRef  String?       @map("vendor_circuit_ref")
+  metadata          Json          @default("{}") @db.JsonB
+  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization      Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  site              Site          @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  installation      Installation? @relation(fields: [installationId], references: [id])
+  chargingStations  ChargingStation[]   @relation("CircuitStations")
+
+  @@index([orgId, siteId])
+  @@index([installationId])
+  @@map("circuits")
+  @@schema("properties")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ocpp — OcppConfigurationKey registry (ADR 0010)
+// Populated by GetConfiguration / ChangeConfiguration round-trips.
+// Closes OCPP 1.6 spec gap — operator can see what's actually set on
+// each charger with audit trail.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model OcppConfigurationKey {
+  id                  String        @id @default(uuid()) @db.Uuid
+  orgId               String        @map("org_id") @db.Uuid
+  ocppIdentityId      String        @map("ocpp_identity_id") @db.Uuid
+  keyName             String        @map("key_name")
+  keyValue            String?       @map("key_value")
+  readonly            Boolean       @default(false)
+  observedAt          DateTime      @map("observed_at") @db.Timestamptz(6)
+  setByActorUserId    String?       @map("set_by_actor_user_id") @db.Uuid
+  setAt               DateTime?     @map("set_at") @db.Timestamptz(6)
+  notes               String?
+
+  organization        Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  ocppIdentity        OcppIdentity  @relation(fields: [ocppIdentityId], references: [id], onDelete: Cascade)
+  setByActor          User?         @relation("ConfigKeySetBy", fields: [setByActorUserId], references: [id])
+
+  @@unique([ocppIdentityId, keyName])
+  @@index([orgId, ocppIdentityId])
+  @@map("configuration_keys")
+  @@schema("ocpp")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// billing — REV-3 cost-center splitting (ADR 0008)
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum CostFactorAnchor {
+  org
+  property
+  site
+  installation
+  circuit
+  charger
+  driver_contract
+
+  @@schema("billing")
+}
+
+enum CostFactorStatus {
+  draft
+  active
+  archived
+
+  @@schema("billing")
+}
+
+model CostFactor {
+  id                  String              @id @default(uuid()) @db.Uuid
+  code                String              @unique
+  displayName         String              @map("display_name")
+  description         String?
+  anchorTier          CostFactorAnchor    @map("anchor_tier")
+  defaultVatRatePct   Decimal             @map("default_vat_rate_pct") @db.Decimal(4, 2)
+  defaultCurrency     String              @map("default_currency") @default("ISK")
+  status              CostFactorStatus    @default(active)
+  createdAt           DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tariffDefinitions   TariffDefinition[]
+  contractAssignments ContractFactorAssignment[]
+  driverOverrides     DriverContractFactorOverride[]
+  accumulators        ContractPeriodAccumulator[]
+  billingLines        BillingLine[]
+
+  @@map("cost_factors")
+  @@schema("billing")
+}
+
+model TariffDefinition {
+  id              String           @id @default(uuid()) @db.Uuid
+  orgId           String           @map("org_id") @db.Uuid
+  costFactorId    String           @map("cost_factor_id") @db.Uuid
+  displayName     String           @map("display_name")
+  computeRule     Json             @map("compute_rule") @db.JsonB
+  vatRatePct      Decimal          @map("vat_rate_pct") @db.Decimal(4, 2)
+  currency        String           @default("ISK")
+  validFrom       DateTime         @map("valid_from") @db.Timestamptz(6)
+  validUntil      DateTime?        @map("valid_until") @db.Timestamptz(6)
+  status          String           @default("active")
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization    Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  costFactor      CostFactor       @relation(fields: [costFactorId], references: [id])
+
+  // Anchor entities reference back via FK columns on Site / Installation /
+  // Charger / DriverContract — listed below for relation completeness.
+  sitesDsoTariff           Site[]           @relation("SiteDsoTariff")
+  sitesUsrfTariff          Site[]           @relation("SiteUsrfTariff")
+  sitesUsrfPremTariff      Site[]           @relation("SiteUsrfPremTariff")
+  sitesXtrrfTariff         Site[]           @relation("SiteXtrrfTariff")
+  sitesSpvivfTariff        Site[]           @relation("SiteSpvivfTariff")
+  installationsRetailerTariff Installation[] @relation("InstallationRetailerTariff")
+  stationsChrgrfTariff     ChargingStation[]  @relation("StationChrgrfTariff")
+  driverContractsWrkpfTariff DriverContract[] @relation("DriverContractWrkpfTariff")
+
+  @@index([orgId, costFactorId, validFrom])
+  @@map("tariff_definitions")
+  @@schema("billing")
+}
+
+model CostCenter {
+  id                  String              @id @default(uuid()) @db.Uuid
+  orgId               String              @map("org_id") @db.Uuid
+  code                String
+  displayName         String              @map("display_name")
+  payerOrgId          String?             @map("payer_org_id") @db.Uuid
+  payerUserId         String?             @map("payer_user_id") @db.Uuid
+  beneficiaryOrgId    String?             @map("beneficiary_org_id") @db.Uuid
+  status              String              @default("active")
+  createdAt           DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization        Organization        @relation("CostCenterOrg", fields: [orgId], references: [id], onDelete: Cascade)
+  payerOrg            Organization?       @relation("CostCenterPayer", fields: [payerOrgId], references: [id])
+  payerUser           User?               @relation("CostCenterPayerUser", fields: [payerUserId], references: [id])
+  beneficiaryOrg      Organization?       @relation("CostCenterBeneficiary", fields: [beneficiaryOrgId], references: [id])
+  contractAssignments ContractFactorAssignment[]
+  driverOverrides     DriverContractFactorOverride[]
+  billingLines        BillingLine[]
+
+  @@unique([orgId, code])
+  @@map("cost_centers")
+  @@schema("billing")
+}
+
+enum ContractScopeType {
+  org
+  property
+  site
+  installation
+  charger
+
+  @@schema("billing")
+}
+
+enum ContractStatus {
+  pending_configuration
+  active
+  superseded
+  archived
+
+  @@schema("billing")
+}
+
+model Contract {
+  id                  String                    @id @default(uuid()) @db.Uuid
+  orgId               String                    @map("org_id") @db.Uuid
+  scopeType           ContractScopeType         @map("scope_type")
+  scopeId             String?                   @map("scope_id") @db.Uuid
+  parentContractId    String?                   @map("parent_contract_id") @db.Uuid
+  displayName         String                    @map("display_name")
+  status              ContractStatus            @default(pending_configuration)
+  validFrom           DateTime                  @map("valid_from") @db.Timestamptz(6)
+  validUntil          DateTime?                 @map("valid_until") @db.Timestamptz(6)
+  createdAt           DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization        Organization              @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  parent              Contract?                 @relation("ContractInheritance", fields: [parentContractId], references: [id])
+  children            Contract[]                @relation("ContractInheritance")
+  assignments         ContractFactorAssignment[]
+  accumulators        ContractPeriodAccumulator[]
+
+  @@index([orgId, scopeType, scopeId])
+  @@map("contracts")
+  @@schema("billing")
+}
+
+model ContractFactorAssignment {
+  id                  String         @id @default(uuid()) @db.Uuid
+  contractId          String         @map("contract_id") @db.Uuid
+  costFactorId        String         @map("cost_factor_id") @db.Uuid
+  costCenterId        String         @map("cost_center_id") @db.Uuid
+  allocationRule      Json           @map("allocation_rule") @db.JsonB
+  priority            Int            @default(0)
+  validFrom           DateTime       @map("valid_from") @db.Timestamptz(6)
+  validUntil          DateTime?      @map("valid_until") @db.Timestamptz(6)
+
+  contract            Contract       @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  costFactor          CostFactor     @relation(fields: [costFactorId], references: [id])
+  costCenter          CostCenter     @relation(fields: [costCenterId], references: [id])
+
+  @@index([contractId, costFactorId, priority])
+  @@map("contract_factor_assignments")
+  @@schema("billing")
+}
+
+enum DriverContractOwnerType {
+  workplace
+  family_group
+  self
+
+  @@schema("billing")
+}
+
+model DriverContract {
+  id                  String                          @id @default(uuid()) @db.Uuid
+  orgId               String                          @map("org_id") @db.Uuid
+  userId              String                          @map("user_id") @db.Uuid
+  scopeType           ContractScopeType?              @map("scope_type")
+  scopeId             String?                         @map("scope_id") @db.Uuid
+  parentContractId    String?                         @map("parent_contract_id") @db.Uuid
+  ownerType           DriverContractOwnerType         @map("owner_type")
+  ownerId             String                          @map("owner_id") @db.Uuid
+  wrkpfTariffId       String?                         @map("wrkpf_tariff_id") @db.Uuid
+  displayName         String                          @map("display_name")
+  status              ContractStatus                  @default(pending_configuration)
+  validFrom           DateTime                        @map("valid_from") @db.Timestamptz(6)
+  validUntil          DateTime?                       @map("valid_until") @db.Timestamptz(6)
+  createdAt           DateTime                        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime                        @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization        Organization                    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user                User                            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent              DriverContract?                 @relation("DriverContractInheritance", fields: [parentContractId], references: [id])
+  children            DriverContract[]                @relation("DriverContractInheritance")
+  wrkpfTariff         TariffDefinition?               @relation("DriverContractWrkpfTariff", fields: [wrkpfTariffId], references: [id])
+  overrides           DriverContractFactorOverride[]
+  accumulators        ContractPeriodAccumulator[]
+
+  @@index([orgId, userId, validFrom])
+  @@map("driver_contracts")
+  @@schema("billing")
+}
+
+model DriverContractFactorOverride {
+  id                  String              @id @default(uuid()) @db.Uuid
+  driverContractId    String              @map("driver_contract_id") @db.Uuid
+  costFactorId        String              @map("cost_factor_id") @db.Uuid
+  costCenterId        String              @map("cost_center_id") @db.Uuid
+  allocationRule      Json                @map("allocation_rule") @db.JsonB
+  priority            Int                 @default(0)
+  scopeType           ContractScopeType?  @map("scope_type")
+  scopeId             String?             @map("scope_id") @db.Uuid
+
+  driverContract      DriverContract      @relation(fields: [driverContractId], references: [id], onDelete: Cascade)
+  costFactor          CostFactor          @relation(fields: [costFactorId], references: [id])
+  costCenter          CostCenter          @relation(fields: [costCenterId], references: [id])
+
+  @@index([driverContractId, costFactorId, priority])
+  @@map("driver_contract_factor_overrides")
+  @@schema("billing")
+}
+
+model ContractPeriodAccumulator {
+  id                          String          @id @default(uuid()) @db.Uuid
+  orgId                       String          @map("org_id") @db.Uuid
+  driverContractId            String?         @map("driver_contract_id") @db.Uuid
+  contractId                  String?         @map("contract_id") @db.Uuid
+  costFactorId                String          @map("cost_factor_id") @db.Uuid
+  periodType                  String          @map("period_type") @default("calendar_month")
+  periodStartDate             DateTime        @map("period_start_date") @db.Date
+  periodEndDate               DateTime        @map("period_end_date") @db.Date
+  cumulativeKwh               Decimal         @map("cumulative_kwh") @db.Decimal(12, 4) @default(0)
+  cumulativeAmountExVatMinor  BigInt          @map("cumulative_amount_ex_vat_minor") @default(0)
+  cumulativeSessionCount      Int             @map("cumulative_session_count") @default(0)
+  lastSessionId               String?         @map("last_session_id") @db.Uuid
+  updatedAt                   DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization                Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  driverContract              DriverContract? @relation(fields: [driverContractId], references: [id])
+  contract                    Contract?       @relation(fields: [contractId], references: [id])
+  costFactor                  CostFactor      @relation(fields: [costFactorId], references: [id])
+
+  @@unique([driverContractId, costFactorId, periodStartDate])
+  @@unique([contractId, costFactorId, periodStartDate])
+  @@index([orgId, periodStartDate])
+  @@map("contract_period_accumulators")
+  @@schema("billing")
+}
+
+model BillingLine {
+  id                          String          @id @default(uuid()) @db.Uuid
+  orgId                       String          @map("org_id") @db.Uuid
+  sessionId                   String          @map("session_id") @db.Uuid
+  costFactorId                String          @map("cost_factor_id") @db.Uuid
+  costFactorCode              String          @map("cost_factor_code")
+  costCenterId                String          @map("cost_center_id") @db.Uuid
+  amountExVatMinor            BigInt          @map("amount_ex_vat_minor")
+  vatRatePct                  Decimal         @map("vat_rate_pct") @db.Decimal(4, 2)
+  vatAmountMinor              BigInt          @map("vat_amount_minor")
+  amountIncVatMinor           BigInt          @map("amount_inc_vat_minor")
+  currency                    String
+  computationDetail           Json            @map("computation_detail") @db.JsonB
+  createdAt                   DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization                Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  session                     ChargeSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  costFactor                  CostFactor      @relation(fields: [costFactorId], references: [id])
+  costCenter                  CostCenter      @relation(fields: [costCenterId], references: [id])
+
+  @@index([orgId, sessionId])
+  @@index([costCenterId, createdAt(sort: Desc)])
+  @@map("billing_lines")
+  @@schema("billing")
+}

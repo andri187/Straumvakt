@@ -1,0 +1,41 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "hlada-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-04-18",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "observability": {
+    "enabled": true
+  },
+  // Service binding to the OCPP gateway Worker — admin command dispatch
+  // (start/stop/reset) goes through the gateway. Same pattern as the
+  // monolith Worker had. ADR 0004 governs the binding shape.
+  "services": [
+    {
+      "binding": "OCPP_GATEWAY",
+      "service": "straumvakt-ocpp"
+    }
+  ],
+  // Staging env — deployed by `wrangler deploy --env staging` from
+  // apps/api/. Secrets (DATABASE_URL, AUTH_SECRET, ADMIN_EMAIL,
+  // ADMIN_PASSWORD, OCPP_INGEST_SECRET) live in the Cloudflare dashboard
+  // for the hlada-api-staging Worker — never in this file.
+  "env": {
+    "staging": {
+      "name": "hlada-api-staging",
+      "services": [
+        {
+          "binding": "OCPP_GATEWAY",
+          "service": "straumvakt-ocpp-staging"
+        }
+      ],
+      "hyperdrive": [
+        {
+          "binding": "HYPERDRIVE_DB",
+          "id": "d2d56ab1ffe241bbb64946ba78a52be5",
+          "localConnectionString": "postgresql://placeholder:placeholder@localhost:5432/placeholder"
+        }
+      ]
+    }
+  }
+}

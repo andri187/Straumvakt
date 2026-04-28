@@ -76,3 +76,8 @@ public/zaptec/
 # Investor pitch deck — kept entirely out of git per operator preference.
 # LibreOffice .odp source + exported slide SVGs + assets all live local-only.
 docs/architecture/investor_slides/
+
+# Monorepo — generated Prisma client output for apps/api (regenerated on prisma generate)
+apps/api/src/generated/
+apps/*/node_modules/
+packages/*/node_modules/

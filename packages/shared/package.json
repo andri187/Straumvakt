@@ -1,0 +1,16 @@
+{
+  "name": "@straumvakt/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./inputs/orgs": "./src/inputs/orgs.ts",
+    "./domain/orgs": "./src/domain/orgs.ts"
+  },
+  "dependencies": {
+    "zod": "^4.3.6"
+  }
+}

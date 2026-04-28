@@ -1,0 +1,26 @@
+{
+  "name": "@straumvakt/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy:staging": "prisma generate && wrangler deploy --env staging",
+    "deploy:prod": "prisma generate && wrangler deploy",
+    "prisma:generate": "prisma generate",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "^7.7.0",
+    "@prisma/client": "^7.7.0",
+    "@straumvakt/shared": "*",
+    "hono": "^4.6.13",
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20251121.0",
+    "prisma": "^7.7.0",
+    "typescript": "5.6.3",
+    "wrangler": "^4.84.0"
+  }
+}
