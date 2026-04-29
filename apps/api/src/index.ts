@@ -22,6 +22,10 @@ import { adminOnboarding } from "./routes/admin/onboarding";
 import { adminMe } from "./routes/admin/me";
 import { adminZaptec } from "./routes/admin/zaptec";
 import { adminPendingDiscoveries } from "./routes/admin/pending-discoveries";
+import {
+  adminVendorCredentialsAll,
+  adminVendorCredentialsByOrg,
+} from "./routes/admin/vendor-credentials";
 import { makePrisma } from "./lib/prisma";
 import { buildRegistry } from "./lib/dispatch-targets";
 import { processCommand, sweepStuckPending } from "./lib/dispatcher";
@@ -77,6 +81,8 @@ app.route("/api/admin/onboarding", adminOnboarding);
 app.route("/api/admin/me", adminMe);
 app.route("/api/admin/zaptec", adminZaptec);
 app.route("/api/admin/pending-discoveries", adminPendingDiscoveries);
+app.route("/api/admin/vendor-credentials", adminVendorCredentialsAll);
+app.route("/api/admin/orgs/:orgId/vendor-credentials", adminVendorCredentialsByOrg);
 
 app.notFound((c) => c.json({ error: "not_found", path: c.req.path }, 404));
 

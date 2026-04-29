@@ -128,6 +128,7 @@ model Organization {
   properties          Property[]
   sites               Site[]
   installations       Installation[]
+  vendorCredentials   VendorCredential[] @relation("OrgVendorCredentials")
   circuits            Circuit[]
   siteAssets          SiteAsset[]
   // Rev-5 (ADR 0012) — Charger renamed to ChargingStation
@@ -364,6 +365,7 @@ model Installation {
   displayName            String                        @map("display_name")
   vendorInstallationRef  String?                       @map("vendor_installation_ref")
   credentialsRef         String?                       @map("credentials_ref")
+  credentialsId          String?                       @map("credentials_id") @db.Uuid
   credentialsStatus      String?                       @map("credentials_status")
   onboardingStatus       InstallationOnboardingStatus  @map("onboarding_status") @default(pending_credentials)
   metadata               Json                          @default("{}") @db.JsonB
@@ -378,6 +380,7 @@ model Installation {
   site                   Site                          @relation(fields: [siteId], references: [id], onDelete: Cascade)
   vendor                 HardwareVendor?               @relation(fields: [vendorId], references: [id])
   model                  HardwareModel?                @relation(fields: [modelId], references: [id])
+  credentials            VendorCredential?             @relation("InstallationCredential", fields: [credentialsId], references: [id])
   chargingStations       ChargingStation[]
   circuits               Circuit[]
 
@@ -618,8 +621,35 @@ model HardwareVendor {
 
   models         HardwareModel[]
   installations  Installation[]
+  credentials    VendorCredential[]
 
   @@map("vendors")
+  @@schema("hardware")
+}
+
+// Per-org vendor portal credentials. Mirrors prisma/schema.prisma.
+// Password is AES-GCM encrypted with a Worker-side KEK before insert
+// (apps/api/src/lib/credential-crypto.ts) — DB never holds plaintext.
+model VendorCredential {
+  id             String          @id @default(uuid()) @db.Uuid
+  ownerOrgId     String          @map("owner_org_id") @db.Uuid
+  vendorId       String          @map("vendor_id") @db.Uuid
+  username       String          @db.VarChar(200)
+  passwordCipher Bytes?          @map("password_cipher")
+  passwordIv     Bytes?          @map("password_iv")
+  status         String          @default("active") // active | expired | revoked
+  lastUsedAt     DateTime?       @map("last_used_at") @db.Timestamptz(6)
+  notes          String?         @db.VarChar(500)
+  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  ownerOrg       Organization    @relation("OrgVendorCredentials", fields: [ownerOrgId], references: [id], onDelete: Cascade)
+  vendor         HardwareVendor  @relation(fields: [vendorId], references: [id])
+  installations  Installation[]  @relation("InstallationCredential")
+
+  @@unique([ownerOrgId, vendorId, username])
+  @@index([ownerOrgId])
+  @@map("vendor_credentials")
   @@schema("hardware")
 }
 

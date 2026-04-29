@@ -32,4 +32,7 @@ export interface Env {
   ADMIN_EMAIL: string;
   ADMIN_PASSWORD: string;
   OCPP_INGEST_SECRET: string;
+  // KEK for AES-GCM encryption of stored vendor portal passwords. SHA-256
+  // of this secret → AES-256 key. Set via wrangler secret put.
+  OCPP_CRED_KEK: string;
 }
