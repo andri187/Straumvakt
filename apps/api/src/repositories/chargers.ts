@@ -128,7 +128,11 @@ export async function createCharger(
   const password = generatePassword();
   const authSecretHash = await sha256Hex(password);
 
-  const result = await db.$transaction(async (tx) => {
+  // 6 round trips inside the tx (siteAsset, chargingStation, eVSE,
+  // connector, ocppIdentity, pendingDiscovery.deleteMany). 60s timeout
+  // gives generous headroom over Hyperdrive's per-query latency.
+  const result = await db.$transaction(
+    async (tx) => {
     const siteAsset = await tx.siteAsset.create({
       data: {
         orgId: input.orgId,
@@ -200,7 +204,9 @@ export async function createCharger(
       connectorId: connector.id,
       ocppIdentityId: identity.id,
     };
-  });
+    },
+    { timeout: 60_000, maxWait: 30_000 },
+  );
 
   await recordAuditAction(db, {
     orgId: input.orgId,

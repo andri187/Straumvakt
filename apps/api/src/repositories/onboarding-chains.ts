@@ -65,7 +65,12 @@ export async function createOnboardingChain(
   const password = generatePassword();
   const authSecretHash = await sha256Hex(password);
 
-  const result = await db.$transaction(async (tx) => {
+  // 9 sequential round trips (Org → Property → Site → SiteAsset →
+  // ChargingStation → EVSE → Connector → OcppIdentity →
+  // pendingDiscovery.deleteMany). Default 5s tx timeout cuts it close
+  // over Hyperdrive; bump to 60s.
+  const result = await db.$transaction(
+    async (tx) => {
     const org = await tx.organization.create({
       data: {
         slug: input.orgSlug,
@@ -183,7 +188,9 @@ export async function createOnboardingChain(
       connectorId: connector.id,
       ocppIdentityId: identity.id,
     };
-  });
+    },
+    { timeout: 60_000, maxWait: 30_000 },
+  );
 
   await recordAuditAction(db, {
     orgId: result.orgId,

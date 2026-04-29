@@ -149,6 +149,17 @@ adminZaptec.post("/import", async (c) => {
       return c.json({ error: msg }, 400);
     }
     if (msg === "installation_not_accessible") return c.json({ error: msg }, 404);
-    throw err;
+    // Anything else: log full stack + structured error fields so wrangler tail
+    // surfaces the real cause instead of the generic onError 'internal'.
+    console.error("[zaptec.import] unhandled", {
+      message: msg,
+      name: err instanceof Error ? err.name : "non-error",
+      stack: err instanceof Error ? err.stack : undefined,
+      input: {
+        zaptecInstallationId: parsed.data.zaptecInstallationId,
+        orgId: parsed.data.orgId,
+      },
+    });
+    return c.json({ error: "import_failed", message: msg }, 500);
   }
 });

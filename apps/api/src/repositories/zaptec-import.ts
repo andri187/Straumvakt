@@ -115,7 +115,16 @@ export async function importZaptecInstallation(
   );
 
   // 5) Multi-table tx.
-  const result = await db.$transaction(async (tx) => {
+  //
+  // Per-charger we make 6 round trips (siteAsset, chargingStation, eVSE,
+  // connector, ocppIdentity, pendingDiscovery.deleteMany). Hyperdrive +
+  // Neon round-trip latency lands us around 50–80ms each, so ten chargers
+  // is well past Prisma's default 5-second interactive-tx timeout. Bump
+  // to 60s + a 30s max-wait to claim a connection. If we ever import
+  // installations with hundreds of chargers, switch to createMany +
+  // pre-allocated UUIDs to drop round-trip count.
+  const result = await db.$transaction(
+    async (tx) => {
     const property = await tx.property.create({
       data: {
         orgId: org.id,
@@ -227,7 +236,9 @@ export async function importZaptecInstallation(
       installationId: installation.id,
       chargers: importedChargers,
     };
-  });
+    },
+    { timeout: 60_000, maxWait: 30_000 },
+  );
 
   await recordAuditAction(db, {
     orgId: org.id,
