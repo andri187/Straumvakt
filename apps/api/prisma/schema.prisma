@@ -710,6 +710,23 @@ model OcppIdentity {
   @@schema("ocpp")
 }
 
+// Pre-onboarding discoveries — populated by the OCPP gateway auth path
+// when a charger presents Basic-Auth that does not match any
+// OcppIdentity row. Mirrors prisma/schema.prisma.
+model PendingDiscovery {
+  identityString     String   @id @map("identity_string") @db.VarChar(64)
+  firstSeenAt        DateTime @default(now()) @map("first_seen_at") @db.Timestamptz(6)
+  lastSeenAt         DateTime @default(now()) @map("last_seen_at") @db.Timestamptz(6)
+  attemptCount       Int      @default(0) @map("attempt_count")
+  remoteAddr         String?  @map("remote_addr") @db.VarChar(64)
+  userAgent          String?  @map("user_agent") @db.VarChar(255)
+  lastPayloadSummary Json?    @map("last_payload_summary") @db.JsonB
+
+  @@index([lastSeenAt(sort: Desc)])
+  @@map("pending_discoveries")
+  @@schema("ocpp")
+}
+
 enum OcppVersion {
   ocpp_1_6
   ocpp_2_0_1

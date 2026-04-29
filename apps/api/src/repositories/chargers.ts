@@ -186,6 +186,14 @@ export async function createCharger(
       select: { id: true },
     });
 
+    // Closes the pending-discoveries loop: if the gateway recorded
+    // failed auth attempts for this identityString before provision,
+    // remove the row in the same transaction. deleteMany is no-op
+    // when no row matches.
+    await tx.pendingDiscovery.deleteMany({
+      where: { identityString: input.identityString },
+    });
+
     return {
       chargingStationId: siteAsset.id,
       evseId: evse.id,

@@ -1,20 +1,27 @@
+import Link from "next/link";
 import { SectionTabs, OPERATIONS_TABS, CHARGERS_TABS } from "@/components/section-tabs";
 import { ActionBar } from "@/components/action-bar";
+import { apiFetchServerJson } from "@/lib/api-client-server";
+import type { PendingDiscoverySummary } from "@straumvakt/shared/domain/pending-discoveries";
+import { DismissButton } from "./dismiss-button";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Chargers · Pending onboarding" };
 
-// Pending pool — physical chargers that have the gateway URL configured
-// and have attempted to connect, but no OcppIdentity row matches their
-// presented Basic-Auth credentials yet. The list populates via a future
-// gateway-side hook (see `Wiring needed` block below).
+// Pre-onboarding pool — physical chargers that have presented Basic-
+// Auth against the OCPP gateway but no OcppIdentity row matches their
+// identity-string. Populated by the gateway's auth-fail upsert (see
+// src/app/api/internal/ocpp-auth/route.ts → recordPendingDiscovery).
 //
-// Until that hook lands the pending pool is always empty. Showing the
-// page now so the operator console has a stable home for the eventual
-// flow.
+// Click "Claim" to jump to /chargers/new with the identity string
+// pre-filled; on successful provision the pending_discoveries row
+// is deleted in the same tx (apps/api repositories/chargers.ts +
+// repositories/onboarding-chains.ts).
 
 export default async function PendingChargersPage() {
-  const pending: never[] = [];
+  const { pending } = await apiFetchServerJson<{ pending: PendingDiscoverySummary[] }>(
+    "/api/admin/pending-discoveries",
+  );
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-8">
@@ -22,7 +29,7 @@ export default async function PendingChargersPage() {
       <SectionTabs tabs={CHARGERS_TABS} />
       <ActionBar
         title="Pending onboarding"
-        description="Physical chargers that have the gateway URL configured and have attempted to connect, but their identity hasn't been provisioned yet. Claim a row here to pre-fill the create-charger form with the discovered identity string."
+        description="Chargers that connected to the OCPP gateway with credentials that don't match any provisioned OcppIdentity. Claim a row to pre-fill the new-charger form with the discovered identity string."
       />
 
       {pending.length === 0 ? (
@@ -31,62 +38,60 @@ export default async function PendingChargersPage() {
           <p className="mt-1 text-xs text-ink-400">
             Pending discoveries appear here automatically once a charger boots
             against the gateway URL with credentials that don&apos;t match an
-            existing OcppIdentity row.
+            existing OcppIdentity row. Point your charger at{" "}
+            <code className="font-mono">wss://straumvakt-ocpp-staging.straumvakt.workers.dev/ocpp/&lt;identity&gt;</code>{" "}
+            to surface it here.
           </p>
         </div>
       ) : (
-        // Will render the list of pending discoveries once the gateway hook lands.
-        <ul className="rounded-md border border-bg-border bg-bg-base/30">
-          {/* placeholder for future PendingDiscovery rows */}
-        </ul>
+        <div className="overflow-hidden rounded-md border border-bg-border bg-bg-base/30">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-bg-inset/40 text-[10px] uppercase tracking-brand text-ink-500">
+              <tr>
+                <th className="px-3 py-2 font-medium">Identity</th>
+                <th className="px-3 py-2 font-medium">First seen</th>
+                <th className="px-3 py-2 font-medium">Last seen</th>
+                <th className="px-3 py-2 font-medium text-right">Attempts</th>
+                <th className="px-3 py-2 font-medium">Source</th>
+                <th className="px-3 py-2 font-medium" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-bg-border/40">
+              {pending.map((p) => (
+                <tr key={p.identityString} className="hover:bg-bg-raised/30">
+                  <td className="px-3 py-2 font-mono text-xs text-ink-100">
+                    {p.identityString}
+                  </td>
+                  <td className="px-3 py-2 text-xs text-ink-300">
+                    {new Date(p.firstSeenAt).toLocaleString()}
+                  </td>
+                  <td className="px-3 py-2 text-xs text-ink-200">
+                    {new Date(p.lastSeenAt).toLocaleString()}
+                  </td>
+                  <td className="px-3 py-2 text-right text-xs text-ink-200">
+                    {p.attemptCount}
+                  </td>
+                  <td className="px-3 py-2 font-mono text-[10px] text-ink-500">
+                    {p.remoteAddr ?? "—"}
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <Link
+                      href={{
+                        pathname: "/chargers/new",
+                        query: { identityString: p.identityString },
+                      }}
+                      className="mr-2 rounded-md bg-sv-green/20 px-2 py-1 text-[11px] font-medium text-sv-green ring-1 ring-sv-green/30 hover:bg-sv-green/30"
+                    >
+                      Claim
+                    </Link>
+                    <DismissButton identityString={p.identityString} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
-
-      <section className="mt-6 rounded-md border border-amber-700/40 bg-amber-950/20 p-4 text-xs text-amber-200">
-        <h2 className="text-sm font-semibold text-amber-100">Wiring needed</h2>
-        <p className="mt-1">
-          To populate this view, the OCPP gateway worker needs a small
-          discovery hook on the auth path:
-        </p>
-        <ol className="mt-2 list-decimal pl-5 space-y-0.5 text-amber-200/90">
-          <li>
-            New schema table <code className="font-mono">ocpp.pending_discoveries</code>{" "}
-            — columns: <code className="font-mono">identity_string</code>,{" "}
-            <code className="font-mono">first_seen_at</code>,{" "}
-            <code className="font-mono">last_seen_at</code>,{" "}
-            <code className="font-mono">attempt_count</code>,{" "}
-            <code className="font-mono">remote_addr</code>,{" "}
-            <code className="font-mono">user_agent</code>,{" "}
-            <code className="font-mono">last_payload_summary</code>{" "}
-            (JSONB, e.g., the BootNotification body).
-          </li>
-          <li>
-            Gateway hook on auth-fail-due-to-unknown-identity: upsert by{" "}
-            <code className="font-mono">identity_string</code>, increment{" "}
-            <code className="font-mono">attempt_count</code>, update{" "}
-            <code className="font-mono">last_seen_at</code>. Skip if the
-            identity already exists in <code className="font-mono">ocpp_identities</code>.
-          </li>
-          <li>
-            On successful provision via{" "}
-            <a className="underline hover:text-amber-100" href="/chargers/new">
-              /chargers/new
-            </a>{" "}
-            with a matching <code className="font-mono">identity_string</code>:
-            delete the discovery row in the same transaction.
-          </li>
-          <li>
-            Repository + admin route to list discoveries (org-scoped is
-            tricky here since these aren&apos;t org-bound until claimed —
-            platform-admin reads only).
-          </li>
-        </ol>
-        <p className="mt-2 text-amber-200/80">
-          Estimated effort: ~2 hours including migration, hook, repo, list
-          rendering, and a &quot;Claim&quot; button that pre-fills{" "}
-          <code className="font-mono">/chargers/new</code> with the
-          discovered identity string.
-        </p>
-      </section>
     </div>
   );
 }

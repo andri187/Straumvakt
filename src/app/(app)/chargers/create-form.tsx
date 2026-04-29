@@ -17,7 +17,14 @@ type Result = {
   ocppPassword: string;
 };
 
-export function CreateChargerForm({ orgOptions }: { orgOptions: { id: string; label: string }[] }) {
+export function CreateChargerForm({
+  orgOptions,
+  initialIdentityString = "",
+}: {
+  orgOptions: { id: string; label: string }[];
+  /** Pre-fill identityString — set when claiming a row from /chargers/pending. */
+  initialIdentityString?: string;
+}) {
   const router = useRouter();
   const [orgId, setOrgId] = useState(orgOptions[0]?.id ?? "");
   const [siteId, setSiteId] = useState("");
@@ -36,7 +43,7 @@ export function CreateChargerForm({ orgOptions }: { orgOptions: { id: string; la
   const [connectorIndex, setConnectorIndex] = useState("1");
   const [connectorType, setConnectorType] = useState<typeof CONNECTOR_TYPES[number]>("Type2");
   const [connectorMaxPowerKw, setConnectorMaxPowerKw] = useState("");
-  const [identityString, setIdentityString] = useState("");
+  const [identityString, setIdentityString] = useState(initialIdentityString);
   const [ocppVersion, setOcppVersion] = useState<typeof OCPP_VERSIONS[number]>("ocpp_1_6");
   const [assetClass, setAssetClass] = useState<typeof ASSET_CLASSES[number]>("ac");
   const [submitting, setSubmitting] = useState(false);

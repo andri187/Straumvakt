@@ -6,7 +6,14 @@ import { CreateChargerForm } from "../create-form";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "New charger" };
 
-export default async function NewChargerPage() {
+export default async function NewChargerPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ identityString?: string }>;
+}) {
+  const sp = await searchParams;
+  const initialIdentityString = (sp.identityString ?? "").slice(0, 64);
+
   const { orgs } = await apiFetchServerJson<{ orgs: OrgSummary[] }>("/api/admin/orgs");
   const orgOptions = orgs.filter((o) => o.status !== "archived").map((o) => ({ id: o.id, label: `${o.displayName} (${o.slug})` }));
 
@@ -22,11 +29,19 @@ export default async function NewChargerPage() {
           transaction. The OCPP Basic-Auth password is revealed once after
           create. Required fields are marked with <span className="text-rose-400">*</span>.
         </p>
+        {initialIdentityString && (
+          <p className="mt-2 rounded border border-sv-sky/30 bg-sv-sky/10 px-3 py-2 text-xs text-sv-sky">
+            Claiming pending discovery — identityString pre-filled with{" "}
+            <code className="font-mono">{initialIdentityString}</code>. The matching
+            row in <code className="font-mono">ocpp.pending_discoveries</code> is
+            removed when this charger is created.
+          </p>
+        )}
       </header>
       {orgOptions.length === 0 ? (
         <div className="rounded border border-amber-700/40 bg-amber-950/20 p-3 text-xs text-amber-200">Create Org + Property + Site first.</div>
       ) : (
-        <CreateChargerForm orgOptions={orgOptions} />
+        <CreateChargerForm orgOptions={orgOptions} initialIdentityString={initialIdentityString} />
       )}
     </div>
   );

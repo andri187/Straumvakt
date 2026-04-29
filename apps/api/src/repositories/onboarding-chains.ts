@@ -166,6 +166,13 @@ export async function createOnboardingChain(
       select: { id: true },
     });
 
+    // Mirror chargers.createCharger — close the pending-discoveries
+    // loop in the same tx if the operator's onboarding chain provisions
+    // an identityString the gateway has been seeing.
+    await tx.pendingDiscovery.deleteMany({
+      where: { identityString: input.identityString },
+    });
+
     return {
       orgId: org.id,
       orgSlug: org.slug,

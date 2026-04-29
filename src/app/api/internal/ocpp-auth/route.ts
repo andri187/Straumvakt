@@ -57,6 +57,20 @@ export async function POST(req: Request) {
     // Hash even on miss to avoid timing side-channel — same pattern
     // as password-check on a non-existent user.
     await sha256Hex(password);
+
+    // Upsert into pending_discoveries so the operator sees this charger
+    // in /chargers/pending. Best-effort — failure here doesn't change
+    // the auth response. Identity-string is PK; concurrent attempts
+    // from the same charger increment the counter atomically.
+    try {
+      await recordPendingDiscovery(identityString, req);
+    } catch (err) {
+      console.error("[ocpp-auth] pending_discoveries upsert failed", {
+        identityString,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 403 });
   }
 
@@ -69,4 +83,41 @@ export async function POST(req: Request) {
     { ok: true, identityId: identity.id, orgId: identity.orgId },
     { status: 200 },
   );
+}
+
+/**
+ * Upsert into ocpp.pending_discoveries. Captured fields are the
+ * minimum useful for an operator to triage: when first/last seen, how
+ * many attempts, and the connecting peer. Payload-summary is left
+ * null at the auth stage — the gateway can layer in BootNotification
+ * details on a later fail if it wants.
+ */
+async function recordPendingDiscovery(
+  identityString: string,
+  req: Request,
+): Promise<void> {
+  // CF-Connecting-IP is set by Cloudflare on internal hops too; fall
+  // back to x-real-ip / x-forwarded-for for compatibility.
+  const remoteAddr =
+    req.headers.get("cf-connecting-ip") ??
+    req.headers.get("x-real-ip") ??
+    (req.headers.get("x-forwarded-for") ?? "").split(",")[0]?.trim() ??
+    null;
+  const userAgent = req.headers.get("user-agent");
+
+  await prisma().pendingDiscovery.upsert({
+    where: { identityString },
+    create: {
+      identityString,
+      attemptCount: 1,
+      remoteAddr: remoteAddr ? remoteAddr.slice(0, 64) : null,
+      userAgent: userAgent ? userAgent.slice(0, 255) : null,
+    },
+    update: {
+      lastSeenAt: new Date(),
+      attemptCount: { increment: 1 },
+      remoteAddr: remoteAddr ? remoteAddr.slice(0, 64) : null,
+      userAgent: userAgent ? userAgent.slice(0, 255) : null,
+    },
+  });
 }

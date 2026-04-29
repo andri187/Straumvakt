@@ -21,7 +21,8 @@
     "./domain/installations": "./src/domain/installations.ts",
     "./domain/circuits": "./src/domain/circuits.ts",
     "./domain/users": "./src/domain/users.ts",
-    "./domain/chargers": "./src/domain/chargers.ts"
+    "./domain/chargers": "./src/domain/chargers.ts",
+    "./domain/pending-discoveries": "./src/domain/pending-discoveries.ts"
   },
   "dependencies": {
     "zod": "^4.3.6"
