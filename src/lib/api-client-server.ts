@@ -10,6 +10,16 @@
 
 import { cookies, headers } from "next/headers";
 
+// Same UI-host → API-host mapping as the browser client. Server
+// components running in the UI Worker also need the API URL, and
+// process.env.NEXT_PUBLIC_API_BASE_URL is not always populated by the
+// CF build runner (NEXT_PUBLIC_* are inlined at build time). Reading
+// the request's Host header at runtime gives us a robust fallback.
+const HOSTNAME_TO_API: Record<string, string> = {
+  "hlada-staging.straumvakt.workers.dev": "https://hlada-api-staging.straumvakt.workers.dev",
+  "hlada.straumvakt.workers.dev": "https://hlada-api.straumvakt.workers.dev",
+};
+
 export async function apiFetchServer(path: string, init?: RequestInit): Promise<Response> {
   if (!path.startsWith("/")) {
     throw new Error(`apiFetchServer: path must start with "/" (got: ${path})`);
@@ -24,8 +34,13 @@ export async function apiFetchServer(path: string, init?: RequestInit): Promise<
         "apiFetchServer: NEXT_PUBLIC_API_BASE_URL not set and no Host header — cannot resolve absolute URL",
       );
     }
-    const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
-    base = `${proto}://${host}`;
+    const mapped = HOSTNAME_TO_API[host];
+    if (mapped) {
+      base = mapped;
+    } else {
+      const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
+      base = `${proto}://${host}`;
+    }
   }
 
   const jar = await cookies();
