@@ -1,63 +1,48 @@
-// Zaptec onboarding wizard — discover step.
+// Zaptec onboarding wizard — discover + import.
 //
-// Ported 1:1 from src/app/api/admin/zaptec/discover/route.ts so the UI
-// wizard's apiFetch call reaches the API Worker instead of 404'ing on
-// the UI Worker after the cutover. No Prisma — pure HTTP-out to
-// Zaptec's API; we just translate the result shape.
+// Discover: exchanges credentials for a short-lived access token,
+// lists installations, fetches each hierarchy in parallel, returns a
+// nested tree the wizard renders. No DB writes.
 //
-// Body: { username: string; password: string }
-// Returns: { installations: [{ id, name, address?, activeChargerCount?,
-//   maxCurrent?, timezone?, circuits: [{ id, name, maxCurrent?,
-//   isActive, chargers: [{ id, name, serialNo?, deviceId?, mid?, active? }] }] }] }
-//
-// Credentials are exchanged for an access token once and never logged
-// or persisted. Per-installation persistence happens at the import step
-// (milestone 2.7).
+// Import: provisions one installation (and its chargers) into the
+// Straumvakt schema in a single transaction. See repositories/zaptec-
+// import.ts for the multi-table tx + OCPP password generation.
 
 import { Hono } from "hono";
+import { ZaptecImportInput } from "@straumvakt/shared/inputs/zaptec-import";
 import { z } from "zod";
 import { requireAdmin, type AuthVars } from "../../lib/auth-middleware";
+import { makePrisma } from "../../lib/prisma";
+import {
+  getInstallationHierarchy,
+  getZaptecAccessToken,
+  listInstallations,
+  type ZaptecError,
+  type ZaptecHierarchyCircuit,
+  type ZaptecHierarchyCharger,
+} from "../../lib/zaptec";
+import { importZaptecInstallation } from "../../repositories/zaptec-import";
 import type { Env } from "../../bindings";
 
-const ZAPTEC_BASE = "https://api.zaptec.com";
-
-const Body = z.object({
+const DiscoverBody = z.object({
   username: z.string().min(1).max(200),
   password: z.string().min(1).max(200),
 });
 
-type ZaptecInstallationSummary = {
-  Id?: string;
-  Name?: string;
-  Address?: string;
-  City?: string;
-  ZipCode?: string;
-  ActiveChargerCount?: number;
-  MaxCurrent?: number;
-  TimeZoneIanaName?: string;
-};
-
-type ZaptecHierarchyCharger = {
-  Id?: string;
-  Name?: string | null;
-  SerialNo?: string | null;
-  DeviceId?: string | null;
-  MID?: string | null;
-  Active?: boolean | null;
-};
-
-type ZaptecHierarchyCircuit = {
-  Id?: string;
-  Name?: string | null;
-  MaxCurrent?: number;
-  IsActive?: boolean;
-  Chargers?: ZaptecHierarchyCharger[] | null;
-};
-
-type ZaptecHierarchy = {
-  Id?: string;
-  Circuits?: ZaptecHierarchyCircuit[] | null;
-};
+function zaptecErrorResponse(err: ZaptecError) {
+  switch (err.kind) {
+    case "unreachable":
+      return { code: 502 as const, body: { error: "zaptec_unreachable" as const } };
+    case "invalid_credentials":
+      return { code: 401 as const, body: { error: "invalid_credentials" as const } };
+    case "no_token":
+      return { code: 502 as const, body: { error: "zaptec_oauth_no_token" as const } };
+    case "oauth":
+      return { code: 502 as const, body: { error: "zaptec_oauth_error" as const, status: err.status } };
+    case "list":
+      return { code: 502 as const, body: { error: "zaptec_list_error" as const, status: err.status } };
+  }
+}
 
 export const adminZaptec = new Hono<{ Bindings: Env; Variables: AuthVars }>();
 
@@ -65,73 +50,34 @@ adminZaptec.use("*", requireAdmin);
 
 adminZaptec.post("/discover", async (c) => {
   const raw = (await c.req.json().catch(() => null)) as unknown;
-  const parsed = Body.safeParse(raw);
+  const parsed = DiscoverBody.safeParse(raw);
   if (!parsed.success) {
     return c.json({ error: "validation", issues: parsed.error.issues }, 400);
   }
   const { username, password } = parsed.data;
 
-  // Step 1 — exchange credentials for an access token.
-  const tokenRes = await fetch(`${ZAPTEC_BASE}/oauth/token`, {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "password",
-      username,
-      password,
-      scope: "openid",
-    }),
-
-  }).catch(() => null);
-
-  if (!tokenRes) return c.json({ error: "zaptec_unreachable" }, 502);
-  if (!tokenRes.ok) {
-    if (tokenRes.status === 400 || tokenRes.status === 401) {
-      return c.json({ error: "invalid_credentials" }, 401);
-    }
-    return c.json({ error: "zaptec_oauth_error", status: tokenRes.status }, 502);
+  const tokenResult = await getZaptecAccessToken(username, password);
+  if (!tokenResult.ok) {
+    const r = zaptecErrorResponse(tokenResult.error);
+    return c.json(r.body, r.code);
   }
+  const accessToken = tokenResult.value;
 
-  const tokenJson = (await tokenRes.json().catch(() => null)) as
-    | { access_token?: string }
-    | null;
-  const accessToken = tokenJson?.access_token;
-  if (!accessToken) return c.json({ error: "zaptec_oauth_no_token" }, 502);
-
-  // Step 2 — list installations.
-  const instRes = await fetch(`${ZAPTEC_BASE}/api/installation`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-
-  }).catch(() => null);
-
-  if (!instRes) return c.json({ error: "zaptec_unreachable" }, 502);
-  if (!instRes.ok) {
-    return c.json({ error: "zaptec_list_error", status: instRes.status }, 502);
+  const instResult = await listInstallations(accessToken);
+  if (!instResult.ok) {
+    const r = zaptecErrorResponse(instResult.error);
+    return c.json(r.body, r.code);
   }
-  const instJson = (await instRes.json().catch(() => null)) as
-    | { Data?: ZaptecInstallationSummary[] }
-    | null;
-  const rawInstallations = (instJson?.Data ?? []).filter(
-    (i): i is ZaptecInstallationSummary & { Id: string; Name: string } =>
+  const rawInstallations = instResult.value.filter(
+    (i): i is { Id: string; Name: string } & typeof i =>
       typeof i.Id === "string" && typeof i.Name === "string",
   );
 
-  // Step 3 — fetch each installation's hierarchy in parallel. A missing
-  // hierarchy doesn't fail the whole response; that installation just
-  // surfaces with an empty circuits[].
+  // Hierarchy fetch — failures don't bring down the whole response.
   const hierarchies = await Promise.all(
     rawInstallations.map(async (i) => {
-      try {
-        const r = await fetch(`${ZAPTEC_BASE}/api/installation/${i.Id}/hierarchy`, {
-          headers: { Authorization: `Bearer ${accessToken}` },
-      
-        });
-        if (!r.ok) return { id: i.Id, hierarchy: null };
-        const h = (await r.json().catch(() => null)) as ZaptecHierarchy | null;
-        return { id: i.Id, hierarchy: h };
-      } catch {
-        return { id: i.Id, hierarchy: null };
-      }
+      const r = await getInstallationHierarchy(accessToken, i.Id);
+      return { id: i.Id, hierarchy: r.ok ? r.value : null };
     }),
   );
   const hierarchyById = new Map(hierarchies.map((h) => [h.id, h.hierarchy]));
@@ -173,4 +119,36 @@ adminZaptec.post("/discover", async (c) => {
   });
 
   return c.json({ installations });
+});
+
+adminZaptec.post("/import", async (c) => {
+  const raw = (await c.req.json().catch(() => null)) as unknown;
+  const parsed = ZaptecImportInput.safeParse(raw);
+  if (!parsed.success) {
+    return c.json({ error: "validation", issues: parsed.error.issues }, 400);
+  }
+  const db = makePrisma(c.env);
+  try {
+    const result = await importZaptecInstallation(db, parsed.data);
+    return c.json(
+      {
+        ok: true,
+        ...result,
+        note: "Each ocppPassword is shown once. Set it as the OCPP Basic-Auth password on the corresponding charger; only the SHA-256 hash is stored on our side.",
+      },
+      201,
+    );
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    // Surface known errors with appropriate status codes.
+    if (msg.startsWith("zaptec_")) {
+      return c.json({ error: msg }, 502);
+    }
+    if (msg === "invalid_credentials") return c.json({ error: msg }, 401);
+    if (msg === "vendor_zaptec_missing" || msg === "org_not_found") {
+      return c.json({ error: msg }, 400);
+    }
+    if (msg === "installation_not_accessible") return c.json({ error: msg }, 404);
+    throw err;
+  }
 });

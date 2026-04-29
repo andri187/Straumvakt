@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ChevronRight } from "lucide-react";
 import { apiFetch } from "@/lib/api-client";
+import { ImportDialog } from "./import-dialog";
 
 type Step = "credentials" | "installations";
 
@@ -42,6 +43,7 @@ export function ZaptecWizardForm() {
   const [discovered, setDiscovered] = useState<DiscoveredInstallation[]>([]);
   const [openInstallations, setOpenInstallations] = useState<Set<string>>(new Set());
   const [openCircuits, setOpenCircuits] = useState<Set<string>>(new Set());
+  const [importing, setImporting] = useState<DiscoveredInstallation | null>(null);
 
   function toggleInstallation(id: string) {
     setOpenInstallations((prev) => {
@@ -199,9 +201,8 @@ export function ZaptecWizardForm() {
                       <td className="px-3 py-2 align-top text-right">
                         <button
                           type="button"
-                          disabled
-                          title="Import flow lands in milestone 2.7"
-                          className="rounded border border-bg-border/60 bg-bg-base/40 px-2 py-1 text-[11px] text-ink-500 disabled:cursor-not-allowed"
+                          onClick={() => setImporting(inst)}
+                          className="rounded border border-sv-green/30 bg-sv-green/10 px-2 py-1 text-[11px] text-sv-green hover:bg-sv-green/20"
                         >
                           Import
                         </button>
@@ -231,6 +232,23 @@ export function ZaptecWizardForm() {
             credentials are scoped to the installation row that gets created.
           </p>
         </div>
+      )}
+
+      {importing && (
+        <ImportDialog
+          open
+          onClose={() => setImporting(null)}
+          username={zaptecUser}
+          password={zaptecPass}
+          installation={{
+            id: importing.id,
+            name: importing.name,
+            address: importing.address,
+            chargerCount:
+              importing.activeChargerCount ??
+              importing.circuits.reduce((sum, c) => sum + c.chargers.length, 0),
+          }}
+        />
       )}
     </div>
   );

@@ -15,6 +15,7 @@
     "./inputs/users": "./src/inputs/users.ts",
     "./inputs/chargers": "./src/inputs/chargers.ts",
     "./inputs/onboarding-chains": "./src/inputs/onboarding-chains.ts",
+    "./inputs/zaptec-import": "./src/inputs/zaptec-import.ts",
     "./domain/orgs": "./src/domain/orgs.ts",
     "./domain/properties": "./src/domain/properties.ts",
     "./domain/sites": "./src/domain/sites.ts",
@@ -22,7 +23,8 @@
     "./domain/circuits": "./src/domain/circuits.ts",
     "./domain/users": "./src/domain/users.ts",
     "./domain/chargers": "./src/domain/chargers.ts",
-    "./domain/pending-discoveries": "./src/domain/pending-discoveries.ts"
+    "./domain/pending-discoveries": "./src/domain/pending-discoveries.ts",
+    "./domain/zaptec-import": "./src/domain/zaptec-import.ts"
   },
   "dependencies": {
     "zod": "^4.3.6"
