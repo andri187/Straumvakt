@@ -1,13 +1,20 @@
 // Outbound-commands repository — write side of the outbox pattern.
 //
-// API Worker only enqueues. The dispatcher (still inside the Next.js
-// monolith for now — see ADR 0013 phase plan) reads pending rows from
-// the same Hyperdrive-backed Postgres and dispatches.
+// Producer flow:
+//   1. Insert row into ocpp.outbound_commands (status=pending).
+//   2. Publish { commandId } to OUTBOUND_QUEUE.
 //
-// Status starts at 'pending' with notBefore=now. Caller passes a
-// caller-supplied correlationId so the row links back to its request.
+// The row is the source of truth for state and history; the queue
+// message is just a notification ("wake up and process this id").
+// Consumer side lives in src/lib/dispatcher.ts (processCommand).
+//
+// If queue.send throws, the row is still durable — the periodic
+// sweeper (scheduled handler in src/index.ts) will re-publish stale
+// pending rows.
 
+import type { Queue } from "@cloudflare/workers-types";
 import type { PrismaClient, Prisma } from "../generated/prisma/client";
+import type { OutboundCommandMessage } from "../bindings";
 
 export interface EnqueueCommand {
   orgId: string;
@@ -27,6 +34,7 @@ export interface EnqueuedCommand {
 
 export async function enqueueCommand(
   db: PrismaClient,
+  queue: Queue<OutboundCommandMessage>,
   cmd: EnqueueCommand,
 ): Promise<EnqueuedCommand> {
   const row = await db.outboundCommand.create({
@@ -44,5 +52,15 @@ export async function enqueueCommand(
     },
     select: { id: true, status: true },
   });
+  // Best-effort publish. If this throws (queue back-pressure, transient
+  // CF outage), the sweeper picks the row up later — no corruption.
+  try {
+    await queue.send({ commandId: row.id });
+  } catch (err) {
+    console.error("OUTBOUND_QUEUE.send failed", {
+      commandId: row.id,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
   return row;
 }

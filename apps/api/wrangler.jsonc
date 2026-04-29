@@ -35,7 +35,36 @@
           "id": "d2d56ab1ffe241bbb64946ba78a52be5",
           "localConnectionString": "postgresql://placeholder:placeholder@localhost:5432/placeholder"
         }
-      ]
+      ],
+      // Outbound-command pipeline. Producer side is the admin enqueue
+      // routes; consumer side is this same Worker (queue handler in
+      // src/index.ts). Failed messages after max_retries flow into the
+      // DLQ for visibility — a follow-up DLQ consumer can mark the
+      // outbox row 'failed' with reason. See ADR 0013 phase notes.
+      "queues": {
+        "producers": [
+          {
+            "binding": "OUTBOUND_QUEUE",
+            "queue": "straumvakt-outbound-staging"
+          }
+        ],
+        "consumers": [
+          {
+            "queue": "straumvakt-outbound-staging",
+            "max_batch_size": 5,
+            "max_batch_timeout": 2,
+            "max_retries": 5,
+            "dead_letter_queue": "straumvakt-outbound-dlq-staging"
+          }
+        ]
+      },
+      // Sweeper cron — re-publishes any 'pending' outbox row whose
+      // not_before is older than the staleness threshold (1 min in
+      // dispatcher.sweepStuckPending). Catches the producer-publish-
+      // failed race and DLQ'd rows.
+      "triggers": {
+        "crons": ["*/5 * * * *"]
+      }
     }
   }
 }

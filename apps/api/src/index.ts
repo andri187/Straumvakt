@@ -21,7 +21,16 @@ import { adminChargers } from "./routes/admin/chargers";
 import { adminOnboarding } from "./routes/admin/onboarding";
 import { adminMe } from "./routes/admin/me";
 import { adminZaptec } from "./routes/admin/zaptec";
-import type { Env } from "./bindings";
+import { makePrisma } from "./lib/prisma";
+import { buildRegistry } from "./lib/dispatch-targets";
+import { processCommand, sweepStuckPending } from "./lib/dispatcher";
+import type { Env, OutboundCommandMessage } from "./bindings";
+import type {
+  ExportedHandler,
+  MessageBatch,
+  ScheduledController,
+  ExecutionContext,
+} from "@cloudflare/workers-types";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -77,4 +86,54 @@ app.onError((err, c) => {
   );
 });
 
-export default app;
+// ── ExportedHandler — fetch + queue + scheduled ──────────────────────────
+//
+// fetch:     Hono router (admin HTTP surface, plus /health).
+// queue:     consumer side of OUTBOUND_QUEUE. Per message, atomically
+//            claims the outbox row, dispatches via OCPP_GATEWAY service
+//            binding, and updates the row. Retriable errors throw to let
+//            CF Queue redeliver per its configured backoff.
+// scheduled: cron sweeper. Re-publishes any stuck pending row whose
+//            not_before is older than the staleness threshold — covers
+//            the "row written but queue.send failed" race and any rows
+//            that landed in the DLQ.
+
+const handler: ExportedHandler<Env, OutboundCommandMessage> = {
+  fetch: app.fetch as ExportedHandler<Env>["fetch"],
+
+  async queue(batch: MessageBatch<OutboundCommandMessage>, env: Env) {
+    const db = makePrisma(env);
+    const registry = buildRegistry(env);
+    for (const message of batch.messages) {
+      try {
+        const outcome = await processCommand(db, registry, message.body.commandId);
+        if (outcome.kind === "retry") {
+          // Throw so CF Queue redelivers per max_retries / retry_delay.
+          // The row stays 'pending' and the result column doesn't get
+          // overwritten — observability via the row's last_attempt_at +
+          // attempts counter, and via the message-retry log.
+          throw new Error(`retriable: ${outcome.error}`);
+        }
+        message.ack();
+      } catch (err) {
+        console.error("queue handler error", {
+          commandId: message.body.commandId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        message.retry();
+      }
+    }
+  },
+
+  async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext) {
+    const db = makePrisma(env);
+    const queue = env.OUTBOUND_QUEUE;
+    ctx.waitUntil(
+      sweepStuckPending(db, async (commandId) => {
+        await queue.send({ commandId });
+      }),
+    );
+  },
+};
+
+export default handler;

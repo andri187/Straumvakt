@@ -72,9 +72,11 @@ adminChargers.patch("/:id", async (c) => {
 // ── OCPP outbound-command enqueue ────────────────────────────────────────
 //
 // These endpoints are addressed by ocppIdentityId, not chargingStationId.
-// Each writes one row to the outbox; the dispatcher (still in the monolith
-// for now) picks it up. They return 202 with { commandId, status: "pending" }
-// so callers can poll/correlate via the event log.
+// Each writes one row to the outbox AND publishes { commandId } to
+// OUTBOUND_QUEUE. The queue handler in src/index.ts processes it and
+// dispatches via the OCPP_GATEWAY service binding. They return 202 with
+// { commandId, status: "pending" } so callers can poll/correlate via
+// the event log.
 
 adminChargers.post("/:ocppIdentityId/remote-start", async (c) => {
   const raw = (await c.req.json().catch(() => null)) as unknown;
@@ -89,7 +91,7 @@ adminChargers.post("/:ocppIdentityId/remote-start", async (c) => {
   const connector = await findConnectorOnStation(db, parsed.data.connectorId, identity.chargingStationId);
   if (!connector) return c.json({ error: "connector does not belong to this ocpp identity" }, 400);
 
-  const enqueued = await enqueueCommand(db, {
+  const enqueued = await enqueueCommand(db, c.env.OUTBOUND_QUEUE, {
     orgId: identity.orgId,
     identityId: identity.id,
     controlDomain: "remote_start",
@@ -111,7 +113,7 @@ adminChargers.post("/:ocppIdentityId/remote-stop", async (c) => {
   const identity = await findOcppIdentity(db, c.req.param("ocppIdentityId"));
   if (!identity) return c.json({ error: "ocpp identity not found" }, 404);
 
-  const enqueued = await enqueueCommand(db, {
+  const enqueued = await enqueueCommand(db, c.env.OUTBOUND_QUEUE, {
     orgId: identity.orgId,
     identityId: identity.id,
     controlDomain: "remote_stop",
@@ -142,7 +144,7 @@ adminChargers.post("/:ocppIdentityId/get-configuration", async (c) => {
   const payload: Record<string, unknown> = {};
   if (parsed.data.key) payload.key = parsed.data.key;
 
-  const enqueued = await enqueueCommand(db, {
+  const enqueued = await enqueueCommand(db, c.env.OUTBOUND_QUEUE, {
     orgId: identity.orgId,
     identityId: identity.id,
     controlDomain: "get_configuration",
@@ -164,7 +166,7 @@ adminChargers.post("/:ocppIdentityId/change-configuration", async (c) => {
   const identity = await findOcppIdentity(db, c.req.param("ocppIdentityId"));
   if (!identity) return c.json({ error: "ocpp identity not found" }, 404);
 
-  const enqueued = await enqueueCommand(db, {
+  const enqueued = await enqueueCommand(db, c.env.OUTBOUND_QUEUE, {
     orgId: identity.orgId,
     identityId: identity.id,
     controlDomain: "change_configuration",
