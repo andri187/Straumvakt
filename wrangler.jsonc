@@ -16,7 +16,10 @@
   },
   "vars": {
     "NEXT_PUBLIC_APP_NAME": "Straumvakt",
-    "NEXT_PUBLIC_APP_ENV": "production"
+    "NEXT_PUBLIC_APP_ENV": "production",
+    // Production API Worker is not deployed yet — leave empty until
+    // hlada-api ships and the cookie domain is custom-bound.
+    "NEXT_PUBLIC_API_BASE_URL": ""
   },
   // Service Binding to the OCPP gateway Worker — main-app dispatcher
   // calls `env.OCPP_GATEWAY.fetch('/dispatch/:identityId', ...)`. No
@@ -41,7 +44,11 @@
       },
       "vars": {
         "NEXT_PUBLIC_APP_NAME": "Straumvakt (staging)",
-        "NEXT_PUBLIC_APP_ENV": "staging"
+        "NEXT_PUBLIC_APP_ENV": "staging",
+        // UI fetches against the staging API Worker. Cookie is scoped
+        // to the parent host (straumvakt.workers.dev) by the API Worker
+        // login route so it works across the UI/API subdomain split.
+        "NEXT_PUBLIC_API_BASE_URL": "https://hlada-api-staging.straumvakt.workers.dev"
       },
       "services": [
         {
