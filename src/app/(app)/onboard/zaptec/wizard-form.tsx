@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ChevronRight } from "lucide-react";
 import { apiFetch } from "@/lib/api-client";
 import { ImportDialog } from "./import-dialog";
+import { SaveCredentialsPanel } from "./save-credentials-panel";
 
 type Step = "credentials" | "installations";
 
@@ -151,6 +152,12 @@ export function ZaptecWizardForm() {
               ← Different credentials
             </button>
           </div>
+
+          <SaveCredentialsPanel
+            username={zaptecUser}
+            password={zaptecPass}
+            installationCount={discovered.length}
+          />
 
           <div className="overflow-hidden rounded-md border border-bg-border bg-bg-base/30">
             <table className="w-full text-left text-xs">
