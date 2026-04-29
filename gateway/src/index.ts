@@ -2,10 +2,17 @@
  * Straumvakt OCPP Gateway — Cloudflare Worker entry.
  *
  * Routes:
- *   • GET  /health                        — 200 liveness check
- *   • GET  /ocpp/1.6/:identityString      — WebSocket upgrade from charger
- *   • POST /dispatch/:identityId          — outbound command from main-app
- *                                           dispatcher (Service Binding only)
+ *   • GET  /health                          — 200 liveness check
+ *   • GET  /ocpp/:identityString            — WebSocket upgrade from charger
+ *   • GET  /ocpp/1.6/:identityString        — same, version-prefixed alias
+ *   • POST /dispatch/:identityId            — outbound command from main-app
+ *                                             dispatcher (Service Binding only)
+ *
+ * Both `/ocpp/<id>` and `/ocpp/1.6/<id>` are accepted because vendors
+ * differ on whether they include the protocol version in the URL —
+ * Zaptec configures `wss://.../ocpp/<deviceId>` without any version
+ * prefix. The OCPP version of an identity is authoritative from
+ * `ocpp_identities.ocpp_version`, not the URL.
  *
  * Both the WebSocket path and the dispatch path route requests to the
  * per-identity Durable Object. Authentication:
@@ -33,8 +40,9 @@ export default {
       return new Response("ok", { status: 200 });
     }
 
-    // WebSocket upgrade from a charger
-    const wsMatch = /^\/ocpp\/1\.6\/([^/]+)$/.exec(url.pathname);
+    // WebSocket upgrade from a charger. Accept both /ocpp/<id> and
+    // /ocpp/1.6/<id> — see file header for why.
+    const wsMatch = /^\/ocpp\/(?:1\.6\/)?([^/]+)$/.exec(url.pathname);
     if (wsMatch && wsMatch[1]) {
       if (request.headers.get("upgrade") !== "websocket") {
         return new Response("expected websocket upgrade", { status: 426 });
