@@ -1,28 +1,32 @@
 import { Suspense } from "react";
-import { cookies, headers } from "next/headers";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/sidebar";
 import { SidebarProvider } from "@/components/sidebar-context";
-import { adminSessionConfig, verifyAdminSession } from "@/lib/admin-session";
+import { apiFetchServer } from "@/lib/api-client-server";
 
 export default async function AppLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  // Middleware-as-belt-and-braces:  verify the session here too. The
-  // OpenNext webpack build has been observed to ship an empty
-  // middleware-manifest, in which case the middleware never runs and
-  // unauthenticated visitors hit data-loading pages → 500. Reading the
-  // cookie + HMAC-verifying it directly in the (app) layout makes
-  // every protected page gated regardless of middleware bundling.
+  // Session ownership lives on the API Worker. Verifying here means
+  // forwarding the cookie to GET /api/admin/me — if the API Worker
+  // HMAC-checks it, it returns 200 + session payload; otherwise 401
+  // and we redirect. The UI Worker no longer needs AUTH_SECRET, so
+  // the two-secret-coupling that bounced operators silently when the
+  // values drifted is gone.
+  //
+  // The middleware-stamped header (x-straumvakt-admin-verified) is
+  // still honoured as a fast-path so we don't double-fetch when the
+  // middleware did fire — but the deployed OpenNext webpack build
+  // ships an empty middleware-manifest at the moment, so the /me
+  // round-trip carries the load.
   const reqHeaders = await headers();
   let isAdmin = reqHeaders.get("x-straumvakt-admin-verified") === "1";
   if (!isAdmin) {
-    const jar = await cookies();
-    const token = jar.get(adminSessionConfig.SESSION_COOKIE_NAME)?.value;
-    const session = await verifyAdminSession(token);
-    if (!session) redirect("/login");
+    const res = await apiFetchServer("/api/admin/me");
+    if (!res.ok) redirect("/login");
     isAdmin = true;
   }
   void isAdmin;

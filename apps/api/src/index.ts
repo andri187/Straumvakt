@@ -19,6 +19,7 @@ import { adminUsers } from "./routes/admin/users";
 import { adminMemberships } from "./routes/admin/memberships";
 import { adminChargers } from "./routes/admin/chargers";
 import { adminOnboarding } from "./routes/admin/onboarding";
+import { adminMe } from "./routes/admin/me";
 import type { Env } from "./bindings";
 
 const app = new Hono<{ Bindings: Env }>();
@@ -62,6 +63,7 @@ app.route("/api/admin/users", adminUsers);
 app.route("/api/admin/memberships", adminMemberships);
 app.route("/api/admin/chargers", adminChargers);
 app.route("/api/admin/onboarding", adminOnboarding);
+app.route("/api/admin/me", adminMe);
 
 app.notFound((c) => c.json({ error: "not_found", path: c.req.path }, 404));
 
