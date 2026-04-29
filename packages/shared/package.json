@@ -14,6 +14,7 @@
     "./inputs/circuits": "./src/inputs/circuits.ts",
     "./inputs/users": "./src/inputs/users.ts",
     "./inputs/chargers": "./src/inputs/chargers.ts",
+    "./inputs/onboarding-chains": "./src/inputs/onboarding-chains.ts",
     "./domain/orgs": "./src/domain/orgs.ts",
     "./domain/properties": "./src/domain/properties.ts",
     "./domain/sites": "./src/domain/sites.ts",

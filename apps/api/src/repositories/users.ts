@@ -157,6 +157,19 @@ export async function addMembership(
   return { orgId: m.orgId, userId: m.userId, role: m.role };
 }
 
+export async function updateMembership(
+  db: PrismaClient,
+  orgId: string,
+  userId: string,
+  role: MembershipRole,
+): Promise<{ orgId: string; userId: string; role: MembershipRole }> {
+  const m = await db.membership.update({
+    where: { orgId_userId: { orgId, userId } },
+    data: { role },
+  });
+  return { orgId: m.orgId, userId: m.userId, role: m.role };
+}
+
 export async function removeMembership(
   db: PrismaClient,
   orgId: string,
