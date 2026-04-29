@@ -1,18 +1,30 @@
 import { Suspense } from "react";
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/sidebar";
 import { SidebarProvider } from "@/components/sidebar-context";
+import { adminSessionConfig, verifyAdminSession } from "@/lib/admin-session";
 
 export default async function AppLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  // Middleware already verified the session via HMAC and stamped this
-  // trusted header — reading it here avoids a second crypto.subtle round-trip.
+  // Middleware-as-belt-and-braces:  verify the session here too. The
+  // OpenNext webpack build has been observed to ship an empty
+  // middleware-manifest, in which case the middleware never runs and
+  // unauthenticated visitors hit data-loading pages → 500. Reading the
+  // cookie + HMAC-verifying it directly in the (app) layout makes
+  // every protected page gated regardless of middleware bundling.
   const reqHeaders = await headers();
-  const isAdmin = reqHeaders.get("x-straumvakt-admin-verified") === "1";
-  // Exposed only for components that can gate features on admin presence.
+  let isAdmin = reqHeaders.get("x-straumvakt-admin-verified") === "1";
+  if (!isAdmin) {
+    const jar = await cookies();
+    const token = jar.get(adminSessionConfig.SESSION_COOKIE_NAME)?.value;
+    const session = await verifyAdminSession(token);
+    if (!session) redirect("/login");
+    isAdmin = true;
+  }
   void isAdmin;
 
   return (
