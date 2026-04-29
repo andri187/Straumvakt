@@ -85,9 +85,14 @@ export function ImportDialog({ open, onClose, username, password, installation }
 
   if (!open) return null;
 
+  // Wider when showing the success table (passwords are 64-char hex);
+  // narrower for the entry form. max-h + overflow-y so a long charger
+  // list doesn't push the modal off-screen.
+  const widthClass = result ? "max-w-5xl" : "max-w-2xl";
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-      <div className="w-full max-w-2xl rounded-lg border border-bg-border bg-bg-surface shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 px-4 py-8">
+      <div className={`w-full ${widthClass} max-h-[90vh] overflow-y-auto rounded-lg border border-bg-border bg-bg-surface shadow-2xl`}>
         <header className="flex items-baseline justify-between border-b border-bg-border bg-bg-base/40 px-5 py-3">
           <div>
             <h2 className="text-sm font-semibold text-ink-50">Import Zaptec installation</h2>
@@ -234,21 +239,21 @@ function ImportSuccessPanel({
         </p>
       </div>
 
-      <div className="overflow-hidden rounded-md border border-bg-border bg-bg-base/30">
-        <table className="w-full text-left text-xs">
+      <div className="rounded-md border border-bg-border bg-bg-base/30">
+        <table className="w-full table-fixed text-left text-xs">
           <thead className="bg-bg-inset/40 text-[10px] uppercase tracking-brand text-ink-500">
             <tr>
-              <th className="px-3 py-2 font-medium">Charger</th>
-              <th className="px-3 py-2 font-medium">Identity string</th>
-              <th className="px-3 py-2 font-medium">OCPP password</th>
+              <th className="w-[18%] px-3 py-2 font-medium">Charger</th>
+              <th className="w-[18%] px-3 py-2 font-medium">Identity</th>
+              <th className="w-[64%] px-3 py-2 font-medium">OCPP password</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-bg-border/40">
             {result.chargers.map((c) => (
               <tr key={c.ocppIdentityId}>
-                <td className="px-3 py-2 text-ink-100">{c.displayName}</td>
-                <td className="px-3 py-2 font-mono text-[11px] text-ink-200">{c.identityString}</td>
-                <td className="px-3 py-2 font-mono text-[10px] text-ink-100">{c.ocppPassword}</td>
+                <td className="break-words px-3 py-2 text-ink-100">{c.displayName}</td>
+                <td className="break-all px-3 py-2 font-mono text-[11px] text-ink-200">{c.identityString}</td>
+                <td className="break-all px-3 py-2 font-mono text-[10px] text-ink-100">{c.ocppPassword}</td>
               </tr>
             ))}
           </tbody>
