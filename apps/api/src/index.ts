@@ -17,6 +17,7 @@ import { adminInstallations } from "./routes/admin/installations";
 import { adminCircuits } from "./routes/admin/circuits";
 import { adminUsers } from "./routes/admin/users";
 import { adminMemberships } from "./routes/admin/memberships";
+import { adminChargers } from "./routes/admin/chargers";
 import type { Env } from "./bindings";
 
 const app = new Hono<{ Bindings: Env }>();
@@ -58,10 +59,7 @@ app.route("/api/admin/installations", adminInstallations);
 app.route("/api/admin/circuits", adminCircuits);
 app.route("/api/admin/users", adminUsers);
 app.route("/api/admin/memberships", adminMemberships);
-// /api/admin/charging-stations + /api/admin/chargers — multi-table create
-// transaction (SiteAsset + ChargingStation + EVSE + Connector + OcppIdentity)
-// stays on the monolith until next port pass. List/detail/update will land
-// in a follow-up commit on this branch.
+app.route("/api/admin/chargers", adminChargers);
 
 app.notFound((c) => c.json({ error: "not_found", path: c.req.path }, 404));
 
