@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { apiFetch } from "@/lib/api-client";
 
 const SITE_TYPES = ["standard", "workplace", "mdu", "hotel", "fleet", "retail"] as const;
 const ACCESS_LEVELS = ["public", "private", "taxi_only"] as const;
@@ -22,7 +23,7 @@ export function CreateSiteForm({ orgOptions }: { orgOptions: { id: string; label
 
   useEffect(() => {
     if (!orgId) return;
-    fetch(`/api/admin/orgs/${orgId}/properties`)
+    apiFetch(`/api/admin/orgs/${orgId}/properties`)
       .then((r) => r.json())
       .then((d: { properties?: { id: string; displayName: string }[] }) => {
         const list = d.properties ?? [];
@@ -37,7 +38,7 @@ export function CreateSiteForm({ orgOptions }: { orgOptions: { id: string; label
     setError(null);
     setSubmitting(true);
     try {
-      const res = await fetch("/api/admin/sites", {
+      const res = await apiFetch("/api/admin/sites", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({

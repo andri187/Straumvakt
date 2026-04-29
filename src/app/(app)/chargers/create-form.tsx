@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { apiFetch } from "@/lib/api-client";
 
 const CONNECTOR_TYPES = ["Type2", "CCS2", "CHAdeMO", "Schuko"] as const;
 const OCPP_VERSIONS = ["ocpp_1_6", "ocpp_2_0_1", "ocpp_2_1"] as const;
@@ -45,15 +46,15 @@ export function CreateChargerForm({ orgOptions }: { orgOptions: { id: string; la
 
   useEffect(() => {
     if (!orgId) return;
-    fetch(`/api/admin/orgs/${orgId}/sites`).then((r) => r.json()).then((d: { sites?: { id: string; displayName: string }[] }) => {
+    apiFetch(`/api/admin/orgs/${orgId}/sites`).then((r) => r.json()).then((d: { sites?: { id: string; displayName: string }[] }) => {
       const list = d.sites ?? []; setSites(list); setSiteId(list[0]?.id ?? "");
     });
   }, [orgId]);
 
   useEffect(() => {
     if (!siteId) { setInstallations([]); setCircuits([]); return; }
-    fetch(`/api/admin/sites/${siteId}/installations`).then((r) => r.json()).then((d: { installations?: { id: string; displayName: string }[] }) => setInstallations(d.installations ?? []));
-    fetch(`/api/admin/sites/${siteId}/circuits`).then((r) => r.json()).then((d: { circuits?: { id: string; displayName: string }[] }) => setCircuits(d.circuits ?? []));
+    apiFetch(`/api/admin/sites/${siteId}/installations`).then((r) => r.json()).then((d: { installations?: { id: string; displayName: string }[] }) => setInstallations(d.installations ?? []));
+    apiFetch(`/api/admin/sites/${siteId}/circuits`).then((r) => r.json()).then((d: { circuits?: { id: string; displayName: string }[] }) => setCircuits(d.circuits ?? []));
   }, [siteId]);
 
   function toNum(v: string): number | undefined {
@@ -64,7 +65,7 @@ export function CreateChargerForm({ orgOptions }: { orgOptions: { id: string; la
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault(); setError(null); setSubmitting(true);
     try {
-      const res = await fetch("/api/admin/chargers", {
+      const res = await apiFetch("/api/admin/chargers", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({

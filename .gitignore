@@ -80,3 +80,8 @@ docs/architecture/investor_slides/
 # Prisma generated clients (regenerated on prisma generate)
 src/generated/
 prisma/generated/
+
+# Monorepo — generated Prisma client output for apps/api + workspace node_modules
+apps/api/src/generated/
+apps/*/node_modules/
+packages/*/node_modules/

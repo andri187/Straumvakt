@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { MEMBERSHIP_ROLES } from "@/lib/repositories/_inputs/memberships";
-import type { UserMembershipSummary } from "@/lib/repositories/users";
+import { MEMBERSHIP_ROLES } from "@straumvakt/shared/inputs/users";
+import type { UserMembershipSummary } from "@straumvakt/shared/domain/users";
+import { apiFetch } from "@/lib/api-client";
 
 const ROLE_TONE: Record<string, string> = {
   owner: "bg-violet-950/40 text-violet-300 border-violet-700/40",
@@ -37,11 +38,10 @@ export function MembershipsPanel({
     setError(null);
     setBusyKey(`${orgId}:role`);
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `/api/admin/memberships/${orgId}/${userId}`,
         {
           method: "PATCH",
-          headers: { "content-type": "application/json" },
           body: JSON.stringify({ role }),
         },
       );
@@ -64,7 +64,7 @@ export function MembershipsPanel({
     setError(null);
     setBusyKey(`${orgId}:remove`);
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `/api/admin/memberships/${orgId}/${userId}`,
         { method: "DELETE" },
       );
@@ -88,7 +88,7 @@ export function MembershipsPanel({
     setError(null);
     setBusyKey("add");
     try {
-      const res = await fetch(`/api/admin/orgs/${addOrgId}/memberships`, {
+      const res = await apiFetch(`/api/admin/orgs/${addOrgId}/memberships`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ userId, role: addRole }),

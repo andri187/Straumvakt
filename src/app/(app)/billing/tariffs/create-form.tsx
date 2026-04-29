@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { apiFetch } from "@/lib/api-client";
 
 const RULE_KINDS = [
   "per_kwh",
@@ -47,7 +48,7 @@ export function CreateTariffForm({
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault(); setError(null); setSubmitting(true);
     try {
-      const res = await fetch("/api/admin/tariffs", {
+      const res = await apiFetch("/api/admin/tariffs", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({

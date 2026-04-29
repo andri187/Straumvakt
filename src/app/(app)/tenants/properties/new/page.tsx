@@ -1,12 +1,13 @@
 import Link from "next/link";
-import { listOrgs } from "@/lib/repositories/organizations";
+import { apiFetchServerJson } from "@/lib/api-client-server";
+import type { OrgSummary } from "@straumvakt/shared/domain/orgs";
 import { CreatePropertyForm } from "../create-form";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "New property" };
 
 export default async function NewPropertyPage() {
-  const orgs = await listOrgs();
+  const { orgs } = await apiFetchServerJson<{ orgs: OrgSummary[] }>("/api/admin/orgs");
   const orgOptions = orgs.filter((o) => o.status !== "archived").map((o) => ({ id: o.id, label: `${o.displayName} (${o.slug})` }));
 
   return (

@@ -1,0 +1,29 @@
+{
+  "name": "@straumvakt/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./inputs/orgs": "./src/inputs/orgs.ts",
+    "./inputs/properties": "./src/inputs/properties.ts",
+    "./inputs/sites": "./src/inputs/sites.ts",
+    "./inputs/installations": "./src/inputs/installations.ts",
+    "./inputs/circuits": "./src/inputs/circuits.ts",
+    "./inputs/users": "./src/inputs/users.ts",
+    "./inputs/chargers": "./src/inputs/chargers.ts",
+    "./inputs/onboarding-chains": "./src/inputs/onboarding-chains.ts",
+    "./domain/orgs": "./src/domain/orgs.ts",
+    "./domain/properties": "./src/domain/properties.ts",
+    "./domain/sites": "./src/domain/sites.ts",
+    "./domain/installations": "./src/domain/installations.ts",
+    "./domain/circuits": "./src/domain/circuits.ts",
+    "./domain/users": "./src/domain/users.ts",
+    "./domain/chargers": "./src/domain/chargers.ts"
+  },
+  "dependencies": {
+    "zod": "^4.3.6"
+  }
+}

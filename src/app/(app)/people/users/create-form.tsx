@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { apiFetch } from "@/lib/api-client";
 
 export function CreateUserForm() {
   const router = useRouter();
@@ -15,7 +16,7 @@ export function CreateUserForm() {
     setError(null);
     setSubmitting(true);
     try {
-      const res = await fetch("/api/admin/users", {
+      const res = await apiFetch("/api/admin/users", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({

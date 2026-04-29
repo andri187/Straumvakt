@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { apiFetch } from "@/lib/api-client";
 
 const STATUSES = ["pending_credentials", "discovering", "active", "suspended", "error"] as const;
 
@@ -25,7 +26,7 @@ export function CreateInstallationForm({
 
   useEffect(() => {
     if (!orgId) return;
-    fetch(`/api/admin/orgs/${orgId}/sites`).then((r) => r.json()).then((d: { sites?: { id: string; displayName: string }[] }) => {
+    apiFetch(`/api/admin/orgs/${orgId}/sites`).then((r) => r.json()).then((d: { sites?: { id: string; displayName: string }[] }) => {
       const list = d.sites ?? [];
       setSites(list);
       setSiteId(list[0]?.id ?? "");
@@ -35,7 +36,7 @@ export function CreateInstallationForm({
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault(); setError(null); setSubmitting(true);
     try {
-      const res = await fetch("/api/admin/installations", {
+      const res = await apiFetch("/api/admin/installations", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({

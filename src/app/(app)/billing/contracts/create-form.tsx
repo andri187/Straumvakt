@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { apiFetch } from "@/lib/api-client";
 
 const SCOPES = ["org", "property", "site", "installation", "charger"] as const;
 const STATUSES = ["pending_configuration", "active", "superseded", "archived"] as const;
@@ -28,7 +29,7 @@ export function CreateContractForm({
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault(); setError(null); setSubmitting(true);
     try {
-      const res = await fetch("/api/admin/contracts", {
+      const res = await apiFetch("/api/admin/contracts", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({

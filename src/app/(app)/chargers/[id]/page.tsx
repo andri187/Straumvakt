@@ -1,19 +1,26 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { SectionTabs, OPERATIONS_TABS, CHARGERS_TABS } from "@/components/section-tabs";
-import { getChargerById, listSiteCircuits } from "@/lib/repositories/chargers";
-import { listInstallationsBySite } from "@/lib/repositories/circuits";
+import { apiFetchServer, apiFetchServerJson } from "@/lib/api-client-server";
+import type { ChargerDetail } from "@straumvakt/shared/domain/chargers";
 import { EditChargerPanel } from "./edit-panel";
 
 export const dynamic = "force-dynamic";
 
 export default async function ChargerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const charger = await getChargerById(id);
-  if (!charger) notFound();
-  const [installations, circuits] = await Promise.all([
-    listInstallationsBySite(charger.siteId),
-    listSiteCircuits(charger.siteId),
+  const detailRes = await apiFetchServer(`/api/admin/chargers/${id}`);
+  if (detailRes.status === 404) notFound();
+  if (!detailRes.ok) throw new Error(`HTTP ${detailRes.status}`);
+  const { charger } = (await detailRes.json()) as { charger: ChargerDetail };
+
+  const [{ installations }, { circuits }] = await Promise.all([
+    apiFetchServerJson<{ installations: { id: string; displayName: string }[] }>(
+      `/api/admin/sites/${charger.siteId}/installations`,
+    ),
+    apiFetchServerJson<{ circuits: { id: string; displayName: string }[] }>(
+      `/api/admin/sites/${charger.siteId}/circuits`,
+    ),
   ]);
 
   const evse = charger.evses[0];

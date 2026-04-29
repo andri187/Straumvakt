@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ChevronRight } from "lucide-react";
+import { apiFetch } from "@/lib/api-client";
 
 type Step = "credentials" | "installations";
 
@@ -64,7 +65,7 @@ export function ZaptecWizardForm() {
     setError(null);
     setSubmitting(true);
     try {
-      const res = await fetch("/api/admin/zaptec/discover", {
+      const res = await apiFetch("/api/admin/zaptec/discover", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ username: zaptecUser, password: zaptecPass }),

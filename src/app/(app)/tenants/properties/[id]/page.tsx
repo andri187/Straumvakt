@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getPropertyById } from "@/lib/repositories/properties";
+import { apiFetchServer } from "@/lib/api-client-server";
+import type { PropertySummary } from "@straumvakt/shared/domain/properties";
 import { EditPropertyPanel } from "./edit-panel";
 
 export const dynamic = "force-dynamic";
@@ -11,8 +12,10 @@ export default async function PropertyDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const property = await getPropertyById(id);
-  if (!property) notFound();
+  const res = await apiFetchServer(`/api/admin/properties/${id}`);
+  if (res.status === 404) notFound();
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const { property } = (await res.json()) as { property: PropertySummary };
 
   const addr = (property.address ?? {}) as Record<string, string | undefined>;
 

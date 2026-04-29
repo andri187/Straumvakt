@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { LogOut, Menu } from "lucide-react";
 import { useLanguage } from "@/components/language-provider";
 import { useSidebar } from "@/components/sidebar-context";
+import { apiFetch } from "@/lib/api-client";
 
 export function Topbar({
   title,
@@ -18,7 +19,7 @@ export function Topbar({
 
   async function onLogout() {
     try {
-      await fetch("/api/admin/logout", { method: "POST" });
+      await apiFetch("/api/admin/logout", { method: "POST" });
     } finally {
       router.push("/login");
       router.refresh();

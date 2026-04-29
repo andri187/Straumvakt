@@ -1,16 +1,21 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { SectionTabs, OPERATIONS_TABS } from "@/components/section-tabs";
-import { getCircuitById, listInstallationsBySite } from "@/lib/repositories/circuits";
+import { apiFetchServer, apiFetchServerJson } from "@/lib/api-client-server";
+import type { CircuitSummary } from "@straumvakt/shared/domain/circuits";
 import { EditCircuitPanel } from "./edit-panel";
 
 export const dynamic = "force-dynamic";
 
 export default async function CircuitDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const circuit = await getCircuitById(id);
-  if (!circuit) notFound();
-  const installations = await listInstallationsBySite(circuit.siteId);
+  const detailRes = await apiFetchServer(`/api/admin/circuits/${id}`);
+  if (detailRes.status === 404) notFound();
+  if (!detailRes.ok) throw new Error(`HTTP ${detailRes.status}`);
+  const { circuit } = (await detailRes.json()) as { circuit: CircuitSummary };
+  const { installations } = await apiFetchServerJson<{
+    installations: { id: string; displayName: string }[];
+  }>(`/api/admin/sites/${circuit.siteId}/installations`);
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-8">

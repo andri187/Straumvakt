@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { apiFetch } from "@/lib/api-client";
 
 const ORG_ROLES = [
   "csms_provider",
@@ -194,7 +195,7 @@ export function OnboardForm() {
         connectorMaxPowerKw: toNum(s.connectorMaxPowerKw),
         sitePowerClass: s.sitePowerClass === "" ? undefined : s.sitePowerClass,
       };
-      const res = await fetch("/api/admin/onboarding/chains", {
+      const res = await apiFetch("/api/admin/onboarding/chains", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),

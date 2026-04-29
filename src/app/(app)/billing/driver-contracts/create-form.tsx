@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { apiFetch } from "@/lib/api-client";
 
 const OWNER_TYPES = ["workplace", "family_group", "self"] as const;
 const STATUSES = ["pending_configuration", "active", "superseded", "archived"] as const;
@@ -23,7 +24,7 @@ export function CreateDriverContractForm({ orgOptions }: { orgOptions: { id: str
 
   useEffect(() => {
     if (!orgId) return;
-    fetch(`/api/admin/orgs/${orgId}/users`).then((r) => r.json()).then((d: { users?: { id: string; label: string }[] }) => {
+    apiFetch(`/api/admin/orgs/${orgId}/users`).then((r) => r.json()).then((d: { users?: { id: string; label: string }[] }) => {
       const list = d.users ?? [];
       setUsers(list);
       setUserId(list[0]?.id ?? "");
@@ -35,7 +36,7 @@ export function CreateDriverContractForm({ orgOptions }: { orgOptions: { id: str
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault(); setError(null); setSubmitting(true);
     try {
-      const res = await fetch("/api/admin/driver-contracts", {
+      const res = await apiFetch("/api/admin/driver-contracts", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { apiFetch } from "@/lib/api-client";
 
 export function CreateCostCenterForm({ orgOptions }: { orgOptions: { id: string; label: string }[] }) {
   const router = useRouter();
@@ -17,7 +18,7 @@ export function CreateCostCenterForm({ orgOptions }: { orgOptions: { id: string;
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault(); setError(null); setSubmitting(true);
     try {
-      const res = await fetch("/api/admin/cost-centers", {
+      const res = await apiFetch("/api/admin/cost-centers", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({

@@ -1,13 +1,16 @@
 import Link from "next/link";
 import { SectionTabs, OPERATIONS_TABS, CHARGERS_TABS } from "@/components/section-tabs";
 import { ActionBar } from "@/components/action-bar";
-import { listAllChargers } from "@/lib/repositories/chargers";
+import { apiFetchServerJson } from "@/lib/api-client-server";
+import type { ChargerSummary } from "@straumvakt/shared/domain/chargers";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Chargers" };
 
 export default async function ChargersPage() {
-  const chargers = await listAllChargers();
+  const { chargers } = await apiFetchServerJson<{ chargers: ChargerSummary[] }>(
+    "/api/admin/chargers",
+  );
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-8">
