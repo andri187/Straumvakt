@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { SectionTabs, OPERATIONS_TABS } from "@/components/section-tabs";
 import { apiFetchServer } from "@/lib/api-client-server";
 import type { SiteSummary } from "@straumvakt/shared/domain/sites";
+import { DeleteButton } from "@/components/delete-button";
 import { EditSitePanel } from "./edit-panel";
 
 export const dynamic = "force-dynamic";
@@ -45,6 +46,24 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ id:
           spvivfTariffId: site.spvivfTariffId ?? "",
         }}
       />
+
+      <section className="mt-8 rounded-lg border border-rose-700/30 bg-rose-950/10 p-4">
+        <div className="flex items-baseline justify-between gap-4">
+          <div>
+            <h2 className="text-sm font-semibold text-rose-200">Danger zone</h2>
+            <p className="mt-1 text-xs text-rose-300/80">
+              Deleting this site cascades through all installations, circuits, chargers,
+              EVSEs, connectors, and OcppIdentities anchored under it.
+            </p>
+          </div>
+          <DeleteButton
+            endpoint={`/api/admin/sites/${site.id}`}
+            redirectTo="/sites"
+            confirmText={`Delete site "${site.displayName}" and ALL installations / circuits / chargers under it? This cannot be undone.`}
+            label="Delete site"
+          />
+        </div>
+      </section>
     </div>
   );
 }

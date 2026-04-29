@@ -4,6 +4,7 @@ import { makePrisma } from "../../lib/prisma";
 import { requireAdmin, type AuthVars } from "../../lib/auth-middleware";
 import {
   createSite,
+  deleteSite,
   getSiteById,
   listAllSites,
   updateSite,
@@ -45,6 +46,12 @@ adminSites.patch("/:siteId", async (c) => {
   const db = makePrisma(c.env);
   const site = await updateSite(db, c.req.param("siteId"), parsed.data);
   return c.json({ site });
+});
+
+adminSites.delete("/:siteId", async (c) => {
+  const db = makePrisma(c.env);
+  await deleteSite(db, c.req.param("siteId"));
+  return c.json({ ok: true });
 });
 
 adminSites.get("/:siteId/circuits", async (c) => {

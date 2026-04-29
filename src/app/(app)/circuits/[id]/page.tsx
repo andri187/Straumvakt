@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { SectionTabs, OPERATIONS_TABS } from "@/components/section-tabs";
 import { apiFetchServer, apiFetchServerJson } from "@/lib/api-client-server";
 import type { CircuitSummary } from "@straumvakt/shared/domain/circuits";
+import { DeleteButton } from "@/components/delete-button";
 import { EditCircuitPanel } from "./edit-panel";
 
 export const dynamic = "force-dynamic";
@@ -48,6 +49,24 @@ export default async function CircuitDetailPage({ params }: { params: Promise<{ 
               : "",
         }}
       />
+
+      <section className="mt-8 rounded-lg border border-rose-700/30 bg-rose-950/10 p-4">
+        <div className="flex items-baseline justify-between gap-4">
+          <div>
+            <h2 className="text-sm font-semibold text-rose-200">Danger zone</h2>
+            <p className="mt-1 text-xs text-rose-300/80">
+              Deleting this circuit removes ALL chargers physically anchored to it
+              (per operator policy). Site + installation are preserved.
+            </p>
+          </div>
+          <DeleteButton
+            endpoint={`/api/admin/circuits/${circuit.id}`}
+            redirectTo="/circuits"
+            confirmText={`Delete circuit "${circuit.displayName}" and ALL chargers on it? This cannot be undone.`}
+            label="Delete circuit"
+          />
+        </div>
+      </section>
     </div>
   );
 }

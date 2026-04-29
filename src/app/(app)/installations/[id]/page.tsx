@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { SectionTabs, OPERATIONS_TABS } from "@/components/section-tabs";
 import { apiFetchServer, apiFetchServerJson } from "@/lib/api-client-server";
 import type { InstallationSummary } from "@straumvakt/shared/domain/installations";
+import { DeleteButton } from "@/components/delete-button";
 import { EditInstallationPanel } from "./edit-panel";
 
 export const dynamic = "force-dynamic";
@@ -48,6 +49,24 @@ export default async function InstallationDetailPage({ params }: { params: Promi
           retailerTariffId: installation.retailerTariffId ?? "",
         }}
       />
+
+      <section className="mt-8 rounded-lg border border-rose-700/30 bg-rose-950/10 p-4">
+        <div className="flex items-baseline justify-between gap-4">
+          <div>
+            <h2 className="text-sm font-semibold text-rose-200">Danger zone</h2>
+            <p className="mt-1 text-xs text-rose-300/80">
+              Deleting this installation cascades through all circuits and chargers
+              attached to it. The parent site is preserved.
+            </p>
+          </div>
+          <DeleteButton
+            endpoint={`/api/admin/installations/${installation.id}`}
+            redirectTo="/installations"
+            confirmText={`Delete installation "${installation.displayName}" and ALL circuits / chargers under it? This cannot be undone.`}
+            label="Delete installation"
+          />
+        </div>
+      </section>
     </div>
   );
 }

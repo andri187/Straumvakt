@@ -107,3 +107,26 @@ export async function updateCircuit(
   });
   return toSummary(updated);
 }
+
+/**
+ * Cascade-delete a circuit and the chargers physically anchored on it
+ * (ChargingStation.circuitId = id). Operator-confirmed semantics:
+ * deleting a circuit removes the chargers under it. SiteAsset cascade
+ * reaches EVSE/Connector/OcppIdentity.
+ */
+export async function deleteCircuit(db: PrismaClient, id: string): Promise<void> {
+  await db.$transaction(
+    async (tx) => {
+      const stations = await tx.chargingStation.findMany({
+        where: { circuitId: id },
+        select: { siteAssetId: true },
+      });
+      const siteAssetIds = stations.map((s) => s.siteAssetId);
+      if (siteAssetIds.length > 0) {
+        await tx.siteAsset.deleteMany({ where: { id: { in: siteAssetIds } } });
+      }
+      await tx.circuit.delete({ where: { id } });
+    },
+    { timeout: 60_000, maxWait: 30_000 },
+  );
+}

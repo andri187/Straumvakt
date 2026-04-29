@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { SectionTabs, OPERATIONS_TABS, CHARGERS_TABS } from "@/components/section-tabs";
 import { apiFetchServer, apiFetchServerJson } from "@/lib/api-client-server";
 import type { ChargerDetail } from "@straumvakt/shared/domain/chargers";
+import { DeleteButton } from "@/components/delete-button";
 import { EditChargerPanel } from "./edit-panel";
 
 export const dynamic = "force-dynamic";
@@ -69,6 +70,29 @@ export default async function ChargerDetailPage({ params }: { params: Promise<{ 
           connectorMaxPowerKw: connector?.maxPowerKw ?? "",
         }}
       />
+
+      <section className="mt-8 rounded-lg border border-rose-700/30 bg-rose-950/10 p-4">
+        <div className="flex items-baseline justify-between gap-4">
+          <div>
+            <h2 className="text-sm font-semibold text-rose-200">Danger zone</h2>
+            <p className="mt-1 text-xs text-rose-300/80">
+              Deletes the ChargingStation + EVSE + Connector + OcppIdentity rows. If
+              the physical charger keeps connecting to our gateway with the same
+              identity-string, it will reappear under{" "}
+              <Link href="/chargers/pending" className="underline hover:text-rose-100">
+                /chargers/pending
+              </Link>{" "}
+              within seconds.
+            </p>
+          </div>
+          <DeleteButton
+            endpoint={`/api/admin/chargers/${charger.chargingStationId}`}
+            redirectTo="/chargers"
+            confirmText={`Delete charger "${identity?.identityString ?? charger.chargingStationId.slice(0, 8)}"? This cannot be undone (the OCPP password is gone for good — re-provisioning generates a new one).`}
+            label="Delete charger"
+          />
+        </div>
+      </section>
     </div>
   );
 }

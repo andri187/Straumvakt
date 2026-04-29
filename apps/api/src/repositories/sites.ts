@@ -103,3 +103,32 @@ export async function updateSite(
   const updated = await db.site.update({ where: { id }, data: patch, include });
   return toSummary(updated);
 }
+
+/**
+ * Cascade-delete a site and everything physically anchored under it:
+ * chargers (SiteAsset+ChargingStation+EVSE+Connector+OcppIdentity),
+ * circuits, installations. Schema cascades take care of:
+ *   - SiteAsset → ChargingStation (Cascade)
+ *   - ChargingStation → OcppIdentity (Cascade)
+ *   - Site → Installation (Cascade)
+ *   - Site → Circuit (Cascade)
+ * We explicitly delete SiteAssets first to make the chain reach
+ * EVSE/Connector/OcppIdentity in a defined order, then let the
+ * remaining schema cascades fire when we delete the site itself.
+ *
+ * Operator semantics: deleting a site removes ALL physical and
+ * logical infrastructure underneath. There is no recovery; this is
+ * intentional per the operator's stated cascade rule.
+ */
+export async function deleteSite(db: PrismaClient, id: string): Promise<void> {
+  await db.$transaction(
+    async (tx) => {
+      // SiteAssets (which back ChargingStations) — let the FK cascade
+      // wipe the rest of the physical chain.
+      await tx.siteAsset.deleteMany({ where: { siteId: id } });
+      // Site delete cascades to Installation + Circuit via schema FKs.
+      await tx.site.delete({ where: { id } });
+    },
+    { timeout: 60_000, maxWait: 30_000 },
+  );
+}

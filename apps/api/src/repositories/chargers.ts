@@ -301,3 +301,18 @@ export async function findConnectorOnStation(
     select: { id: true },
   });
 }
+
+/**
+ * Delete a charger by its chargingStationId (= SiteAsset id). Deleting
+ * the SiteAsset cascades through ChargingStation, EVSE, Connector,
+ * OcppIdentity via existing schema FKs. The OcppIdentity going away
+ * is what makes the charger "re-appear" in /chargers/pending the next
+ * time it tries to connect with the same identity_string — the
+ * gateway's auth call won't find a matching row and the auth-fail
+ * branch upserts pending_discoveries.
+ *
+ * Idempotent — deleting a non-existent id is a no-op.
+ */
+export async function deleteCharger(db: PrismaClient, chargingStationId: string): Promise<void> {
+  await db.siteAsset.deleteMany({ where: { id: chargingStationId } });
+}

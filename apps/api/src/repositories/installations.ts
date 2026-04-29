@@ -113,3 +113,31 @@ export async function updateInstallation(
   const updated = await db.installation.update({ where: { id }, data: patch, include });
   return toSummary(updated);
 }
+
+/**
+ * Cascade-delete an installation:
+ *   - Chargers under it (ChargingStation.installationId = id)
+ *   - Circuits under it (Circuit.installationId = id)
+ *   - The installation row itself
+ * Chargers go through SiteAsset deletion so the existing schema
+ * cascade reaches EVSE/Connector/OcppIdentity. Circuits do not have
+ * cascade onDelete from Installation in the schema (set-null), so we
+ * delete them explicitly here.
+ */
+export async function deleteInstallation(db: PrismaClient, id: string): Promise<void> {
+  await db.$transaction(
+    async (tx) => {
+      const stations = await tx.chargingStation.findMany({
+        where: { installationId: id },
+        select: { siteAssetId: true },
+      });
+      const siteAssetIds = stations.map((s) => s.siteAssetId);
+      if (siteAssetIds.length > 0) {
+        await tx.siteAsset.deleteMany({ where: { id: { in: siteAssetIds } } });
+      }
+      await tx.circuit.deleteMany({ where: { installationId: id } });
+      await tx.installation.delete({ where: { id } });
+    },
+    { timeout: 60_000, maxWait: 30_000 },
+  );
+}

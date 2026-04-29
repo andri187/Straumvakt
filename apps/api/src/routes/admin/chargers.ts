@@ -16,6 +16,7 @@ import { makePrisma } from "../../lib/prisma";
 import { requireAdmin, type AuthVars } from "../../lib/auth-middleware";
 import {
   createCharger,
+  deleteCharger,
   findConnectorOnStation,
   findOcppIdentity,
   getChargerById,
@@ -67,6 +68,17 @@ adminChargers.patch("/:id", async (c) => {
   const db = makePrisma(c.env);
   const charger = await updateCharger(db, c.req.param("id"), parsed.data, null);
   return c.json({ charger });
+});
+
+// DELETE — wipes the SiteAsset + ChargingStation + EVSE + Connector +
+// OcppIdentity chain in one cascade. If the physical charger keeps
+// trying to connect with the same identity_string, the auth-fail path
+// in /api/internal/ocpp-auth will record a fresh pending_discoveries
+// row, so it re-appears in /chargers/pending.
+adminChargers.delete("/:id", async (c) => {
+  const db = makePrisma(c.env);
+  await deleteCharger(db, c.req.param("id"));
+  return c.json({ ok: true });
 });
 
 // ── OCPP outbound-command enqueue ────────────────────────────────────────

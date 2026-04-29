@@ -4,6 +4,7 @@ import { makePrisma } from "../../lib/prisma";
 import { requireAdmin, type AuthVars } from "../../lib/auth-middleware";
 import {
   createCircuit,
+  deleteCircuit,
   getCircuitById,
   listAllCircuits,
   updateCircuit,
@@ -43,4 +44,10 @@ adminCircuits.patch("/:id", async (c) => {
   const db = makePrisma(c.env);
   const circuit = await updateCircuit(db, c.req.param("id"), parsed.data);
   return c.json({ circuit });
+});
+
+adminCircuits.delete("/:id", async (c) => {
+  const db = makePrisma(c.env);
+  await deleteCircuit(db, c.req.param("id"));
+  return c.json({ ok: true });
 });

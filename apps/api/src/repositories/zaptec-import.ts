@@ -19,6 +19,13 @@ import {
   getZaptecAccessToken,
 } from "../lib/zaptec";
 
+type ZaptecHierarchyChargerLite = {
+  Id?: string;
+  Name?: string | null;
+  SerialNo?: string | null;
+  DeviceId?: string | null;
+};
+
 function generatePassword(): string {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
@@ -85,24 +92,37 @@ export async function importZaptecInstallation(
   if (!vendor) throw new Error("vendor_zaptec_missing");
   if (!org) throw new Error("org_not_found");
 
-  // 3) Flatten the charger list. Skip Zaptec circuits for now — chargers
-  //    land flat under the installation; operator can rewire circuits
-  //    later via /circuits/new + /chargers/[id]/edit.
-  const flatChargers = (hierarchy.value?.Circuits ?? [])
-    .flatMap((c) => c.Chargers ?? [])
-    .filter((ch): ch is { Id: string; Name?: string | null; SerialNo?: string | null; DeviceId?: string | null } =>
-      typeof ch.Id === "string",
+  // 3) Build the circuit + charger graph. Each Zaptec circuit becomes
+  //    a Straumvakt Circuit (vendorCircuitRef = Zaptec circuit id);
+  //    each charger under it links to that Circuit via
+  //    ChargingStation.circuitId. Operator can later delete circuits to
+  //    cascade-drop their chargers (see deleteCircuit).
+  const zaptecCircuits = (hierarchy.value?.Circuits ?? [])
+    .filter((cc): cc is { Id: string; Name?: string | null; MaxCurrent?: number; Chargers?: ZaptecHierarchyChargerLite[] | null } =>
+      typeof cc.Id === "string",
     )
-    .map((ch) => ({
-      id: ch.Id,
-      name: ch.Name ?? "(unnamed)",
-      serialNo: ch.SerialNo ?? null,
-      deviceId: ch.DeviceId ?? null,
+    .map((cc) => ({
+      id: cc.Id,
+      name: cc.Name ?? "(unnamed circuit)",
+      maxCurrent: cc.MaxCurrent ?? null,
+      chargers: (cc.Chargers ?? [])
+        .filter((ch): ch is { Id: string; Name?: string | null; SerialNo?: string | null; DeviceId?: string | null } =>
+          typeof ch.Id === "string",
+        )
+        .map((ch) => ({
+          id: ch.Id,
+          name: ch.Name ?? "(unnamed)",
+          serialNo: ch.SerialNo ?? null,
+          deviceId: ch.DeviceId ?? null,
+        })),
     }));
 
-  // 4) Pre-generate passwords + hashes outside the tx — sha256 calls
-  //    can't be inside the synchronous transaction body without
-  //    deferring them. Each charger gets one fresh password.
+  // Flatten for password gen (we still pre-compute all passwords up-front).
+  const flatChargers = zaptecCircuits.flatMap((cc) =>
+    cc.chargers.map((ch) => ({ ...ch, zaptecCircuitId: cc.id })),
+  );
+
+  // 4) Pre-generate passwords + hashes outside the tx.
   const chargerSecrets = await Promise.all(
     flatChargers.map(async (ch) => ({
       ...ch,
@@ -162,6 +182,27 @@ export async function importZaptecInstallation(
       select: { id: true },
     });
 
+    // Mirror Zaptec's circuit hierarchy as Straumvakt circuits, keyed
+    // by vendorCircuitRef so future re-imports / sync flows can match
+    // them. Build a Zaptec-circuit-id → Straumvakt-circuit-id map for
+    // the charger-create loop below.
+    const circuitIdByZaptec = new Map<string, string>();
+    for (const cc of zaptecCircuits) {
+      const created = await tx.circuit.create({
+        data: {
+          orgId: org.id,
+          siteId: site.id,
+          installationId: installation.id,
+          displayName: cc.name,
+          ampereCeiling: cc.maxCurrent ?? undefined,
+          phaseCount: 3,
+          vendorCircuitRef: cc.id,
+        },
+        select: { id: true },
+      });
+      circuitIdByZaptec.set(cc.id, created.id);
+    }
+
     const importedChargers: ZaptecImportedCharger[] = [];
     for (const ch of chargerHashes) {
       const siteAsset = await tx.siteAsset.create({
@@ -179,6 +220,7 @@ export async function importZaptecInstallation(
           siteAssetId: siteAsset.id,
           orgId: org.id,
           installationId: installation.id,
+          circuitId: circuitIdByZaptec.get(ch.zaptecCircuitId) ?? null,
           vendor: "Zaptec",
           serialNumber: ch.serialNo,
         },
