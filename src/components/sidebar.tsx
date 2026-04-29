@@ -26,6 +26,7 @@ import {
   Wallet,
   Receipt,
   FileText,
+  KeyRound,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -190,6 +191,12 @@ const nav: NavItem[] = [
         href: "/onboard/zaptec",
         label: { is: "Zaptec wizard", en: "Zaptec wizard" },
         icon: Zap,
+      },
+      {
+        kind: "leaf",
+        href: "/onboard/credentials",
+        label: { is: "Vendor credentials", en: "Vendor credentials" },
+        icon: KeyRound,
       },
     ],
   },

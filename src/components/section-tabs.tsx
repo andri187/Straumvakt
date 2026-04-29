@@ -64,6 +64,7 @@ export const TENANTS_TABS: SectionTab[] = [
 export const ONBOARD_TABS: SectionTab[] = [
   { href: "/onboard", label: "Test chain", exact: true },
   { href: "/onboard/zaptec", label: "Zaptec wizard" },
+  { href: "/onboard/credentials", label: "Vendor credentials" },
 ];
 
 export const REFERENCE_TABS: SectionTab[] = [
