@@ -111,3 +111,38 @@ export async function updateProperty(
   const updated = await db.property.update({ where: { id }, data, include });
   return toSummary(updated);
 }
+
+/**
+ * Cascade-delete a property and everything physically under it. Schema
+ * cascades take care of:
+ *   - Property → Site (Cascade)
+ *   - Site → Installation (Cascade)
+ *   - Site → Circuit (Cascade)
+ *   - SiteAsset → ChargingStation (Cascade)
+ *   - ChargingStation → EVSE / Connector / OcppIdentity (Cascade)
+ * The schema gap is Site → SiteAsset (no auto-cascade), so we drop
+ * SiteAssets explicitly first — same trick as deleteSite. Then the
+ * remaining cascades fire when we delete the property row itself.
+ *
+ * This is the operator's "undo a Zaptec import" hammer: removes the
+ * property + all sites + installations + circuits + chargers + OCPP
+ * identities created by that import in one transaction.
+ */
+export async function deleteProperty(db: PrismaClient, id: string): Promise<void> {
+  await db.$transaction(
+    async (tx) => {
+      // Find every site under this property and drop SiteAssets across
+      // all of them in one query — cleaner than N round-trips.
+      const sites = await tx.site.findMany({
+        where: { propertyId: id },
+        select: { id: true },
+      });
+      const siteIds = sites.map((s) => s.id);
+      if (siteIds.length > 0) {
+        await tx.siteAsset.deleteMany({ where: { siteId: { in: siteIds } } });
+      }
+      await tx.property.delete({ where: { id } });
+    },
+    { timeout: 60_000, maxWait: 30_000 },
+  );
+}

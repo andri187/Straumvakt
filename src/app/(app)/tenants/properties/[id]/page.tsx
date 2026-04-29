@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { apiFetchServer } from "@/lib/api-client-server";
 import type { PropertySummary } from "@straumvakt/shared/domain/properties";
+import { DeleteButton } from "@/components/delete-button";
 import { EditPropertyPanel } from "./edit-panel";
 
 export const dynamic = "force-dynamic";
@@ -49,6 +50,25 @@ export default async function PropertyDetailPage({
           longitude: property.longitude ?? "",
         }}
       />
+
+      <section className="mt-8 rounded-lg border border-rose-700/30 bg-rose-950/10 p-4">
+        <div className="flex items-baseline justify-between gap-4">
+          <div>
+            <h2 className="text-sm font-semibold text-rose-200">Danger zone</h2>
+            <p className="mt-1 text-xs text-rose-300/80">
+              Cascades through every site under this property → installations →
+              circuits → chargers → OCPP identities. Use this to fully undo a
+              Zaptec import. Org is preserved.
+            </p>
+          </div>
+          <DeleteButton
+            endpoint={`/api/admin/properties/${property.id}`}
+            redirectTo="/tenants/properties"
+            confirmText={`Delete property "${property.displayName}" and ALL sites / installations / circuits / chargers under it? This cannot be undone.`}
+            label="Delete property"
+          />
+        </div>
+      </section>
     </div>
   );
 }

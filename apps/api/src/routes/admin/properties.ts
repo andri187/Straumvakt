@@ -4,6 +4,7 @@ import { makePrisma } from "../../lib/prisma";
 import { requireAdmin, type AuthVars } from "../../lib/auth-middleware";
 import {
   createProperty,
+  deleteProperty,
   getPropertyById,
   listAllProperties,
   updateProperty,
@@ -43,4 +44,10 @@ adminProperties.patch("/:id", async (c) => {
   const db = makePrisma(c.env);
   const property = await updateProperty(db, c.req.param("id"), parsed.data);
   return c.json({ property });
+});
+
+adminProperties.delete("/:id", async (c) => {
+  const db = makePrisma(c.env);
+  await deleteProperty(db, c.req.param("id"));
+  return c.json({ ok: true });
 });
