@@ -2,11 +2,18 @@
 // + (ChargingStation + EVSE + Connector + OcppIdentity per charger) in
 // one transaction. Operator picks the org; address comes from Zaptec.
 //
-// Each OCPP identity gets a freshly-generated 32-byte hex Basic-Auth
-// password — returned to the operator exactly once in the response,
-// hashed (SHA-256) before storage. Operator is responsible for re-
-// flashing each Zaptec charger to point at our gateway with the
-// corresponding password.
+// OCPP password is INSTALLATION-LEVEL: the Zaptec portal applies one
+// password across every charger in an installation (you can't set
+// them per-charger from the portal — only via Zaptec API write,
+// which we don't currently call). Operator types that single value
+// into the wizard; we SHA-256 it once and stamp the same hash onto
+// every OcppIdentity row created here. Per-charger isolation will
+// come back when we wire UpdateOcppSettings calls during import.
+//
+// Identity-string is the Zaptec DeviceId, **lowercased** to match
+// the post-Jan-2023 firmware behaviour. SerialNo on the Zaptec API
+// is operator-editable display text in practice ("Festi 2",
+// "Klettás 5"), so it's unsuitable as the OCPP identity-string.
 
 import type { PrismaClient } from "../generated/prisma/client";
 import type { ZaptecImportInput } from "@straumvakt/shared/inputs/zaptec-import";
@@ -26,23 +33,20 @@ type ZaptecHierarchyChargerLite = {
   DeviceId?: string | null;
 };
 
-function generatePassword(): string {
-  const bytes = new Uint8Array(32);
-  crypto.getRandomValues(bytes);
-  let hex = "";
-  for (let i = 0; i < bytes.length; i++) hex += bytes[i].toString(16).padStart(2, "0");
-  return hex;
-}
-
 /**
  * Pick the OCPP identity-string for a Zaptec charger. Preference order:
- *   1. SerialNo  — typically "ZAP123456", what's on the physical sticker.
- *   2. DeviceId  — Zaptec internal id, fallback when SerialNo is null.
- *   3. Zaptec UUID — last-resort, ugly but unique.
+ *   1. DeviceId.toLowerCase() — what the firmware actually sends in
+ *      OCPP Basic-Auth (post-Jan-2023 lowercase behaviour).
+ *   2. Zaptec UUID — last-resort if DeviceId is somehow missing.
  * Trim to 64 chars to match the OcppIdentity column constraint.
+ *
+ * SerialNo is intentionally NOT in the chain. Operators routinely
+ * overwrite it with display names ("Festi 2"), making it unusable
+ * as a stable identity. Display name flows into SiteAsset.displayName
+ * + ChargingStation.serialNumber separately.
  */
-function pickIdentityString(c: { id: string; serialNo: string | null; deviceId: string | null }): string {
-  const candidate = c.serialNo ?? c.deviceId ?? c.id;
+function pickIdentityString(c: { id: string; deviceId: string | null }): string {
+  const candidate = (c.deviceId ?? c.id).toLowerCase();
   return candidate.slice(0, 64);
 }
 
@@ -117,22 +121,19 @@ export async function importZaptecInstallation(
         })),
     }));
 
-  // Flatten for password gen (we still pre-compute all passwords up-front).
+  // Flatten + assign identity-string from DeviceId.
   const flatChargers = zaptecCircuits.flatMap((cc) =>
-    cc.chargers.map((ch) => ({ ...ch, zaptecCircuitId: cc.id })),
-  );
-
-  // 4) Pre-generate passwords + hashes outside the tx.
-  const chargerSecrets = await Promise.all(
-    flatChargers.map(async (ch) => ({
+    cc.chargers.map((ch) => ({
       ...ch,
+      zaptecCircuitId: cc.id,
       identityString: pickIdentityString(ch),
-      password: generatePassword(),
     })),
   );
-  const chargerHashes = await Promise.all(
-    chargerSecrets.map((ch) => sha256Hex(ch.password).then((hash) => ({ ...ch, hash }))),
-  );
+
+  // 4) Hash the installation-level OCPP password once. Same hash
+  //    lands on every OcppIdentity row — operator-supplied value
+  //    (typed into the wizard from the Zaptec portal's OCPP config).
+  const installationHash = await sha256Hex(input.ocppPassword);
 
   // 5) Multi-table tx.
   //
@@ -204,7 +205,7 @@ export async function importZaptecInstallation(
     }
 
     const importedChargers: ZaptecImportedCharger[] = [];
-    for (const ch of chargerHashes) {
+    for (const ch of flatChargers) {
       const siteAsset = await tx.siteAsset.create({
         data: {
           orgId: org.id,
@@ -245,7 +246,7 @@ export async function importZaptecInstallation(
           orgId: org.id,
           chargingStationId: siteAsset.id,
           identityString: ch.identityString,
-          authSecretHash: ch.hash,
+          authSecretHash: installationHash,
           ocppVersion: "ocpp_1_6",
           assetClass: "ac",
           vendor: "Zaptec",
@@ -256,16 +257,18 @@ export async function importZaptecInstallation(
 
       // Loop closure: if a Zaptec charger we just imported was already
       // hitting the gateway (with the matching identity_string), drop
-      // its pending discovery row.
+      // its pending discovery row. Match case-insensitively to handle
+      // pending rows captured before the lowercase fix.
       await tx.pendingDiscovery.deleteMany({
-        where: { identityString: ch.identityString },
+        where: {
+          identityString: { equals: ch.identityString, mode: "insensitive" },
+        },
       });
 
       importedChargers.push({
         chargingStationId: siteAsset.id,
         ocppIdentityId: identity.id,
         identityString: ch.identityString,
-        ocppPassword: ch.password,
         displayName: ch.name,
         serialNo: ch.serialNo,
       });

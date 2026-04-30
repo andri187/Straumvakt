@@ -1,19 +1,19 @@
 // Wire shape returned by POST /api/admin/zaptec/import.
 //
-// Each charger gets a freshly-generated OCPP Basic-Auth password,
-// returned exactly once. The operator must copy each one into the
-// corresponding Zaptec charger config (re-flashing the WSS URL +
-// auth) — Straumvakt only stores the hash.
+// Identity-string is the Zaptec DeviceId (lowercased) — that's what
+// Zaptec firmware actually sends in OCPP Basic-Auth. The OCPP
+// password is installation-level (one value across all chargers in
+// the installation) — the operator types it into the wizard, we
+// hash it once, and apply the same hash to every OcppIdentity row.
+// We don't echo the password back to the client.
 
 export interface ZaptecImportedCharger {
   /** Internal SiteAsset id — same id used everywhere else for the charger. */
   chargingStationId: string;
   /** OcppIdentity row id (gateway DO key). */
   ocppIdentityId: string;
-  /** Identity-string the charger must present (typically the Zaptec SerialNo). */
+  /** Identity-string the charger presents (Zaptec DeviceId, lowercased). */
   identityString: string;
-  /** Plaintext OCPP Basic-Auth password — first and only time it's ever shown. */
-  ocppPassword: string;
   displayName: string;
   serialNo: string | null;
 }

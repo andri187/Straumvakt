@@ -23,6 +23,7 @@ export function ImportDialog({ open, onClose, username, password, installation }
   const [orgId, setOrgId] = useState("");
   const [propertyDisplayName, setPropertyDisplayName] = useState("");
   const [siteDisplayName, setSiteDisplayName] = useState("");
+  const [ocppPassword, setOcppPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ZaptecImportResult | null>(null);
@@ -59,6 +60,7 @@ export function ImportDialog({ open, onClose, username, password, installation }
           orgId,
           propertyDisplayName,
           siteDisplayName,
+          ocppPassword,
         }),
       });
       const body = (await res.json().catch(() => null)) as
@@ -117,9 +119,12 @@ export function ImportDialog({ open, onClose, username, password, installation }
               {installation.chargerCount > 0 && (
                 <> ({installation.chargerCount} charger{installation.chargerCount === 1 ? "" : "s"})</>
               )}{" "}
-              into Straumvakt as Property + Site + Installation. Each
-              charger gets a fresh OCPP Basic-Auth password — shown
-              once on the next screen so you can re-flash them.
+              into Straumvakt as Property + Site + Installation. Identity
+              strings come from each charger&apos;s Zaptec DeviceId
+              (lowercased — that&apos;s what the firmware actually sends).
+              The OCPP password is installation-level: paste the value
+              from the Zaptec portal&apos;s OCPP config below; we&apos;ll hash
+              it and apply it to every charger in the import.
             </p>
 
             <Field label="Org" required>
@@ -167,6 +172,20 @@ export function ImportDialog({ open, onClose, username, password, installation }
               />
             </Field>
 
+            <Field label="Zaptec OCPP password" required>
+              <input
+                type="text"
+                value={ocppPassword}
+                onChange={(e) => setOcppPassword(e.target.value)}
+                disabled={submitting}
+                placeholder="From Zaptec portal → installation OCPP config"
+                className="w-full rounded-md border border-bg-border bg-bg-inset px-3 py-2 font-mono text-sm text-ink-50 disabled:opacity-50"
+                maxLength={200}
+                autoComplete="off"
+                spellCheck={false}
+              />
+            </Field>
+
             {error && (
               <div className="rounded border border-rose-700/40 bg-rose-950/30 p-2 text-xs text-rose-200">
                 {error}
@@ -185,7 +204,7 @@ export function ImportDialog({ open, onClose, username, password, installation }
               <button
                 type="button"
                 onClick={onSubmit}
-                disabled={submitting || !orgId || !propertyDisplayName || !siteDisplayName}
+                disabled={submitting || !orgId || !propertyDisplayName || !siteDisplayName || !ocppPassword}
                 className="rounded-md bg-sv-green/20 px-4 py-1.5 text-xs font-medium text-sv-green ring-1 ring-sv-green/30 hover:bg-sv-green/30 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {submitting ? "Importing…" : "Import"}
@@ -207,35 +226,20 @@ function ImportSuccessPanel({
   result: ZaptecImportResult;
   onDone: () => void;
 }) {
-  const [copied, setCopied] = useState(false);
-  const tsv = result.chargers
-    .map((c) => `${c.identityString}\t${c.ocppPassword}`)
-    .join("\n");
-
-  async function copyAll() {
-    try {
-      await navigator.clipboard.writeText(tsv);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      /* ignore — operator can select-all manually */
-    }
-  }
-
   return (
     <div className="space-y-4 px-5 py-4">
-      <div className="rounded border border-amber-700/40 bg-amber-950/30 p-3 text-xs text-amber-200">
-        <p className="font-medium text-amber-100">
-          Copy these passwords now — they will not be shown again.
+      <div className="rounded border border-sv-green/40 bg-sv-green/10 p-3 text-xs text-sv-green">
+        <p className="font-medium">
+          Imported {result.chargers.length} charger{result.chargers.length === 1 ? "" : "s"}.
         </p>
-        <p className="mt-1 text-amber-200/80">
-          Paste into the corresponding Zaptec charger&apos;s OCPP config under
-          Basic-Auth password, alongside its identity-string. The charger&apos;s
-          WSS URL should be{" "}
+        <p className="mt-1 text-sv-green/80">
+          OCPP password applied installation-wide. Make sure the
+          Zaptec portal&apos;s OCPP URL is set to{" "}
           <code className="font-mono">
-            wss://straumvakt-ocpp-staging.straumvakt.workers.dev/ocpp/&lt;identity-string&gt;
-          </code>
-          .
+            wss://straumvakt-ocpp-staging.straumvakt.workers.dev/ocpp/&#123;deviceId&#125;
+          </code>{" "}
+          — Zaptec substitutes <code className="font-mono">&#123;deviceId&#125;</code> per
+          charger.
         </p>
       </div>
 
@@ -243,9 +247,8 @@ function ImportSuccessPanel({
         <table className="w-full table-fixed text-left text-xs">
           <thead className="bg-bg-inset/40 text-[10px] uppercase tracking-brand text-ink-500">
             <tr>
-              <th className="w-[18%] px-3 py-2 font-medium">Charger</th>
-              <th className="w-[18%] px-3 py-2 font-medium">Identity</th>
-              <th className="w-[64%] px-3 py-2 font-medium">OCPP password</th>
+              <th className="w-[40%] px-3 py-2 font-medium">Charger</th>
+              <th className="w-[60%] px-3 py-2 font-medium">Identity (DeviceId)</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-bg-border/40">
@@ -253,21 +256,13 @@ function ImportSuccessPanel({
               <tr key={c.ocppIdentityId}>
                 <td className="break-words px-3 py-2 text-ink-100">{c.displayName}</td>
                 <td className="break-all px-3 py-2 font-mono text-[11px] text-ink-200">{c.identityString}</td>
-                <td className="break-all px-3 py-2 font-mono text-[10px] text-ink-100">{c.ocppPassword}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
 
-      <div className="flex justify-between gap-2 border-t border-bg-border pt-3">
-        <button
-          type="button"
-          onClick={copyAll}
-          className="rounded-md bg-sv-sky/20 px-3 py-1.5 text-xs font-medium text-sv-sky ring-1 ring-sv-sky/30 hover:bg-sv-sky/30"
-        >
-          {copied ? "Copied!" : "Copy all (TSV)"}
-        </button>
+      <div className="flex justify-end gap-2 border-t border-bg-border pt-3">
         <button
           type="button"
           onClick={onDone}
