@@ -50,6 +50,24 @@ export default async function InstallationDetailPage({ params }: { params: Promi
         }}
       />
 
+      {installation.metadata != null &&
+        typeof installation.metadata === "object" &&
+        Object.keys(installation.metadata as Record<string, unknown>).length > 0 && (
+          <section className="mt-8 rounded-lg border border-bg-border bg-bg-base/30 p-4">
+            <header className="mb-3">
+              <h2 className="text-sm font-semibold text-ink-50">Metadata</h2>
+              <p className="mt-0.5 text-[10px] text-ink-500">
+                Captured at vendor import time (Zaptec / Easee / etc.). Read-only —
+                operator-edit lands when the field becomes load-bearing for billing
+                or routing logic. Schema is freeform JSONB.
+              </p>
+            </header>
+            <pre className="overflow-x-auto rounded border border-bg-border/40 bg-bg-base/40 p-3 font-mono text-[11px] text-ink-200">
+              {JSON.stringify(installation.metadata, null, 2)}
+            </pre>
+          </section>
+        )}
+
       <section className="mt-8 rounded-lg border border-rose-700/30 bg-rose-950/10 p-4">
         <div className="flex items-baseline justify-between gap-4">
           <div>

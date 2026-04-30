@@ -67,6 +67,7 @@ export default async function OrganizationDetailPage({
                 roles: org.roles,
                 addresses: (org.addresses ?? {}) as { primary?: { street?: string; city?: string; postal_code?: string; country?: string } },
                 contacts: (org.contacts ?? {}) as { primary?: { name?: string; email?: string; phone?: string } },
+                branding: (org.branding ?? {}) as { logoUrl?: string; primaryColor?: string; secondaryColor?: string },
               }}
             />
           </div>

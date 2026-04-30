@@ -30,6 +30,15 @@ const ROLES = [
 
 type AddressBlock = { street?: string; city?: string; postal_code?: string; country?: string };
 type ContactBlock = { name?: string; email?: string; phone?: string };
+// Operator branding — surfaces on driver app + the operator console's
+// org-scoped pages once those land. logoUrl and the two color fields
+// cover most CSMS branding needs; the JSONB column accepts arbitrary
+// extras for future driver-app theming.
+type BrandingBlock = {
+  logoUrl?: string;
+  primaryColor?: string;
+  secondaryColor?: string;
+};
 
 export interface OrgInitial {
   displayName: string;
@@ -46,6 +55,7 @@ export interface OrgInitial {
   roles: string[];
   addresses: { primary?: AddressBlock } & Record<string, unknown>;
   contacts: { primary?: ContactBlock } & Record<string, unknown>;
+  branding: BrandingBlock & Record<string, unknown>;
 }
 
 export function OrgEditPanel({ orgId, initial }: { orgId: string; initial: OrgInitial }) {
@@ -73,6 +83,11 @@ export function OrgEditPanel({ orgId, initial }: { orgId: string; initial: OrgIn
   const [contactName, setContactName] = useState(initialContact.name ?? "");
   const [contactEmail, setContactEmail] = useState(initialContact.email ?? "");
   const [contactPhone, setContactPhone] = useState(initialContact.phone ?? "");
+
+  const initialBranding = initial.branding ?? {};
+  const [logoUrl, setLogoUrl] = useState(initialBranding.logoUrl ?? "");
+  const [primaryColor, setPrimaryColor] = useState(initialBranding.primaryColor ?? "");
+  const [secondaryColor, setSecondaryColor] = useState(initialBranding.secondaryColor ?? "");
 
   const [busy, setBusy] = useState<"idle" | "saving" | "archiving">("idle");
   const [error, setError] = useState<string | null>(null);
@@ -109,6 +124,24 @@ export function OrgEditPanel({ orgId, initial }: { orgId: string; initial: OrgIn
       const oldContact = { name: initialContact.name ?? undefined, email: initialContact.email ?? undefined, phone: initialContact.phone ?? undefined };
       if (JSON.stringify(newContact) !== JSON.stringify(oldContact)) {
         patch.contacts = (contactName || contactEmail || contactPhone) ? { ...initial.contacts, primary: newContact } : { ...initial.contacts, primary: undefined };
+      }
+
+      // Branding — preserve existing extras (driver-app theming etc.)
+      // by spreading initial.branding then overwriting the editable
+      // keys; empty string clears the field from the JSON object.
+      const brandingChanged =
+        (logoUrl || "") !== (initialBranding.logoUrl ?? "") ||
+        (primaryColor || "") !== (initialBranding.primaryColor ?? "") ||
+        (secondaryColor || "") !== (initialBranding.secondaryColor ?? "");
+      if (brandingChanged) {
+        const next: Record<string, unknown> = { ...initial.branding };
+        if (logoUrl) next.logoUrl = logoUrl;
+        else delete next.logoUrl;
+        if (primaryColor) next.primaryColor = primaryColor;
+        else delete next.primaryColor;
+        if (secondaryColor) next.secondaryColor = secondaryColor;
+        else delete next.secondaryColor;
+        patch.branding = next;
       }
 
       if (Object.keys(patch).length === 0) {
@@ -200,6 +233,24 @@ export function OrgEditPanel({ orgId, initial }: { orgId: string; initial: OrgIn
             </div>
           </fieldset>
         </div>
+
+        <fieldset className="rounded border border-bg-border/60 p-2">
+          <legend className="px-1 text-[10px] font-semibold uppercase tracking-brand text-ink-400">
+            Branding
+          </legend>
+          <p className="mb-2 text-[10px] text-ink-500">
+            Logo + theme colors. Used by the driver app + org-scoped operator
+            views. JSON column accepts arbitrary extras (driver-app theme keys
+            etc.) which round-trip on save.
+          </p>
+          <div className="space-y-2">
+            <Field label="Logo URL" value={logoUrl} onChange={setLogoUrl} compact mono />
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Field label="Primary color" value={primaryColor} onChange={setPrimaryColor} compact mono placeholder="#3EE9A7" />
+              <Field label="Secondary color" value={secondaryColor} onChange={setSecondaryColor} compact mono placeholder="#2BB6E8" />
+            </div>
+          </div>
+        </fieldset>
 
         <label className="block">
           <span className="block text-[11px] font-semibold uppercase tracking-brand text-ink-400">Notes</span>

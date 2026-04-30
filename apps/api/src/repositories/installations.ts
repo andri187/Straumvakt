@@ -26,6 +26,7 @@ type Row = {
   credentialsStatus: string | null;
   onboardingStatus: string;
   retailerTariffId: string | null;
+  metadata: unknown;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -47,6 +48,7 @@ function toSummary(r: Row): InstallationSummary {
     credentialsStatus: r.credentialsStatus,
     onboardingStatus: r.onboardingStatus,
     retailerTariffId: r.retailerTariffId,
+    metadata: r.metadata,
     createdAt: r.createdAt.toISOString(),
     updatedAt: r.updatedAt.toISOString(),
   };
