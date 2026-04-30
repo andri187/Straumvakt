@@ -6,6 +6,18 @@ import { apiFetch } from "@/lib/api-client";
 import type { ZaptecImportResult } from "@straumvakt/shared/domain/zaptec-import";
 import type { OrgSummary } from "@straumvakt/shared/domain/orgs";
 
+interface DiscoveredChargerRow {
+  id: string;
+  name: string;
+  serialNo: string | null;
+  deviceId: string | null;
+  mid: string | null;
+  active: boolean | null;
+  isOnline: boolean | null;
+  circuitId: string;
+  circuitName: string;
+}
+
 interface Props {
   open: boolean;
   onClose: () => void;
@@ -14,9 +26,18 @@ interface Props {
   password: string;
   /** Installation we're importing. */
   installation: { id: string; name: string; address: string | null; chargerCount: number };
+  /** Pre-flattened charger list from the discover step, with circuit grouping carried alongside. */
+  chargers: DiscoveredChargerRow[];
 }
 
-export function ImportDialog({ open, onClose, username, password, installation }: Props) {
+export function ImportDialog({
+  open,
+  onClose,
+  username,
+  password,
+  installation,
+  chargers,
+}: Props) {
   const router = useRouter();
   const [orgs, setOrgs] = useState<OrgSummary[]>([]);
   const [loadingOrgs, setLoadingOrgs] = useState(false);
@@ -24,6 +45,12 @@ export function ImportDialog({ open, onClose, username, password, installation }
   const [propertyDisplayName, setPropertyDisplayName] = useState("");
   const [siteDisplayName, setSiteDisplayName] = useState("");
   const [ocppPassword, setOcppPassword] = useState("");
+  // Selection state — keyed by Zaptec charger Id. Default: every
+  // active charger checked, every inactive charger unchecked.
+  // Operator can override per-row.
+  const [selected, setSelected] = useState<Set<string>>(
+    () => new Set(chargers.filter((c) => c.active !== false).map((c) => c.id)),
+  );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ZaptecImportResult | null>(null);
@@ -48,6 +75,10 @@ export function ImportDialog({ open, onClose, username, password, installation }
 
   async function onSubmit() {
     if (!orgId) return;
+    if (selected.size === 0) {
+      setError("Select at least one charger to import.");
+      return;
+    }
     setError(null);
     setSubmitting(true);
     try {
@@ -61,6 +92,7 @@ export function ImportDialog({ open, onClose, username, password, installation }
           propertyDisplayName,
           siteDisplayName,
           ocppPassword,
+          chargerIds: Array.from(selected),
         }),
       });
       const body = (await res.json().catch(() => null)) as
@@ -186,6 +218,13 @@ export function ImportDialog({ open, onClose, username, password, installation }
               />
             </Field>
 
+            <ChargerSelector
+              chargers={chargers}
+              selected={selected}
+              setSelected={setSelected}
+              disabled={submitting}
+            />
+
             {error && (
               <div className="rounded border border-rose-700/40 bg-rose-950/30 p-2 text-xs text-rose-200">
                 {error}
@@ -204,10 +243,10 @@ export function ImportDialog({ open, onClose, username, password, installation }
               <button
                 type="button"
                 onClick={onSubmit}
-                disabled={submitting || !orgId || !propertyDisplayName || !siteDisplayName || !ocppPassword}
+                disabled={submitting || !orgId || !propertyDisplayName || !siteDisplayName || !ocppPassword || selected.size === 0}
                 className="rounded-md bg-sv-green/20 px-4 py-1.5 text-xs font-medium text-sv-green ring-1 ring-sv-green/30 hover:bg-sv-green/30 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                {submitting ? "Importing…" : "Import"}
+                {submitting ? "Importing…" : `Import ${selected.size} charger${selected.size === 1 ? "" : "s"}`}
               </button>
             </div>
           </div>
@@ -216,6 +255,209 @@ export function ImportDialog({ open, onClose, username, password, installation }
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * Per-charger selection table grouped by Zaptec circuit. Default
+ * state: every Active=true charger checked, every Active=false
+ * unchecked. Operator can override per-row or use the per-circuit
+ * "select all in circuit" toggle. Each row also surfaces:
+ *   • Active status — Zaptec's own enabled flag for the charger.
+ *   • Online status — IsOnline from the bulk /api/chargers list,
+ *     showing whether Zaptec cloud sees the charger right now.
+ * Both of those help the operator skip stale rows (decommissioned
+ * units that are still in Zaptec's hierarchy) at import time.
+ */
+function ChargerSelector({
+  chargers,
+  selected,
+  setSelected,
+  disabled,
+}: {
+  chargers: DiscoveredChargerRow[];
+  selected: Set<string>;
+  setSelected: (next: Set<string>) => void;
+  disabled: boolean;
+}) {
+  if (chargers.length === 0) return null;
+
+  // Group rows by circuit for a cleaner visual hierarchy.
+  const byCircuit = new Map<string, { name: string; chargers: DiscoveredChargerRow[] }>();
+  for (const c of chargers) {
+    const e = byCircuit.get(c.circuitId) ?? { name: c.circuitName, chargers: [] };
+    e.chargers.push(c);
+    byCircuit.set(c.circuitId, e);
+  }
+  const circuits = Array.from(byCircuit.entries());
+
+  function toggle(id: string) {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelected(next);
+  }
+  function selectAll() {
+    setSelected(new Set(chargers.map((c) => c.id)));
+  }
+  function selectNone() {
+    setSelected(new Set());
+  }
+  function selectActiveOnly() {
+    setSelected(new Set(chargers.filter((c) => c.active !== false).map((c) => c.id)));
+  }
+  function toggleCircuit(circuitId: string, allSelected: boolean) {
+    const next = new Set(selected);
+    const inCircuit = chargers.filter((c) => c.circuitId === circuitId).map((c) => c.id);
+    if (allSelected) inCircuit.forEach((id) => next.delete(id));
+    else inCircuit.forEach((id) => next.add(id));
+    setSelected(next);
+  }
+
+  return (
+    <div className="rounded-md border border-bg-border bg-bg-base/40">
+      <header className="flex flex-wrap items-baseline justify-between gap-2 border-b border-bg-border/40 px-3 py-2">
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-brand text-ink-300">
+            Chargers ({selected.size} of {chargers.length} selected)
+          </h3>
+          <p className="text-[10px] text-ink-500">
+            Inactive chargers are unticked by default. The OCPP password applies to every selected row.
+          </p>
+        </div>
+        <div className="flex shrink-0 gap-1.5 text-[10px]">
+          <SelectorButton onClick={selectAll} disabled={disabled}>
+            All
+          </SelectorButton>
+          <SelectorButton onClick={selectActiveOnly} disabled={disabled}>
+            Active only
+          </SelectorButton>
+          <SelectorButton onClick={selectNone} disabled={disabled}>
+            None
+          </SelectorButton>
+        </div>
+      </header>
+
+      <div className="max-h-72 overflow-y-auto">
+        <table className="w-full table-fixed text-left text-[11px]">
+          <thead className="sticky top-0 bg-bg-inset/60 text-[10px] uppercase tracking-brand text-ink-500 backdrop-blur">
+            <tr>
+              <th className="w-8 px-2 py-1.5" />
+              <th className="w-[28%] px-2 py-1.5 font-medium">Charger</th>
+              <th className="w-[18%] px-2 py-1.5 font-medium">Device ID</th>
+              <th className="w-[12%] px-2 py-1.5 font-medium">Active</th>
+              <th className="w-[12%] px-2 py-1.5 font-medium">Online</th>
+              <th className="w-[18%] px-2 py-1.5 font-medium">Circuit</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-bg-border/30">
+            {circuits.flatMap(([circuitId, c]) => {
+              const inCircuit = c.chargers;
+              const allSelected = inCircuit.every((ch) => selected.has(ch.id));
+              const anySelected = inCircuit.some((ch) => selected.has(ch.id));
+              return [
+                <tr key={`${circuitId}:header`} className="bg-bg-base/30">
+                  <td className="px-2 py-1.5 align-middle">
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      ref={(el) => {
+                        if (el) el.indeterminate = !allSelected && anySelected;
+                      }}
+                      onChange={() => toggleCircuit(circuitId, allSelected)}
+                      disabled={disabled}
+                      aria-label={`Select all chargers on ${c.name}`}
+                    />
+                  </td>
+                  <td colSpan={5} className="px-2 py-1.5 align-middle text-[11px] text-ink-200">
+                    <span className="font-medium">{c.name}</span>
+                    <span className="ml-2 text-ink-500">({inCircuit.length})</span>
+                  </td>
+                </tr>,
+                ...inCircuit.map((ch) => (
+                  <tr key={ch.id} className="hover:bg-bg-raised/20">
+                    <td className="px-2 py-1.5 align-middle">
+                      <input
+                        type="checkbox"
+                        checked={selected.has(ch.id)}
+                        onChange={() => toggle(ch.id)}
+                        disabled={disabled}
+                        aria-label={`Select ${ch.name}`}
+                      />
+                    </td>
+                    <td className="px-2 py-1.5 align-middle">
+                      <div className="text-ink-100 truncate">{ch.name}</div>
+                      <div className="font-mono text-[9px] text-ink-500 truncate">{ch.serialNo ?? ch.id.slice(0, 8)}</div>
+                    </td>
+                    <td className="px-2 py-1.5 align-middle font-mono text-[10px] text-ink-300 truncate">
+                      {ch.deviceId ?? "—"}
+                    </td>
+                    <td className="px-2 py-1.5 align-middle">
+                      <ActiveBadge active={ch.active} />
+                    </td>
+                    <td className="px-2 py-1.5 align-middle">
+                      <OnlineBadge online={ch.isOnline} />
+                    </td>
+                    <td className="px-2 py-1.5 align-middle text-ink-300 truncate">{ch.circuitName}</td>
+                  </tr>
+                )),
+              ];
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function SelectorButton({
+  onClick,
+  disabled,
+  children,
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="rounded border border-bg-border bg-bg-base/50 px-2 py-1 text-ink-200 hover:bg-bg-base/70 hover:text-ink-50 disabled:cursor-not-allowed disabled:opacity-40"
+    >
+      {children}
+    </button>
+  );
+}
+
+function ActiveBadge({ active }: { active: boolean | null }) {
+  if (active === null) return <span className="text-ink-500">—</span>;
+  return active ? (
+    <span className="inline-flex items-center gap-1 rounded bg-sv-green/10 px-1.5 py-0.5 text-[10px] text-sv-green ring-1 ring-sv-green/30">
+      <span className="h-1.5 w-1.5 rounded-full bg-sv-green" />
+      active
+    </span>
+  ) : (
+    <span className="inline-flex items-center gap-1 rounded bg-bg-base/60 px-1.5 py-0.5 text-[10px] text-ink-400 ring-1 ring-bg-border">
+      <span className="h-1.5 w-1.5 rounded-full bg-ink-500" />
+      inactive
+    </span>
+  );
+}
+
+function OnlineBadge({ online }: { online: boolean | null }) {
+  if (online === null) return <span className="text-ink-500">—</span>;
+  return online ? (
+    <span className="inline-flex items-center gap-1 rounded bg-emerald-950/40 px-1.5 py-0.5 text-[10px] text-emerald-300 ring-1 ring-emerald-700/30">
+      <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+      online
+    </span>
+  ) : (
+    <span className="inline-flex items-center gap-1 rounded bg-bg-base/60 px-1.5 py-0.5 text-[10px] text-ink-400 ring-1 ring-bg-border">
+      <span className="h-1.5 w-1.5 rounded-full bg-ink-500" />
+      offline
+    </span>
   );
 }
 

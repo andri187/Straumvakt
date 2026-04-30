@@ -17,6 +17,7 @@ import {
   getChargerDetail,
   getInstallationHierarchy,
   getZaptecAccessToken,
+  listChargers,
   listInstallations,
   type ZaptecError,
   type ZaptecHierarchyCircuit,
@@ -76,14 +77,29 @@ adminZaptec.post("/discover", async (c) => {
       typeof i.Id === "string" && typeof i.Name === "string",
   );
 
-  // Hierarchy fetch — failures don't bring down the whole response.
-  const hierarchies = await Promise.all(
-    rawInstallations.map(async (i) => {
-      const r = await getInstallationHierarchy(accessToken, i.Id);
-      return { id: i.Id, hierarchy: r.ok ? r.value : null };
-    }),
-  );
+  // Hierarchy fetch + bulk online list — both run in parallel. Failures
+  // don't bring down the whole response. The bulk /api/chargers list
+  // returns IsOnline per charger in one call (across all installations
+  // visible to this credential), so we merge it onto each charger
+  // by Zaptec UUID.
+  const [hierarchies, onlineList] = await Promise.all([
+    Promise.all(
+      rawInstallations.map(async (i) => {
+        const r = await getInstallationHierarchy(accessToken, i.Id);
+        return { id: i.Id, hierarchy: r.ok ? r.value : null };
+      }),
+    ),
+    listChargers(accessToken),
+  ]);
   const hierarchyById = new Map(hierarchies.map((h) => [h.id, h.hierarchy]));
+  const isOnlineById = new Map<string, boolean>();
+  if (onlineList.ok) {
+    for (const ch of onlineList.value) {
+      if (ch.Id && typeof ch.IsOnline === "boolean") {
+        isOnlineById.set(ch.Id, ch.IsOnline);
+      }
+    }
+  }
 
   const installations = rawInstallations.map((i) => {
     const h = hierarchyById.get(i.Id);
@@ -103,6 +119,7 @@ adminZaptec.post("/discover", async (c) => {
             deviceId: ch.DeviceId ?? null,
             mid: ch.MID ?? null,
             active: ch.Active ?? null,
+            isOnline: isOnlineById.get(ch.Id) ?? null,
           })),
       }));
 

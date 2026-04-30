@@ -15,6 +15,7 @@ type DiscoveredCharger = {
   deviceId: string | null;
   mid: string | null;
   active: boolean | null;
+  isOnline: boolean | null;
 };
 
 type DiscoveredCircuit = {
@@ -255,6 +256,16 @@ export function ZaptecWizardForm() {
               importing.activeChargerCount ??
               importing.circuits.reduce((sum, c) => sum + c.chargers.length, 0),
           }}
+          // Flatten the circuit hierarchy into a per-charger list so
+          // the dialog can render checkboxes grouped by circuit. Each
+          // row carries circuitName for display.
+          chargers={importing.circuits.flatMap((c) =>
+            c.chargers.map((ch) => ({
+              ...ch,
+              circuitId: c.id,
+              circuitName: c.name,
+            })),
+          )}
         />
       )}
     </div>

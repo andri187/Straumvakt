@@ -102,6 +102,13 @@ export async function importZaptecInstallation(
   //    each charger under it links to that Circuit via
   //    ChargingStation.circuitId. Operator can later delete circuits to
   //    cascade-drop their chargers (see deleteCircuit).
+  // Build the charger inclusion filter from operator selection. When
+  // chargerIds isn't provided, fall back to including everything (the
+  // legacy behaviour for backward compat).
+  const includedSet = input.chargerIds && input.chargerIds.length > 0
+    ? new Set(input.chargerIds)
+    : null;
+
   const zaptecCircuits = (hierarchy.value?.Circuits ?? [])
     .filter((cc): cc is { Id: string; Name?: string | null; MaxCurrent?: number; Chargers?: ZaptecHierarchyChargerLite[] | null } =>
       typeof cc.Id === "string",
@@ -114,13 +121,17 @@ export async function importZaptecInstallation(
         .filter((ch): ch is { Id: string; Name?: string | null; SerialNo?: string | null; DeviceId?: string | null } =>
           typeof ch.Id === "string",
         )
+        .filter((ch) => includedSet === null || includedSet.has(ch.Id))
         .map((ch) => ({
           id: ch.Id,
           name: ch.Name ?? "(unnamed)",
           serialNo: ch.SerialNo ?? null,
           deviceId: ch.DeviceId ?? null,
         })),
-    }));
+    }))
+    // Drop circuits that ended up with zero chargers after filtering
+    // — no point provisioning empty circuits the operator didn't ask for.
+    .filter((cc) => cc.chargers.length > 0);
 
   // Flatten + assign identity-string from DeviceId.
   const flatChargersBase = zaptecCircuits.flatMap((cc) =>

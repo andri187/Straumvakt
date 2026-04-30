@@ -22,5 +22,12 @@ export const ZaptecImportInput = z.object({
   // row created by the import. Per-charger passwords would require
   // Zaptec API write automation we don't have yet.
   ocppPassword: z.string().min(1).max(200),
+  // Optional inclusion filter — operator-selected Zaptec charger
+  // UUIDs. When omitted, the import takes every charger in the
+  // installation hierarchy (legacy behaviour). When provided, only
+  // chargers whose Zaptec Id appears in this list get provisioned.
+  // The wizard auto-deselects inactive (Active=false) chargers but
+  // the operator can override per-row.
+  chargerIds: z.array(z.string().min(1)).optional(),
 });
 export type ZaptecImportInput = z.infer<typeof ZaptecImportInput>;
