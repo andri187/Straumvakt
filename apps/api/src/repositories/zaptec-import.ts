@@ -21,6 +21,7 @@ import type { ZaptecImportResult, ZaptecImportedCharger } from "@straumvakt/shar
 import { sha256Hex } from "../lib/sha256";
 import { recordAuditAction } from "../lib/audit";
 import {
+  getChargerDetail,
   getInstallationHierarchy,
   getInstallationSummary,
   getZaptecAccessToken,
@@ -122,7 +123,7 @@ export async function importZaptecInstallation(
     }));
 
   // Flatten + assign identity-string from DeviceId.
-  const flatChargers = zaptecCircuits.flatMap((cc) =>
+  const flatChargersBase = zaptecCircuits.flatMap((cc) =>
     cc.chargers.map((ch) => ({
       ...ch,
       zaptecCircuitId: cc.id,
@@ -130,7 +131,35 @@ export async function importZaptecInstallation(
     })),
   );
 
-  // 4) Hash the installation-level OCPP password once. Same hash
+  // 4) Per-charger detail fetch — needed for CreatedOnDate (the
+  //    Zaptec-side commissioning date). Translates to install_date
+  //    on ChargingStation; warranty_expires defaults to install_date
+  //    + 5 years (Zaptec Pro standard). Best-effort: failures fall
+  //    through to null so the rest of the import doesn't abort.
+  //    Parallel fetch across chargers — 35 chargers × ~150ms each
+  //    runs comfortably within the 60s tx budget.
+  const flatChargers = await Promise.all(
+    flatChargersBase.map(async (ch) => {
+      const detail = await getChargerDetail(accessToken, ch.id).catch(() => null);
+      const createdOn =
+        detail?.ok && detail.value && typeof detail.value.CreatedOnDate === "string"
+          ? detail.value.CreatedOnDate
+          : null;
+      let installDate: Date | null = null;
+      let warrantyExpires: Date | null = null;
+      if (createdOn) {
+        const parsed = new Date(createdOn);
+        if (Number.isFinite(parsed.getTime())) {
+          installDate = parsed;
+          warrantyExpires = new Date(parsed);
+          warrantyExpires.setUTCFullYear(warrantyExpires.getUTCFullYear() + 5);
+        }
+      }
+      return { ...ch, installDate, warrantyExpires };
+    }),
+  );
+
+  // 5) Hash the installation-level OCPP password once. Same hash
   //    lands on every OcppIdentity row — operator-supplied value
   //    (typed into the wizard from the Zaptec portal's OCPP config).
   const installationHash = await sha256Hex(input.ocppPassword);
@@ -224,6 +253,8 @@ export async function importZaptecInstallation(
           circuitId: circuitIdByZaptec.get(ch.zaptecCircuitId) ?? null,
           vendor: "Zaptec",
           serialNumber: ch.serialNo,
+          installDate: ch.installDate,
+          warrantyExpires: ch.warrantyExpires,
         },
       });
 
