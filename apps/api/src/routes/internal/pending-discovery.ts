@@ -45,18 +45,24 @@ internalPendingDiscovery.post("/", async (c) => {
 
   const db = makePrisma(c.env);
   try {
-    // Path 1: identity already provisioned → enrich the existing row.
-    // Match case-insensitive (Zaptec sends lowercase, DB has whatever
-    // case the import landed). updateMany so multiple matches —
-    // theoretically possible across orgs — all get refreshed.
-    const matched = await db.ocppIdentity.updateMany({
+    // Path 1: identity already provisioned → no-op. We deliberately
+    // don't update last_seen_at here — that column is reserved for
+    // projections of real auth-passing OCPP messages so the sites
+    // tree's OCPP emblem matches Zaptec's IsOcppConnected (and
+    // matches the profile page's OCPP pill). Updating on no-auth
+    // attempts would conflate "auth working" with "auth failing but
+    // reachable" — the operator can already see vendor-side
+    // reachability via the API emblem (creds work + charger known).
+    //
+    // The pending list also stays clean since we skip the upsert.
+    const matched = await db.ocppIdentity.findFirst({
       where: {
         identityString: { equals: identityString, mode: "insensitive" },
       },
-      data: { lastSeenAt: new Date() },
+      select: { id: true },
     });
-    if (matched.count > 0) {
-      return c.json({ ok: true, enriched: matched.count });
+    if (matched) {
+      return c.json({ ok: true, suppressed: true });
     }
 
     // Path 2: truly unknown — upsert into the pending pool.
@@ -77,5 +83,5 @@ internalPendingDiscovery.post("/", async (c) => {
     return c.json({ ok: false, error: "upsert_failed" }, 500);
   }
 
-  return c.json({ ok: true, enriched: 0 });
+  return c.json({ ok: true });
 });

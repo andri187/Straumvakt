@@ -185,6 +185,8 @@ export interface ZaptecChargerLite {
    * IsAuthorizationRequired on the bulk + detail responses.
    */
   IsAuthorizationRequired?: boolean;
+  /** Auth mode enum: 0=None, 1=Vendor app, 2=OCPP cloud, 3=Native OCPP. */
+  AuthenticationType?: number;
 }
 export async function listChargers(
   accessToken: string,

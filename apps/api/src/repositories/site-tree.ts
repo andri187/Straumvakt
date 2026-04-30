@@ -22,14 +22,20 @@ const ONLINE_WINDOW_MS = 5 * 60 * 1000;
 
 interface ZaptecLiveSnapshot {
   /**
-   * True iff vendor credentials work AND this charger is in the
-   * Zaptec bulk list. Operator-facing meaning: "we have functional
-   * API control over this charger". Independent of whether the
-   * charger is currently online to Zaptec cloud — that runtime
-   * state is captured separately via the OCPP emblem +
-   * technical-read panel on the charger detail page.
+   * Per-charger config flag. True when vendor credentials work AND
+   * this charger is in the Zaptec bulk list. Operator-facing
+   * meaning: "API integration is configured for this charger".
+   * Independent of runtime online state.
    */
   apiActive: boolean;
+  /**
+   * Per-charger config flag. True when the charger's
+   * AuthenticationType is 2 (OCPP cloud) — i.e. OCPP is the
+   * configured comms mode. Doesn't say anything about whether the
+   * charger is currently authenticated against our gateway; that's
+   * the Auth toggle's job.
+   */
+  ocppConfigured: boolean;
   authRequired: boolean;
   /** Zaptec's own runtime view; exposed for tooltips/future use. */
   vendorOnline: boolean;
@@ -100,8 +106,18 @@ async function buildApiActiveMap(
           if (!ch.Id) continue;
           const stationId = map.get(ch.Id);
           if (!stationId) continue;
+          // AuthenticationType: 0=None, 1=Vendor app, 2=OCPP cloud,
+          // 3=Native OCPP. Treat 2 (cloud) and 3 (native) as
+          // OCPP-configured — both route through OCPP, just over
+          // different transports.
+          const authTypeNum =
+            typeof (ch as { AuthenticationType?: unknown }).AuthenticationType === "number"
+              ? ((ch as { AuthenticationType?: number }).AuthenticationType as number)
+              : null;
+          const ocppConfigured = authTypeNum === 2 || authTypeNum === 3;
           out.set(stationId, {
             apiActive: true,
+            ocppConfigured,
             // IsAuthorizationRequired may be undefined on legacy / Go
             // chargers — treat as "not required" (the Zaptec default).
             authRequired: ch.IsAuthorizationRequired === true,
@@ -213,21 +229,22 @@ export async function listSiteTree(
     const pendingSeen = identity
       ? pendingByIdentity.get(identity.identityString.toLowerCase()) ?? null
       : null;
-    // OCPP active = strict gateway-DO view: auth passed AND projection
-    // saw recent traffic. pending_discoveries is intentionally NOT
-    // included here — it'd conflate "auth working" with "auth failing
-    // but reachable".
-    const ocppActive =
-      identity?.status === "online" ||
-      (lastSeen != null && now - new Date(lastSeen).getTime() < ONLINE_WINDOW_MS);
     const liveSnapshot = apiActiveMap.get(c.siteAssetId) ?? null;
     const apiActive = liveSnapshot ? liveSnapshot.apiActive : null;
     const authRequired = liveSnapshot ? liveSnapshot.authRequired : null;
-    // `online` keeps the legacy "either source signals reachability"
-    // semantic for parent-node count aggregation. New code should
-    // prefer apiActive / ocppActive.
+    // OCPP emblem reflects the per-charger CONFIG (AuthenticationType=2
+    // or 3 in Zaptec) — i.e. "OCPP is the configured auth mode for
+    // this charger". Independent of whether a session is currently
+    // open. Runtime-state-based reachability is captured separately
+    // via the chargersOnline / chargersOffline counts on parent rows.
+    const ocppActive = liveSnapshot ? liveSnapshot.ocppConfigured : null;
+    // `online` reflects RUNTIME reachability for the count-pill
+    // aggregation: identity recently seen by gateway projection
+    // (auth-passing OCPP traffic), or pending_discoveries last_seen
+    // within window. Distinct from the config-state emblems.
     const online =
-      ocppActive ||
+      identity?.status === "online" ||
+      (lastSeen != null && now - new Date(lastSeen).getTime() < ONLINE_WINDOW_MS) ||
       (pendingSeen != null && now - pendingSeen.getTime() < ONLINE_WINDOW_MS);
     const connectorTypes = c.evses.flatMap((e) => e.connectors.map((k) => k.type));
     const connectorSummary =

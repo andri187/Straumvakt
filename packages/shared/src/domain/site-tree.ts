@@ -29,13 +29,13 @@ export interface SiteTreeChargerNode {
    */
   apiActive: boolean | null;
   /**
-   * Our OCPP gateway has a live authenticated session — i.e. auth
-   * passed AND the projection saw a recent OCPP message. Distinct
-   * from "reachable" — a charger can be apiActive but ocppActive
-   * false when Zaptec is connecting anonymously and our gateway is
-   * 401-ing every upgrade.
+   * Per-charger CONFIG flag. True when Zaptec's AuthenticationType
+   * is OCPP (2 = OCPP cloud, 3 = Native OCPP). False when configured
+   * for any other auth mode. null = unknown (non-Zaptec / Zaptec
+   * unreachable). Independent of runtime session state — that's
+   * tracked via parent-node chargersOnline / chargersOffline counts.
    */
-  ocppActive: boolean;
+  ocppActive: boolean | null;
   /**
    * Whether Zaptec is configured to send OCPP Basic-Auth on the
    * WSS upgrade for this charger. Drives the per-row Auth toggle
