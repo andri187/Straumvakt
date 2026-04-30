@@ -21,16 +21,25 @@ import { openPassword } from "../lib/credential-crypto";
 const ONLINE_WINDOW_MS = 5 * 60 * 1000;
 
 interface ZaptecLiveSnapshot {
+  /**
+   * True iff vendor credentials work AND this charger is in the
+   * Zaptec bulk list. Operator-facing meaning: "we have functional
+   * API control over this charger". Independent of whether the
+   * charger is currently online to Zaptec cloud — that runtime
+   * state is captured separately via the OCPP emblem +
+   * technical-read panel on the charger detail page.
+   */
   apiActive: boolean;
   authRequired: boolean;
+  /** Zaptec's own runtime view; exposed for tooltips/future use. */
+  vendorOnline: boolean;
 }
 
 /**
  * Build a Map<chargingStationId, ZaptecLiveSnapshot> by hitting
  * Zaptec's bulk /api/chargers endpoint per active Zaptec credential.
  * One round trip per credential — dramatically cheaper than
- * per-charger detail. Snapshot includes both IsOnline (apiActive)
- * and IsAuthorizationRequired (the auth toggle state).
+ * per-charger detail.
  *
  * Best-effort. Failures (auth issue, Zaptec unreachable, missing
  * KEK) leave the map empty and the caller renders apiActive=null
@@ -82,15 +91,21 @@ async function buildApiActiveMap(
         if (!tokenResult.ok) return;
         const listResult = await listChargers(tokenResult.value);
         if (!listResult.ok) return;
+        // For every charger Zaptec returns that we know about, mark
+        // apiActive=true — creds work AND we have the vendor record
+        // for it, so the charger is API-manageable. Chargers in our
+        // DB that aren't in this response stay null (= unknown), so
+        // the operator can spot decommissioned-but-still-imported rows.
         for (const ch of listResult.value) {
-          if (!ch.Id || typeof ch.IsOnline !== "boolean") continue;
+          if (!ch.Id) continue;
           const stationId = map.get(ch.Id);
           if (!stationId) continue;
           out.set(stationId, {
-            apiActive: ch.IsOnline,
+            apiActive: true,
             // IsAuthorizationRequired may be undefined on legacy / Go
             // chargers — treat as "not required" (the Zaptec default).
             authRequired: ch.IsAuthorizationRequired === true,
+            vendorOnline: ch.IsOnline === true,
           });
         }
       } catch (err) {

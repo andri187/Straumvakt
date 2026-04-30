@@ -1,14 +1,21 @@
 // Gateway → API Worker: log a charger that attempted to connect to
-// our gateway WITHOUT valid OCPP Basic-Auth credentials. Mirrors the
-// pending_discoveries upsert path the ocpp-auth route already does
-// for the wrong-creds case — this catches the no-creds case so
-// every connection attempt surfaces on /chargers/pending regardless
-// of whether the charger is configured to send auth yet.
+// our gateway WITHOUT valid OCPP Basic-Auth credentials. Two paths:
+//
+//   1. Identity string MATCHES an existing OcppIdentity (case-
+//      insensitive lookup): update OcppIdentity.last_seen_at on the
+//      matching row and DO NOT touch pending_discoveries. The
+//      operator's already onboarded this charger; the connection
+//      attempt should enrich the existing record, not pollute the
+//      pending list.
+//
+//   2. No matching OcppIdentity: upsert pending_discoveries as
+//      before. These are truly unknown chargers that the operator
+//      hasn't claimed yet.
 //
 // Same shared-secret gating (OCPP_INGEST_SECRET) as ocpp-auth so the
-// gateway is the only legitimate caller. Fire-and-forget from the
-// gateway's perspective — we always 200 (or 401 on bad secret); the
-// gateway translates the response into a 401 to the charger.
+// gateway is the only legitimate caller. Always 200 (or 401 on bad
+// secret); the gateway returns 401 to the charger regardless of
+// which path we took here.
 
 import { Hono } from "hono";
 import { makePrisma } from "../../lib/prisma";
@@ -38,6 +45,21 @@ internalPendingDiscovery.post("/", async (c) => {
 
   const db = makePrisma(c.env);
   try {
+    // Path 1: identity already provisioned → enrich the existing row.
+    // Match case-insensitive (Zaptec sends lowercase, DB has whatever
+    // case the import landed). updateMany so multiple matches —
+    // theoretically possible across orgs — all get refreshed.
+    const matched = await db.ocppIdentity.updateMany({
+      where: {
+        identityString: { equals: identityString, mode: "insensitive" },
+      },
+      data: { lastSeenAt: new Date() },
+    });
+    if (matched.count > 0) {
+      return c.json({ ok: true, enriched: matched.count });
+    }
+
+    // Path 2: truly unknown — upsert into the pending pool.
     await upsertPendingDiscovery(db, {
       identityString,
       remoteAddr:
@@ -55,5 +77,5 @@ internalPendingDiscovery.post("/", async (c) => {
     return c.json({ ok: false, error: "upsert_failed" }, 500);
   }
 
-  return c.json({ ok: true });
+  return c.json({ ok: true, enriched: 0 });
 });
