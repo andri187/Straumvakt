@@ -48,7 +48,10 @@ export default async function ChargerDetailPage({ params }: { params: Promise<{ 
         ← Back to chargers
       </Link>
       <header className="mb-4 border-b border-bg-border pb-3">
-        <h1 className="text-xl font-semibold text-ink-50">{identity?.identityString ?? charger.serialNumber ?? charger.chargingStationId.slice(0, 8)}</h1>
+        <div className="flex flex-wrap items-center gap-2">
+          <h1 className="text-xl font-semibold text-ink-50">{identity?.identityString ?? charger.serialNumber ?? charger.chargingStationId.slice(0, 8)}</h1>
+          <WarrantyEmblem expires={charger.warrantyExpires} />
+        </div>
         <p className="mt-0.5 text-xs text-ink-400">
           <Link href={`/tenants/organizations/${charger.orgId}`} className="text-sv-sky hover:underline">{charger.orgDisplayName}</Link>
           {" · "}<span className="text-ink-300">{charger.siteDisplayName}</span>
@@ -220,6 +223,40 @@ function ProfileRow({ label, value }: { label: string; value: string | null }) {
       <span className="shrink-0 font-mono text-[10px] text-ink-500">{label}</span>
       <span className="font-mono text-[11px] text-ink-100 break-all truncate">{value}</span>
     </div>
+  );
+}
+
+function WarrantyEmblem({ expires }: { expires: string | null }) {
+  // Parse the YYYY-MM-DD date in UTC so timezone drift around midnight
+  // doesn't flip the badge a day early/late. Comparison happens at the
+  // date granularity the column stores at.
+  const inWarranty =
+    expires != null &&
+    Number.isFinite(new Date(expires + "T00:00:00Z").getTime()) &&
+    new Date(expires + "T00:00:00Z").getTime() > Date.now();
+
+  const label = expires
+    ? `${inWarranty ? "Warranty" : "Out of warranty"} · ${expires}`
+    : "No warranty info";
+  const tone = inWarranty
+    ? "border-sv-green/40 bg-sv-green/10 text-sv-green"
+    : "border-bg-border bg-bg-base/40 text-ink-500";
+
+  return (
+    <span
+      title={label}
+      className={
+        "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-brand " +
+        tone
+      }
+    >
+      <span
+        className={
+          "h-1.5 w-1.5 rounded-full " + (inWarranty ? "bg-sv-green" : "bg-ink-500")
+        }
+      />
+      {inWarranty ? "Warranty" : "Out of warranty"}
+    </span>
   );
 }
 

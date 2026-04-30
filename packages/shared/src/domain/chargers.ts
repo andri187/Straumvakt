@@ -63,6 +63,8 @@ export interface ChargerDetail {
   model: string | null;
   serialNumber: string | null;
   firmwareVersion: string | null;
+  /** Date column in DB, ISO string here. Null when never set. */
+  warrantyExpires: string | null;
   // OCPP BootNotification profile (1.6 §6.2 / 2.0.1 §1.4) — auto-
   // populated by the charger.booted projection. Null until the
   // charger boots against our gateway at least once.

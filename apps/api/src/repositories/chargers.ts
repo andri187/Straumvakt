@@ -100,6 +100,7 @@ export async function getChargerById(
     model: r.model,
     serialNumber: r.serialNumber,
     firmwareVersion: r.firmwareVersion,
+    warrantyExpires: r.warrantyExpires ? r.warrantyExpires.toISOString().slice(0, 10) : null,
     chargeBoxSerialNumber: r.chargeBoxSerialNumber,
     meterType: r.meterType,
     meterSerialNumber: r.meterSerialNumber,
