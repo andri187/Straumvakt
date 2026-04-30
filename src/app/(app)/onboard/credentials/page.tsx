@@ -51,8 +51,8 @@ export default async function VendorCredentialsPage() {
                 <th className="px-3 py-2 font-medium">Username</th>
                 <th className="px-3 py-2 font-medium">Owner org</th>
                 <th className="px-3 py-2 font-medium">Status</th>
-                <th className="px-3 py-2 text-right font-medium">Installations</th>
-                <th className="px-3 py-2 text-right font-medium">Chargers</th>
+                <th className="px-3 py-2 text-right font-medium">Installs</th>
+                <th className="px-3 py-2 text-right font-medium">Chargers (online / total)</th>
                 <th className="px-3 py-2 font-medium">Last used</th>
                 <th className="px-3 py-2 font-medium">Created</th>
                 <th className="px-3 py-2 font-medium">Notes</th>
@@ -79,7 +79,14 @@ export default async function VendorCredentialsPage() {
                     <StatusBadge status={c.status} />
                   </td>
                   <td className="px-3 py-2 text-right text-ink-200">{c.installationCount ?? 0}</td>
-                  <td className="px-3 py-2 text-right text-ink-200">{c.chargerCount ?? 0}</td>
+                  <td className="px-3 py-2 text-right">
+                    <span className="font-mono text-xs">
+                      <span className={(c.chargersOnline ?? 0) > 0 ? "text-emerald-300" : "text-ink-500"}>
+                        {c.chargersOnline ?? 0}
+                      </span>
+                      <span className="text-ink-500"> / {c.chargerCount ?? 0}</span>
+                    </span>
+                  </td>
                   <td className="px-3 py-2 text-xs text-ink-400">
                     {c.lastUsedAt ? new Date(c.lastUsedAt).toLocaleString() : "—"}
                   </td>

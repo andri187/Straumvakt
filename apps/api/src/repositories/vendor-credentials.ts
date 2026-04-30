@@ -27,10 +27,15 @@ interface RawRow {
   updatedAt: Date;
   ownerOrg: { displayName: string };
   vendor: { slug: string; displayName: string };
-  _count: { installations: number };
 }
 
-function toSummary(r: RawRow, chargerCount: number | null): VendorCredentialSummary {
+interface CountStats {
+  installationCount: number;
+  chargerCount: number;
+  chargersOnline: number;
+}
+
+function toSummary(r: RawRow, stats: CountStats | null): VendorCredentialSummary {
   return {
     id: r.id,
     ownerOrgId: r.ownerOrgId,
@@ -44,29 +49,60 @@ function toSummary(r: RawRow, chargerCount: number | null): VendorCredentialSumm
     lastUsedAt: r.lastUsedAt?.toISOString() ?? null,
     createdAt: r.createdAt.toISOString(),
     updatedAt: r.updatedAt.toISOString(),
-    installationCount: r._count.installations,
-    chargerCount,
+    installationCount: stats?.installationCount ?? null,
+    chargerCount: stats?.chargerCount ?? null,
+    chargersOnline: stats?.chargersOnline ?? null,
   };
 }
 
 /**
- * Per-credential count of chargers across linked installations.
- * Single grouped query keeps this O(1) regardless of credential count.
+ * Per-credential counts: installations linked to this credential
+ * (matched via the new credentials_id FK OR the legacy
+ * credentials_ref text-match for installations imported before the
+ * vault landed), plus chargers under those installations split into
+ * online vs offline. Online = OcppIdentity.status='online' OR
+ * lastSeenAt within last 5 minutes (projections.ts updates these
+ * fields on incoming OCPP events).
+ *
+ * Single grouped query — O(1) round-trip per list call.
  */
-async function chargerCountByCredential(
+async function statsByCredential(
   db: PrismaClient,
   credentialIds: string[],
-): Promise<Map<string, number>> {
+): Promise<Map<string, CountStats>> {
   if (credentialIds.length === 0) return new Map();
-  const rows = await db.$queryRaw<{ credentials_id: string; charger_count: bigint }[]>`
-    SELECT i.credentials_id, COUNT(cs.site_asset_id)::BIGINT AS charger_count
-    FROM properties.installations i
+  const rows = await db.$queryRaw<
+    {
+      credential_id: string;
+      install_count: bigint;
+      charger_count: bigint;
+      chargers_online: bigint;
+    }[]
+  >`
+    SELECT
+      vc.id AS credential_id,
+      COUNT(DISTINCT i.id)::BIGINT AS install_count,
+      COUNT(DISTINCT cs.site_asset_id)::BIGINT AS charger_count,
+      COUNT(DISTINCT cs.site_asset_id) FILTER (
+        WHERE oi.status = 'online' OR oi.last_seen_at > NOW() - interval '5 minutes'
+      )::BIGINT AS chargers_online
+    FROM hardware.vendor_credentials vc
+    LEFT JOIN properties.installations i ON
+      i.credentials_id = vc.id
+      OR (i.org_id = vc.owner_org_id AND i.credentials_ref = vc.username)
     LEFT JOIN assets.charging_stations cs ON cs.installation_id = i.id
-    WHERE i.credentials_id = ANY(${credentialIds}::uuid[])
-    GROUP BY i.credentials_id
+    LEFT JOIN ocpp.ocpp_identities oi ON oi.charging_station_id = cs.site_asset_id
+    WHERE vc.id = ANY(${credentialIds}::uuid[])
+    GROUP BY vc.id
   `;
-  const out = new Map<string, number>();
-  for (const r of rows) out.set(r.credentials_id, Number(r.charger_count));
+  const out = new Map<string, CountStats>();
+  for (const r of rows) {
+    out.set(r.credential_id, {
+      installationCount: Number(r.install_count),
+      chargerCount: Number(r.charger_count),
+      chargersOnline: Number(r.chargers_online),
+    });
+  }
   return out;
 }
 
@@ -84,15 +120,11 @@ export async function listVendorCredentials(
     include: {
       ownerOrg: { select: { displayName: true } },
       vendor: { select: { slug: true, displayName: true } },
-      _count: { select: { installations: true } },
     },
   })) as RawRow[];
 
-  const cc = await chargerCountByCredential(
-    db,
-    rows.map((r) => r.id),
-  );
-  return rows.map((r) => toSummary(r, cc.get(r.id) ?? 0));
+  const stats = await statsByCredential(db, rows.map((r) => r.id));
+  return rows.map((r) => toSummary(r, stats.get(r.id) ?? null));
 }
 
 export async function getVendorCredentialById(
@@ -104,12 +136,11 @@ export async function getVendorCredentialById(
     include: {
       ownerOrg: { select: { displayName: true } },
       vendor: { select: { slug: true, displayName: true } },
-      _count: { select: { installations: true } },
     },
   })) as RawRow | null;
   if (!row) return null;
-  const cc = await chargerCountByCredential(db, [id]);
-  return toSummary(row, cc.get(id) ?? 0);
+  const stats = await statsByCredential(db, [id]);
+  return toSummary(row, stats.get(id) ?? null);
 }
 
 export interface CreateCredentialArgs {
@@ -145,10 +176,9 @@ export async function createVendorCredential(
     include: {
       ownerOrg: { select: { displayName: true } },
       vendor: { select: { slug: true, displayName: true } },
-      _count: { select: { installations: true } },
     },
   })) as RawRow;
-  return toSummary(created, 0);
+  return toSummary(created, null);
 }
 
 export interface UpdateCredentialArgs {
@@ -177,11 +207,10 @@ export async function updateVendorCredential(
     include: {
       ownerOrg: { select: { displayName: true } },
       vendor: { select: { slug: true, displayName: true } },
-      _count: { select: { installations: true } },
     },
   })) as RawRow;
-  const cc = await chargerCountByCredential(db, [id]);
-  return toSummary(updated, cc.get(id) ?? 0);
+  const stats = await statsByCredential(db, [id]);
+  return toSummary(updated, stats.get(id) ?? null);
 }
 
 export async function deleteVendorCredential(

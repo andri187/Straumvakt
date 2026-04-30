@@ -19,4 +19,8 @@ export interface VendorCredentialSummary {
   // Convenience counts populated by the list endpoints — null when not joined.
   installationCount: number | null;
   chargerCount: number | null;
+  // Of the chargerCount, how many have OCPP activity within the freshness
+  // window (status='online' OR lastSeenAt within last 5 minutes). Null when
+  // the join wasn't computed.
+  chargersOnline: number | null;
 }
