@@ -55,6 +55,14 @@ model User {
   locale         String           @default("is")
   notes          String?          @db.Text
 
+  // ── Profile enrichment round 2 (Sprint 3) ────────────────────────
+  firstName      String?          @map("first_name")
+  middleName     String?          @map("middle_name")
+  lastName       String?          @map("last_name")
+  dateOfBirth    DateTime?        @map("date_of_birth") @db.Date
+  photoUrl       String?          @map("photo_url")
+  address        Json             @default("{}") @map("address") @db.JsonB
+
   // ── Existing relations ───────────────────────────────────────────
   credentials    UserCredential?
   memberships    Membership[]
@@ -277,6 +285,11 @@ model Site {
   xtrrfTariffId      String?         @map("xtrrf_tariff_id") @db.Uuid
   spvivfTariffId     String?         @map("spvivf_tariff_id") @db.Uuid
 
+  // ── Profile enrichment round 2 (Sprint 3) ────────────────────────
+  openingHours       Json            @default("{}") @map("opening_hours") @db.JsonB
+  accessNote         String?         @map("access_note") @db.Text
+  photoUrl           String?         @map("photo_url")
+
   // ── Existing relations ───────────────────────────────────────────
   organization       Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
   property           Property        @relation(fields: [propertyId], references: [id], onDelete: Cascade)
@@ -433,6 +446,20 @@ model ChargingStation {
   ownerOrgId       String?       @map("owner_org_id") @db.Uuid
   chrgrfTariffId   String?       @map("chrgrf_tariff_id") @db.Uuid
 
+  // ── OCPP BootNotification profile (1.6 §6.2 / 2.0.1 §1.4) ────────
+  chargeBoxSerialNumber String? @map("charge_box_serial_number")
+  meterType             String? @map("meter_type")
+  meterSerialNumber     String? @map("meter_serial_number")
+  iccid                 String?
+  imsi                  String?
+
+  // ── Operator-domain fields (Sprint 3 enrichment) ──────────────────
+  locationNote     String?       @map("location_note") @db.Text
+  mountingType     String?       @map("mounting_type")
+  photoUrl         String?       @map("photo_url")
+  ipRating         String?       @map("ip_rating")
+  breakerAmps      Int?          @map("breaker_amps")
+
   // ── Existing relations ───────────────────────────────────────────
   siteAsset        SiteAsset     @relation(fields: [siteAssetId], references: [id], onDelete: Cascade)
   organization     Organization  @relation("StationOperator", fields: [orgId], references: [id])
@@ -500,6 +527,9 @@ model Connector {
   maxPowerKw      Decimal?        @map("max_power_kw") @db.Decimal(8, 2)
   status          String          @default("unknown")
   statusUpdatedAt DateTime?       @map("status_updated_at") @db.Timestamptz(6)
+  // ── OCPP StatusNotification mirror (1.6 §4.9) ─────────────────────
+  errorCode       String?         @map("error_code")
+  vendorErrorCode String?         @map("vendor_error_code")
   createdAt       DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt       DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
 
