@@ -48,6 +48,7 @@ export default async function PendingChargersPage() {
           <table className="w-full text-left text-sm">
             <thead className="bg-bg-inset/40 text-[10px] uppercase tracking-brand text-ink-500">
               <tr>
+                <th className="px-3 py-2 font-medium">Status</th>
                 <th className="px-3 py-2 font-medium">Identity</th>
                 <th className="px-3 py-2 font-medium">First seen</th>
                 <th className="px-3 py-2 font-medium">Last seen</th>
@@ -59,6 +60,9 @@ export default async function PendingChargersPage() {
             <tbody className="divide-y divide-bg-border/40">
               {pending.map((p) => (
                 <tr key={p.identityString} className="hover:bg-bg-raised/30">
+                  <td className="px-3 py-2">
+                    <OnlineEmblem lastSeenAt={p.lastSeenAt} />
+                  </td>
                   <td className="px-3 py-2 font-mono text-xs text-ink-100">
                     {p.identityString}
                   </td>
@@ -93,5 +97,38 @@ export default async function PendingChargersPage() {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * "Online" for a pending row = the charger is still actively retrying.
+ * Same 5-minute window as the OcppIdentity online definition (used in
+ * the sites tree + vendor-credentials counts), so the operator sees a
+ * consistent definition of "right now" across both views.
+ *
+ * Computed at render time from `lastSeenAt` so the page stays a server
+ * component — the dot becomes stale on refresh, which is the right
+ * behaviour for an admin diagnostic page.
+ */
+const ONLINE_WINDOW_MS = 5 * 60 * 1000;
+
+function OnlineEmblem({ lastSeenAt }: { lastSeenAt: string }) {
+  const seen = new Date(lastSeenAt).getTime();
+  const online = Number.isFinite(seen) && Date.now() - seen < ONLINE_WINDOW_MS;
+  const label = online ? "Live" : "Idle";
+  const tone = online
+    ? "border-sv-green/40 bg-sv-green/10 text-sv-green"
+    : "border-bg-border bg-bg-base/40 text-ink-500";
+  return (
+    <span
+      title={online ? `Last attempt ${new Date(lastSeenAt).toLocaleTimeString()} — within retry window` : `Last attempt ${new Date(lastSeenAt).toLocaleString()} — outside 5 min window`}
+      className={
+        "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-brand " +
+        tone
+      }
+    >
+      <span className={"h-1.5 w-1.5 rounded-full " + (online ? "bg-sv-green animate-pulse" : "bg-ink-500")} />
+      {label}
+    </span>
   );
 }
