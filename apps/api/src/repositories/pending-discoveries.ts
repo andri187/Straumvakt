@@ -67,6 +67,26 @@ export async function deletePendingDiscovery(
 }
 
 /**
+ * Bulk-delete pending rows whose last_seen_at is older than the
+ * "live" window (5 min). Operator triggers this from /chargers/pending
+ * to clear out the noise — chargers that briefly probed the gateway
+ * once and never came back. If a cleared row's charger reconnects
+ * later, the gateway's no-auth hook re-creates the row at the next
+ * retry, so this is non-destructive.
+ *
+ * Returns count of deleted rows so the UI can flash a confirmation.
+ */
+const IDLE_THRESHOLD_MS = 5 * 60 * 1000;
+
+export async function clearIdlePendingDiscoveries(db: PrismaClient): Promise<number> {
+  const cutoff = new Date(Date.now() - IDLE_THRESHOLD_MS);
+  const r = await db.pendingDiscovery.deleteMany({
+    where: { lastSeenAt: { lt: cutoff } },
+  });
+  return r.count;
+}
+
+/**
  * Upsert a row keyed by identity_string. Called from the OCPP auth
  * route on a 403 (unknown identity OR bad password). Identity string
  * is lowercased before write so the same charger retrying from

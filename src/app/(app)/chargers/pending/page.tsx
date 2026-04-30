@@ -4,6 +4,9 @@ import { ActionBar } from "@/components/action-bar";
 import { apiFetchServerJson } from "@/lib/api-client-server";
 import type { PendingDiscoverySummary } from "@straumvakt/shared/domain/pending-discoveries";
 import { DismissButton } from "./dismiss-button";
+import { ClearIdleButton } from "./clear-idle-button";
+
+const ONLINE_WINDOW_MS = 5 * 60 * 1000;
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Chargers · Pending onboarding" };
@@ -23,14 +26,24 @@ export default async function PendingChargersPage() {
     "/api/admin/pending-discoveries",
   );
 
+  // Idle = last_seen_at older than 5 min. Computed server-side so the
+  // ClearIdleButton can show the count up-front without a client round-trip.
+  const now = Date.now();
+  const idleCount = pending.filter(
+    (p) => now - new Date(p.lastSeenAt).getTime() >= ONLINE_WINDOW_MS,
+  ).length;
+
   return (
     <div className="mx-auto max-w-6xl px-6 py-8">
       <SectionTabs tabs={OPERATIONS_TABS} />
       <SectionTabs tabs={CHARGERS_TABS} />
-      <ActionBar
-        title="Pending onboarding"
-        description="Chargers that connected to the OCPP gateway with credentials that don't match any provisioned OcppIdentity. Claim a row to pre-fill the new-charger form with the discovered identity string."
-      />
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <ActionBar
+          title="Pending onboarding"
+          description="Chargers that connected to the OCPP gateway with credentials that don't match any provisioned OcppIdentity. Claim a row to pre-fill the new-charger form with the discovered identity string."
+        />
+        <ClearIdleButton idleCount={idleCount} />
+      </div>
 
       {pending.length === 0 ? (
         <div className="rounded border border-dashed border-bg-border p-8 text-center">
@@ -110,7 +123,6 @@ export default async function PendingChargersPage() {
  * component — the dot becomes stale on refresh, which is the right
  * behaviour for an admin diagnostic page.
  */
-const ONLINE_WINDOW_MS = 5 * 60 * 1000;
 
 function OnlineEmblem({ lastSeenAt }: { lastSeenAt: string }) {
   const seen = new Date(lastSeenAt).getTime();
