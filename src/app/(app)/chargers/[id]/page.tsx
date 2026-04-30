@@ -80,6 +80,11 @@ export default async function ChargerDetailPage({ params }: { params: Promise<{ 
       {/* Operator command surface — only mount when there's an OcppIdentity
           (without one, /api/admin/chargers/<id>/<command> would 404 since
           the route keys on ocppIdentityId). */}
+      {/* Connectors + commands — live status pill + per-connector
+          Start/Stop inline. GetConfig / ChangeConfig collapsed in
+          a <details> at the bottom. Pulls connector status straight
+          from the connector.status_updated projection (live, updated
+          on each StatusNotification). */}
       {identity && (
         <div className="mb-6">
           <ChargerCommandsPanel
@@ -88,63 +93,30 @@ export default async function ChargerDetailPage({ params }: { params: Promise<{ 
               id: c.id,
               connectorIndex: c.connectorIndex,
               type: c.type,
+              status: c.status,
+              errorCode: c.errorCode,
+              vendorErrorCode: c.vendorErrorCode,
+              statusUpdatedAt: c.statusUpdatedAt,
             }))}
           />
         </div>
       )}
 
-      {/* OCPP profile + connector status — combined compact card.
-          OCPP fields auto-populate from BootNotification; connectors
-          come from the connector.status_updated projection. */}
-      {(hasOcppProfile(charger) || (evse && evse.connectors.length > 0)) && (
+      {/* OCPP BootNotification profile — auto-populated from the
+          charger's first BootNotification. Read-only on our side. */}
+      {hasOcppProfile(charger) && (
         <section className="mb-6 rounded-lg border border-bg-border bg-bg-base/30 p-3">
-          {hasOcppProfile(charger) && (
-            <>
-              <header className="mb-2 flex items-baseline justify-between">
-                <h2 className="text-xs font-semibold uppercase tracking-brand text-ink-300">OCPP profile</h2>
-                <span className="text-[10px] text-ink-500">BootNotification — read-only</span>
-              </header>
-              <div className="mb-3 grid gap-x-4 gap-y-1 text-[11px] sm:grid-cols-2 lg:grid-cols-3">
-                <ProfileRow label="charge_box_serial" value={charger.chargeBoxSerialNumber} />
-                <ProfileRow label="meter_type" value={charger.meterType} />
-                <ProfileRow label="meter_serial" value={charger.meterSerialNumber} />
-                <ProfileRow label="iccid" value={charger.iccid} />
-                <ProfileRow label="imsi" value={charger.imsi} />
-              </div>
-            </>
-          )}
-
-          {evse && evse.connectors.length > 0 && (
-            <>
-              <header className="mb-2 flex items-baseline justify-between border-t border-bg-border/40 pt-2">
-                <h2 className="text-xs font-semibold uppercase tracking-brand text-ink-300">Connectors</h2>
-                <span className="text-[10px] text-ink-500">live · StatusNotification projection</span>
-              </header>
-              <ul className="grid gap-1 text-[11px] sm:grid-cols-2">
-                {evse.connectors.map((c) => (
-                  <li
-                    key={c.id}
-                    className="flex flex-wrap items-center gap-2 rounded border border-bg-border/40 bg-bg-base/40 px-2 py-1"
-                  >
-                    <span className="font-mono text-[10px] text-ink-400">#{c.connectorIndex}</span>
-                    <span className="text-ink-300">{c.type}</span>
-                    <StatusPill status={c.status} />
-                    {c.errorCode && (
-                      <span className="rounded border border-rose-700/40 bg-rose-950/30 px-1 py-0 text-[10px] font-medium text-rose-200">
-                        {c.errorCode}
-                        {c.vendorErrorCode && <span className="ml-1 text-rose-300/70">[{c.vendorErrorCode}]</span>}
-                      </span>
-                    )}
-                    {c.statusUpdatedAt && (
-                      <span className="ml-auto text-[10px] text-ink-500">
-                        {new Date(c.statusUpdatedAt).toLocaleTimeString()}
-                      </span>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
+          <header className="mb-2 flex items-baseline justify-between">
+            <h2 className="text-xs font-semibold uppercase tracking-brand text-ink-300">OCPP profile</h2>
+            <span className="text-[10px] text-ink-500">BootNotification — read-only</span>
+          </header>
+          <div className="grid gap-x-4 gap-y-1 text-[11px] sm:grid-cols-2 lg:grid-cols-3">
+            <ProfileRow label="charge_box_serial" value={charger.chargeBoxSerialNumber} />
+            <ProfileRow label="meter_type" value={charger.meterType} />
+            <ProfileRow label="meter_serial" value={charger.meterSerialNumber} />
+            <ProfileRow label="iccid" value={charger.iccid} />
+            <ProfileRow label="imsi" value={charger.imsi} />
+          </div>
         </section>
       )}
 
