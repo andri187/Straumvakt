@@ -127,6 +127,33 @@ export async function getChargerDetail(
 }
 
 /**
+ * POST /api/chargers/{id}/update — write a subset of observation IDs.
+ * Body is a flat object keyed by Zaptec StateId number → string value
+ * (e.g. `{ "120": "true" }` to flip AuthenticationRequired). The
+ * settable IDs are listed in `docs/reference/integrations/zaptec.md`
+ * §13.16. Zaptec applies the change asynchronously — the response is
+ * accept-only; verify by re-fetching detail or state after a few
+ * seconds.
+ */
+export async function updateChargerSettings(
+  accessToken: string,
+  chargerId: string,
+  body: Record<string, string | boolean | number>,
+): Promise<ZaptecResult<true>> {
+  const res = await fetch(`${ZAPTEC_BASE}/api/chargers/${chargerId}/update`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(body),
+  }).catch(() => null);
+  if (!res) return { ok: false, error: { kind: "unreachable" } };
+  if (!res.ok) return { ok: false, error: { kind: "list", status: res.status } };
+  return { ok: true, value: true };
+}
+
+/**
  * GET /api/chargers — bulk list of chargers visible to this token.
  * Returns ~17 fields per charger including `IsOnline`. One call per
  * credential is dramatically cheaper than per-charger detail when the

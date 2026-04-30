@@ -25,6 +25,10 @@ import {
 } from "../../lib/zaptec";
 import { importZaptecInstallation } from "../../repositories/zaptec-import";
 import { unsealVendorCredentialPassword } from "../../repositories/vendor-credentials";
+import {
+  setZaptecAuthRequired,
+  type BulkScope,
+} from "../../repositories/zaptec-bulk-config";
 import { sha256Hex } from "../../lib/sha256";
 import type { Env } from "../../bindings";
 
@@ -225,6 +229,60 @@ adminZaptec.post("/inspect", async (c) => {
   );
 
   return c.json({ chargers: details });
+});
+
+/**
+ * POST /api/admin/zaptec/bulk-auth
+ *
+ * Cascade-toggle Zaptec's `AuthenticationRequired` flag (StateId 120)
+ * across a tree scope. Operator clicks an "Auth on/off" button on
+ * a row in the /sites tree → this endpoint resolves the scope to
+ * every Zaptec-vendor charger underneath, unseals the org's stored
+ * Zaptec credential, and POSTs /api/chargers/{id}/update in
+ * parallel.
+ *
+ * scope.kind enum:
+ *   "site"         — every charger on every installation under the site
+ *   "installation" — every charger under the installation
+ *   "circuit"      — every charger on the circuit
+ *   "charger"      — a single charger
+ *
+ * Returns per-row outcomes so the UI can flash "Updated 30 / Failed 2".
+ */
+const BulkAuthScope = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("site"), siteId: z.string().uuid() }),
+  z.object({ kind: z.literal("installation"), installationId: z.string().uuid() }),
+  z.object({ kind: z.literal("circuit"), circuitId: z.string().uuid() }),
+  z.object({ kind: z.literal("charger"), chargingStationId: z.string().uuid() }),
+]);
+const BulkAuthBody = z.object({
+  scope: BulkAuthScope,
+  enabled: z.boolean(),
+});
+
+adminZaptec.post("/bulk-auth", async (c) => {
+  const raw = (await c.req.json().catch(() => null)) as unknown;
+  const parsed = BulkAuthBody.safeParse(raw);
+  if (!parsed.success) {
+    return c.json({ error: "validation", issues: parsed.error.issues }, 400);
+  }
+  const db = makePrisma(c.env);
+  try {
+    const result = await setZaptecAuthRequired(
+      db,
+      c.env.OCPP_CRED_KEK,
+      parsed.data.scope as BulkScope,
+      parsed.data.enabled,
+    );
+    return c.json({ ok: true, ...result });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg === "kek_unavailable") return c.json({ error: msg }, 500);
+    if (msg === "zaptec_credential_missing") return c.json({ error: msg }, 400);
+    if (msg === "zaptec_auth_failed") return c.json({ error: msg }, 502);
+    console.error("[zaptec.bulk-auth] unhandled", { msg, scope: parsed.data.scope });
+    return c.json({ error: "internal", message: msg }, 500);
+  }
 });
 
 adminZaptec.post("/import", async (c) => {
