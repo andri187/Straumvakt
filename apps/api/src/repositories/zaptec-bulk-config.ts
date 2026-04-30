@@ -16,7 +16,7 @@
 // reversible by toggling back.
 
 import type { PrismaClient } from "../generated/prisma/client";
-import { getZaptecAccessToken, updateChargerSettings } from "../lib/zaptec";
+import { getZaptecAccessToken, putChargerProperties } from "../lib/zaptec";
 import { openPassword } from "../lib/credential-crypto";
 
 export type BulkScope =
@@ -124,12 +124,17 @@ export async function setZaptecAuthRequired(
   if (!tokenResult.ok) throw new Error("zaptec_auth_failed");
   const accessToken = tokenResult.value;
 
-  // StateId 120 = AuthenticationRequired (writable per Zaptec docs §13.16).
-  const body = { "120": enabled ? "true" : "false" };
+  // PUT /api/chargers/{id} with PropertyAuthenticationDisabled =
+  // !enabled. Inverse polarity: AuthenticationDisabled=true means
+  // OCPP Basic-Auth is OFF; =false means it's ON. The earlier
+  // approach (POST /update with StateId 120) returned 200 but silently
+  // no-op'd — see lib/zaptec.ts:putChargerProperties for the full
+  // probe history.
+  const body = { PropertyAuthenticationDisabled: !enabled };
 
   const results = await Promise.all(
     zaptec.map(async (c) => {
-      const r = await updateChargerSettings(accessToken, c.vendorResourceId!, body);
+      const r = await putChargerProperties(accessToken, c.vendorResourceId!, body);
       if (r.ok) {
         return { ok: true as const, c };
       }

@@ -127,21 +127,26 @@ export async function getChargerDetail(
 }
 
 /**
- * POST /api/chargers/{id}/update — write a subset of observation IDs.
- * Body is a flat object keyed by Zaptec StateId number → string value
- * (e.g. `{ "120": "true" }` to flip AuthenticationRequired). The
- * settable IDs are listed in `docs/reference/integrations/zaptec.md`
- * §13.16. Zaptec applies the change asynchronously — the response is
- * accept-only; verify by re-fetching detail or state after a few
- * seconds.
+ * PUT /api/chargers/{id} — write Property* fields on a charger.
+ * Body is keyed by the property name (e.g. `PropertyAuthenticationDisabled`,
+ * `PropertyOcppDefaultIdTag`). Returns the updated charger detail.
+ *
+ * NOTE on the previously-tried POST /api/chargers/{id}/update path:
+ * that endpoint accepts writes and returns 200 but silently no-ops
+ * for Property* fields regardless of the body shape (probed every
+ * variation: StateId-keyed, name-keyed, envelope, with/without
+ * string-coerced values — none of them changed PropertyAuthenticationDisabled).
+ * The Zaptec UI flips Property* via PUT, which DOES persist (verified
+ * round-trip on A2 ZPR042727 — PropertyAuthenticationDisabled:
+ * true → false → true). Stick with PUT for any property write.
  */
-export async function updateChargerSettings(
+export async function putChargerProperties(
   accessToken: string,
   chargerId: string,
   body: Record<string, string | boolean | number>,
-): Promise<ZaptecResult<true>> {
-  const res = await fetch(`${ZAPTEC_BASE}/api/chargers/${chargerId}/update`, {
-    method: "POST",
+): Promise<ZaptecResult<Record<string, unknown>>> {
+  const res = await fetch(`${ZAPTEC_BASE}/api/chargers/${chargerId}`, {
+    method: "PUT",
     headers: {
       Authorization: `Bearer ${accessToken}`,
       "content-type": "application/json",
@@ -150,7 +155,8 @@ export async function updateChargerSettings(
   }).catch(() => null);
   if (!res) return { ok: false, error: { kind: "unreachable" } };
   if (!res.ok) return { ok: false, error: { kind: "list", status: res.status } };
-  return { ok: true, value: true };
+  const json = (await res.json().catch(() => null)) as Record<string, unknown> | null;
+  return { ok: true, value: json ?? {} };
 }
 
 /**
