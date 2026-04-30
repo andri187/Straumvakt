@@ -49,6 +49,13 @@ export const ChargerUpdateInput = z.object({
   connectorId: z.string().uuid().optional(),
   connectorType: ConnectorTypeEnum.optional(),
   connectorMaxPowerKw: z.number().positive().max(1000).optional().nullable(),
+  // Operator-domain physical info (Sprint 3 enrichment). Each accepts
+  // empty string → coerce to null (operator clearing a field).
+  locationNote: z.string().max(2000).optional().nullable(),
+  mountingType: z.enum(["wall", "pedestal", "floor", "other"]).optional().nullable(),
+  photoUrl: z.string().max(500).optional().nullable(),
+  ipRating: z.string().max(20).optional().nullable(),
+  breakerAmps: z.number().int().min(1).max(2000).optional().nullable(),
 });
 export type ChargerUpdateInput = z.infer<typeof ChargerUpdateInput>;
 

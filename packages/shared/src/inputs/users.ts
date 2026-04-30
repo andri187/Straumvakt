@@ -24,6 +24,26 @@ export const UserUpdateInput = z.object({
   phone: optionalString(40),
   locale: z.string().min(2).max(10).optional(),
   notes: optionalString(2000),
+  // Profile enrichment round 2 (Sprint 3) — name parts editable
+  // separately from displayName; address is a freeform JSON object.
+  firstName: z.string().max(120).optional().nullable(),
+  middleName: z.string().max(120).optional().nullable(),
+  lastName: z.string().max(120).optional().nullable(),
+  // dateOfBirth as ISO yyyy-mm-dd; UI sends empty-string when cleared.
+  dateOfBirth: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, { message: "format: yyyy-mm-dd" })
+    .optional()
+    .nullable(),
+  photoUrl: z.string().max(500).optional().nullable(),
+  address: z
+    .object({
+      street: z.string().max(200).optional(),
+      city: z.string().max(80).optional(),
+      postalCode: z.string().max(20).optional(),
+      countryCode: z.string().regex(/^[A-Z]{2}$/).optional(),
+    })
+    .optional(),
 });
 export type UserUpdateInput = z.infer<typeof UserUpdateInput>;
 

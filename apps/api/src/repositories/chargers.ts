@@ -100,6 +100,16 @@ export async function getChargerById(
     model: r.model,
     serialNumber: r.serialNumber,
     firmwareVersion: r.firmwareVersion,
+    chargeBoxSerialNumber: r.chargeBoxSerialNumber,
+    meterType: r.meterType,
+    meterSerialNumber: r.meterSerialNumber,
+    iccid: r.iccid,
+    imsi: r.imsi,
+    locationNote: r.locationNote,
+    mountingType: r.mountingType,
+    photoUrl: r.photoUrl,
+    ipRating: r.ipRating,
+    breakerAmps: r.breakerAmps,
     evses: r.evses.map((e) => ({
       id: e.id,
       evseIndex: e.evseIndex,
@@ -110,6 +120,10 @@ export async function getChargerById(
         connectorIndex: c.connectorIndex,
         type: c.type,
         maxPowerKw: c.maxPowerKw?.toString() ?? null,
+        status: c.status,
+        errorCode: c.errorCode,
+        vendorErrorCode: c.vendorErrorCode,
+        statusUpdatedAt: c.statusUpdatedAt?.toISOString() ?? null,
       })),
     })),
     ocppIdentities: r.ocppIdentities.map((i) => ({
@@ -247,6 +261,12 @@ export async function updateCharger(
     if (patch.stationFirmwareVersion !== undefined) stationData.firmwareVersion = patch.stationFirmwareVersion;
     if (patch.installationId !== undefined) stationData.installationId = patch.installationId;
     if (patch.circuitId !== undefined) stationData.circuitId = patch.circuitId;
+    // Operator-domain fields (Sprint 3 enrichment).
+    if (patch.locationNote !== undefined) stationData.locationNote = patch.locationNote;
+    if (patch.mountingType !== undefined) stationData.mountingType = patch.mountingType;
+    if (patch.photoUrl !== undefined) stationData.photoUrl = patch.photoUrl;
+    if (patch.ipRating !== undefined) stationData.ipRating = patch.ipRating;
+    if (patch.breakerAmps !== undefined) stationData.breakerAmps = patch.breakerAmps;
     if (Object.keys(stationData).length > 0) {
       await tx.chargingStation.update({ where: { siteAssetId: chargingStationId }, data: stationData });
     }

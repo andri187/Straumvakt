@@ -24,6 +24,9 @@ type Row = {
   usrfPremTariffId: string | null;
   xtrrfTariffId: string | null;
   spvivfTariffId: string | null;
+  openingHours: unknown;
+  accessNote: string | null;
+  photoUrl: string | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -46,6 +49,9 @@ function toSummary(r: Row): SiteSummary {
     usrfPremTariffId: r.usrfPremTariffId,
     xtrrfTariffId: r.xtrrfTariffId,
     spvivfTariffId: r.spvivfTariffId,
+    openingHours: r.openingHours,
+    accessNote: r.accessNote,
+    photoUrl: r.photoUrl,
     createdAt: r.createdAt.toISOString(),
     updatedAt: r.updatedAt.toISOString(),
   };
@@ -100,7 +106,12 @@ export async function updateSite(
   id: string,
   patch: SiteUpdateInput,
 ): Promise<SiteSummary> {
-  const updated = await db.site.update({ where: { id }, data: patch, include });
+  const data: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(patch)) {
+    if (v === undefined) continue;
+    data[k] = v;
+  }
+  const updated = await db.site.update({ where: { id }, data, include });
   return toSummary(updated);
 }
 
