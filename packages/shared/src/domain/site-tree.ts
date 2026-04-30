@@ -36,6 +36,13 @@ export interface SiteTreeChargerNode {
    * 401-ing every upgrade.
    */
   ocppActive: boolean;
+  /**
+   * Whether Zaptec is configured to send OCPP Basic-Auth on the
+   * WSS upgrade for this charger. Drives the per-row Auth toggle
+   * in the sites tree. null = unknown (non-Zaptec / Zaptec
+   * unreachable / no credential available).
+   */
+  authRequired: boolean | null;
   status: string;
   lastSeenAt: string | null;
   connectorSummary: string;

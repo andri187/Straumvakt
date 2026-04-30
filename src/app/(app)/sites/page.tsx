@@ -8,23 +8,43 @@ import type {
   SiteTreeCircuitNode,
   SiteTreeChargerNode,
 } from "@straumvakt/shared/domain/site-tree";
-import { ZaptecAuthToggle } from "./auth-toggle-button";
+import { ZaptecAuthToggle, type AuthState } from "./auth-toggle-button";
 
-function countChargers(node: SiteTreeNode | SiteTreeInstallationNode | SiteTreeCircuitNode): number {
+function flatChargers(
+  node: SiteTreeNode | SiteTreeInstallationNode | SiteTreeCircuitNode,
+): SiteTreeChargerNode[] {
   if ("orphanCircuits" in node) {
-    return (
-      node.installations.reduce(
-        (sum, i) => sum + countChargers(i),
-        0,
-      ) +
-      node.orphanCircuits.reduce((sum, c) => sum + c.chargers.length, 0) +
-      node.orphanChargers.length
-    );
+    return [
+      ...node.installations.flatMap(flatChargers),
+      ...node.orphanCircuits.flatMap((c) => c.chargers),
+      ...node.orphanChargers,
+    ];
   }
   if ("circuits" in node) {
-    return node.circuits.reduce((sum, c) => sum + c.chargers.length, 0) + node.directChargers.length;
+    return [...node.circuits.flatMap((c) => c.chargers), ...node.directChargers];
   }
-  return node.chargers.length;
+  return node.chargers;
+}
+
+/**
+ * Aggregate auth state across a list of Zaptec chargers. Used by the
+ * sites tree to render the per-row toggle's color. Non-Zaptec rows
+ * are excluded from the aggregate so a stray non-Zaptec charger
+ * doesn't drag the state to "unknown".
+ */
+function aggregateAuthState(chargers: SiteTreeChargerNode[]): {
+  state: AuthState;
+  count: number;
+} {
+  const zaptec = chargers.filter((c) => c.vendor === "Zaptec");
+  if (zaptec.length === 0) return { state: "unknown", count: 0 };
+  const known = zaptec.filter((c) => c.authRequired !== null);
+  if (known.length === 0) return { state: "unknown", count: zaptec.length };
+  const on = known.filter((c) => c.authRequired === true).length;
+  const off = known.length - on;
+  if (on === known.length) return { state: "all-on", count: zaptec.length };
+  if (off === known.length) return { state: "all-off", count: zaptec.length };
+  return { state: "mixed", count: zaptec.length };
 }
 
 export const dynamic = "force-dynamic";
@@ -64,7 +84,7 @@ export default async function SitesPage() {
 
 function SiteRow({ site }: { site: SiteTreeNode }) {
   const total = site.installations.length + site.orphanCircuits.length + site.orphanChargers.length;
-  const chargerCount = countChargers(site);
+  const auth = aggregateAuthState(flatChargers(site));
   return (
     <details className="group" open={total > 0 && total <= 3}>
       <summary className="flex cursor-pointer items-center gap-3 px-4 py-2.5 hover:bg-bg-base/20">
@@ -79,10 +99,12 @@ function SiteRow({ site }: { site: SiteTreeNode }) {
             {" · "}<span className="font-mono">{site.siteType}/{site.accessLevel}</span>
           </span>
         </div>
-        <span className="flex shrink-0 items-center gap-1.5">
-          <ZaptecAuthToggle scope={{ kind: "site", siteId: site.id }} enabled={true} count={chargerCount} label={site.displayName} />
-          <ZaptecAuthToggle scope={{ kind: "site", siteId: site.id }} enabled={false} count={chargerCount} label={site.displayName} />
-        </span>
+        <ZaptecAuthToggle
+          scope={{ kind: "site", siteId: site.id }}
+          state={auth.state}
+          count={auth.count}
+          label={site.displayName}
+        />
         <ChargerCountPill online={site.chargersOnline} offline={site.chargersOffline} />
       </summary>
 
@@ -125,7 +147,7 @@ function SiteRow({ site }: { site: SiteTreeNode }) {
 
 function InstallationRow({ installation }: { installation: SiteTreeInstallationNode }) {
   const childCount = installation.circuits.length + installation.directChargers.length;
-  const chargerCount = countChargers(installation);
+  const auth = aggregateAuthState(flatChargers(installation));
   return (
     <details className="group/i" open={childCount > 0 && childCount <= 4}>
       <summary
@@ -147,10 +169,12 @@ function InstallationRow({ installation }: { installation: SiteTreeInstallationN
         <span className="font-mono text-[10px] text-ink-500">{installation.onboardingStatus}</span>
         <span className="ml-auto flex items-center gap-1.5">
           {installation.vendorSlug === "zaptec" && (
-            <>
-              <ZaptecAuthToggle scope={{ kind: "installation", installationId: installation.id }} enabled={true} count={chargerCount} label={installation.displayName} />
-              <ZaptecAuthToggle scope={{ kind: "installation", installationId: installation.id }} enabled={false} count={chargerCount} label={installation.displayName} />
-            </>
+            <ZaptecAuthToggle
+              scope={{ kind: "installation", installationId: installation.id }}
+              state={auth.state}
+              count={auth.count}
+              label={installation.displayName}
+            />
           )}
           <ChargerCountPill
             online={installation.chargersOnline}
@@ -203,10 +227,12 @@ function CircuitRow({ circuit, indent }: { circuit: SiteTreeCircuitNode; indent:
         </span>
         <span className="ml-auto flex items-center gap-1.5">
           {circuit.chargers.length > 0 && (
-            <>
-              <ZaptecAuthToggle scope={{ kind: "circuit", circuitId: circuit.id }} enabled={true} count={circuit.chargers.length} label={circuit.displayName} />
-              <ZaptecAuthToggle scope={{ kind: "circuit", circuitId: circuit.id }} enabled={false} count={circuit.chargers.length} label={circuit.displayName} />
-            </>
+            <ZaptecAuthToggle
+              scope={{ kind: "circuit", circuitId: circuit.id }}
+              state={aggregateAuthState(circuit.chargers).state}
+              count={aggregateAuthState(circuit.chargers).count}
+              label={circuit.displayName}
+            />
           )}
           <span className="text-[10px] text-ink-500">
             {circuit.chargers.length} charger{circuit.chargers.length === 1 ? "" : "s"}
@@ -263,10 +289,12 @@ function ChargerLine({ charger, indent }: { charger: SiteTreeChargerNode; indent
       <span className="text-[10px] text-ink-500 truncate">{charger.connectorSummary}</span>
       <span className="ml-auto flex items-center gap-1.5">
         {charger.vendor === "Zaptec" && (
-          <>
-            <ZaptecAuthToggle scope={{ kind: "charger", chargingStationId: charger.chargingStationId }} enabled={true} count={1} label={label} />
-            <ZaptecAuthToggle scope={{ kind: "charger", chargingStationId: charger.chargingStationId }} enabled={false} count={1} label={label} />
-          </>
+          <ZaptecAuthToggle
+            scope={{ kind: "charger", chargingStationId: charger.chargingStationId }}
+            state={aggregateAuthState([charger]).state}
+            count={1}
+            label={label}
+          />
         )}
         <span className="font-mono text-[10px] text-ink-500">
           {charger.status}

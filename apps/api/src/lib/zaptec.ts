@@ -171,6 +171,14 @@ export interface ZaptecChargerLite {
   Active?: boolean;
   InstallationId?: string;
   CircuitId?: string;
+  /**
+   * Reflects the AuthenticationRequired flag (StateId 120). True when
+   * Zaptec is configured to send OCPP Basic-Auth on the WSS upgrade,
+   * false when it connects anonymously. We write this via
+   * updateChargerSettings({"120": "true|false"}) and read it via
+   * IsAuthorizationRequired on the bulk + detail responses.
+   */
+  IsAuthorizationRequired?: boolean;
 }
 export async function listChargers(
   accessToken: string,

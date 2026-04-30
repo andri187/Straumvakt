@@ -20,20 +20,27 @@ import { openPassword } from "../lib/credential-crypto";
 
 const ONLINE_WINDOW_MS = 5 * 60 * 1000;
 
+interface ZaptecLiveSnapshot {
+  apiActive: boolean;
+  authRequired: boolean;
+}
+
 /**
- * Build a Map<chargingStationId, IsOnline> by hitting Zaptec's bulk
- * /api/chargers endpoint per active Zaptec credential. One round trip
- * per credential — dramatically cheaper than per-charger detail.
+ * Build a Map<chargingStationId, ZaptecLiveSnapshot> by hitting
+ * Zaptec's bulk /api/chargers endpoint per active Zaptec credential.
+ * One round trip per credential — dramatically cheaper than
+ * per-charger detail. Snapshot includes both IsOnline (apiActive)
+ * and IsAuthorizationRequired (the auth toggle state).
  *
  * Best-effort. Failures (auth issue, Zaptec unreachable, missing
  * KEK) leave the map empty and the caller renders apiActive=null
- * rather than 500ing the page.
+ * + authRequired=null rather than 500ing the page.
  */
 async function buildApiActiveMap(
   db: PrismaClient,
   kek: string | undefined,
-): Promise<Map<string, boolean>> {
-  const out = new Map<string, boolean>();
+): Promise<Map<string, ZaptecLiveSnapshot>> {
+  const out = new Map<string, ZaptecLiveSnapshot>();
   if (!kek) return out;
 
   const credentials = await db.vendorCredential.findMany({
@@ -78,7 +85,13 @@ async function buildApiActiveMap(
         for (const ch of listResult.value) {
           if (!ch.Id || typeof ch.IsOnline !== "boolean") continue;
           const stationId = map.get(ch.Id);
-          if (stationId) out.set(stationId, ch.IsOnline);
+          if (!stationId) continue;
+          out.set(stationId, {
+            apiActive: ch.IsOnline,
+            // IsAuthorizationRequired may be undefined on legacy / Go
+            // chargers — treat as "not required" (the Zaptec default).
+            authRequired: ch.IsAuthorizationRequired === true,
+          });
         }
       } catch (err) {
         console.error("[site-tree] zaptec API-active fetch failed", {
@@ -192,9 +205,9 @@ export async function listSiteTree(
     const ocppActive =
       identity?.status === "online" ||
       (lastSeen != null && now - new Date(lastSeen).getTime() < ONLINE_WINDOW_MS);
-    const apiActive = apiActiveMap.has(c.siteAssetId)
-      ? apiActiveMap.get(c.siteAssetId) ?? false
-      : null;
+    const liveSnapshot = apiActiveMap.get(c.siteAssetId) ?? null;
+    const apiActive = liveSnapshot ? liveSnapshot.apiActive : null;
+    const authRequired = liveSnapshot ? liveSnapshot.authRequired : null;
     // `online` keeps the legacy "either source signals reachability"
     // semantic for parent-node count aggregation. New code should
     // prefer apiActive / ocppActive.
@@ -218,6 +231,7 @@ export async function listSiteTree(
       online,
       apiActive,
       ocppActive,
+      authRequired,
       status: identity?.status ?? "—",
       lastSeenAt: lastSeen ? new Date(lastSeen).toISOString() : null,
       connectorSummary,
