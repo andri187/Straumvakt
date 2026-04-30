@@ -264,6 +264,21 @@ function CircuitRow({ circuit, indent }: { circuit: SiteTreeCircuitNode; indent:
   );
 }
 
+function formatRelativeDuration(fromISO: string | null): string | null {
+  if (!fromISO) return null;
+  const ms = Date.now() - new Date(fromISO).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return null;
+  const min = Math.floor(ms / 60_000);
+  if (min < 1) return "<1m";
+  if (min < 60) return `${min}m`;
+  const h = Math.floor(min / 60);
+  const remMin = min % 60;
+  if (h < 24) return remMin > 0 ? `${h}h ${remMin}m` : `${h}h`;
+  const d = Math.floor(h / 24);
+  const remH = h % 24;
+  return remH > 0 ? `${d}d ${remH}h` : `${d}d`;
+}
+
 function ChargerLine({ charger, indent }: { charger: SiteTreeChargerNode; indent: number }) {
   const label =
     charger.identityString ?? charger.serialNumber ?? charger.chargingStationId.slice(0, 8);
@@ -275,6 +290,10 @@ function ChargerLine({ charger, indent }: { charger: SiteTreeChargerNode; indent
         minute: "2-digit",
       })
     : null;
+  const connectedFor = formatRelativeDuration(charger.onlineSince);
+  const onlineDot = charger.online
+    ? "bg-emerald-400"
+    : "bg-ink-600";
   return (
     <div
       className="flex items-center gap-2 rounded px-2 py-1 text-xs hover:bg-bg-base/30"
@@ -301,9 +320,33 @@ function ChargerLine({ charger, indent }: { charger: SiteTreeChargerNode; indent
         </span>
       )}
       <span className="text-[10px] text-ink-500 truncate">{charger.connectorSummary}</span>
-      <span className="ml-auto font-mono text-[10px] text-ink-500">
-        {charger.status}
-        {lastSeen && ` · ${lastSeen}`}
+      <span className="ml-auto flex items-center gap-2 text-[10px] text-ink-500">
+        <span
+          className="inline-flex items-center gap-1"
+          title={charger.online ? "Reachable in last 5 min" : "Not heard from in last 5 min"}
+        >
+          <span className={`h-1.5 w-1.5 rounded-full ${onlineDot}`} />
+          <span className="font-mono">{charger.online ? "online" : "offline"}</span>
+        </span>
+        {connectedFor && (
+          <span
+            className="font-mono"
+            title={
+              charger.onlineSince
+                ? `Online since ${new Date(charger.onlineSince).toLocaleString()}`
+                : undefined
+            }
+          >
+            {connectedFor}
+          </span>
+        )}
+        <span
+          className="font-mono"
+          title="24h disconnect count — needs gateway WebSocket event tracking, not yet wired"
+        >
+          {charger.disconnectsPast24h == null ? "—" : `${charger.disconnectsPast24h}↻`}
+        </span>
+        {lastSeen && <span className="font-mono truncate">{lastSeen}</span>}
       </span>
     </div>
   );

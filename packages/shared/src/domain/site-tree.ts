@@ -37,6 +37,22 @@ export interface SiteTreeChargerNode {
    */
   ocppActive: boolean | null;
   /**
+   * ISO timestamp of when the charger came online (StateId -2 last
+   * transition to "1"). null when offline / never connected /
+   * Zaptec data unavailable. Used to render "online 3h 12m" in the
+   * tree row. Disconnect count would need a server-side event log
+   * that we don't currently track — see disconnectsPast24h.
+   */
+  onlineSince: string | null;
+  /**
+   * Number of disconnects observed in the last 24 hours. Always
+   * null right now: Zaptec REST doesn't expose this and we don't
+   * yet track gateway WebSocket lifecycle events on our side.
+   * Reserved so the UI placeholder maps to a real field once we
+   * add the event log.
+   */
+  disconnectsPast24h: number | null;
+  /**
    * Whether Zaptec is configured to send OCPP Basic-Auth on the
    * WSS upgrade for this charger. Drives the per-row Auth toggle
    * in the sites tree. null = unknown (non-Zaptec / Zaptec

@@ -15,7 +15,7 @@ import type {
   SiteTreeCircuitNode,
   SiteTreeChargerNode,
 } from "@straumvakt/shared/domain/site-tree";
-import { getZaptecAccessToken, listChargers } from "../lib/zaptec";
+import { getChargerState, getZaptecAccessToken, listChargers } from "../lib/zaptec";
 import { openPassword } from "../lib/credential-crypto";
 
 const ONLINE_WINDOW_MS = 5 * 60 * 1000;
@@ -39,6 +39,12 @@ interface ZaptecLiveSnapshot {
   authRequired: boolean;
   /** Zaptec's own runtime view; exposed for tooltips/future use. */
   vendorOnline: boolean;
+  /**
+   * Timestamp of the StateId -2 (IsOnline) last transition to "1"
+   * — i.e. when the charger came online to Zaptec cloud. Null when
+   * we couldn't read state for this charger.
+   */
+  onlineSince: string | null;
 }
 
 /**
@@ -102,6 +108,12 @@ async function buildApiActiveMap(
         // for it, so the charger is API-manageable. Chargers in our
         // DB that aren't in this response stay null (= unknown), so
         // the operator can spot decommissioned-but-still-imported rows.
+        // First pass: write the rows we can populate from the bulk
+        // list alone. onlineSince gets filled in afterwards via
+        // per-charger /state calls, but only for chargers that are
+        // currently IsOnline=true (no point fetching state for
+        // offline ones — onlineSince doesn't apply).
+        const onlineToFetch: Array<{ vendorId: string; stationId: string }> = [];
         for (const ch of listResult.value) {
           if (!ch.Id) continue;
           const stationId = map.get(ch.Id);
@@ -118,12 +130,32 @@ async function buildApiActiveMap(
           out.set(stationId, {
             apiActive: true,
             ocppConfigured,
-            // IsAuthorizationRequired may be undefined on legacy / Go
-            // chargers — treat as "not required" (the Zaptec default).
             authRequired: ch.IsAuthorizationRequired === true,
             vendorOnline: ch.IsOnline === true,
+            onlineSince: null,
           });
+          if (ch.IsOnline === true) {
+            onlineToFetch.push({ vendorId: ch.Id, stationId });
+          }
         }
+
+        // Per-charger /state fetch in parallel — pulls StateId -2
+        // (IsOnline) timestamp so we can render "online 3h 12m" in
+        // the tree row. Skipped for offline chargers. Best-effort:
+        // if the state call fails, onlineSince stays null and the UI
+        // renders an em-dash.
+        await Promise.all(
+          onlineToFetch.map(async ({ vendorId, stationId }) => {
+            const stateResult = await getChargerState(tokenResult.value, vendorId);
+            if (!stateResult.ok) return;
+            const isOnlineEntry = stateResult.value.find((s) => s.StateId === -2);
+            if (!isOnlineEntry || !isOnlineEntry.Timestamp) return;
+            const existing = out.get(stationId);
+            if (existing) {
+              out.set(stationId, { ...existing, onlineSince: isOnlineEntry.Timestamp });
+            }
+          }),
+        );
       } catch (err) {
         console.error("[site-tree] zaptec API-active fetch failed", {
           orgId: cred.ownerOrgId,
@@ -276,6 +308,12 @@ export async function listSiteTree(
       apiActive,
       ocppActive,
       authRequired,
+      onlineSince: liveSnapshot ? liveSnapshot.onlineSince : null,
+      // Disconnect count needs gateway-side WebSocket lifecycle event
+      // tracking that we don't have yet — Zaptec REST doesn't expose
+      // it either. Reserved as a stable null so the UI placeholder
+      // maps cleanly when the data lands.
+      disconnectsPast24h: null,
       status: identity?.status ?? "—",
       lastSeenAt: lastSeen ? new Date(lastSeen).toISOString() : null,
       connectorSummary,
