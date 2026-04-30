@@ -35,6 +35,7 @@ Thumbs.db
 
 # Backup files
 *.bak
+*.bak.png
 
 # LibreOffice / OpenOffice lock files
 .~lock.*#
