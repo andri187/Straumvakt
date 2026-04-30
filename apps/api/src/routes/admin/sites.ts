@@ -11,6 +11,7 @@ import {
 } from "../../repositories/sites";
 import { listInstallationsBySite } from "../../repositories/installations";
 import { listCircuitsBySite } from "../../repositories/circuits";
+import { listSiteTree } from "../../repositories/site-tree";
 import type { Env } from "../../bindings";
 
 export const adminSites = new Hono<{ Bindings: Env; Variables: AuthVars }>();
@@ -21,6 +22,12 @@ adminSites.get("/", async (c) => {
   const db = makePrisma(c.env);
   const sites = await listAllSites(db);
   return c.json({ sites });
+});
+
+adminSites.get("/tree", async (c) => {
+  const db = makePrisma(c.env);
+  const tree = await listSiteTree(db);
+  return c.json({ tree });
 });
 
 adminSites.post("/", async (c) => {

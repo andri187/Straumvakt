@@ -36,19 +36,22 @@ export default async function ChargerDetailPage({ params }: { params: Promise<{ 
       <Link href="/chargers" className="mb-4 inline-block text-xs text-ink-400 hover:text-sv-sky">
         ← Back to chargers
       </Link>
-      <header className="mb-6 border-b border-bg-border pb-4">
-        <h1 className="text-2xl font-semibold text-ink-50">{identity?.identityString ?? charger.serialNumber ?? charger.chargingStationId.slice(0, 8)}</h1>
-        <p className="mt-1 text-sm text-ink-400">
-          Org <Link href={`/tenants/organizations/${charger.orgId}`} className="text-sv-sky hover:underline">{charger.orgDisplayName}</Link>
-          {" · "}Site <span className="text-ink-300">{charger.siteDisplayName}</span>
-          {charger.installationDisplayName && <> · Installation <span className="text-ink-300">{charger.installationDisplayName}</span></>}
-          {charger.circuitDisplayName && <> · Circuit <span className="text-ink-300">{charger.circuitDisplayName}</span></>}
+      <header className="mb-4 border-b border-bg-border pb-3">
+        <h1 className="text-xl font-semibold text-ink-50">{identity?.identityString ?? charger.serialNumber ?? charger.chargingStationId.slice(0, 8)}</h1>
+        <p className="mt-0.5 text-xs text-ink-400">
+          <Link href={`/tenants/organizations/${charger.orgId}`} className="text-sv-sky hover:underline">{charger.orgDisplayName}</Link>
+          {" · "}<span className="text-ink-300">{charger.siteDisplayName}</span>
+          {charger.installationDisplayName && <> · <span className="text-ink-300">{charger.installationDisplayName}</span></>}
+          {charger.circuitDisplayName && <> · <span className="text-ink-300">{charger.circuitDisplayName}</span></>}
+          {(charger.vendor || charger.model) && (
+            <> · <span className="text-ink-300">{charger.vendor} {charger.model}</span></>
+          )}
         </p>
-        <div className="mt-1 flex gap-3 font-mono text-[10px] text-ink-500">
-          <span>Station {charger.chargingStationId.slice(0, 8)}</span>
-          {evse && <span>EVSE {evse.id.slice(0, 8)}</span>}
-          {connector && <span>Connector {connector.id.slice(0, 8)}</span>}
-          {identity && <span>OcppIdentity {identity.id.slice(0, 8)}</span>}
+        <div className="mt-0.5 flex flex-wrap gap-x-3 font-mono text-[10px] text-ink-500">
+          <span>stn {charger.chargingStationId.slice(0, 8)}</span>
+          {evse && <span>evse {evse.id.slice(0, 8)}</span>}
+          {connector && <span>conn {connector.id.slice(0, 8)}</span>}
+          {identity && <span>ocpp {identity.id.slice(0, 8)}</span>}
         </div>
       </header>
 
@@ -68,63 +71,66 @@ export default async function ChargerDetailPage({ params }: { params: Promise<{ 
         </div>
       )}
 
-      {/* OCPP profile — auto-populated from the BootNotification projection.
-          All read-only on the operator side; the charger is the source of
-          truth. Hides cleanly when the charger has never booted yet. */}
-      {hasOcppProfile(charger) && (
-        <section className="mb-6 rounded-lg border border-bg-border bg-bg-base/30 p-4">
-          <header className="mb-3 flex items-baseline justify-between">
-            <h2 className="text-sm font-semibold text-ink-50">OCPP profile</h2>
-            <span className="text-[10px] text-ink-500">
-              Auto-populated from BootNotification — read-only.
-            </span>
-          </header>
-          <dl className="grid gap-x-4 gap-y-1 text-xs sm:grid-cols-[160px_1fr]">
-            <ProfileRow label="charge_box_serial_number" value={charger.chargeBoxSerialNumber} />
-            <ProfileRow label="meter_type" value={charger.meterType} />
-            <ProfileRow label="meter_serial_number" value={charger.meterSerialNumber} />
-            <ProfileRow label="iccid" value={charger.iccid} />
-            <ProfileRow label="imsi" value={charger.imsi} />
-          </dl>
+      {/* OCPP profile + connector status — combined compact card.
+          OCPP fields auto-populate from BootNotification; connectors
+          come from the connector.status_updated projection. */}
+      {(hasOcppProfile(charger) || (evse && evse.connectors.length > 0)) && (
+        <section className="mb-6 rounded-lg border border-bg-border bg-bg-base/30 p-3">
+          {hasOcppProfile(charger) && (
+            <>
+              <header className="mb-2 flex items-baseline justify-between">
+                <h2 className="text-xs font-semibold uppercase tracking-brand text-ink-300">OCPP profile</h2>
+                <span className="text-[10px] text-ink-500">BootNotification — read-only</span>
+              </header>
+              <div className="mb-3 grid gap-x-4 gap-y-1 text-[11px] sm:grid-cols-2 lg:grid-cols-3">
+                <ProfileRow label="charge_box_serial" value={charger.chargeBoxSerialNumber} />
+                <ProfileRow label="meter_type" value={charger.meterType} />
+                <ProfileRow label="meter_serial" value={charger.meterSerialNumber} />
+                <ProfileRow label="iccid" value={charger.iccid} />
+                <ProfileRow label="imsi" value={charger.imsi} />
+              </div>
+            </>
+          )}
+
+          {evse && evse.connectors.length > 0 && (
+            <>
+              <header className="mb-2 flex items-baseline justify-between border-t border-bg-border/40 pt-2">
+                <h2 className="text-xs font-semibold uppercase tracking-brand text-ink-300">Connectors</h2>
+                <span className="text-[10px] text-ink-500">live · StatusNotification projection</span>
+              </header>
+              <ul className="grid gap-1 text-[11px] sm:grid-cols-2">
+                {evse.connectors.map((c) => (
+                  <li
+                    key={c.id}
+                    className="flex flex-wrap items-center gap-2 rounded border border-bg-border/40 bg-bg-base/40 px-2 py-1"
+                  >
+                    <span className="font-mono text-[10px] text-ink-400">#{c.connectorIndex}</span>
+                    <span className="text-ink-300">{c.type}</span>
+                    <StatusPill status={c.status} />
+                    {c.errorCode && (
+                      <span className="rounded border border-rose-700/40 bg-rose-950/30 px-1 py-0 text-[10px] font-medium text-rose-200">
+                        {c.errorCode}
+                        {c.vendorErrorCode && <span className="ml-1 text-rose-300/70">[{c.vendorErrorCode}]</span>}
+                      </span>
+                    )}
+                    {c.statusUpdatedAt && (
+                      <span className="ml-auto text-[10px] text-ink-500">
+                        {new Date(c.statusUpdatedAt).toLocaleTimeString()}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
         </section>
       )}
 
-      {/* Connector status with errorCode breakout. */}
-      {evse && evse.connectors.length > 0 && (
-        <section className="mb-6 rounded-lg border border-bg-border bg-bg-base/30 p-4">
-          <header className="mb-3">
-            <h2 className="text-sm font-semibold text-ink-50">Connector status</h2>
-            <p className="mt-0.5 text-[10px] text-ink-500">
-              Live — updates from the connector.status_updated projection on each OCPP StatusNotification.
-            </p>
-          </header>
-          <ul className="space-y-2 text-xs">
-            {evse.connectors.map((c) => (
-              <li key={c.id} className="flex items-baseline justify-between gap-2 rounded border border-bg-border/40 bg-bg-base/40 px-3 py-2">
-                <span className="text-ink-200">
-                  Connector <span className="font-mono text-[10px] text-ink-400">#{c.connectorIndex}</span>
-                  <span className="ml-2 text-ink-500">{c.type}</span>
-                </span>
-                <span className="flex items-baseline gap-2">
-                  <StatusPill status={c.status} />
-                  {c.errorCode && (
-                    <span className="rounded border border-rose-700/40 bg-rose-950/30 px-1.5 py-0.5 text-[10px] font-medium text-rose-200">
-                      {c.errorCode}
-                      {c.vendorErrorCode && <span className="ml-1 text-rose-300/70">[{c.vendorErrorCode}]</span>}
-                    </span>
-                  )}
-                  {c.statusUpdatedAt && (
-                    <span className="text-[10px] text-ink-500">
-                      {new Date(c.statusUpdatedAt).toLocaleTimeString()}
-                    </span>
-                  )}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
+      <details className="mb-6 rounded-lg border border-bg-border bg-bg-base/30">
+        <summary className="cursor-pointer px-3 py-2 text-xs font-semibold uppercase tracking-brand text-ink-300 hover:text-ink-100">
+          Edit charger
+        </summary>
+        <div className="border-t border-bg-border/40 p-3">
       <EditChargerPanel
         chargingStationId={charger.chargingStationId}
         installationOptions={installations}
@@ -149,6 +155,8 @@ export default async function ChargerDetailPage({ params }: { params: Promise<{ 
           breakerAmps: charger.breakerAmps?.toString() ?? "",
         }}
       />
+        </div>
+      </details>
 
       <section className="mt-8 rounded-lg border border-rose-700/30 bg-rose-950/10 p-4">
         <div className="flex items-baseline justify-between gap-4">
@@ -185,10 +193,10 @@ function hasOcppProfile(c: ChargerDetail): boolean {
 function ProfileRow({ label, value }: { label: string; value: string | null }) {
   if (!value) return null;
   return (
-    <>
-      <dt className="font-mono text-[10px] text-ink-500">{label}</dt>
-      <dd className="font-mono text-[11px] text-ink-100 break-all">{value}</dd>
-    </>
+    <div className="flex items-baseline gap-2 min-w-0">
+      <span className="shrink-0 font-mono text-[10px] text-ink-500">{label}</span>
+      <span className="font-mono text-[11px] text-ink-100 break-all truncate">{value}</span>
+    </div>
   );
 }
 

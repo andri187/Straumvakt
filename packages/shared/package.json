@@ -26,7 +26,8 @@
     "./domain/chargers": "./src/domain/chargers.ts",
     "./domain/pending-discoveries": "./src/domain/pending-discoveries.ts",
     "./domain/zaptec-import": "./src/domain/zaptec-import.ts",
-    "./domain/vendor-credentials": "./src/domain/vendor-credentials.ts"
+    "./domain/vendor-credentials": "./src/domain/vendor-credentials.ts",
+    "./domain/site-tree": "./src/domain/site-tree.ts"
   },
   "dependencies": {
     "zod": "^4.3.6"
