@@ -51,6 +51,63 @@ export default async function ChargerDetailPage({ params }: { params: Promise<{ 
         </div>
       </header>
 
+      {/* OCPP profile — auto-populated from the BootNotification projection.
+          All read-only on the operator side; the charger is the source of
+          truth. Hides cleanly when the charger has never booted yet. */}
+      {hasOcppProfile(charger) && (
+        <section className="mb-6 rounded-lg border border-bg-border bg-bg-base/30 p-4">
+          <header className="mb-3 flex items-baseline justify-between">
+            <h2 className="text-sm font-semibold text-ink-50">OCPP profile</h2>
+            <span className="text-[10px] text-ink-500">
+              Auto-populated from BootNotification — read-only.
+            </span>
+          </header>
+          <dl className="grid gap-x-4 gap-y-1 text-xs sm:grid-cols-[160px_1fr]">
+            <ProfileRow label="charge_box_serial_number" value={charger.chargeBoxSerialNumber} />
+            <ProfileRow label="meter_type" value={charger.meterType} />
+            <ProfileRow label="meter_serial_number" value={charger.meterSerialNumber} />
+            <ProfileRow label="iccid" value={charger.iccid} />
+            <ProfileRow label="imsi" value={charger.imsi} />
+          </dl>
+        </section>
+      )}
+
+      {/* Connector status with errorCode breakout. */}
+      {evse && evse.connectors.length > 0 && (
+        <section className="mb-6 rounded-lg border border-bg-border bg-bg-base/30 p-4">
+          <header className="mb-3">
+            <h2 className="text-sm font-semibold text-ink-50">Connector status</h2>
+            <p className="mt-0.5 text-[10px] text-ink-500">
+              Live — updates from the connector.status_updated projection on each OCPP StatusNotification.
+            </p>
+          </header>
+          <ul className="space-y-2 text-xs">
+            {evse.connectors.map((c) => (
+              <li key={c.id} className="flex items-baseline justify-between gap-2 rounded border border-bg-border/40 bg-bg-base/40 px-3 py-2">
+                <span className="text-ink-200">
+                  Connector <span className="font-mono text-[10px] text-ink-400">#{c.connectorIndex}</span>
+                  <span className="ml-2 text-ink-500">{c.type}</span>
+                </span>
+                <span className="flex items-baseline gap-2">
+                  <StatusPill status={c.status} />
+                  {c.errorCode && (
+                    <span className="rounded border border-rose-700/40 bg-rose-950/30 px-1.5 py-0.5 text-[10px] font-medium text-rose-200">
+                      {c.errorCode}
+                      {c.vendorErrorCode && <span className="ml-1 text-rose-300/70">[{c.vendorErrorCode}]</span>}
+                    </span>
+                  )}
+                  {c.statusUpdatedAt && (
+                    <span className="text-[10px] text-ink-500">
+                      {new Date(c.statusUpdatedAt).toLocaleTimeString()}
+                    </span>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <EditChargerPanel
         chargingStationId={charger.chargingStationId}
         installationOptions={installations}
@@ -68,6 +125,11 @@ export default async function ChargerDetailPage({ params }: { params: Promise<{ 
           connectorId: connector?.id ?? "",
           connectorType: connector?.type ?? "Type2",
           connectorMaxPowerKw: connector?.maxPowerKw ?? "",
+          locationNote: charger.locationNote ?? "",
+          mountingType: charger.mountingType ?? "",
+          photoUrl: charger.photoUrl ?? "",
+          ipRating: charger.ipRating ?? "",
+          breakerAmps: charger.breakerAmps?.toString() ?? "",
         }}
       />
 
@@ -94,5 +156,44 @@ export default async function ChargerDetailPage({ params }: { params: Promise<{ 
         </div>
       </section>
     </div>
+  );
+}
+
+function hasOcppProfile(c: ChargerDetail): boolean {
+  return Boolean(
+    c.chargeBoxSerialNumber || c.meterType || c.meterSerialNumber || c.iccid || c.imsi,
+  );
+}
+
+function ProfileRow({ label, value }: { label: string; value: string | null }) {
+  if (!value) return null;
+  return (
+    <>
+      <dt className="font-mono text-[10px] text-ink-500">{label}</dt>
+      <dd className="font-mono text-[11px] text-ink-100 break-all">{value}</dd>
+    </>
+  );
+}
+
+function StatusPill({ status }: { status: string }) {
+  const tone =
+    status === "Available" || status === "available"
+      ? "bg-emerald-950/40 text-emerald-300 border-emerald-700/40"
+      : status === "Charging" || status === "charging"
+        ? "bg-sv-sky/20 text-sv-sky border-sv-sky/40"
+        : status === "Faulted" || status === "faulted"
+          ? "bg-rose-950/40 text-rose-300 border-rose-700/40"
+          : status === "Unavailable" || status === "unavailable"
+            ? "bg-amber-950/40 text-amber-300 border-amber-700/40"
+            : "bg-slate-800/60 text-slate-300 border-slate-700/40";
+  return (
+    <span
+      className={
+        "inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-medium uppercase " +
+        tone
+      }
+    >
+      {status}
+    </span>
   );
 }

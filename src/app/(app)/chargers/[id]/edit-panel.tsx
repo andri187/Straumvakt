@@ -6,6 +6,8 @@ import { apiFetch } from "@/lib/api-client";
 
 const CONNECTOR_TYPES = ["Type2", "CCS2", "CHAdeMO", "Schuko"] as const;
 
+const MOUNTING_TYPES = ["", "wall", "pedestal", "floor", "other"] as const;
+
 type Initial = {
   stationVendor: string;
   stationModel: string;
@@ -19,6 +21,12 @@ type Initial = {
   connectorId: string;
   connectorType: string;
   connectorMaxPowerKw: string;
+  // Profile enrichment round 2 — operator-domain physical info.
+  locationNote: string;
+  mountingType: string;
+  photoUrl: string;
+  ipRating: string;
+  breakerAmps: string;
 };
 
 export function EditChargerPanel({
@@ -66,7 +74,13 @@ export function EditChargerPanel({
         body.connectorType = s.connectorType;
         body.connectorMaxPowerKw = toNum(s.connectorMaxPowerKw) ?? null;
       }
-      const res = await apiFetch(`/api/admin/charging-stations/${chargingStationId}`, {
+      // Operator-domain physical info — empty string = clear (null).
+      body.locationNote = s.locationNote || null;
+      body.mountingType = s.mountingType || null;
+      body.photoUrl = s.photoUrl || null;
+      body.ipRating = s.ipRating || null;
+      body.breakerAmps = toNum(s.breakerAmps) ?? null;
+      const res = await apiFetch(`/api/admin/chargers/${chargingStationId}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
@@ -112,6 +126,25 @@ export function EditChargerPanel({
           </div>
         </fieldset>
       )}
+
+      <fieldset className="rounded border border-bg-border/60 p-3">
+        <legend className="px-1 text-[10px] font-semibold uppercase tracking-brand text-ink-300">Operator info</legend>
+        <div className="space-y-2">
+          <label className="block">
+            <span className="block text-[11px] font-semibold uppercase tracking-brand text-ink-400">Location note</span>
+            <textarea value={s.locationNote} onChange={(e) => set("locationNote", e.target.value)} rows={2} placeholder="north wall, slot 3" className="mt-1 w-full rounded-md border border-bg-border bg-bg-base/50 px-3 py-2 text-sm text-ink-50 focus:border-sv-sky focus:outline-none" />
+          </label>
+          <Select
+            label="Mounting type"
+            value={s.mountingType}
+            onChange={(v) => set("mountingType", v)}
+            options={MOUNTING_TYPES.map((t) => ({ value: t, label: t === "" ? "— unset —" : t }))}
+          />
+          <Field label="Photo URL" value={s.photoUrl} onChange={(v) => set("photoUrl", v)} mono />
+          <Field label="IP rating" value={s.ipRating} onChange={(v) => set("ipRating", v)} mono />
+          <Field label="Upstream breaker (A)" value={s.breakerAmps} onChange={(v) => set("breakerAmps", v)} mono />
+        </div>
+      </fieldset>
 
       {error && <div className="rounded border border-rose-700/40 bg-rose-950/30 p-2 text-xs text-rose-200">{error}</div>}
       {saved && <div className="rounded border border-sv-green/40 bg-sv-green/10 p-2 text-xs text-sv-green">Saved.</div>}
