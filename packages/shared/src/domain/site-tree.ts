@@ -16,10 +16,26 @@ export interface SiteTreeChargerNode {
   vendor: string | null;
   model: string | null;
   serialNumber: string | null;
-  // Online iff status === 'online' or last_seen_at within the last 5
-  // minutes — same definition vendor-credentials uses for its
-  // online/offline split. Reflects the gateway DO's perspective.
+  // `online` is the legacy "either source signals reachability" flag,
+  // kept for the at-a-glance count aggregation on parent nodes.
+  // Renderers should prefer `apiActive` + `ocppActive` for per-row
+  // emblems since they distinguish what's actually reachable.
   online: boolean;
+  /**
+   * Zaptec cloud reports this charger as online (vendor-side
+   * data plane reachable). null = not a Zaptec charger / Zaptec
+   * unreachable / no credential available — render the emblem grey
+   * but operator can hover to see "unknown" rather than "offline".
+   */
+  apiActive: boolean | null;
+  /**
+   * Our OCPP gateway has a live authenticated session — i.e. auth
+   * passed AND the projection saw a recent OCPP message. Distinct
+   * from "reachable" — a charger can be apiActive but ocppActive
+   * false when Zaptec is connecting anonymously and our gateway is
+   * 401-ing every upgrade.
+   */
+  ocppActive: boolean;
   status: string;
   lastSeenAt: string | null;
   connectorSummary: string;

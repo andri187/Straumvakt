@@ -127,6 +127,41 @@ export async function getChargerDetail(
 }
 
 /**
+ * GET /api/chargers — bulk list of chargers visible to this token.
+ * Returns ~17 fields per charger including `IsOnline`. One call per
+ * credential is dramatically cheaper than per-charger detail when the
+ * caller only needs Zaptec's reachability flag (e.g. for the sites
+ * tree's API-active emblem). Pagination is via the `Pages` envelope
+ * Zaptec returns; default page size is large enough for typical
+ * fleets so we don't paginate yet.
+ */
+export interface ZaptecChargerLite {
+  Id?: string;
+  DeviceId?: string | null;
+  SerialNo?: string | null;
+  Name?: string | null;
+  IsOnline?: boolean;
+  Active?: boolean;
+  InstallationId?: string;
+  CircuitId?: string;
+}
+export async function listChargers(
+  accessToken: string,
+): Promise<ZaptecResult<ZaptecChargerLite[]>> {
+  const res = await fetch(`${ZAPTEC_BASE}/api/chargers`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  }).catch(() => null);
+  if (!res) return { ok: false, error: { kind: "unreachable" } };
+  if (!res.ok) return { ok: false, error: { kind: "list", status: res.status } };
+  const json = (await res.json().catch(() => null)) as
+    | { Data?: ZaptecChargerLite[] }
+    | ZaptecChargerLite[]
+    | null;
+  if (Array.isArray(json)) return { ok: true, value: json };
+  return { ok: true, value: json?.Data ?? [] };
+}
+
+/**
  * GET /api/chargers/{id}/state — array of `{ StateId, ValueAsString,
  * Timestamp }` observation entries. Negative IDs (-2 IsOnline, -3
  * IsOcppConnected, -100 AuthorizationCache) are synthetic. Full

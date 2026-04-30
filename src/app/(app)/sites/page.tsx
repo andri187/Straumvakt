@@ -209,13 +209,8 @@ function ChargerLine({ charger, indent }: { charger: SiteTreeChargerNode; indent
       className="flex items-center gap-2 rounded px-2 py-1 text-xs hover:bg-bg-base/30"
       style={{ paddingLeft: `${1.25 * indent + 1}rem` }}
     >
-      <span
-        className={
-          "h-1.5 w-1.5 rounded-full " +
-          (charger.online ? "bg-emerald-400" : "bg-ink-500")
-        }
-        aria-label={charger.online ? "online" : "offline"}
-      />
+      <SourceEmblem label="API" active={charger.apiActive} />
+      <SourceEmblem label="OCPP" active={charger.ocppActive} />
       <Link
         href={`/chargers/${charger.chargingStationId}`}
         className="font-mono text-ink-100 hover:text-sv-sky truncate"
@@ -256,6 +251,47 @@ function ChargerCountPill({
         <span className="h-1.5 w-1.5 rounded-full bg-ink-500" />
         {offline}
       </span>
+    </span>
+  );
+}
+
+/**
+ * Per-source online emblem — green when the charger is reachable
+ * via this control plane, grey otherwise. `active = null` means
+ * "unknown" (e.g. Zaptec API unreachable, no credential available)
+ * and renders the same as offline but with a different tooltip so
+ * the operator knows the difference.
+ *
+ *   API  → Zaptec cloud reports IsOnline. Vendor-side data plane.
+ *   OCPP → our gateway has a live authenticated session.
+ *
+ * Both green = full hand-shake. Green API + grey OCPP = "Zaptec
+ * sees the charger but auth is failing on our side" — exactly the
+ * config-drift signal the operator needs to spot.
+ */
+function SourceEmblem({ label, active }: { label: string; active: boolean | null }) {
+  const tone = active
+    ? "bg-emerald-950/40 text-emerald-300 ring-emerald-700/30"
+    : active === false
+      ? "bg-bg-base/50 text-ink-500 ring-bg-border"
+      : "bg-bg-base/30 text-ink-600 ring-bg-border/40";
+  const dotTone = active
+    ? "bg-emerald-400"
+    : active === false
+      ? "bg-ink-500"
+      : "bg-ink-600";
+  const title = active
+    ? `${label} active`
+    : active === false
+      ? `${label} offline`
+      : `${label} status unknown`;
+  return (
+    <span
+      title={title}
+      className={`inline-flex shrink-0 items-center gap-1 rounded px-1 py-0.5 font-mono text-[9px] ring-1 ${tone}`}
+    >
+      <span className={`h-1.5 w-1.5 rounded-full ${dotTone}`} />
+      {label}
     </span>
   );
 }

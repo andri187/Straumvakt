@@ -26,7 +26,10 @@ adminSites.get("/", async (c) => {
 
 adminSites.get("/tree", async (c) => {
   const db = makePrisma(c.env);
-  const tree = await listSiteTree(db);
+  // KEK is required to decrypt vendor credentials for the per-charger
+  // API-active fetch. Without it the repo skips the Zaptec leg and
+  // returns apiActive=null on every charger.
+  const tree = await listSiteTree(db, c.env.OCPP_CRED_KEK);
   return c.json({ tree });
 });
 

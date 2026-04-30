@@ -15,17 +15,99 @@ import type {
   SiteTreeCircuitNode,
   SiteTreeChargerNode,
 } from "@straumvakt/shared/domain/site-tree";
+import { getZaptecAccessToken, listChargers } from "../lib/zaptec";
+import { openPassword } from "../lib/credential-crypto";
 
 const ONLINE_WINDOW_MS = 5 * 60 * 1000;
 
-export async function listSiteTree(db: PrismaClient): Promise<SiteTreeNode[]> {
+/**
+ * Build a Map<chargingStationId, IsOnline> by hitting Zaptec's bulk
+ * /api/chargers endpoint per active Zaptec credential. One round trip
+ * per credential — dramatically cheaper than per-charger detail.
+ *
+ * Best-effort. Failures (auth issue, Zaptec unreachable, missing
+ * KEK) leave the map empty and the caller renders apiActive=null
+ * rather than 500ing the page.
+ */
+async function buildApiActiveMap(
+  db: PrismaClient,
+  kek: string | undefined,
+): Promise<Map<string, boolean>> {
+  const out = new Map<string, boolean>();
+  if (!kek) return out;
+
+  const credentials = await db.vendorCredential.findMany({
+    where: { status: "active", vendor: { slug: "zaptec" } },
+    select: {
+      ownerOrgId: true,
+      username: true,
+      passwordCipher: true,
+      passwordIv: true,
+    },
+  });
+  if (credentials.length === 0) return out;
+
+  // Build map: orgId → list of (vendorResourceId → chargingStationId).
+  // Used after the Zaptec call to translate vendor UUIDs back to our
+  // SiteAsset ids.
+  const orgIdentities = await db.ocppIdentity.findMany({
+    where: { vendor: "Zaptec", vendorResourceId: { not: null } },
+    select: { orgId: true, chargingStationId: true, vendorResourceId: true },
+  });
+  const orgVendorMap = new Map<string, Map<string, string>>();
+  for (const id of orgIdentities) {
+    if (!id.vendorResourceId) continue;
+    const inner = orgVendorMap.get(id.orgId) ?? new Map<string, string>();
+    inner.set(id.vendorResourceId, id.chargingStationId);
+    orgVendorMap.set(id.orgId, inner);
+  }
+
+  await Promise.all(
+    credentials.map(async (cred) => {
+      const map = orgVendorMap.get(cred.ownerOrgId);
+      if (!map || !cred.passwordCipher || !cred.passwordIv) return;
+      try {
+        const password = await openPassword(kek, {
+          cipher: cred.passwordCipher,
+          iv: cred.passwordIv,
+        });
+        const tokenResult = await getZaptecAccessToken(cred.username, password);
+        if (!tokenResult.ok) return;
+        const listResult = await listChargers(tokenResult.value);
+        if (!listResult.ok) return;
+        for (const ch of listResult.value) {
+          if (!ch.Id || typeof ch.IsOnline !== "boolean") continue;
+          const stationId = map.get(ch.Id);
+          if (stationId) out.set(stationId, ch.IsOnline);
+        }
+      } catch (err) {
+        console.error("[site-tree] zaptec API-active fetch failed", {
+          orgId: cred.ownerOrgId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }),
+  );
+
+  return out;
+}
+
+export async function listSiteTree(
+  db: PrismaClient,
+  kek?: string,
+): Promise<SiteTreeNode[]> {
   // pending_discoveries is the second source of "online" — populated
   // by the gateway's no-auth hook when a charger connects but doesn't
   // present valid Basic-Auth. Without this, a charger connecting
   // anonymously (e.g. Zaptec PropertyAuthenticationDisabled=true)
   // would render offline here while showing Live on /chargers/pending.
   // Same charger → same answer in both views.
-  const [sites, installations, circuits, chargers, pending] = await Promise.all([
+  //
+  // apiActiveMap is fetched in parallel with the DB queries — Zaptec
+  // round trip is the slowest leg, so overlapping it with the DB
+  // queries keeps the total tree-build time bounded by max() rather
+  // than sum().
+  const [sites, installations, circuits, chargers, pending, apiActiveMap] = await Promise.all([
     db.site.findMany({
       orderBy: [{ displayName: "asc" }],
       include: {
@@ -82,6 +164,7 @@ export async function listSiteTree(db: PrismaClient): Promise<SiteTreeNode[]> {
     db.pendingDiscovery.findMany({
       select: { identityString: true, lastSeenAt: true },
     }),
+    buildApiActiveMap(db, kek),
   ]);
 
   const now = Date.now();
@@ -102,9 +185,21 @@ export async function listSiteTree(db: PrismaClient): Promise<SiteTreeNode[]> {
     const pendingSeen = identity
       ? pendingByIdentity.get(identity.identityString.toLowerCase()) ?? null
       : null;
-    const online =
+    // OCPP active = strict gateway-DO view: auth passed AND projection
+    // saw recent traffic. pending_discoveries is intentionally NOT
+    // included here — it'd conflate "auth working" with "auth failing
+    // but reachable".
+    const ocppActive =
       identity?.status === "online" ||
-      (lastSeen != null && now - new Date(lastSeen).getTime() < ONLINE_WINDOW_MS) ||
+      (lastSeen != null && now - new Date(lastSeen).getTime() < ONLINE_WINDOW_MS);
+    const apiActive = apiActiveMap.has(c.siteAssetId)
+      ? apiActiveMap.get(c.siteAssetId) ?? false
+      : null;
+    // `online` keeps the legacy "either source signals reachability"
+    // semantic for parent-node count aggregation. New code should
+    // prefer apiActive / ocppActive.
+    const online =
+      ocppActive ||
       (pendingSeen != null && now - pendingSeen.getTime() < ONLINE_WINDOW_MS);
     const connectorTypes = c.evses.flatMap((e) => e.connectors.map((k) => k.type));
     const connectorSummary =
@@ -121,6 +216,8 @@ export async function listSiteTree(db: PrismaClient): Promise<SiteTreeNode[]> {
       model: c.model,
       serialNumber: c.serialNumber,
       online,
+      apiActive,
+      ocppActive,
       status: identity?.status ?? "—",
       lastSeenAt: lastSeen ? new Date(lastSeen).toISOString() : null,
       connectorSummary,
