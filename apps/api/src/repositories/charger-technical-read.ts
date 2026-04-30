@@ -45,6 +45,9 @@ const STATE_IDS = {
   LteIccid: 962,
   LteImsi: 960,
   MidCalibrationID: 982,
+  AuthenticationListVersion: 751,
+  RoutingId: 801,
+  InstallationId: 800,
 } as const;
 
 const OPERATION_MODES: Record<string, string> = {
@@ -68,6 +71,12 @@ const COMM_MODES: Record<string, string> = {
   "2": "LTE",
   "3": "PLC",
   "4": "Ethernet",
+};
+const AUTH_TYPE_LABELS: Record<number, string> = {
+  0: "Zaptec (vendor app / portal RFID)",
+  1: "Vendor app",
+  2: "OCPP 1.6J cloud",
+  3: "Native OCPP",
 };
 
 function emptyRead(): ChargerTechnicalRead {
@@ -103,6 +112,13 @@ function emptyRead(): ChargerTechnicalRead {
     propertyOcppUrl: null,
     propertyAuthenticationDisabled: null,
     isAuthorizationRequired: null,
+    authenticationType: null,
+    authenticationTypeLabel: null,
+    ocppDefaultIdTag: null,
+    ocppCloudUrlVersion: null,
+    authListVersion: null,
+    routingId: null,
+    installationId: null,
     warningsBitmask: null,
   };
 }
@@ -246,6 +262,22 @@ export async function getChargerTechnicalRead(
           : null,
       isAuthorizationRequired:
         typeof d.IsAuthorizationRequired === "boolean" ? d.IsAuthorizationRequired : null,
+      authenticationType:
+        typeof d.AuthenticationType === "number" ? d.AuthenticationType : null,
+      authenticationTypeLabel:
+        typeof d.AuthenticationType === "number"
+          ? AUTH_TYPE_LABELS[d.AuthenticationType] ?? `Unknown (${d.AuthenticationType})`
+          : null,
+      ocppDefaultIdTag:
+        typeof d.PropertyOcppDefaultIdTag === "string" ? d.PropertyOcppDefaultIdTag : null,
+      // OcppCloudUrlVersion lives on the installation, not the charger
+      // — surface from state if the charger reports it, else null. The
+      // installation-level value is fetched separately by the operator
+      // if needed.
+      ocppCloudUrlVersion: null,
+      authListVersion: pickStateNumber(state, STATE_IDS.AuthenticationListVersion),
+      routingId: pickState(state, STATE_IDS.RoutingId),
+      installationId: pickState(state, STATE_IDS.InstallationId),
       warningsBitmask: warnings ?? notifications,
     };
   } catch (err) {

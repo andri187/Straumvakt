@@ -182,7 +182,18 @@ export function TechnicalReadDetail({ read }: { read: ChargerTechnicalRead | nul
           />
         </Card>
 
-        <Card title="Vendor / portal config" hint="From Zaptec /api/chargers/:id">
+        <Card title="OCPP config" hint="auth mode + URL + identity tag + list version">
+          <Row
+            label="Auth mode"
+            value={read.authenticationTypeLabel ?? DASH}
+            tone={
+              read.authenticationType === 2 || read.authenticationType === 3
+                ? "ok"
+                : read.authenticationType != null
+                  ? "warn"
+                  : undefined
+            }
+          />
           <Row label="OCPP URL" value={read.propertyOcppUrl ?? DASH} mono />
           <Row
             label="Auth required"
@@ -193,7 +204,19 @@ export function TechnicalReadDetail({ read }: { read: ChargerTechnicalRead | nul
             )}
             tone={read.propertyAuthenticationDisabled ? "warn" : undefined}
           />
-          <Row label="Authorization required" value={fmtBool(read.isAuthorizationRequired)} />
+          <Row label="Default idTag" value={read.ocppDefaultIdTag ?? DASH} mono />
+          <Row
+            label="Auth list version"
+            value={
+              read.authListVersion == null
+                ? DASH
+                : read.authListVersion === 0
+                  ? "0 (none synced)"
+                  : String(read.authListVersion)
+            }
+            mono
+          />
+          <Row label="Routing ID" value={read.routingId ?? DASH} mono />
         </Card>
       </div>
     </section>

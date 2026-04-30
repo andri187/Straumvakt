@@ -54,6 +54,17 @@ export interface ChargerTechnicalRead {
   propertyAuthenticationDisabled: boolean | null;
   isAuthorizationRequired: boolean | null;
 
+  // OCPP-specific config + state. Mostly drawn from the per-charger
+  // detail + state endpoints; surfaced together so the operator can
+  // see the full OCPP stack at a glance on the charger profile.
+  authenticationType: number | null;        // 0=None/Zaptec, 1=Vendor app, 2=OCPP cloud, 3=Native OCPP
+  authenticationTypeLabel: string | null;   // Human label for authenticationType
+  ocppDefaultIdTag: string | null;          // PropertyOcppDefaultIdTag — fallback for StartTransaction
+  ocppCloudUrlVersion: number | null;       // 0=Legacy, 1=OCPP 1.6 compliant
+  authListVersion: number | null;           // StateId 751 — Zaptec local auth list version
+  routingId: string | null;                 // StateId 801 — DLB routing key
+  installationId: string | null;            // StateId 800 — Zaptec installation UUID
+
   // Active warnings/notifications bitmask (decoded by the UI).
   warningsBitmask: number | null;      // StateId 803/804
 }

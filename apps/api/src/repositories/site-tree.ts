@@ -232,12 +232,24 @@ export async function listSiteTree(
     const liveSnapshot = apiActiveMap.get(c.siteAssetId) ?? null;
     const apiActive = liveSnapshot ? liveSnapshot.apiActive : null;
     const authRequired = liveSnapshot ? liveSnapshot.authRequired : null;
-    // OCPP emblem reflects the per-charger CONFIG (AuthenticationType=2
-    // or 3 in Zaptec) — i.e. "OCPP is the configured auth mode for
-    // this charger". Independent of whether a session is currently
-    // open. Runtime-state-based reachability is captured separately
-    // via the chargersOnline / chargersOffline counts on parent rows.
-    const ocppActive = liveSnapshot ? liveSnapshot.ocppConfigured : null;
+    // OCPP emblem prefers the Zaptec config signal (AuthenticationType
+    // = 2 or 3 means OCPP), but falls back to our gateway's view when
+    // the vendor API is unreachable for this charger. The fallback
+    // catches "Zaptec is down but our OCPP gateway is hearing the
+    // charger fine" — the operator still wants to see green. Order:
+    //   1. Vendor API says OCPP-mode → trust it
+    //   2. Vendor API says not-OCPP → trust it (red)
+    //   3. Vendor API silent + we have a recent auth-passing OCPP
+    //      session → green (gateway evidence)
+    //   4. Otherwise → null (unknown)
+    const gatewayHasOcpp =
+      identity?.status === "online" ||
+      (lastSeen != null && now - new Date(lastSeen).getTime() < ONLINE_WINDOW_MS);
+    const ocppActive = liveSnapshot
+      ? liveSnapshot.ocppConfigured
+      : gatewayHasOcpp
+        ? true
+        : null;
     // `online` reflects RUNTIME reachability for the count-pill
     // aggregation: identity recently seen by gateway projection
     // (auth-passing OCPP traffic), or pending_discoveries last_seen

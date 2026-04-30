@@ -89,35 +89,39 @@ export function ChargerCommandsPanel({
     }
   }
 
+  // Compact 4-column grid: Start / Stop / Get / Set fit in one row on
+  // wide screens, stack on narrow. Each column has a tiny header,
+  // inline inputs, and a single action button.
+  const inputCls =
+    "w-full min-w-0 rounded border border-bg-border bg-bg-inset px-2 py-1 font-mono text-[11px] text-ink-50 disabled:opacity-50";
+  const labelCls = "block text-[9px] uppercase tracking-brand text-ink-500";
+
   return (
-    <section className="rounded-lg border border-bg-border bg-bg-base/30 p-4">
-      <header className="mb-3">
-        <h2 className="text-sm font-semibold text-ink-50">Charger commands</h2>
-        <p className="mt-0.5 text-[10px] text-ink-500">
-          Each command is enqueued to{" "}
-          <code className="font-mono">ocpp.outbound_commands</code> and dispatched
-          via the gateway. Status moves to <code className="font-mono">acked</code> /{" "}
-          <code className="font-mono">failed</code> when the charger responds.
-        </p>
+    <section className="rounded-lg border border-bg-border bg-bg-base/30 p-3">
+      <header className="mb-2 flex items-baseline justify-between">
+        <h2 className="text-xs font-semibold uppercase tracking-brand text-ink-300">
+          Charger commands
+        </h2>
+        <span className="text-[10px] text-ink-500">enqueued → outbox → gateway</span>
       </header>
 
-      <div className="space-y-3">
+      <div className="grid gap-2 lg:grid-cols-4">
         {/* Remote Start */}
-        <div className="rounded border border-bg-border/60 bg-bg-base/40 p-3">
-          <div className="mb-2 flex items-baseline justify-between">
-            <h3 className="text-xs font-semibold text-sv-green">Remote Start</h3>
-            <span className="text-[10px] text-ink-500">RemoteStartTransaction</span>
+        <div className="rounded border border-bg-border/40 bg-bg-base/40 p-2">
+          <div className="mb-1 flex items-baseline justify-between">
+            <span className="text-[10px] font-semibold uppercase tracking-brand text-sv-green">Start</span>
+            <span className="text-[9px] text-ink-500">RemoteStart</span>
           </div>
-          <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
-            <label className="block">
-              <span className="block text-[10px] uppercase tracking-brand text-ink-400">Connector</span>
+          <div className="space-y-1">
+            <label>
+              <span className={labelCls}>Connector</span>
               <select
                 value={startConnectorId}
                 onChange={(e) => setStartConnectorId(e.target.value)}
                 disabled={connectors.length === 0}
-                className="mt-1 w-full rounded border border-bg-border bg-bg-inset px-2 py-1.5 text-xs text-ink-50 disabled:opacity-50"
+                className={inputCls}
               >
-                {connectors.length === 0 && <option>No connectors</option>}
+                {connectors.length === 0 && <option>—</option>}
                 {connectors.map((c) => (
                   <option key={c.id} value={c.id}>
                     #{c.connectorIndex} ({c.type})
@@ -125,155 +129,145 @@ export function ChargerCommandsPanel({
                 ))}
               </select>
             </label>
-            <label className="block">
-              <span className="block text-[10px] uppercase tracking-brand text-ink-400">idTag (RFID, optional)</span>
+            <label>
+              <span className={labelCls}>idTag (optional)</span>
               <input
                 type="text"
                 value={idTag}
                 onChange={(e) => setIdTag(e.target.value)}
-                placeholder="e.g. ABC123 (charger may auto-authorize)"
+                placeholder="ABC123"
                 maxLength={20}
-                className="mt-1 w-full rounded border border-bg-border bg-bg-inset px-2 py-1.5 font-mono text-xs text-ink-50"
+                className={inputCls}
               />
             </label>
             <button
               type="button"
-              onClick={() =>
-                fire("remote-start", {
-                  connectorId: startConnectorId,
-                  idTag: idTag || undefined,
-                })
-              }
+              onClick={() => fire("remote-start", { connectorId: startConnectorId, idTag: idTag || undefined })}
               disabled={!startConnectorId || busy !== null}
-              className="self-end rounded-md bg-sv-green/20 px-3 py-1.5 text-xs font-medium text-sv-green ring-1 ring-sv-green/30 hover:bg-sv-green/30 disabled:cursor-not-allowed disabled:opacity-40"
+              className="w-full rounded-md bg-sv-green/20 px-2 py-1 text-[11px] font-medium text-sv-green ring-1 ring-sv-green/30 hover:bg-sv-green/30 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {busy === "remote-start" ? "Sending…" : "Start"}
+              {busy === "remote-start" ? "…" : "Start"}
             </button>
           </div>
         </div>
 
         {/* Remote Stop */}
-        <div className="rounded border border-bg-border/60 bg-bg-base/40 p-3">
-          <div className="mb-2 flex items-baseline justify-between">
-            <h3 className="text-xs font-semibold text-rose-300">Remote Stop</h3>
-            <span className="text-[10px] text-ink-500">RemoteStopTransaction</span>
+        <div className="rounded border border-bg-border/40 bg-bg-base/40 p-2">
+          <div className="mb-1 flex items-baseline justify-between">
+            <span className="text-[10px] font-semibold uppercase tracking-brand text-rose-300">Stop</span>
+            <span className="text-[9px] text-ink-500">RemoteStop</span>
           </div>
-          <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
-            <label className="block">
-              <span className="block text-[10px] uppercase tracking-brand text-ink-400">Transaction ID</span>
+          <div className="space-y-1">
+            <label>
+              <span className={labelCls}>Transaction ID</span>
               <input
                 type="number"
                 value={transactionId}
                 onChange={(e) => setTransactionId(e.target.value)}
-                placeholder="from the active ChargeSession"
-                className="mt-1 w-full rounded border border-bg-border bg-bg-inset px-2 py-1.5 font-mono text-xs text-ink-50"
+                placeholder="active txId"
+                className={inputCls}
               />
             </label>
             <button
               type="button"
               onClick={() => fire("remote-stop", { transactionId: Number(transactionId) })}
               disabled={!transactionId || busy !== null}
-              className="self-end rounded-md bg-rose-500/10 px-3 py-1.5 text-xs font-medium text-rose-300 ring-1 ring-rose-500/30 hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+              className="w-full rounded-md bg-rose-500/10 px-2 py-1 text-[11px] font-medium text-rose-300 ring-1 ring-rose-500/30 hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {busy === "remote-stop" ? "Sending…" : "Stop"}
+              {busy === "remote-stop" ? "…" : "Stop"}
             </button>
           </div>
         </div>
 
-        {/* Get / Change configuration */}
-        <div className="grid gap-2 sm:grid-cols-2">
-          <div className="rounded border border-bg-border/60 bg-bg-base/40 p-3">
-            <div className="mb-2 flex items-baseline justify-between">
-              <h3 className="text-xs font-semibold text-sv-sky">Get Configuration</h3>
-              <span className="text-[10px] text-ink-500">GetConfiguration</span>
-            </div>
-            <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+        {/* Get Configuration */}
+        <div className="rounded border border-bg-border/40 bg-bg-base/40 p-2">
+          <div className="mb-1 flex items-baseline justify-between">
+            <span className="text-[10px] font-semibold uppercase tracking-brand text-sv-sky">Read cfg</span>
+            <span className="text-[9px] text-ink-500">GetConfig</span>
+          </div>
+          <div className="space-y-1">
+            <label>
+              <span className={labelCls}>Key (blank = all)</span>
               <input
                 type="text"
                 value={getConfigKey}
                 onChange={(e) => setGetConfigKey(e.target.value)}
-                placeholder="key (blank → all keys)"
+                placeholder="HeartbeatInterval"
                 maxLength={50}
-                className="rounded border border-bg-border bg-bg-inset px-2 py-1.5 font-mono text-xs text-ink-50"
+                className={inputCls}
               />
-              <button
-                type="button"
-                onClick={() =>
-                  fire(
-                    "get-configuration",
-                    getConfigKey ? { key: [getConfigKey] } : {},
-                  )
-                }
-                disabled={busy !== null}
-                className="rounded-md bg-sv-sky/20 px-3 py-1.5 text-xs font-medium text-sv-sky ring-1 ring-sv-sky/30 hover:bg-sv-sky/30 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {busy === "get-configuration" ? "…" : "Read"}
-              </button>
-            </div>
+            </label>
+            <button
+              type="button"
+              onClick={() => fire("get-configuration", getConfigKey ? { key: [getConfigKey] } : {})}
+              disabled={busy !== null}
+              className="w-full rounded-md bg-sv-sky/20 px-2 py-1 text-[11px] font-medium text-sv-sky ring-1 ring-sv-sky/30 hover:bg-sv-sky/30 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {busy === "get-configuration" ? "…" : "Read"}
+            </button>
           </div>
+        </div>
 
-          <div className="rounded border border-bg-border/60 bg-bg-base/40 p-3">
-            <div className="mb-2 flex items-baseline justify-between">
-              <h3 className="text-xs font-semibold text-sv-sky">Change Configuration</h3>
-              <span className="text-[10px] text-ink-500">ChangeConfiguration</span>
-            </div>
-            <div className="grid gap-2">
-              <div className="grid gap-2 sm:grid-cols-2">
-                <input
-                  type="text"
-                  value={changeConfigKey}
-                  onChange={(e) => setChangeConfigKey(e.target.value)}
-                  placeholder="key"
-                  maxLength={50}
-                  className="rounded border border-bg-border bg-bg-inset px-2 py-1.5 font-mono text-xs text-ink-50"
-                />
-                <input
-                  type="text"
-                  value={changeConfigValue}
-                  onChange={(e) => setChangeConfigValue(e.target.value)}
-                  placeholder="value"
-                  maxLength={500}
-                  className="rounded border border-bg-border bg-bg-inset px-2 py-1.5 font-mono text-xs text-ink-50"
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() =>
-                  fire("change-configuration", {
-                    key: changeConfigKey,
-                    value: changeConfigValue,
-                  })
-                }
-                disabled={!changeConfigKey || busy !== null}
-                className="rounded-md bg-sv-sky/20 px-3 py-1.5 text-xs font-medium text-sv-sky ring-1 ring-sv-sky/30 hover:bg-sv-sky/30 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {busy === "change-configuration" ? "Sending…" : "Write"}
-              </button>
-            </div>
+        {/* Change Configuration */}
+        <div className="rounded border border-bg-border/40 bg-bg-base/40 p-2">
+          <div className="mb-1 flex items-baseline justify-between">
+            <span className="text-[10px] font-semibold uppercase tracking-brand text-sv-sky">Write cfg</span>
+            <span className="text-[9px] text-ink-500">ChangeConfig</span>
+          </div>
+          <div className="space-y-1">
+            <label>
+              <span className={labelCls}>Key</span>
+              <input
+                type="text"
+                value={changeConfigKey}
+                onChange={(e) => setChangeConfigKey(e.target.value)}
+                placeholder="HeartbeatInterval"
+                maxLength={50}
+                className={inputCls}
+              />
+            </label>
+            <label>
+              <span className={labelCls}>Value</span>
+              <input
+                type="text"
+                value={changeConfigValue}
+                onChange={(e) => setChangeConfigValue(e.target.value)}
+                placeholder="60"
+                maxLength={500}
+                className={inputCls}
+              />
+            </label>
+            <button
+              type="button"
+              onClick={() =>
+                fire("change-configuration", { key: changeConfigKey, value: changeConfigValue })
+              }
+              disabled={!changeConfigKey || busy !== null}
+              className="w-full rounded-md bg-sv-sky/20 px-2 py-1 text-[11px] font-medium text-sv-sky ring-1 ring-sv-sky/30 hover:bg-sv-sky/30 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {busy === "change-configuration" ? "…" : "Write"}
+            </button>
           </div>
         </div>
       </div>
 
       {error && (
-        <p className="mt-3 rounded border border-rose-700/40 bg-rose-950/30 px-2 py-1.5 text-xs text-rose-200">
+        <p className="mt-2 rounded border border-rose-700/40 bg-rose-950/30 px-2 py-1 text-[11px] text-rose-200">
           {error}
         </p>
       )}
 
       {log.length > 0 && (
-        <div className="mt-3 rounded border border-bg-border/40 bg-bg-base/40 p-2">
-          <p className="mb-1 text-[10px] uppercase tracking-brand text-ink-400">Recent</p>
-          <ul className="space-y-0.5 text-[11px]">
-            {log.map((e, i) => (
-              <li key={i} className="flex items-baseline gap-2 font-mono text-ink-300">
-                <span className="text-ink-500">{e.at}</span>
-                <span className="text-sv-green">{e.action}</span>
-                <span className="text-ink-400">→ {e.status}</span>
-                <span className="text-ink-500">{e.commandId.slice(0, 8)}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
+        <ul className="mt-2 space-y-0.5 text-[10px] font-mono">
+          {log.slice(0, 5).map((e, i) => (
+            <li key={i} className="flex items-baseline gap-2 text-ink-400">
+              <span className="text-ink-500">{e.at}</span>
+              <span className="text-sv-green">{e.action}</span>
+              <span>→ {e.status}</span>
+              <span className="text-ink-500">{e.commandId.slice(0, 8)}</span>
+            </li>
+          ))}
+        </ul>
       )}
     </section>
   );
