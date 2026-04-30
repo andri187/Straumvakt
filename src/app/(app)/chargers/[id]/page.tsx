@@ -5,6 +5,7 @@ import { apiFetchServer, apiFetchServerJson } from "@/lib/api-client-server";
 import type { ChargerDetail } from "@straumvakt/shared/domain/chargers";
 import { DeleteButton } from "@/components/delete-button";
 import { EditChargerPanel } from "./edit-panel";
+import { ChargerCommandsPanel } from "./commands-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -50,6 +51,22 @@ export default async function ChargerDetailPage({ params }: { params: Promise<{ 
           {identity && <span>OcppIdentity {identity.id.slice(0, 8)}</span>}
         </div>
       </header>
+
+      {/* Operator command surface — only mount when there's an OcppIdentity
+          (without one, /api/admin/chargers/<id>/<command> would 404 since
+          the route keys on ocppIdentityId). */}
+      {identity && (
+        <div className="mb-6">
+          <ChargerCommandsPanel
+            ocppIdentityId={identity.id}
+            connectors={(evse?.connectors ?? []).map((c) => ({
+              id: c.id,
+              connectorIndex: c.connectorIndex,
+              type: c.type,
+            }))}
+          />
+        </div>
+      )}
 
       {/* OCPP profile — auto-populated from the BootNotification projection.
           All read-only on the operator side; the charger is the source of
