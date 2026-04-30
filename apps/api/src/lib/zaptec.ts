@@ -126,6 +126,30 @@ export async function getChargerDetail(
   return { ok: true, value: json };
 }
 
+/**
+ * GET /api/chargers/{id}/state — array of `{ StateId, ValueAsString,
+ * Timestamp }` observation entries. Negative IDs (-2 IsOnline, -3
+ * IsOcppConnected, -100 AuthorizationCache) are synthetic. Full
+ * id catalogue in docs/reference/integrations/zaptec.md §5.
+ */
+export interface ZaptecStateEntry {
+  StateId: number;
+  ValueAsString?: string | null;
+  Timestamp?: string;
+}
+export async function getChargerState(
+  accessToken: string,
+  chargerId: string,
+): Promise<ZaptecResult<ZaptecStateEntry[]>> {
+  const res = await fetch(`${ZAPTEC_BASE}/api/chargers/${chargerId}/state`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  }).catch(() => null);
+  if (!res) return { ok: false, error: { kind: "unreachable" } };
+  if (!res.ok) return { ok: false, error: { kind: "list", status: res.status } };
+  const json = (await res.json().catch(() => null)) as ZaptecStateEntry[] | null;
+  return { ok: true, value: json ?? [] };
+}
+
 export async function getInstallationSummary(
   accessToken: string,
   installationId: string,

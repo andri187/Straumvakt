@@ -3,9 +3,11 @@ import { notFound } from "next/navigation";
 import { SectionTabs, OPERATIONS_TABS, CHARGERS_TABS } from "@/components/section-tabs";
 import { apiFetchServer, apiFetchServerJson } from "@/lib/api-client-server";
 import type { ChargerDetail } from "@straumvakt/shared/domain/chargers";
+import type { ChargerTechnicalRead } from "@straumvakt/shared/domain/charger-technical-read";
 import { DeleteButton } from "@/components/delete-button";
 import { EditChargerPanel } from "./edit-panel";
 import { ChargerCommandsPanel } from "./commands-panel";
+import { TechnicalReadPills, TechnicalReadDetail } from "./technical-read-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -16,14 +18,23 @@ export default async function ChargerDetailPage({ params }: { params: Promise<{ 
   if (!detailRes.ok) throw new Error(`HTTP ${detailRes.status}`);
   const { charger } = (await detailRes.json()) as { charger: ChargerDetail };
 
-  const [{ installations }, { circuits }] = await Promise.all([
+  // Fan out the slow Zaptec round-trip (auth + 2 API calls) in
+  // parallel with the form-option fetches. If Zaptec is unreachable
+  // the API Worker returns { fresh: false } and we render placeholders.
+  const [{ installations }, { circuits }, technicalReadResult] = await Promise.all([
     apiFetchServerJson<{ installations: { id: string; displayName: string }[] }>(
       `/api/admin/sites/${charger.siteId}/installations`,
     ),
     apiFetchServerJson<{ circuits: { id: string; displayName: string }[] }>(
       `/api/admin/sites/${charger.siteId}/circuits`,
     ),
+    apiFetchServer(`/api/admin/chargers/${id}/technical-read`)
+      .then(async (r) =>
+        r.ok ? ((await r.json()) as { technicalRead: ChargerTechnicalRead }).technicalRead : null,
+      )
+      .catch(() => null),
   ]);
+  const technicalRead = technicalReadResult;
 
   const evse = charger.evses[0];
   const connector = evse?.connectors[0];
@@ -54,6 +65,14 @@ export default async function ChargerDetailPage({ params }: { params: Promise<{ 
           {identity && <span>ocpp {identity.id.slice(0, 8)}</span>}
         </div>
       </header>
+
+      {/* Compact technical-read pills — Signal / Comm / OCPP / Firmware
+          / Grid / Temp. Pulled live from Zaptec each page load; renders
+          em-dash placeholders when the vendor side is unreachable. */}
+      <TechnicalReadPills
+        read={technicalRead}
+        firmwareFromBoot={charger.firmwareVersion}
+      />
 
       {/* Operator command surface — only mount when there's an OcppIdentity
           (without one, /api/admin/chargers/<id>/<command> would 404 since
@@ -157,6 +176,10 @@ export default async function ChargerDetailPage({ params }: { params: Promise<{ 
       />
         </div>
       </details>
+
+      {/* Extended technical read — live dashboard, hardware identity,
+          environment, etc. Below the edit panel per operator request. */}
+      <TechnicalReadDetail read={technicalRead} />
 
       <section className="mt-8 rounded-lg border border-rose-700/30 bg-rose-950/10 p-4">
         <div className="flex items-baseline justify-between gap-4">

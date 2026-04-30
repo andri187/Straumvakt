@@ -23,6 +23,7 @@ import {
   listAllChargers,
   updateCharger,
 } from "../../repositories/chargers";
+import { getChargerTechnicalRead } from "../../repositories/charger-technical-read";
 import { enqueueCommand } from "../../repositories/outbound-commands";
 import type { Env } from "../../bindings";
 
@@ -59,6 +60,16 @@ adminChargers.get("/:id", async (c) => {
   const charger = await getChargerById(db, c.req.param("id"));
   if (!charger) return c.json({ error: "not_found" }, 404);
   return c.json({ charger });
+});
+
+// Live vendor-side telemetry (Zaptec). Slow path — auths to the
+// vendor portal and fetches detail + state. Render the charger
+// detail page in parallel with this so a slow Zaptec response
+// doesn't block the rest of the page.
+adminChargers.get("/:id/technical-read", async (c) => {
+  const db = makePrisma(c.env);
+  const read = await getChargerTechnicalRead(db, c.req.param("id"), c.env.OCPP_CRED_KEK);
+  return c.json({ technicalRead: read });
 });
 
 adminChargers.patch("/:id", async (c) => {
