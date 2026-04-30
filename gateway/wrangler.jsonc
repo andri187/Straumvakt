@@ -52,7 +52,7 @@
       "services": [
         {
           "binding": "MAIN_APP",
-          "service": "hlada-staging"
+          "service": "hlada-api-staging"
         }
       ]
     }

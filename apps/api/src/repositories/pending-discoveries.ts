@@ -46,3 +46,37 @@ export async function deletePendingDiscovery(
 ): Promise<void> {
   await db.pendingDiscovery.deleteMany({ where: { identityString } });
 }
+
+/**
+ * Upsert a row keyed by identity_string. Called from the OCPP auth
+ * route on a 403 (unknown identity OR bad password). Identity string
+ * is lowercased before write so the same charger retrying from
+ * different firmware versions doesn't pile up under multiple cases —
+ * Zaptec sends lowercase post-Jan 2023 (legacy uppercase toggle
+ * deprecated), and operator-typed entries vary by hand.
+ */
+export async function upsertPendingDiscovery(
+  db: PrismaClient,
+  args: {
+    identityString: string;
+    remoteAddr: string | null;
+    userAgent: string | null;
+  },
+): Promise<void> {
+  const key = args.identityString.toLowerCase();
+  await db.pendingDiscovery.upsert({
+    where: { identityString: key },
+    create: {
+      identityString: key,
+      attemptCount: 1,
+      remoteAddr: args.remoteAddr ? args.remoteAddr.slice(0, 64) : null,
+      userAgent: args.userAgent ? args.userAgent.slice(0, 255) : null,
+    },
+    update: {
+      lastSeenAt: new Date(),
+      attemptCount: { increment: 1 },
+      remoteAddr: args.remoteAddr ? args.remoteAddr.slice(0, 64) : null,
+      userAgent: args.userAgent ? args.userAgent.slice(0, 255) : null,
+    },
+  });
+}
