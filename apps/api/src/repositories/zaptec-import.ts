@@ -256,6 +256,14 @@ export async function importZaptecInstallation(
         select: { id: true },
       });
 
+      // serialNumber = uppercase DeviceId (the canonical hardware
+      // serial stamped on the device). Operator-editable Zaptec
+      // SerialNo is unsuitable as a system UID — operators routinely
+      // overwrite it with display names ("Festi 2"). Falls back to
+      // the Zaptec UUID if DeviceId is missing (decommissioned rows
+      // that Zaptec returns without a DeviceId), keeping the value
+      // unique even when the canonical serial isn't available.
+      const canonicalSerial = (ch.deviceId ?? ch.id).toUpperCase().slice(0, 64);
       await tx.chargingStation.create({
         data: {
           siteAssetId: siteAsset.id,
@@ -263,7 +271,7 @@ export async function importZaptecInstallation(
           installationId: installation.id,
           circuitId: circuitIdByZaptec.get(ch.zaptecCircuitId) ?? null,
           vendor: "Zaptec",
-          serialNumber: ch.serialNo,
+          serialNumber: canonicalSerial,
           installDate: ch.installDate,
           warrantyExpires: ch.warrantyExpires,
         },

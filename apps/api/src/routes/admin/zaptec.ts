@@ -254,6 +254,20 @@ adminZaptec.post("/import", async (c) => {
     if (msg === "vendor_zaptec_missing" || msg === "org_not_found") {
       return c.json({ error: msg }, 400);
     }
+    // Postgres unique-violation on serial_number. Most likely cause:
+    // the operator re-imported a Zaptec installation without deleting
+    // the previous Property + chargers first. The first matching
+    // serial throws here, which collapses the whole tx — clean state.
+    if (msg.includes("charging_stations_serial_number_key")) {
+      return c.json(
+        {
+          error: "duplicate_serial",
+          message:
+            "One or more chargers in this Zaptec installation are already imported under a different Property. Delete the existing Property first, or deselect the duplicates in the wizard.",
+        },
+        409,
+      );
+    }
     if (msg === "installation_not_accessible") return c.json({ error: msg }, 404);
     // Anything else: log full stack + structured error fields so wrangler tail
     // surfaces the real cause instead of the generic onError 'internal'.

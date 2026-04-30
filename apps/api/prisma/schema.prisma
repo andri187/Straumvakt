@@ -434,7 +434,9 @@ model ChargingStation {
   installationId   String?       @map("installation_id") @db.Uuid
   vendor           String?
   model            String?
-  serialNumber     String?       @map("serial_number")
+  // System-wide unique. Populated from Zaptec DeviceId (uppercase)
+  // on import — canonical hardware serial stamped on the device.
+  serialNumber     String?       @unique @map("serial_number")
   installDate      DateTime?     @map("install_date") @db.Date
   warrantyExpires  DateTime?     @map("warranty_expires") @db.Date
   firmwareVersion  String?       @map("firmware_version")
