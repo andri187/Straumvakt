@@ -41,6 +41,11 @@ export function TechnicalReadPills({
   const firmware = read?.firmwareVersion ?? firmwareFromBoot ?? null;
   const stale = read?.fresh === false;
 
+  // OCPP pill mirrors the /sites tree OCPP emblem: config state, not
+  // runtime "is the socket currently open". Goes through the same
+  // truth table — auth mode + auth-required toggle.
+  const ocppState = computeOcppState(read);
+
   return (
     <section className="mb-4 grid grid-cols-3 gap-2 rounded-lg border border-bg-border bg-bg-base/30 p-3 sm:grid-cols-6">
       <Pill icon={Signal} label="Signal" value={fmtSignal(read?.signalDbm ?? null)} />
@@ -48,8 +53,8 @@ export function TechnicalReadPills({
       <Pill
         icon={ShieldCheck}
         label="OCPP"
-        value={read?.ocppConnected == null ? DASH : read.ocppConnected ? "online" : "offline"}
-        tone={read?.ocppConnected ? "ok" : read?.ocppConnected === false ? "warn" : undefined}
+        value={ocppState.value}
+        tone={ocppState.tone}
       />
       <Pill icon={Cpu} label="Firmware" value={firmware ?? DASH} mono />
       <Pill icon={Zap} label="Grid" value={read?.networkType ?? DASH} />
@@ -61,6 +66,31 @@ export function TechnicalReadPills({
       )}
     </section>
   );
+}
+
+/**
+ * Truth table mirrors the sites-tree OCPP emblem:
+ *   ready          — AuthenticationType OCPP (2/3) AND auth required
+ *   "auth off"     — AuthenticationType OCPP but PropertyAuthenticationDisabled
+ *   "not OCPP"     — AuthenticationType is Zaptec/Vendor (0/1)
+ *   —              — Zaptec data unavailable
+ */
+function computeOcppState(read: ChargerTechnicalRead | null): {
+  value: string;
+  tone: "ok" | "warn" | undefined;
+} {
+  if (!read) return { value: DASH, tone: undefined };
+  const t = read.authenticationType;
+  if (t == null) return { value: DASH, tone: undefined };
+  const isOcppMode = t === 2 || t === 3;
+  if (!isOcppMode) {
+    return { value: "not OCPP", tone: "warn" };
+  }
+  // OCPP mode is set; tone hinges on auth-required.
+  if (read.propertyAuthenticationDisabled === true) {
+    return { value: "auth off", tone: "warn" };
+  }
+  return { value: "ready", tone: "ok" };
 }
 
 function Pill({
