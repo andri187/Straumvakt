@@ -38,14 +38,48 @@ export type { _IngestResult };
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * charger.booted — upsert lifecycle state onto the OCPP identity.
+ * charger.booted — upsert lifecycle state onto the OCPP identity AND
+ * mirror BootNotification profile fields onto the ChargingStation row
+ * (OCPP 1.6 §6.2 / 2.0.1 §1.4). Operator detail page renders these
+ * read-only — the source of truth is the charger itself, surfaced on
+ * each boot.
+ *
+ * Walks identity → station so we can update both rows in the same tx.
+ * If the OcppIdentity has no chargingStation (shouldn't happen for
+ * provisioned identities, but defensive), the station update is
+ * skipped.
  */
 const onChargerBooted: ProjectionHandler = async (tx, event) => {
   const now = new Date();
-  await tx.ocppIdentity.update({
+  const identity = await tx.ocppIdentity.update({
     where: { id: event.aggregateId },
     data: { status: "online", lastSeenAt: now },
+    select: { chargingStationId: true },
   });
+
+  // BootNotification payload field names per OCPP 1.6 spec.
+  // Treat all as optional — vendors omit per-firmware-version.
+  const stationData: Record<string, string | undefined> = {};
+  const setIfPresent = (column: string, key: string) => {
+    const v = stringField(event.payload, key);
+    if (v !== undefined) stationData[column] = v;
+  };
+  setIfPresent("vendor", "chargePointVendor");
+  setIfPresent("model", "chargePointModel");
+  setIfPresent("serialNumber", "chargePointSerialNumber");
+  setIfPresent("chargeBoxSerialNumber", "chargeBoxSerialNumber");
+  setIfPresent("firmwareVersion", "firmwareVersion");
+  setIfPresent("meterType", "meterType");
+  setIfPresent("meterSerialNumber", "meterSerialNumber");
+  setIfPresent("iccid", "iccid");
+  setIfPresent("imsi", "imsi");
+
+  if (identity.chargingStationId && Object.keys(stationData).length > 0) {
+    await tx.chargingStation.update({
+      where: { siteAssetId: identity.chargingStationId },
+      data: stationData,
+    });
+  }
 };
 
 /**
@@ -73,16 +107,26 @@ const onChargerStatusUpdated: ProjectionHandler = async (tx, event) => {
 
 /**
  * connector.status_updated — writes the latest status to the connector
- * row along with the authoritative OCPP timestamp.
+ * row along with the authoritative OCPP timestamp + the StatusNotification
+ * error fields (OCPP 1.6 §4.9). vendorErrorCode is rare but useful for
+ * vendor-specific diagnostics; errorCode of "NoError" is normalised to
+ * null so the operator UI can branch on `errorCode != null` cleanly.
  */
 const onConnectorStatusUpdated: ProjectionHandler = async (tx, event) => {
   const status = stringField(event.payload, "status");
   if (!status) return;
+  const rawErrorCode = stringField(event.payload, "errorCode");
+  const errorCode =
+    rawErrorCode === undefined || rawErrorCode === "NoError" ? null : rawErrorCode;
+  const vendorErrorCode = stringField(event.payload, "vendorErrorCode") ?? null;
+
   await tx.connector.update({
     where: { id: event.aggregateId },
     data: {
       status,
       statusUpdatedAt: new Date(event.occurredAt),
+      errorCode,
+      vendorErrorCode,
     },
   });
 };
