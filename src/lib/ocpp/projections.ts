@@ -192,6 +192,61 @@ const onSessionMeterValueRecorded: ProjectionHandler = async (tx, event) => {
 };
 
 /**
+ * ocpp.command_result — the gateway emits this after it receives a
+ * CallResult or CallError matching one of our outbound commands.
+ *
+ * Resolves the outbox row by `aggregateId` (= the outbound_commands.id
+ * the dispatcher minted) and reflects the charger's actual response
+ * back into the row:
+ *
+ *   • Gateway-level outcome "rejected" (CallError frame from charger)
+ *     → status = 'failed'.
+ *   • Gateway-level outcome "accepted" but the OCPP CallResult payload
+ *     carries a `status` field that isn't "Accepted" / "RebootRequired"
+ *     (e.g. RemoteStartTransaction returning {status: "Rejected"})
+ *     → status = 'failed'. The dispatch made it; the charger refused.
+ *   • Otherwise → status = 'acked'.
+ *
+ * The `result` JSON column is overwritten with the full event payload
+ * (commandId, action, outcome, charger response, latencyMs) so the
+ * operator console can render exactly what the charger said.
+ *
+ * Note: the dispatcher already marks the row 'acked' when the gateway
+ * returns 202 from /dispatch — that was a "we sent it" ack, not a
+ * "charger accepted" ack. This projection promotes that to the real
+ * truth or downgrades to 'failed', whichever applies.
+ */
+const onCommandResult: ProjectionHandler = async (tx, event) => {
+  const outcome = stringField(event.payload, "outcome");
+  if (outcome !== "accepted" && outcome !== "rejected") return;
+
+  const result = (event.payload as { result?: unknown }).result;
+  const chargerStatus =
+    result && typeof result === "object"
+      ? stringField(result as Record<string, unknown>, "status")
+      : undefined;
+
+  // OCPP responses where status is informational-only or non-rejection.
+  // RebootRequired / NotSupported can be treated as 'acked' from the
+  // outbox's perspective — the command was processed, just not the way
+  // we hoped. Operator can drill in via the result payload.
+  const isChargerRejected =
+    outcome === "rejected" ||
+    (chargerStatus !== undefined &&
+      chargerStatus !== "Accepted" &&
+      chargerStatus !== "RebootRequired" &&
+      chargerStatus !== "NotSupported");
+
+  await tx.outboundCommand.update({
+    where: { id: event.aggregateId },
+    data: {
+      status: isChargerRejected ? "failed" : "acked",
+      result: event.payload as Prisma.InputJsonValue,
+    },
+  });
+};
+
+/**
  * session.stopped — closes out the ChargeSession row with stop reason
  * and final energy.
  */
@@ -231,6 +286,7 @@ export function registerAllProjections(): void {
   registerProjection("session.started", onSessionStarted);
   registerProjection("session.meter_value_recorded", onSessionMeterValueRecorded);
   registerProjection("session.stopped", onSessionStopped);
+  registerProjection("ocpp.command_result", onCommandResult);
   // card.authorize_requested intentionally has no projection handler —
   // Sprint 2 wires it through the OCPI token resolver.
   // ocpp.unknown_message intentionally has no projection — logged only.
