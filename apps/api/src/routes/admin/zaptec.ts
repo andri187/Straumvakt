@@ -14,6 +14,7 @@ import { z } from "zod";
 import { requireAdmin, type AuthVars } from "../../lib/auth-middleware";
 import { makePrisma } from "../../lib/prisma";
 import {
+  getChargerDetail,
   getInstallationHierarchy,
   getZaptecAccessToken,
   listInstallations,
@@ -22,6 +23,8 @@ import {
   type ZaptecHierarchyCharger,
 } from "../../lib/zaptec";
 import { importZaptecInstallation } from "../../repositories/zaptec-import";
+import { unsealVendorCredentialPassword } from "../../repositories/vendor-credentials";
+import { sha256Hex } from "../../lib/sha256";
 import type { Env } from "../../bindings";
 
 const DiscoverBody = z.object({
@@ -119,6 +122,92 @@ adminZaptec.post("/discover", async (c) => {
   });
 
   return c.json({ installations });
+});
+
+/**
+ * POST /api/admin/zaptec/inspect
+ *
+ * Diagnostic endpoint — uses a stored VendorCredential to query
+ * Zaptec for a single installation's per-charger OCPP config. We
+ * SHA-256 the OcppInitialChargePointPassword before returning so
+ * the operator can compare it to our auth_secret_hash without
+ * echoing the password. All other config fields (URL, auth flags)
+ * are returned verbatim — they're not secrets.
+ *
+ * Used to verify that Zaptec's portal-side state matches our DB-
+ * side expectations after the wizard runs.
+ */
+const InspectBody = z.object({
+  credentialId: z.string().uuid(),
+  zaptecInstallationId: z.string().uuid(),
+});
+
+adminZaptec.post("/inspect", async (c) => {
+  const raw = (await c.req.json().catch(() => null)) as unknown;
+  const parsed = InspectBody.safeParse(raw);
+  if (!parsed.success) {
+    return c.json({ error: "validation", issues: parsed.error.issues }, 400);
+  }
+
+  const db = makePrisma(c.env);
+  const creds = await unsealVendorCredentialPassword(
+    db,
+    parsed.data.credentialId,
+    c.env.OCPP_CRED_KEK,
+  ).catch((err) => ({ error: err instanceof Error ? err.message : String(err) }));
+  if ("error" in creds) {
+    return c.json({ error: creds.error }, 400);
+  }
+
+  const tokenResult = await getZaptecAccessToken(creds.username, creds.password);
+  if (!tokenResult.ok) {
+    const r = zaptecErrorResponse(tokenResult.error);
+    return c.json(r.body, r.code);
+  }
+  const accessToken = tokenResult.value;
+
+  const hierarchy = await getInstallationHierarchy(accessToken, parsed.data.zaptecInstallationId);
+  if (!hierarchy.ok) {
+    const r = zaptecErrorResponse(hierarchy.error);
+    return c.json(r.body, r.code);
+  }
+
+  const chargerIds = (hierarchy.value?.Circuits ?? [])
+    .flatMap((cc) => cc.Chargers ?? [])
+    .map((ch) => ch.Id)
+    .filter((id): id is string => typeof id === "string");
+
+  // Fetch per-charger detail in parallel. Hash the OCPP password before
+  // it leaves this Worker — never echoed in plaintext.
+  const details = await Promise.all(
+    chargerIds.map(async (id) => {
+      const r = await getChargerDetail(accessToken, id);
+      if (!r.ok || !r.value) return { chargerId: id, error: r.ok ? "no_value" : r.error.kind };
+      const d = r.value;
+      const password = typeof d.OcppInitialChargePointPassword === "string"
+        ? d.OcppInitialChargePointPassword
+        : null;
+      const passwordSha256 = password ? await sha256Hex(password) : null;
+      return {
+        chargerId: id,
+        deviceId: typeof d.DeviceId === "string" ? d.DeviceId : null,
+        name: typeof d.Name === "string" ? d.Name : null,
+        serialNo: typeof d.SerialNo === "string" ? d.SerialNo : null,
+        propertyOcppUrl: typeof d.PropertyOcppUrl === "string" ? d.PropertyOcppUrl : null,
+        propertyAuthenticationDisabled:
+          typeof d.PropertyAuthenticationDisabled === "boolean"
+            ? d.PropertyAuthenticationDisabled
+            : null,
+        isAuthorizationRequired:
+          typeof d.IsAuthorizationRequired === "boolean" ? d.IsAuthorizationRequired : null,
+        active: typeof d.Active === "boolean" ? d.Active : null,
+        ocppPasswordPresent: password !== null && password.length > 0,
+        ocppPasswordSha256: passwordSha256,
+      };
+    }),
+  );
+
+  return c.json({ chargers: details });
 });
 
 adminZaptec.post("/import", async (c) => {

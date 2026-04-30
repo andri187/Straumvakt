@@ -27,6 +27,7 @@ import {
   adminVendorCredentialsByOrg,
 } from "./routes/admin/vendor-credentials";
 import { internalOcppAuth } from "./routes/internal/ocpp-auth";
+import { internalPendingDiscovery } from "./routes/internal/pending-discovery";
 import { makePrisma } from "./lib/prisma";
 import { buildRegistry } from "./lib/dispatch-targets";
 import { processCommand, sweepStuckPending } from "./lib/dispatcher";
@@ -88,6 +89,7 @@ app.route("/api/admin/orgs/:orgId/vendor-credentials", adminVendorCredentialsByO
 // Internal — gateway → API auth lookup. Gated by OCPP_INGEST_SECRET
 // header (ADR 0004), not the admin session middleware.
 app.route("/api/internal/ocpp-auth", internalOcppAuth);
+app.route("/api/internal/pending-discovery", internalPendingDiscovery);
 
 app.notFound((c) => c.json({ error: "not_found", path: c.req.path }, 404));
 

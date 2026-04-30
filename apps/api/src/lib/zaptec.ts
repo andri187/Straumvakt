@@ -103,6 +103,29 @@ export async function getInstallationHierarchy(
   return { ok: true, value: json };
 }
 
+/**
+ * GET /api/chargers/{id} — per-charger detail. Includes the
+ * (secret) OcppInitialChargePointPassword + property-level OCPP
+ * config flags. Caller is responsible for stripping the password
+ * before returning to clients (see Zaptec docs ADR-style note).
+ *
+ * Return type is unstructured Record<string, unknown> on purpose —
+ * the response has ~30 fields and we don't want to define a brittle
+ * full-shape type just for diagnostics.
+ */
+export async function getChargerDetail(
+  accessToken: string,
+  chargerId: string,
+): Promise<ZaptecResult<Record<string, unknown> | null>> {
+  const res = await fetch(`${ZAPTEC_BASE}/api/chargers/${chargerId}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  }).catch(() => null);
+  if (!res) return { ok: false, error: { kind: "unreachable" } };
+  if (!res.ok) return { ok: false, error: { kind: "list", status: res.status } };
+  const json = (await res.json().catch(() => null)) as Record<string, unknown> | null;
+  return { ok: true, value: json };
+}
+
 export async function getInstallationSummary(
   accessToken: string,
   installationId: string,

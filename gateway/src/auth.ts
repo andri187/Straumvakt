@@ -57,6 +57,14 @@ export function parseBasicAuth(header: string | null): {
  * string from the URL path against the Basic-Auth username — refuses
  * any mismatch (defends against a charger presenting one identity on
  * the path and another in the header).
+ *
+ * On the *no-auth* path (charger connects without a Basic-Auth
+ * header), we still reject the upgrade but log the attempt to the
+ * pending-discovery pool so /chargers/pending surfaces the connection
+ * — without that, operator can't see chargers that haven't been
+ * configured with credentials yet. Identity-mismatch is treated the
+ * same way (the URL identity is what we'd want the operator to see).
+ * Both fall through to a 401 to the charger.
  */
 export async function authenticate(
   env: GatewayEnv,
@@ -64,8 +72,12 @@ export async function authenticate(
   authHeader: string | null,
 ): Promise<AuthResult> {
   const basic = parseBasicAuth(authHeader);
-  if (!basic) return { ok: false, status: 401, reason: "missing_basic_auth" };
+  if (!basic) {
+    await logPendingDiscovery(env, urlIdentityString);
+    return { ok: false, status: 401, reason: "missing_basic_auth" };
+  }
   if (basic.username !== urlIdentityString) {
+    await logPendingDiscovery(env, urlIdentityString);
     return { ok: false, status: 401, reason: "identity_mismatch" };
   }
 
@@ -88,7 +100,38 @@ export async function authenticate(
     return { ok: true, identityId: body.identityId, orgId: body.orgId };
   }
   if (resp.status === 403) {
+    // ocpp-auth route already upserts pending_discoveries on 403 —
+    // no double-log needed here.
     return { ok: false, status: 403, reason: "bad_credentials" };
   }
   return { ok: false, status: 401, reason: "auth_upstream_failed" };
+}
+
+/**
+ * Best-effort. Failure is silent — we never block the charger
+ * response on observability writes. Same OCPP_INGEST_SECRET gate as
+ * the auth call.
+ */
+async function logPendingDiscovery(env: GatewayEnv, identityString: string): Promise<void> {
+  try {
+    const resp = await env.MAIN_APP.fetch(
+      new Request("https://main.internal/api/internal/pending-discovery", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-straumvakt-ingest": env.OCPP_INGEST_SECRET,
+        },
+        body: JSON.stringify({ identityString }),
+      }),
+    );
+    // Drain the body. Without this the Service Binding subrequest is
+    // marked Canceled when this Worker returns its own response —
+    // and the API Worker's Prisma upsert can be interrupted mid-write.
+    await resp.text().catch(() => null);
+  } catch (err) {
+    console.error("[gateway] pending-discovery log failed", {
+      identityString,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
 }
