@@ -18,6 +18,13 @@ export interface PendingDiscoverySummary {
 export async function listPendingDiscoveries(
   db: PrismaClient,
 ): Promise<PendingDiscoverySummary[]> {
+  // Hide already-onboarded chargers from the pending list — even if the
+  // gateway is still recording auth attempts (e.g. because Zaptec has
+  // Authentication disabled and is connecting anonymously), those rows
+  // shouldn't surface as "pending" since the operator already claimed
+  // the identity. We compare on lower(identity_string) to match the
+  // case-insensitive auth lookup. Operator can still see these via the
+  // /chargers list if they want.
   const rows = await db.pendingDiscovery.findMany({
     orderBy: { lastSeenAt: "desc" },
     select: {
@@ -29,14 +36,26 @@ export async function listPendingDiscoveries(
       userAgent: true,
     },
   });
-  return rows.map((r) => ({
-    identityString: r.identityString,
-    firstSeenAt: r.firstSeenAt.toISOString(),
-    lastSeenAt: r.lastSeenAt.toISOString(),
-    attemptCount: r.attemptCount,
-    remoteAddr: r.remoteAddr,
-    userAgent: r.userAgent,
-  }));
+
+  if (rows.length === 0) return [];
+
+  const lowerKeys = rows.map((r) => r.identityString.toLowerCase());
+  const matchingStrings = await db.$queryRaw<{ identity_string: string }[]>`
+    SELECT LOWER(identity_string) AS identity_string FROM ocpp.ocpp_identities
+    WHERE LOWER(identity_string) = ANY(${lowerKeys})
+  `;
+  const onboardedSet = new Set(matchingStrings.map((r) => r.identity_string));
+
+  return rows
+    .filter((r) => !onboardedSet.has(r.identityString.toLowerCase()))
+    .map((r) => ({
+      identityString: r.identityString,
+      firstSeenAt: r.firstSeenAt.toISOString(),
+      lastSeenAt: r.lastSeenAt.toISOString(),
+      attemptCount: r.attemptCount,
+      remoteAddr: r.remoteAddr,
+      userAgent: r.userAgent,
+    }));
 }
 
 /** Delete by identity_string. Idempotent — no-op if row is missing. */
