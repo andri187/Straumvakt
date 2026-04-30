@@ -15,6 +15,28 @@ import { MembershipsPanel } from "./memberships-panel";
 
 export const metadata = { title: "User detail" };
 
+// User.address is stored as a freeform JSONB; the edit panel works
+// with the conventional street/city/postalCode/countryCode shape but
+// tolerates extras (they'll round-trip through patch.address as-is).
+function addressInitial(raw: unknown): {
+  street: string;
+  city: string;
+  postalCode: string;
+  countryCode: string;
+} {
+  if (!raw || typeof raw !== "object") {
+    return { street: "", city: "", postalCode: "", countryCode: "" };
+  }
+  const a = raw as Record<string, unknown>;
+  const s = (k: string) => (typeof a[k] === "string" ? (a[k] as string) : "");
+  return {
+    street: s("street"),
+    city: s("city"),
+    postalCode: s("postalCode"),
+    countryCode: s("countryCode") || "IS",
+  };
+}
+
 export default async function UserDetailPage({
   params,
 }: {
@@ -114,6 +136,12 @@ export default async function UserDetailPage({
                   phone: user.phone ?? "",
                   locale: user.locale,
                   notes: user.notes ?? "",
+                  firstName: user.firstName ?? "",
+                  middleName: user.middleName ?? "",
+                  lastName: user.lastName ?? "",
+                  dateOfBirth: user.dateOfBirth ?? "",
+                  photoUrl: user.photoUrl ?? "",
+                  address: addressInitial(user.address),
                 }}
               />
             </div>
