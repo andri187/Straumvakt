@@ -8,6 +8,41 @@ import { EditSitePanel } from "./edit-panel";
 
 export const dynamic = "force-dynamic";
 
+const DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
+
+// Project the freeform openingHours JSONB into the form's typed shape
+// (single window per day + closed flag). The API zod accepts up to 6
+// windows per day; if the row was hand-edited to multi-window the form
+// will pick the first window only — we don't drop the rest, the
+// backend only sees the new patch when the operator clicks Save.
+function hydrateOpeningHours(
+  raw: unknown,
+): Record<(typeof DAYS)[number], { closed: boolean; open: string; close: string }> {
+  const out = {} as Record<(typeof DAYS)[number], { closed: boolean; open: string; close: string }>;
+  const obj = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  for (const d of DAYS) {
+    const v = obj[d];
+    if (Array.isArray(v) && v.length > 0) {
+      const w = v[0] as { open?: unknown; close?: unknown };
+      out[d] = {
+        closed: false,
+        open: typeof w.open === "string" ? w.open : "08:00",
+        close: typeof w.close === "string" ? w.close : "18:00",
+      };
+    } else {
+      // empty array OR missing key → closed.
+      out[d] = { closed: true, open: "08:00", close: "18:00" };
+    }
+  }
+  return out;
+}
+
+function extractNotes(raw: unknown): string {
+  if (!raw || typeof raw !== "object") return "";
+  const v = (raw as Record<string, unknown>).notes;
+  return typeof v === "string" ? v : "";
+}
+
 export default async function SiteDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const res = await apiFetchServer(`/api/admin/sites/${id}`);
@@ -44,6 +79,10 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ id:
           usrfPremTariffId: site.usrfPremTariffId ?? "",
           xtrrfTariffId: site.xtrrfTariffId ?? "",
           spvivfTariffId: site.spvivfTariffId ?? "",
+          openingHours: hydrateOpeningHours(site.openingHours),
+          openingNotes: extractNotes(site.openingHours),
+          accessNote: site.accessNote ?? "",
+          photoUrl: site.photoUrl ?? "",
         }}
       />
 
