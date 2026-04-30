@@ -61,8 +61,11 @@ function toSummary(r: RawRow, stats: CountStats | null): VendorCredentialSummary
  * credentials_ref text-match for installations imported before the
  * vault landed), plus chargers under those installations split into
  * online vs offline. Online = OcppIdentity.status='online' OR
- * lastSeenAt within last 5 minutes (projections.ts updates these
- * fields on incoming OCPP events).
+ * OcppIdentity.lastSeenAt within last 5 min (projections update on
+ * successful auth) OR a matching pending_discoveries row within the
+ * same window (gateway's no-auth hook fires whether or not auth
+ * passes — keeps "I can hear the charger" honest even when Basic-Auth
+ * is missing). Same definition the sites tree uses.
  *
  * Single grouped query — O(1) round-trip per list call.
  */
@@ -84,7 +87,9 @@ async function statsByCredential(
       COUNT(DISTINCT i.id)::BIGINT AS install_count,
       COUNT(DISTINCT cs.site_asset_id)::BIGINT AS charger_count,
       COUNT(DISTINCT cs.site_asset_id) FILTER (
-        WHERE oi.status = 'online' OR oi.last_seen_at > NOW() - interval '5 minutes'
+        WHERE oi.status = 'online'
+          OR oi.last_seen_at > NOW() - interval '5 minutes'
+          OR pd.last_seen_at  > NOW() - interval '5 minutes'
       )::BIGINT AS chargers_online
     FROM hardware.vendor_credentials vc
     LEFT JOIN properties.installations i ON
@@ -92,6 +97,7 @@ async function statsByCredential(
       OR (i.org_id = vc.owner_org_id AND i.credentials_ref = vc.username)
     LEFT JOIN assets.charging_stations cs ON cs.installation_id = i.id
     LEFT JOIN ocpp.ocpp_identities oi ON oi.charging_station_id = cs.site_asset_id
+    LEFT JOIN ocpp.pending_discoveries pd ON LOWER(pd.identity_string) = LOWER(oi.identity_string)
     WHERE vc.id = ANY(${credentialIds}::uuid[])
     GROUP BY vc.id
   `;

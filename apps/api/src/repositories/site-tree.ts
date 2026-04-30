@@ -19,7 +19,13 @@ import type {
 const ONLINE_WINDOW_MS = 5 * 60 * 1000;
 
 export async function listSiteTree(db: PrismaClient): Promise<SiteTreeNode[]> {
-  const [sites, installations, circuits, chargers] = await Promise.all([
+  // pending_discoveries is the second source of "online" — populated
+  // by the gateway's no-auth hook when a charger connects but doesn't
+  // present valid Basic-Auth. Without this, a charger connecting
+  // anonymously (e.g. Zaptec PropertyAuthenticationDisabled=true)
+  // would render offline here while showing Live on /chargers/pending.
+  // Same charger → same answer in both views.
+  const [sites, installations, circuits, chargers, pending] = await Promise.all([
     db.site.findMany({
       orderBy: [{ displayName: "asc" }],
       include: {
@@ -73,18 +79,33 @@ export async function listSiteTree(db: PrismaClient): Promise<SiteTreeNode[]> {
         },
       },
     }),
+    db.pendingDiscovery.findMany({
+      select: { identityString: true, lastSeenAt: true },
+    }),
   ]);
 
   const now = Date.now();
+
+  // Map pending rows by lower(identityString) — same case-insensitive
+  // join the auth route uses, so we catch the "Zaptec sends lowercase
+  // / DB stored uppercase" mismatch consistently.
+  const pendingByIdentity = new Map<string, Date>();
+  for (const p of pending) {
+    pendingByIdentity.set(p.identityString.toLowerCase(), p.lastSeenAt);
+  }
 
   function chargerNode(
     c: (typeof chargers)[number],
   ): SiteTreeChargerNode {
     const identity = c.ocppIdentities[0] ?? null;
     const lastSeen = identity?.lastSeenAt ?? null;
+    const pendingSeen = identity
+      ? pendingByIdentity.get(identity.identityString.toLowerCase()) ?? null
+      : null;
     const online =
       identity?.status === "online" ||
-      (lastSeen != null && now - new Date(lastSeen).getTime() < ONLINE_WINDOW_MS);
+      (lastSeen != null && now - new Date(lastSeen).getTime() < ONLINE_WINDOW_MS) ||
+      (pendingSeen != null && now - pendingSeen.getTime() < ONLINE_WINDOW_MS);
     const connectorTypes = c.evses.flatMap((e) => e.connectors.map((k) => k.type));
     const connectorSummary =
       connectorTypes.length === 0
