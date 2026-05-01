@@ -281,8 +281,16 @@ function formatRelativeDuration(fromISO: string | null): string | null {
 }
 
 function ChargerLine({ charger, indent }: { charger: SiteTreeChargerNode; indent: number }) {
-  const label =
-    charger.identityString ?? charger.serialNumber ?? charger.chargingStationId.slice(0, 8);
+  // Operator-recognisable display name comes first ("A1" / "Festi 5"),
+  // canonical serial / DeviceId follows for unambiguous identification.
+  // Fallback chain: displayName → serialNumber → identityString → station UUID.
+  const primary = charger.displayName || charger.serialNumber || charger.identityString || charger.chargingStationId.slice(0, 8);
+  const secondary =
+    charger.serialNumber && charger.serialNumber !== primary
+      ? charger.serialNumber
+      : charger.identityString && charger.identityString.toUpperCase() !== primary?.toUpperCase()
+        ? charger.identityString
+        : null;
   const connectedFor = formatRelativeDuration(charger.onlineSince);
   const onlineDot = charger.online ? "bg-emerald-400" : "bg-ink-600";
   const statusText = charger.online
@@ -312,10 +320,14 @@ function ChargerLine({ charger, indent }: { charger: SiteTreeChargerNode; indent
       />
       <Link
         href={`/chargers/${charger.chargingStationId}`}
-        className="font-mono text-ink-100 hover:text-sv-sky truncate"
+        className="text-ink-100 hover:text-sv-sky truncate"
+        title={`${primary}${secondary ? ` · ${secondary}` : ""}`}
       >
-        {label}
+        {primary}
       </Link>
+      {secondary && (
+        <span className="font-mono text-[10px] text-ink-500 truncate">{secondary}</span>
+      )}
       <span className="ml-auto flex items-center gap-2 text-[11px] text-ink-400">
         <span>{statusText}</span>
         <span

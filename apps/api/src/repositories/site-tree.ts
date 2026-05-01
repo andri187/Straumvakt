@@ -235,7 +235,7 @@ export async function listSiteTree(
     db.chargingStation.findMany({
       orderBy: [{ updatedAt: "desc" }],
       include: {
-        siteAsset: { select: { siteId: true } },
+        siteAsset: { select: { siteId: true, displayName: true } },
         evses: {
           orderBy: { evseIndex: "asc" },
           select: {
@@ -329,6 +329,7 @@ export async function listSiteTree(
       vendor: c.vendor,
       model: c.model,
       serialNumber: c.serialNumber,
+      displayName: c.siteAsset.displayName,
       online,
       apiActive,
       ocppActive,

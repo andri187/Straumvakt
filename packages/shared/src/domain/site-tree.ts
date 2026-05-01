@@ -16,6 +16,15 @@ export interface SiteTreeChargerNode {
   vendor: string | null;
   model: string | null;
   serialNumber: string | null;
+  /**
+   * Operator-friendly display name from SiteAsset.displayName.
+   * Set at import time to Zaptec's Name field (e.g. "A1", "Festi 5",
+   * "Klettás 3"). Distinct from `serialNumber` (canonical hardware
+   * serial = uppercase DeviceId) and `identityString` (lowercase
+   * DeviceId used as the OCPP identity-string). Operators recognize
+   * chargers by this label.
+   */
+  displayName: string;
   // `online` is the legacy "either source signals reachability" flag,
   // kept for the at-a-glance count aggregation on parent nodes.
   // Renderers should prefer `apiActive` + `ocppActive` for per-row
