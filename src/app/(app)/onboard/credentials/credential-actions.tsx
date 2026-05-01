@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api-client";
 
@@ -69,6 +70,13 @@ export function CredentialActions({
 
   return (
     <div className="inline-flex items-center gap-1">
+      <Link
+        href={`/onboard/credentials/${credentialId}/manage` as Parameters<typeof Link>[0]["href"]}
+        className="rounded border border-sv-sky/40 bg-sv-sky/10 px-2 py-1 text-[10px] text-sv-sky hover:bg-sv-sky/20"
+        title="Manage which Zaptec chargers this credential controls"
+      >
+        Manage
+      </Link>
       <button
         type="button"
         onClick={toggleStatus}

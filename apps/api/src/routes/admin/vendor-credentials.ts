@@ -19,6 +19,10 @@ import {
   listVendorCredentials,
   updateVendorCredential,
 } from "../../repositories/vendor-credentials";
+import {
+  applyCredentialSelection,
+  getCredentialManagementTree,
+} from "../../repositories/credential-management";
 import type { Env } from "../../bindings";
 
 // Platform-wide list — every org's credentials. Operator UI uses this
@@ -56,6 +60,52 @@ adminVendorCredentialsAll.patch("/:id", async (c) => {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (msg.includes("Record to update not found")) return c.json({ error: "not_found" }, 404);
+    throw err;
+  }
+});
+
+// Manage tree — returns the operator-facing view of "what's in Zaptec
+// vs what's in our DB" for a credential. Imported installations float
+// to the top so the operator can act; unimported sink (wizard-only).
+adminVendorCredentialsAll.get("/:id/manage-tree", async (c) => {
+  const db = makePrisma(c.env);
+  try {
+    const tree = await getCredentialManagementTree(db, c.env.OCPP_CRED_KEK, c.req.param("id"));
+    return c.json({ tree });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg === "credential_not_found") return c.json({ error: msg }, 404);
+    if (msg === "credential_not_zaptec") return c.json({ error: msg }, 400);
+    if (msg === "credential_password_missing") return c.json({ error: msg }, 400);
+    if (msg === "zaptec_auth_failed") return c.json({ error: msg }, 502);
+    if (msg === "kek_unavailable") return c.json({ error: msg }, 500);
+    throw err;
+  }
+});
+
+adminVendorCredentialsAll.post("/:id/apply", async (c) => {
+  const raw = (await c.req.json().catch(() => null)) as
+    | { selectedZaptecChargerIds?: unknown }
+    | null;
+  const ids = Array.isArray(raw?.selectedZaptecChargerIds)
+    ? (raw!.selectedZaptecChargerIds as unknown[]).filter(
+        (v): v is string => typeof v === "string",
+      )
+    : null;
+  if (!ids) {
+    return c.json({ error: "validation", issues: [{ path: ["selectedZaptecChargerIds"], message: "must be string array" }] }, 400);
+  }
+  const db = makePrisma(c.env);
+  try {
+    const result = await applyCredentialSelection(db, c.env.OCPP_CRED_KEK, c.req.param("id"), ids);
+    return c.json({ result });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg === "credential_not_found") return c.json({ error: msg }, 404);
+    if (msg === "credential_not_zaptec") return c.json({ error: msg }, 400);
+    if (msg === "credential_password_missing") return c.json({ error: msg }, 400);
+    if (msg === "zaptec_auth_failed") return c.json({ error: msg }, 502);
+    if (msg === "kek_unavailable") return c.json({ error: msg }, 500);
     throw err;
   }
 });
