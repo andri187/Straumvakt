@@ -251,7 +251,7 @@ function InstallationRow({ installation }: { installation: SiteTreeInstallationN
 
 function CircuitRow({ circuit, indent }: { circuit: SiteTreeCircuitNode; indent: number }) {
   return (
-    <details className="group/c" open={circuit.chargers.length > 0 && circuit.chargers.length <= 6}>
+    <details className="group/c" open={circuit.chargers.length > 0}>
       <summary
         className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 hover:bg-bg-base/30"
         style={{ paddingLeft: `${1.25 * indent + 0.5}rem` }}
