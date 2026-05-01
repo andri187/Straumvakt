@@ -65,6 +65,47 @@ export interface ChargerTechnicalRead {
   routingId: string | null;                 // StateId 801 — DLB routing key
   installationId: string | null;            // StateId 800 — Zaptec installation UUID
 
+  // Additional per-charger state observations exposed once for the
+  // Technical Read page. All optional — Zaptec-side may not have
+  // populated all 70+ observations yet.
+  mainboardSwVersion: string | null;        // StateId 908
+  smartBootloaderVersion: string | null;    // StateId 912
+  hardwareVersion: string | null;           // StateId 913
+  internalTempBC: number | null;            // StateId 202
+  humidityPct: number | null;               // StateId 270
+  lifetimeEnergyKWh: number | null;         // SignedMeterValueKwh from detail
+  lteRoamingDisabled: boolean | null;       // StateId 753
+  lteImei: string | null;                   // StateId 963
+  lteMsisdn: string | null;                 // StateId 961
+  macPlcGrid: string | null;                // StateId 951
+  lastChargeCard: string | null;            // StateId 750 — `<UUID>;<card>;<group>` last seen
+  pin: string | null;                       // detail.Pin — wallet PIN
+  hasSessions: boolean | null;              // detail.HasSessions
+
+  // Installation-level fields (separate Zaptec fetch). null when
+  // the installation detail call fails or isn't attempted.
+  installation: ChargerInstallationSnapshot | null;
+
   // Active warnings/notifications bitmask (decoded by the UI).
   warningsBitmask: number | null;      // StateId 803/804
+}
+
+export interface ChargerInstallationSnapshot {
+  name: string | null;
+  address: string | null;
+  city: string | null;
+  zipCode: string | null;
+  countryId: string | null;
+  timeZoneIanaName: string | null;
+  activeChargerCount: number | null;
+  maxCurrent: number | null;
+  availableCurrent: number | null;
+  useLoadBalancing: boolean | null;
+  isRequiredAuthentication: boolean | null;
+  ocppCloudUrl: string | null;
+  ocppCloudUrlVersion: number | null;
+  routingId: string | null;
+  messagingEnabled: boolean | null;
+  active: boolean | null;
+  createdOnDate: string | null;
 }

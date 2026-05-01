@@ -11,10 +11,14 @@
 // just with placeholder values.
 
 import type { PrismaClient } from "../generated/prisma/client";
-import type { ChargerTechnicalRead } from "@straumvakt/shared/domain/charger-technical-read";
+import type {
+  ChargerTechnicalRead,
+  ChargerInstallationSnapshot,
+} from "@straumvakt/shared/domain/charger-technical-read";
 import {
   getChargerDetail,
   getChargerState,
+  getInstallationSummary,
   getZaptecAccessToken,
   type ZaptecStateEntry,
 } from "../lib/zaptec";
@@ -48,6 +52,15 @@ const STATE_IDS = {
   AuthenticationListVersion: 751,
   RoutingId: 801,
   InstallationId: 800,
+  MainboardSwVersion: 908,
+  SmartBootloaderVersion: 912,
+  HardwareVersion: 913,
+  Humidity: 270,
+  LteRoamingDisabled: 753,
+  LteImei: 963,
+  LteMsisdn: 961,
+  MacPlcGrid: 951,
+  NewChargeCard: 750,
 } as const;
 
 const OPERATION_MODES: Record<string, string> = {
@@ -119,6 +132,20 @@ function emptyRead(): ChargerTechnicalRead {
     authListVersion: null,
     routingId: null,
     installationId: null,
+    mainboardSwVersion: null,
+    smartBootloaderVersion: null,
+    hardwareVersion: null,
+    internalTempBC: null,
+    humidityPct: null,
+    lifetimeEnergyKWh: null,
+    lteRoamingDisabled: null,
+    lteImei: null,
+    lteMsisdn: null,
+    macPlcGrid: null,
+    lastChargeCard: null,
+    pin: null,
+    hasSessions: null,
+    installation: null,
     warningsBitmask: null,
   };
 }
@@ -196,6 +223,10 @@ export async function getChargerTechnicalRead(
     const tokenResult = await getZaptecAccessToken(credential.username, password);
     if (!tokenResult.ok) return emptyRead();
 
+    // Fetch detail + state first; we need detail.InstallationId to
+    // know which installation to fetch. Then in parallel: installation
+    // detail (for installation-level fields surfaced on the Technical
+    // Read page).
     const [detailRes, stateRes] = await Promise.all([
       getChargerDetail(tokenResult.value, vendorResourceId),
       getChargerState(tokenResult.value, vendorResourceId),
@@ -203,6 +234,44 @@ export async function getChargerTechnicalRead(
 
     const detail = detailRes.ok ? detailRes.value ?? {} : {};
     const state = stateRes.ok ? stateRes.value : [];
+
+    let installationSnapshot: ChargerInstallationSnapshot | null = null;
+    const installationIdRaw = (detail as Record<string, unknown>).InstallationId;
+    if (typeof installationIdRaw === "string" && installationIdRaw.length > 0) {
+      const instRes = await getInstallationSummary(tokenResult.value, installationIdRaw);
+      if (instRes.ok && instRes.value) {
+        const i = instRes.value as Record<string, unknown>;
+        installationSnapshot = {
+          name: typeof i.Name === "string" ? i.Name : null,
+          address: typeof i.Address === "string" ? i.Address : null,
+          city: typeof i.City === "string" ? i.City : null,
+          zipCode: typeof i.ZipCode === "string" ? i.ZipCode : null,
+          countryId: typeof i.CountryId === "string" ? i.CountryId : null,
+          timeZoneIanaName:
+            typeof i.TimeZoneIanaName === "string" ? i.TimeZoneIanaName : null,
+          activeChargerCount:
+            typeof i.ActiveChargerCount === "number" ? i.ActiveChargerCount : null,
+          maxCurrent: typeof i.MaxCurrent === "number" ? i.MaxCurrent : null,
+          availableCurrent:
+            typeof i.AvailableCurrent === "number" ? i.AvailableCurrent : null,
+          useLoadBalancing:
+            typeof i.UseLoadBalancing === "boolean" ? i.UseLoadBalancing : null,
+          isRequiredAuthentication:
+            typeof i.IsRequiredAuthentication === "boolean"
+              ? i.IsRequiredAuthentication
+              : null,
+          ocppCloudUrl: typeof i.OcppCloudUrl === "string" ? i.OcppCloudUrl : null,
+          ocppCloudUrlVersion:
+            typeof i.OcppCloudUrlVersion === "number" ? i.OcppCloudUrlVersion : null,
+          routingId: typeof i.RoutingId === "string" ? i.RoutingId : null,
+          messagingEnabled:
+            typeof i.MessagingEnabled === "boolean" ? i.MessagingEnabled : null,
+          active: typeof i.Active === "boolean" ? i.Active : null,
+          createdOnDate:
+            typeof i.CreatedOnDate === "string" ? i.CreatedOnDate : null,
+        };
+      }
+    }
 
     const tempA = pickStateNumber(state, STATE_IDS.InternalTempA);
     const tempB = pickStateNumber(state, STATE_IDS.InternalTempB);
@@ -278,6 +347,21 @@ export async function getChargerTechnicalRead(
       authListVersion: pickStateNumber(state, STATE_IDS.AuthenticationListVersion),
       routingId: pickState(state, STATE_IDS.RoutingId),
       installationId: pickState(state, STATE_IDS.InstallationId),
+      mainboardSwVersion: pickState(state, STATE_IDS.MainboardSwVersion),
+      smartBootloaderVersion: pickState(state, STATE_IDS.SmartBootloaderVersion),
+      hardwareVersion: pickState(state, STATE_IDS.HardwareVersion),
+      internalTempBC: pickStateNumber(state, STATE_IDS.InternalTempB),
+      humidityPct: pickStateNumber(state, STATE_IDS.Humidity),
+      lifetimeEnergyKWh:
+        typeof d.SignedMeterValueKwh === "number" ? d.SignedMeterValueKwh : null,
+      lteRoamingDisabled: pickStateBool(state, STATE_IDS.LteRoamingDisabled),
+      lteImei: pickState(state, STATE_IDS.LteImei),
+      lteMsisdn: pickState(state, STATE_IDS.LteMsisdn),
+      macPlcGrid: pickState(state, STATE_IDS.MacPlcGrid),
+      lastChargeCard: pickState(state, STATE_IDS.NewChargeCard),
+      pin: typeof d.Pin === "string" ? d.Pin : null,
+      hasSessions: typeof d.HasSessions === "boolean" ? d.HasSessions : null,
+      installation: installationSnapshot,
       warningsBitmask: warnings ?? notifications,
     };
   } catch (err) {

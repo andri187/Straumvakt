@@ -218,19 +218,28 @@ export default async function ChargerTechnicalReadPage({
             <PlaceholderRow label="Per row" trailing="start / end / kWh / kr / driver tag" />
           </TechSection>
           <TechSection title="Firmware" source="api" hint="installation rollout state">
-            <InfoRow label="Computer SW" info={t?.firmwareVersion ?? charger.firmwareVersion ?? DASH} mono />
-            <PlaceholderRow label="Mainboard SW" trailing="StateId 909" />
-            <PlaceholderRow label="Smart bootloader" trailing="StateId 911/912" />
-            <PlaceholderRow label="Rollout cohort" trailing="installation-wide schedule" />
+            <InfoRow label="Computer SW (911)" info={t?.firmwareVersion ?? charger.firmwareVersion ?? DASH} mono />
+            <InfoRow label="Mainboard SW (908)" info={t?.mainboardSwVersion ?? DASH} mono />
+            <InfoRow label="Smart bootloader (912)" info={t?.smartBootloaderVersion ?? DASH} mono />
+            <InfoRow label="Hardware (913)" info={t?.hardwareVersion ?? DASH} mono />
           </TechSection>
         </div>
 
         {/* DLB + Authentication */}
         <div className="mt-5 grid gap-5 lg:grid-cols-2">
           <TechSection title="Dynamic load balancing" source="api" hint="installation-level controller">
-            <PlaceholderRow label="UseLoadBalancing" trailing="installation flag" />
-            <PlaceholderRow label="MaxCurrent" trailing="installation cap (A)" />
-            <PlaceholderRow label="AvailableCurrent" trailing="real-time headroom" />
+            <InfoRow
+              label="UseLoadBalancing"
+              info={t?.installation?.useLoadBalancing == null ? DASH : t.installation.useLoadBalancing ? "yes" : "no"}
+            />
+            <InfoRow
+              label="MaxCurrent"
+              info={t?.installation?.maxCurrent != null ? `${t.installation.maxCurrent} A` : DASH}
+            />
+            <InfoRow
+              label="AvailableCurrent"
+              info={t?.installation?.availableCurrent != null ? `${t.installation.availableCurrent} A` : DASH}
+            />
             <InfoRow
               label="Per-charger allocation"
               info={t?.chargeCurrentSetA != null ? `${t.chargeCurrentSetA.toFixed(1)} A` : DASH}
@@ -238,20 +247,29 @@ export default async function ChargerTechnicalReadPage({
           </TechSection>
           <TechSection title="Authentication" source="api" hint="charger + installation">
             <InfoRow
-              label="IsRequiredAuthentication"
+              label="IsRequiredAuthentication (installation)"
               info={
-                t?.propertyAuthenticationDisabled == null
+                t?.installation?.isRequiredAuthentication == null
                   ? DASH
-                  : t.propertyAuthenticationDisabled
-                    ? "no — disabled"
-                    : "yes"
+                  : t.installation.isRequiredAuthentication
+                    ? "yes"
+                    : "no"
               }
             />
             <InfoRow label="AuthType" info={t?.authenticationTypeLabel ?? DASH} />
-            <PlaceholderRow label="Last auth attempt" trailing="StateId 752" />
             <InfoRow
-              label="Local auth list size"
-              info={t?.authListVersion != null ? `version ${t.authListVersion}` : DASH}
+              label="Last NewChargeCard (750)"
+              info={t?.lastChargeCard ?? DASH}
+              mono
+            />
+            <InfoRow
+              label="Local auth list version (751)"
+              info={t?.authListVersion != null ? String(t.authListVersion) : DASH}
+              mono
+            />
+            <InfoRow
+              label="Default idTag"
+              info={t?.ocppDefaultIdTag ?? DASH}
               mono
             />
           </TechSection>
@@ -266,7 +284,11 @@ export default async function ChargerTechnicalReadPage({
               label="Signal strength"
               info={t?.signalDbm != null ? `${t.signalDbm} dBm` : DASH}
             />
-            <PlaceholderRow label="LTE roaming" trailing="StateId 803" />
+            <InfoRow
+              label="LTE roaming disabled (753)"
+              info={t?.lteRoamingDisabled == null ? DASH : t.lteRoamingDisabled ? "yes" : "no"}
+            />
+            <InfoRow label="Uptime (820)" info={t?.uptimeHours != null ? `${t.uptimeHours.toFixed(1)} h` : DASH} />
           </TechSection>
           <TechSection title="Eco / Schedule" source="api" hint="installation-level rules">
             <PlaceholderRow label="Schedule active" trailing="installation flag" />
@@ -279,45 +301,86 @@ export default async function ChargerTechnicalReadPage({
         <div className="mt-5 grid gap-5 lg:grid-cols-2">
           <TechSection title="Hardware identity" source="api" hint="StateId 950 / 951 / 962 / 980">
             <InfoRow label="Serial number" info={charger.serialNumber ?? t?.serialNo ?? DASH} mono />
+            <InfoRow label="DeviceId" info={t?.deviceId ?? DASH} mono />
             <InfoRow label="MID" info={t?.mid ?? DASH} mono />
-            <InfoRow label="MAC address" info={t?.macMain ?? DASH} mono />
+            <InfoRow label="MAC main (950)" info={t?.macMain ?? DASH} mono />
+            <InfoRow label="MAC PLC grid (951)" info={t?.macPlcGrid ?? DASH} mono />
+            <InfoRow label="MAC Wi-Fi (952)" info={t?.macWifi ?? DASH} mono />
             <InfoRow
-              label="LTE identifiers"
-              info={
-                t?.lteIccid || t?.lteImsi
-                  ? `ICCID ${t.lteIccid ?? "—"} · IMSI ${t.lteImsi ?? "—"}`
-                  : `${charger.iccid ? `ICCID ${charger.iccid}` : ""}${charger.imsi ? ` · IMSI ${charger.imsi}` : ""}` || DASH
-              }
+              label="LTE ICCID (962)"
+              info={t?.lteIccid ?? charger.iccid ?? DASH}
               mono
             />
-          </TechSection>
-          <TechSection title="Environment" source="api" hint="StateId 507 / 508 / 509 / 553">
             <InfoRow
-              label="Internal temp 5"
+              label="LTE IMSI (960)"
+              info={t?.lteImsi ?? charger.imsi ?? DASH}
+              mono
+            />
+            <InfoRow label="LTE IMEI (963)" info={t?.lteImei ?? DASH} mono />
+            <InfoRow label="LTE MSISDN (961)" info={t?.lteMsisdn ?? DASH} mono />
+          </TechSection>
+          <TechSection title="Environment" source="api" hint="StateId 201 / 202 / 270">
+            <InfoRow
+              label="Internal temp A (201)"
               info={t?.internalTemperatureC != null ? `${t.internalTemperatureC.toFixed(1)} °C` : DASH}
             />
-            <PlaceholderRow label="Internal temp 6" trailing="°C" />
-            <PlaceholderRow label="Humidity" trailing="%RH" />
+            <InfoRow
+              label="Internal temp B (202)"
+              info={t?.internalTempBC != null ? `${t.internalTempBC.toFixed(1)} °C` : DASH}
+            />
+            <InfoRow
+              label="Humidity (270)"
+              info={t?.humidityPct != null ? `${t.humidityPct.toFixed(1)} %RH` : DASH}
+            />
           </TechSection>
         </div>
 
         {/* Installation features */}
         <TechSection title="Installation features" source="api" hint="aggregate of installation-level toggles" className="mt-5">
           <div className="grid gap-2 sm:grid-cols-2">
-            <PlaceholderRow label="UseLoadBalancing" />
-            <PlaceholderRow label="IsRequiredAuthentication" />
-            <InfoRow label="OcppCloudUrl" info={t?.propertyOcppUrl ?? DASH} mono />
-            <PlaceholderRow label="TimeZoneIanaName" />
-            <PlaceholderRow label="ActiveChargerCount" />
-            <PlaceholderRow label="MaxCurrent / AvailableCurrent" />
+            <InfoRow
+              label="UseLoadBalancing"
+              info={t?.installation?.useLoadBalancing == null ? DASH : t.installation.useLoadBalancing ? "yes" : "no"}
+            />
+            <InfoRow
+              label="IsRequiredAuthentication"
+              info={
+                t?.installation?.isRequiredAuthentication == null
+                  ? DASH
+                  : t.installation.isRequiredAuthentication
+                    ? "yes"
+                    : "no"
+              }
+            />
+            <InfoRow label="OcppCloudUrl" info={t?.installation?.ocppCloudUrl ?? t?.propertyOcppUrl ?? DASH} mono />
+            <InfoRow label="TimeZoneIanaName" info={t?.installation?.timeZoneIanaName ?? DASH} mono />
+            <InfoRow
+              label="ActiveChargerCount"
+              info={t?.installation?.activeChargerCount != null ? String(t.installation.activeChargerCount) : DASH}
+            />
+            <InfoRow
+              label="MaxCurrent / AvailableCurrent"
+              info={
+                t?.installation?.maxCurrent != null
+                  ? `${t.installation.maxCurrent} A / ${t.installation.availableCurrent ?? "—"} A`
+                  : DASH
+              }
+            />
           </div>
         </TechSection>
 
         {/* Real-time messaging */}
         <TechSection title="Real-time messaging" source="api" hint="installation messaging endpoint" className="mt-5">
-          <PlaceholderRow label="Connection URL" trailing="vendor cloud URL" />
-          <PlaceholderRow label="Status" trailing="connected / disconnected" />
-          <PlaceholderRow label="Subscription topic" trailing="installation-id key" />
+          <InfoRow
+            label="Messaging enabled"
+            info={t?.installation?.messagingEnabled == null ? DASH : t.installation.messagingEnabled ? "yes" : "no"}
+          />
+          <InfoRow
+            label="Subscription topic"
+            info={t?.installationId ?? t?.installation?.name ? `installation_${t?.installationId ?? "?"}` : DASH}
+            mono
+          />
+          <PlaceholderRow label="SAS token" trailing="server-side only — fetched per session" />
         </TechSection>
 
         {/* OCPP section divider */}
@@ -353,7 +416,10 @@ export default async function ChargerTechnicalReadPage({
 
         <div className="mt-5 grid gap-5 lg:grid-cols-2">
           <TechSection title="Meter values" source="ocpp" hint="MeterValues sampling">
-            <PlaceholderRow label="Energy.Active.Import.Register" trailing="kWh lifetime" />
+            <InfoRow
+              label="Energy.Active.Import.Register"
+              info={t?.lifetimeEnergyKWh != null ? `${t.lifetimeEnergyKWh.toFixed(3)} kWh lifetime` : DASH}
+            />
             <InfoRow label="Power.Active.Import" info={fmtKW(t?.totalChargePowerW ?? null)} />
             <InfoRow
               label="Voltage / Current per phase"
@@ -369,7 +435,7 @@ export default async function ChargerTechnicalReadPage({
               }
               mono
             />
-            <PlaceholderRow label="Sample interval" trailing="config key" />
+            <PlaceholderRow label="Sample interval" trailing="needs GetConfiguration round-trip projection" />
           </TechSection>
           <TechSection title="Authorization log" source="ocpp" hint="Authorize requests">
             <PlaceholderRow label="Last token" trailing="hashed RFID / driver id" />
@@ -420,11 +486,21 @@ export default async function ChargerTechnicalReadPage({
         {/* Metadata footer */}
         <div className="mt-5 grid gap-5 lg:grid-cols-2">
           <TechSection title="Installation metadata" source="api">
-            <InfoRow label="Name" info={charger.installationDisplayName ?? DASH} />
-            <PlaceholderRow label="Address" />
-            <PlaceholderRow label="Time zone" />
-            <PlaceholderRow label="Active charger count" />
-            <PlaceholderRow label="Created on" />
+            <InfoRow label="Name" info={t?.installation?.name ?? charger.installationDisplayName ?? DASH} />
+            <InfoRow
+              label="Address"
+              info={
+                t?.installation?.address || t?.installation?.city || t?.installation?.zipCode
+                  ? `${t?.installation?.address ?? ""}, ${t?.installation?.zipCode ?? ""} ${t?.installation?.city ?? ""}`.trim()
+                  : DASH
+              }
+            />
+            <InfoRow label="Time zone" info={t?.installation?.timeZoneIanaName ?? DASH} mono />
+            <InfoRow
+              label="Active charger count"
+              info={t?.installation?.activeChargerCount != null ? String(t.installation.activeChargerCount) : DASH}
+            />
+            <InfoRow label="Created on" info={fmtDate(t?.installation?.createdOnDate ?? null)} />
           </TechSection>
           <TechSection title="Charger metadata" source="api">
             <InfoRow label="Name" info={identity?.identityString ?? charger.serialNumber ?? DASH} />
