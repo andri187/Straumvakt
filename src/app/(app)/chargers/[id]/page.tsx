@@ -163,6 +163,20 @@ export default async function ChargerDetailPage({ params }: { params: Promise<{ 
           environment, etc. Below the edit panel per operator request. */}
       <TechnicalReadDetail read={technicalRead} />
 
+      {/* Full Technical Read view — the long-form layout with every
+          section grouped + sourced. Linked rather than inlined so this
+          profile page stays scannable. */}
+      <div className="mt-6 flex justify-center">
+        <Link
+          href={
+            `/chargers/${charger.chargingStationId}/technical-read` as Parameters<typeof Link>[0]["href"]
+          }
+          className="inline-flex items-center gap-2 rounded-md border border-sv-sky/40 bg-sv-sky/10 px-4 py-2 text-sm font-medium text-sv-sky hover:bg-sv-sky/20"
+        >
+          Technical Read →
+        </Link>
+      </div>
+
       <section className="mt-8 rounded-lg border border-rose-700/30 bg-rose-950/10 p-4">
         <div className="flex items-baseline justify-between gap-4">
           <div>
