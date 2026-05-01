@@ -29,23 +29,37 @@ export default async function InstallationsPage() {
       ) : (
         <ul className="divide-y divide-bg-border/60 rounded-md border border-bg-border bg-bg-base/30">
           {installations.map((i) => (
-            <li key={i.id} className="px-4 py-3 hover:bg-bg-base/20">
-              <div className="flex items-baseline justify-between">
-                <div>
-                  <div className="text-sm font-medium text-ink-50">
-                    <Link href={`/installations/${i.id}`} className="hover:text-sv-sky">
-                      {i.displayName}
-                    </Link>
-                  </div>
-                  <div className="text-xs text-ink-500">
-                    Org: <Link className="text-sv-sky hover:underline" href={`/tenants/organizations/${i.orgId}`}>{i.orgDisplayName}</Link>
-                    {" · "}Site: <span className="text-ink-300">{i.siteDisplayName}</span>
-                    {i.vendorSlug && <span className="ml-2 rounded bg-sv-sky/10 px-1.5 py-0.5 font-mono text-[10px] text-sv-sky">{i.vendorSlug}</span>}
-                  </div>
-                  <div className="mt-0.5 text-[10px] font-mono text-ink-500">{i.onboardingStatus}{i.vendorInstallationRef && ` · ref ${i.vendorInstallationRef}`}</div>
-                </div>
-                <span className="font-mono text-[10px] text-ink-500">{i.id.slice(0, 8)}</span>
-              </div>
+            <li
+              key={i.id}
+              className="flex items-center gap-3 px-3 py-1.5 text-xs hover:bg-bg-base/20"
+            >
+              <Link
+                href={`/installations/${i.id}`}
+                className="shrink-0 text-sm font-medium text-ink-50 hover:text-sv-sky"
+              >
+                {i.displayName}
+              </Link>
+              {i.vendorSlug && (
+                <span className="shrink-0 rounded bg-sv-sky/10 px-1.5 py-0.5 font-mono text-[10px] text-sv-sky">
+                  {i.vendorSlug}
+                </span>
+              )}
+              <span className="min-w-0 flex-1 truncate text-ink-500">
+                <Link className="text-sv-sky hover:underline" href={`/tenants/organizations/${i.orgId}`}>
+                  {i.orgDisplayName}
+                </Link>
+                {" · "}
+                {i.siteDisplayName}
+                {i.vendorInstallationRef && (
+                  <>
+                    {" · "}
+                    <span className="font-mono">{i.vendorInstallationRef}</span>
+                  </>
+                )}
+              </span>
+              <span className="shrink-0 font-mono text-[10px] text-ink-500">
+                {i.onboardingStatus}
+              </span>
             </li>
           ))}
         </ul>

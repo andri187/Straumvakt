@@ -27,26 +27,37 @@ export default async function CircuitsPage() {
       ) : (
         <ul className="divide-y divide-bg-border/60 rounded-md border border-bg-border bg-bg-base/30">
           {circuits.map((c) => (
-            <li key={c.id} className="px-4 py-3 hover:bg-bg-base/20">
-              <div className="flex items-baseline justify-between">
-                <div>
-                  <div className="text-sm font-medium text-ink-50">
-                    <Link href={`/circuits/${c.id}`} className="hover:text-sv-sky">
-                      {c.displayName}
-                    </Link>
-                  </div>
-                  <div className="text-xs text-ink-500">
-                    Org: <Link className="text-sv-sky hover:underline" href={`/tenants/organizations/${c.orgId}`}>{c.orgDisplayName}</Link>
-                    {" · "}Site: <span className="text-ink-300">{c.siteDisplayName}</span>
-                    {c.installationDisplayName && <> · Installation: <span className="text-ink-300">{c.installationDisplayName}</span></>}
-                  </div>
-                  <div className="mt-0.5 text-[10px] font-mono text-ink-500">
-                    {c.phaseCount}-phase{c.ampereCeiling && ` · ${c.ampereCeiling}A ceiling`}
-                    {c.vendorCircuitRef && ` · ref ${c.vendorCircuitRef}`}
-                  </div>
-                </div>
-                <span className="font-mono text-[10px] text-ink-500">{c.id.slice(0, 8)}</span>
-              </div>
+            <li
+              key={c.id}
+              className="flex items-center gap-3 px-3 py-1.5 text-xs hover:bg-bg-base/20"
+            >
+              <Link
+                href={`/circuits/${c.id}`}
+                className="shrink-0 text-sm font-medium text-ink-50 hover:text-sv-sky"
+              >
+                {c.displayName}
+              </Link>
+              <span className="shrink-0 font-mono text-[10px] text-ink-500">
+                {c.phaseCount}p{c.ampereCeiling && ` · ${c.ampereCeiling}A`}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-ink-500">
+                <Link className="text-sv-sky hover:underline" href={`/tenants/organizations/${c.orgId}`}>
+                  {c.orgDisplayName}
+                </Link>
+                {" · "}
+                {c.siteDisplayName}
+                {c.installationDisplayName && (
+                  <>
+                    {" · "}
+                    {c.installationDisplayName}
+                  </>
+                )}
+              </span>
+              {c.vendorCircuitRef && (
+                <span className="shrink-0 font-mono text-[10px] text-ink-500">
+                  {c.vendorCircuitRef}
+                </span>
+              )}
             </li>
           ))}
         </ul>

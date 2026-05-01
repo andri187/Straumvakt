@@ -28,22 +28,37 @@ export default async function ChargersPage() {
       ) : (
         <ul className="divide-y divide-bg-border/60 rounded-md border border-bg-border bg-bg-base/30">
           {chargers.map((c) => (
-            <li key={c.chargingStationId} className="px-4 py-3 hover:bg-bg-base/20">
-              <div className="flex items-baseline justify-between">
-                <div>
-                  <div className="text-sm font-medium text-ink-50">
-                    <Link href={`/chargers/${c.chargingStationId}`} className="hover:text-sv-sky">
-                      {c.identityString}
-                    </Link>
-                  </div>
-                  <div className="text-xs text-ink-500">
-                    {c.orgDisplayName} · {c.siteDisplayName}
-                    {c.vendor && c.model && <> · <span className="text-ink-300">{c.vendor} {c.model}</span></>}
-                  </div>
-                  <div className="mt-0.5 text-[10px] font-mono text-ink-500">{c.ocppVersion} · {c.connectorType}{c.serialNumber && ` · ${c.serialNumber}`}</div>
-                </div>
-                <span className="font-mono text-[10px] text-ink-500">{c.chargingStationId.slice(0, 8)}</span>
-              </div>
+            <li
+              key={c.chargingStationId}
+              className="flex items-center gap-3 px-3 py-1.5 text-xs hover:bg-bg-base/20"
+            >
+              <Link
+                href={`/chargers/${c.chargingStationId}`}
+                className="shrink-0 font-mono text-sm font-medium text-ink-50 hover:text-sv-sky"
+              >
+                {c.identityString}
+              </Link>
+              {c.serialNumber && c.serialNumber !== c.identityString && (
+                <span className="shrink-0 font-mono text-[10px] text-ink-500">
+                  {c.serialNumber}
+                </span>
+              )}
+              <span className="min-w-0 flex-1 truncate text-ink-500">
+                {c.orgDisplayName}
+                {" · "}
+                {c.siteDisplayName}
+                {c.vendor && c.model && (
+                  <>
+                    {" · "}
+                    <span className="text-ink-300">
+                      {c.vendor} {c.model}
+                    </span>
+                  </>
+                )}
+              </span>
+              <span className="shrink-0 font-mono text-[10px] text-ink-500">
+                {c.ocppVersion} · {c.connectorType}
+              </span>
             </li>
           ))}
         </ul>
