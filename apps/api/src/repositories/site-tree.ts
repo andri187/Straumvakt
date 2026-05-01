@@ -15,7 +15,12 @@ import type {
   SiteTreeCircuitNode,
   SiteTreeChargerNode,
 } from "@straumvakt/shared/domain/site-tree";
-import { getChargerState, getZaptecAccessToken, listChargers } from "../lib/zaptec";
+import {
+  getChargerDetail,
+  getChargerState,
+  getZaptecAccessToken,
+  listChargers,
+} from "../lib/zaptec";
 import { openPassword } from "../lib/credential-crypto";
 
 const ONLINE_WINDOW_MS = 5 * 60 * 1000;
@@ -45,6 +50,8 @@ interface ZaptecLiveSnapshot {
    * we couldn't read state for this charger.
    */
   onlineSince: string | null;
+  /** Lifetime kWh from charger detail's SignedMeterValueKwh. Null when missing. */
+  lifetimeEnergyKWh: number | null;
 }
 
 /**
@@ -133,27 +140,40 @@ async function buildApiActiveMap(
             authRequired: ch.IsAuthorizationRequired === true,
             vendorOnline: ch.IsOnline === true,
             onlineSince: null,
+            lifetimeEnergyKWh: null,
           });
           if (ch.IsOnline === true) {
             onlineToFetch.push({ vendorId: ch.Id, stationId });
           }
         }
 
-        // Per-charger /state fetch in parallel — pulls StateId -2
-        // (IsOnline) timestamp so we can render "online 3h 12m" in
-        // the tree row. Skipped for offline chargers. Best-effort:
-        // if the state call fails, onlineSince stays null and the UI
-        // renders an em-dash.
+        // Per-online-charger fetches in parallel:
+        //   /state  → StateId -2 timestamp (online-since)
+        //   /detail → SignedMeterValueKwh (lifetime kWh)
+        // Both run side-by-side per charger; offline chargers skip
+        // both fetches. Best-effort — failures leave fields null and
+        // the UI renders em-dashes rather than 500ing the page.
         await Promise.all(
           onlineToFetch.map(async ({ vendorId, stationId }) => {
-            const stateResult = await getChargerState(tokenResult.value, vendorId);
-            if (!stateResult.ok) return;
-            const isOnlineEntry = stateResult.value.find((s) => s.StateId === -2);
-            if (!isOnlineEntry || !isOnlineEntry.Timestamp) return;
+            const [stateResult, detailResult] = await Promise.all([
+              getChargerState(tokenResult.value, vendorId),
+              getChargerDetail(tokenResult.value, vendorId),
+            ]);
             const existing = out.get(stationId);
-            if (existing) {
-              out.set(stationId, { ...existing, onlineSince: isOnlineEntry.Timestamp });
-            }
+            if (!existing) return;
+            const onlineEntry = stateResult.ok
+              ? stateResult.value.find((s) => s.StateId === -2)
+              : null;
+            const onlineSince = onlineEntry?.Timestamp ?? null;
+            const lifetimeKWh =
+              detailResult.ok && detailResult.value && typeof detailResult.value.SignedMeterValueKwh === "number"
+                ? (detailResult.value.SignedMeterValueKwh as number)
+                : null;
+            out.set(stationId, {
+              ...existing,
+              onlineSince,
+              lifetimeEnergyKWh: lifetimeKWh,
+            });
           }),
         );
       } catch (err) {
@@ -319,10 +339,23 @@ export async function listSiteTree(
       // it either. Reserved as a stable null so the UI placeholder
       // maps cleanly when the data lands.
       disconnectsPast24h: null,
+      lifetimeEnergyKWh: liveSnapshot?.lifetimeEnergyKWh ?? null,
       status: identity?.status ?? "—",
       lastSeenAt: lastSeen ? new Date(lastSeen).toISOString() : null,
       connectorSummary,
     };
+  }
+
+  function sumKwh(nodes: SiteTreeChargerNode[]): number | null {
+    let total = 0;
+    let any = false;
+    for (const n of nodes) {
+      if (n.lifetimeEnergyKWh != null) {
+        total += n.lifetimeEnergyKWh;
+        any = true;
+      }
+    }
+    return any ? total : null;
   }
 
   function circuitNode(
@@ -335,6 +368,7 @@ export async function listSiteTree(
       ampereCeiling: cir.ampereCeiling,
       phaseCount: cir.phaseCount,
       chargers: children,
+      lifetimeEnergyKWhTotal: sumKwh(children),
     };
   }
 
@@ -390,6 +424,10 @@ export async function listSiteTree(
       online += instOn;
       offline += instOff;
 
+      const allInstChargers = [
+        ...circuitNodes.flatMap((c) => c.chargers),
+        ...directChargers,
+      ];
       return {
         id: inst.id,
         displayName: inst.displayName,
@@ -399,6 +437,7 @@ export async function listSiteTree(
         directChargers,
         chargersOnline: instOn,
         chargersOffline: instOff,
+        lifetimeEnergyKWhTotal: sumKwh(allInstChargers),
       };
     });
 
@@ -419,6 +458,11 @@ export async function listSiteTree(
       .map(chargerNode);
     orphanChargers.forEach((n) => (n.online ? online++ : offline++));
 
+    const allSiteChargers: SiteTreeChargerNode[] = [
+      ...installationNodes.flatMap((i) => [...i.circuits.flatMap((c) => c.chargers), ...i.directChargers]),
+      ...orphanCircuits.flatMap((c) => c.chargers),
+      ...orphanChargers,
+    ];
     return {
       id: s.id,
       displayName: s.displayName,
@@ -434,6 +478,7 @@ export async function listSiteTree(
       installations: installationNodes,
       orphanCircuits,
       orphanChargers,
+      lifetimeEnergyKWhTotal: sumKwh(allSiteChargers),
     };
   });
 }

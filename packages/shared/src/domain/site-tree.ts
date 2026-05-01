@@ -53,6 +53,14 @@ export interface SiteTreeChargerNode {
    */
   disconnectsPast24h: number | null;
   /**
+   * Lifetime energy delivered by this charger, in kWh, taken from
+   * Zaptec's SignedMeterValueKwh on the per-charger detail
+   * response. null when we couldn't read it (offline, vendor API
+   * unreachable). Used both per-charger and aggregated up parent
+   * tree nodes for at-a-glance fleet energy totals.
+   */
+  lifetimeEnergyKWh: number | null;
+  /**
    * Whether Zaptec is configured to send OCPP Basic-Auth on the
    * WSS upgrade for this charger. Drives the per-row Auth toggle
    * in the sites tree. null = unknown (non-Zaptec / Zaptec
@@ -70,6 +78,12 @@ export interface SiteTreeCircuitNode {
   ampereCeiling: number | null;
   phaseCount: number;
   chargers: SiteTreeChargerNode[];
+  /**
+   * Sum of lifetimeEnergyKWh across this circuit's chargers. null
+   * when no charger had a value (vendor data unreachable for the
+   * whole circuit).
+   */
+  lifetimeEnergyKWhTotal: number | null;
 }
 
 export interface SiteTreeInstallationNode {
@@ -82,6 +96,7 @@ export interface SiteTreeInstallationNode {
   directChargers: SiteTreeChargerNode[];
   chargersOnline: number;
   chargersOffline: number;
+  lifetimeEnergyKWhTotal: number | null;
 }
 
 export interface SiteTreeNode {
@@ -101,4 +116,5 @@ export interface SiteTreeNode {
   orphanCircuits: SiteTreeCircuitNode[];
   // Chargers not under any installation or circuit.
   orphanChargers: SiteTreeChargerNode[];
+  lifetimeEnergyKWhTotal: number | null;
 }

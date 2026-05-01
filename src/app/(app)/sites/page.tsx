@@ -105,6 +105,7 @@ function SiteRow({ site }: { site: SiteTreeNode }) {
             {" · "}<span className="font-mono">{site.siteType}/{site.accessLevel}</span>
           </span>
         </div>
+        <KwhPill value={site.lifetimeEnergyKWhTotal} />
         <ChargerCountPill online={site.chargersOnline} offline={site.chargersOffline} />
       </summary>
 
@@ -176,6 +177,7 @@ function InstallationRow({ installation }: { installation: SiteTreeInstallationN
               label={installation.displayName}
             />
           )}
+          <KwhPill value={installation.lifetimeEnergyKWhTotal} small />
           <ChargerCountPill
             online={installation.chargersOnline}
             offline={installation.chargersOffline}
@@ -225,8 +227,11 @@ function CircuitRow({ circuit, indent }: { circuit: SiteTreeCircuitNode; indent:
           {circuit.phaseCount}-phase
           {circuit.ampereCeiling && ` · ${circuit.ampereCeiling}A`}
         </span>
-        <span className="ml-auto text-[10px] text-ink-500">
-          {circuit.chargers.length} charger{circuit.chargers.length === 1 ? "" : "s"}
+        <span className="ml-auto flex items-center gap-1.5">
+          <KwhPill value={circuit.lifetimeEnergyKWhTotal} small />
+          <span className="text-[10px] text-ink-500">
+            {circuit.chargers.length} charger{circuit.chargers.length === 1 ? "" : "s"}
+          </span>
         </span>
       </summary>
       <div>
@@ -245,6 +250,19 @@ function CircuitRow({ circuit, indent }: { circuit: SiteTreeCircuitNode; indent:
       </div>
     </details>
   );
+}
+
+/**
+ * Format kWh as ###.###,## (Icelandic / German style: period
+ * thousands separator, comma decimal). Returns em-dash for null.
+ * Examples: 22285.691 → "22.285,69"; 1.5 → "1,50"; null → "—".
+ */
+function formatKwh(kwh: number | null): string {
+  if (kwh == null) return "—";
+  const fixed = kwh.toFixed(2); // "22285.69"
+  const [intPart, fracPart] = fixed.split(".");
+  const grouped = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  return `${grouped},${fracPart}`;
 }
 
 function formatRelativeDuration(fromISO: string | null): string | null {
@@ -298,7 +316,19 @@ function ChargerLine({ charger, indent }: { charger: SiteTreeChargerNode; indent
       >
         {label}
       </Link>
-      <span className="ml-auto text-[11px] text-ink-400">{statusText}</span>
+      <span className="ml-auto flex items-center gap-2 text-[11px] text-ink-400">
+        <span>{statusText}</span>
+        <span
+          className="font-mono text-ink-300"
+          title={
+            charger.lifetimeEnergyKWh != null
+              ? `Lifetime energy delivered (Zaptec SignedMeterValueKwh)`
+              : "Lifetime energy unavailable"
+          }
+        >
+          {formatKwh(charger.lifetimeEnergyKWh)} kWh
+        </span>
+      </span>
     </div>
   );
 }
@@ -323,6 +353,25 @@ function ChargerCountPill({
         <span className="h-1.5 w-1.5 rounded-full bg-ink-500" />
         {offline}
       </span>
+    </span>
+  );
+}
+
+/**
+ * Aggregate lifetime-kWh pill for parent rows (site, installation,
+ * circuit). Single value formatted as ###.###,## kWh — Icelandic /
+ * European convention with period thousands separator + comma
+ * decimal. Em-dash when no charger in scope reported a value.
+ */
+function KwhPill({ value, small = false }: { value: number | null; small?: boolean }) {
+  const cls = small ? "text-[10px]" : "text-[11px]";
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center gap-1 rounded bg-sv-sky/10 px-1.5 py-0.5 font-mono text-sv-sky ring-1 ring-sv-sky/30 ${cls}`}
+      title={value != null ? "Lifetime kWh delivered (sum of children)" : "No lifetime kWh data available"}
+    >
+      <span>{formatKwh(value)}</span>
+      <span className="text-sv-sky/60">kWh</span>
     </span>
   );
 }
