@@ -440,7 +440,8 @@ function ChargerStatusDots({ chargers }: { chargers: SiteTreeChargerNode[] }) {
       c.serialNumber ||
       c.identityString ||
       c.chargingStationId.slice(0, 8),
-    status: derivePrimaryStatus(c),
+    category: chargerCategory(c),
+    label: chargerDisplayStatus(c),
   }));
   const count = items.length;
   const twoLines = count > 10;
@@ -465,8 +466,8 @@ function ChargerStatusDots({ chargers }: { chargers: SiteTreeChargerNode[] }) {
         {items.map((it, i) => (
           <span
             key={i}
-            className={`rounded-full ${dotClass} ${dotColor(it.status)}`}
-            title={`${it.primary} — ${it.status ?? "no status"}`}
+            className={`rounded-full ${dotClass} ${dotColor(it.category)}`}
+            title={`${it.primary} — ${it.label}`}
           />
         ))}
       </span>
@@ -481,8 +482,8 @@ function ChargerStatusDots({ chargers }: { chargers: SiteTreeChargerNode[] }) {
       {items.map((it, i) => (
         <span
           key={i}
-          className={`rounded-full ${dotClass} ${dotColor(it.status)}`}
-          title={`${it.primary} — ${it.status ?? "no status"}`}
+          className={`rounded-full ${dotClass} ${dotColor(it.category)}`}
+          title={`${it.primary} — ${it.label}`}
         />
       ))}
     </span>
@@ -490,14 +491,51 @@ function ChargerStatusDots({ chargers }: { chargers: SiteTreeChargerNode[] }) {
 }
 
 /**
- * Worst-case status across a charger's connectors. Priority is set by
- * what the operator wants to spot first: faults dominate, then
- * reservations, then active sessions, then idle. Connectors with no
- * source contribute null (= "no status") which the dot renders grey.
+ * Per-charger dot category. Priority order set by operator urgency:
+ *   1. faulted    — broken hardware, needs intervention
+ *   2. offline    — we can't see it; either charger.online is false,
+ *                   no connector reported any status, or the charger
+ *                   itself reported Unavailable. Operators want
+ *                   visibility on these because they're earning $0.
+ *   3. in-use     — Preparing / Charging / Suspended* / Finishing /
+ *                   Reserved — actively serving a session.
+ *   4. available  — idle, ready for the next driver.
+ *
+ * Returns null only in pathological cases (some connector has a
+ * source we don't recognise). Fault wins absolutely, so a fault on
+ * any connector flips the whole charger red.
  */
-function derivePrimaryStatus(c: SiteTreeChargerNode): string | null {
+function chargerCategory(
+  c: SiteTreeChargerNode,
+): "faulted" | "offline" | "in-use" | "available" | null {
   const real = c.connectors.filter((k) => k.source != null);
-  if (real.length === 0) return null;
+  if (real.some((k) => k.status === "Faulted")) return "faulted";
+  if (!c.online) return "offline";
+  if (real.length === 0) return "offline";
+  if (real.some((k) => k.status === "Unavailable")) return "offline";
+  const inUse = (s: string) =>
+    s === "Preparing" ||
+    s === "Charging" ||
+    s === "SuspendedEV" ||
+    s === "SuspendedEVSE" ||
+    s === "Finishing" ||
+    s === "Reserved";
+  if (real.some((k) => inUse(k.status))) return "in-use";
+  if (real.some((k) => k.status === "Available")) return "available";
+  return null;
+}
+
+/**
+ * Tooltip string — the most descriptive single label we can offer
+ * for this charger's current state. Distinct from the dot color
+ * (which buckets into 4 categories) so the operator can hover and
+ * see the precise OCPP enum value.
+ */
+function chargerDisplayStatus(c: SiteTreeChargerNode): string {
+  const real = c.connectors.filter((k) => k.source != null);
+  if (real.some((k) => k.status === "Faulted")) return "Faulted";
+  if (!c.online) return "offline (charger unreachable)";
+  if (real.length === 0) return "no status reported";
   const priority = [
     "Faulted",
     "Reserved",
@@ -506,30 +544,29 @@ function derivePrimaryStatus(c: SiteTreeChargerNode): string | null {
     "Charging",
     "Preparing",
     "Finishing",
-    "Available",
     "Unavailable",
+    "Available",
   ];
   for (const p of priority) {
-    if (real.some((k) => k.status === p)) return p;
+    const found = real.find((k) => k.status === p);
+    if (found) return found.status;
   }
   return real[0].status;
 }
 
-function dotColor(status: string | null): string {
-  if (status == null) return "bg-ink-700";
-  if (status === "Faulted") return "bg-rose-400";
-  if (status === "Reserved") return "bg-amber-400";
-  if (
-    status === "Preparing" ||
-    status === "Charging" ||
-    status === "SuspendedEV" ||
-    status === "SuspendedEVSE" ||
-    status === "Finishing"
-  )
-    return "bg-sv-sky";
-  if (status === "Available") return "bg-emerald-400";
-  if (status === "Unavailable") return "bg-ink-500";
-  return "bg-ink-700";
+function dotColor(cat: ReturnType<typeof chargerCategory>): string {
+  switch (cat) {
+    case "faulted":
+      return "bg-rose-400";
+    case "offline":
+      return "bg-ink-600";
+    case "in-use":
+      return "bg-sv-sky";
+    case "available":
+      return "bg-emerald-400";
+    default:
+      return "bg-ink-700";
+  }
 }
 
 function ConnectorPills({
