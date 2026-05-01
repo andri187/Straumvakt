@@ -214,6 +214,36 @@ async function buildApiActiveMap(
         if (writeThroughs.length > 0) {
           await Promise.all(writeThroughs);
         }
+
+        // Decommissioned-by-omission detection. Zaptec's bulk
+        // /api/chargers excludes Active=false rows, so any imported
+        // charger whose vendor_resource_id we *expected* but didn't
+        // see in the response has been retired (or removed) on the
+        // vendor side. Mark these explicitly so the /sites toggle
+        // can hide them and the badge can render. apiActive=false
+        // because the credential reaches Zaptec but the API no
+        // longer surfaces this charger.
+        //
+        // Note this only fires when listResult.ok was true — if auth
+        // failed or the bulk call errored we already returned early
+        // without touching `out`, leaving rows null (= unknown).
+        const seenZaptecIds = new Set<string>();
+        for (const ch of listResult.value) {
+          if (typeof ch.Id === "string") seenZaptecIds.add(ch.Id);
+        }
+        for (const [vendorResourceId, stationId] of map.entries()) {
+          if (seenZaptecIds.has(vendorResourceId)) continue;
+          if (out.has(stationId)) continue;
+          out.set(stationId, {
+            apiActive: false,
+            ocppConfigured: false,
+            authRequired: false,
+            vendorOnline: false,
+            onlineSince: null,
+            lifetimeEnergyKWh: null,
+            decommissioned: true,
+          });
+        }
       } catch (err) {
         console.error("[site-tree] zaptec API-active fetch failed", {
           orgId: cred.ownerOrgId,
