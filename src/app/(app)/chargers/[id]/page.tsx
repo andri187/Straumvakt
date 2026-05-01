@@ -89,36 +89,43 @@ export default async function ChargerDetailPage({ params }: { params: Promise<{ 
         <div className="mb-6">
           <ChargerCommandsPanel
             ocppIdentityId={identity.id}
-            connectors={(evse?.connectors ?? []).map((c) => ({
-              id: c.id,
-              connectorIndex: c.connectorIndex,
-              type: c.type,
-              status: c.status,
-              errorCode: c.errorCode,
-              vendorErrorCode: c.vendorErrorCode,
-              statusUpdatedAt: c.statusUpdatedAt,
-            }))}
+            connectors={(evse?.connectors ?? []).map((c) => {
+              // Source preference: real OCPP traffic (projection set
+              // statusUpdatedAt) wins. When that's null — i.e. no
+              // auth-passing OCPP traffic ever received for this
+              // charger — fall back to Zaptec's OperatingMode label.
+              // The status pill, errorCode pill, and timestamp all
+              // get re-resolved here so the panel doesn't have to
+              // know which source the data came from.
+              const dbHasStatus = c.statusUpdatedAt != null;
+              const vendorMode = technicalRead?.chargerOperationMode ?? null;
+              return {
+                id: c.id,
+                connectorIndex: c.connectorIndex,
+                type: c.type,
+                status: dbHasStatus ? c.status : (mapVendorOperationMode(vendorMode) ?? "—"),
+                errorCode: dbHasStatus ? c.errorCode : null,
+                vendorErrorCode: dbHasStatus ? c.vendorErrorCode : null,
+                statusUpdatedAt: c.statusUpdatedAt,
+                source: dbHasStatus
+                  ? "ocpp"
+                  : vendorMode != null
+                    ? "vendor"
+                    : "none",
+              };
+            })}
           />
         </div>
       )}
 
-      {/* OCPP BootNotification profile — auto-populated from the
-          charger's first BootNotification. Read-only on our side. */}
-      {hasOcppProfile(charger) && (
-        <section className="mb-6 rounded-lg border border-bg-border bg-bg-base/30 p-3">
-          <header className="mb-2 flex items-baseline justify-between">
-            <h2 className="text-xs font-semibold uppercase tracking-brand text-ink-300">OCPP profile</h2>
-            <span className="text-[10px] text-ink-500">BootNotification — read-only</span>
-          </header>
-          <div className="grid gap-x-4 gap-y-1 text-[11px] sm:grid-cols-2 lg:grid-cols-3">
-            <ProfileRow label="charge_box_serial" value={charger.chargeBoxSerialNumber} />
-            <ProfileRow label="meter_type" value={charger.meterType} />
-            <ProfileRow label="meter_serial" value={charger.meterSerialNumber} />
-            <ProfileRow label="iccid" value={charger.iccid} />
-            <ProfileRow label="imsi" value={charger.imsi} />
-          </div>
-        </section>
-      )}
+      {/* Hardware identity / OCPP boot profile. Always shown when we
+          have anything from either source — DB columns (populated by
+          the BootNotification projection on auth-passing OCPP) or
+          Zaptec live (chargers that haven't booted against us yet).
+          Per-row source attribution via title hover so the operator
+          can tell "real OCPP boot" from "vendor-side fallback". */}
+      <ChargerHardwareSection charger={charger} read={technicalRead} />
+
 
       <details className="mb-6 rounded-lg border border-bg-border bg-bg-base/30">
         <summary className="cursor-pointer px-3 py-2 text-xs font-semibold uppercase tracking-brand text-ink-300 hover:text-ink-100">
@@ -182,18 +189,150 @@ export default async function ChargerDetailPage({ params }: { params: Promise<{ 
   );
 }
 
-function hasOcppProfile(c: ChargerDetail): boolean {
-  return Boolean(
-    c.chargeBoxSerialNumber || c.meterType || c.meterSerialNumber || c.iccid || c.imsi,
+/**
+ * Map Zaptec's OperatingMode label (StateId 710) to OCPP-style
+ * connector status taxonomy. Used as a fallback when our own
+ * connector.status_updated projection has nothing to show — i.e.
+ * before the first auth-passing StatusNotification arrives.
+ */
+function mapVendorOperationMode(mode: string | null): string | null {
+  if (!mode) return null;
+  if (/charging/i.test(mode)) return "Charging";
+  if (/finish/i.test(mode)) return "Finishing";
+  if (/disconnect/i.test(mode)) return "Available";
+  if (/connected.*request/i.test(mode) && /limit/i.test(mode)) return "SuspendedEVSE";
+  if (/connected.*request/i.test(mode)) return "Preparing";
+  if (/limited/i.test(mode)) return "SuspendedEVSE";
+  return mode;
+}
+
+/**
+ * Render a row of operator-relevant identity facts pulled from
+ * whichever source has data, with source attribution. Order of
+ * preference per field:
+ *   ocpp boot  — populated by our charger.booted projection on a
+ *                real auth-passing BootNotification
+ *   vendor api — populated by Zaptec's per-charger detail / state
+ *                endpoints (live each request)
+ *   missing    — render an em-dash, neither source has the value
+ *
+ * Never auto-hides — operator needs to see what's known and what
+ * isn't, not have the section disappear when one source is empty.
+ */
+function ChargerHardwareSection({
+  charger,
+  read,
+}: {
+  charger: ChargerDetail;
+  read: ChargerTechnicalRead | null;
+}) {
+  type Source = "ocpp" | "vendor" | null;
+  function pick(
+    fromBoot: string | null,
+    fromVendor: string | null,
+  ): { value: string | null; source: Source } {
+    if (fromBoot) return { value: fromBoot, source: "ocpp" };
+    if (fromVendor) return { value: fromVendor, source: "vendor" };
+    return { value: null, source: null };
+  }
+
+  const rows = [
+    {
+      label: "DeviceId",
+      ...pick(null, read?.deviceId ?? null),
+    },
+    {
+      label: "Charge box serial",
+      ...pick(charger.chargeBoxSerialNumber, read?.deviceId ?? null),
+    },
+    {
+      label: "Meter ID (MID)",
+      ...pick(null, read?.mid ?? null),
+    },
+    {
+      label: "Meter type",
+      ...pick(charger.meterType, null),
+    },
+    {
+      label: "Meter serial",
+      ...pick(charger.meterSerialNumber, null),
+    },
+    {
+      label: "ICCID (SIM)",
+      ...pick(charger.iccid, read?.lteIccid ?? null),
+    },
+    {
+      label: "IMSI (SIM)",
+      ...pick(charger.imsi, read?.lteImsi ?? null),
+    },
+    {
+      label: "Firmware",
+      ...pick(charger.firmwareVersion, read?.firmwareVersion ?? null),
+    },
+  ];
+
+  // Don't render at all if EVERYTHING is missing — that's a worse
+  // UX than a useful section. But render even one row of hits.
+  if (rows.every((r) => r.value == null)) return null;
+
+  return (
+    <section className="mb-6 rounded-lg border border-bg-border bg-bg-base/30 p-3">
+      <header className="mb-2 flex items-baseline justify-between">
+        <h2 className="text-xs font-semibold uppercase tracking-brand text-ink-300">
+          Hardware identity
+        </h2>
+        <SourceLegend />
+      </header>
+      <div className="grid gap-x-4 gap-y-1 text-[11px] sm:grid-cols-2 lg:grid-cols-3">
+        {rows.map((r) => (
+          <ProfileRow key={r.label} label={r.label} value={r.value} source={r.source} />
+        ))}
+      </div>
+    </section>
   );
 }
 
-function ProfileRow({ label, value }: { label: string; value: string | null }) {
-  if (!value) return null;
+function SourceLegend() {
   return (
-    <div className="flex items-baseline gap-2 min-w-0">
+    <span className="flex items-center gap-2 text-[9px] text-ink-500">
+      <span className="inline-flex items-center gap-1">
+        <span className="h-1 w-1 rounded-full bg-sv-green" /> OCPP boot
+      </span>
+      <span className="inline-flex items-center gap-1">
+        <span className="h-1 w-1 rounded-full bg-sv-sky" /> Vendor API
+      </span>
+    </span>
+  );
+}
+
+function ProfileRow({
+  label,
+  value,
+  source,
+}: {
+  label: string;
+  value: string | null;
+  source: "ocpp" | "vendor" | null;
+}) {
+  const dot =
+    source === "ocpp"
+      ? "bg-sv-green"
+      : source === "vendor"
+        ? "bg-sv-sky"
+        : "bg-ink-700";
+  const title =
+    source === "ocpp"
+      ? "From an auth-passing OCPP BootNotification (cached in our DB)"
+      : source === "vendor"
+        ? "Live from Zaptec API"
+        : "Not reported by either source";
+  return (
+    <div className="flex items-baseline gap-2 min-w-0" title={title}>
+      <span className={`mt-1.5 h-1 w-1 shrink-0 rounded-full ${dot}`} />
       <span className="shrink-0 font-mono text-[10px] text-ink-500">{label}</span>
-      <span className="font-mono text-[11px] text-ink-100 break-all truncate">{value}</span>
+      <span className="font-mono text-[11px] text-ink-100 break-all truncate">
+        {value ?? "—"}
+      </span>
     </div>
   );
 }

@@ -24,6 +24,15 @@ interface ConnectorOption {
   errorCode: string | null;
   vendorErrorCode: string | null;
   statusUpdatedAt: string | null;
+  /**
+   * Where the status came from. "ocpp" = auth-passing OCPP
+   * StatusNotification projected to our DB. "vendor" = derived from
+   * Zaptec's OperatingMode (StateId 710). "none" = no data either
+   * side. Drives the small attribution next to the status pill so
+   * the operator can tell whether the value reflects an actual OCPP
+   * session or a vendor-side proxy.
+   */
+  source: "ocpp" | "vendor" | "none";
 }
 
 interface CommandLogEntry {
@@ -121,17 +130,13 @@ export function ChargerCommandsPanel({
                   </span>
                   <span className="text-[11px] text-ink-300">{c.type}</span>
                   <ConnectorStatusPill status={c.status} />
+                  <SourceTag source={c.source} statusUpdatedAt={c.statusUpdatedAt} />
                   {c.errorCode && (
                     <span className="rounded border border-rose-700/40 bg-rose-950/30 px-1 py-0 text-[10px] font-medium text-rose-200">
                       {c.errorCode}
                       {c.vendorErrorCode && (
                         <span className="ml-1 text-rose-300/70">[{c.vendorErrorCode}]</span>
                       )}
-                    </span>
-                  )}
-                  {c.statusUpdatedAt && (
-                    <span className="ml-auto text-[10px] text-ink-500">
-                      updated {new Date(c.statusUpdatedAt).toLocaleTimeString()}
                     </span>
                   )}
                 </div>
@@ -272,6 +277,56 @@ export function ChargerCommandsPanel({
         </ul>
       )}
     </section>
+  );
+}
+
+/**
+ * Tiny attribution next to a connector status pill. Tells the
+ * operator whether the value came from a real OCPP message we
+ * projected, or from Zaptec's vendor-side observation (StateId 710
+ * fallback when no OCPP traffic has been received yet).
+ */
+function SourceTag({
+  source,
+  statusUpdatedAt,
+}: {
+  source: "ocpp" | "vendor" | "none";
+  statusUpdatedAt: string | null;
+}) {
+  if (source === "none") {
+    return (
+      <span
+        className="text-[10px] text-ink-600"
+        title="No status data — neither OCPP traffic nor Zaptec API has reported it"
+      >
+        no data
+      </span>
+    );
+  }
+  if (source === "vendor") {
+    return (
+      <span
+        className="rounded border border-sv-sky/40 bg-sv-sky/10 px-1 py-0 text-[9px] font-medium text-sv-sky"
+        title="Derived from Zaptec's OperatingMode (StateId 710). Falls back here when no auth-passing OCPP StatusNotification has been projected."
+      >
+        vendor
+      </span>
+    );
+  }
+  // ocpp
+  const when = statusUpdatedAt ? new Date(statusUpdatedAt) : null;
+  const ageMin = when ? Math.floor((Date.now() - when.getTime()) / 60_000) : null;
+  return (
+    <span
+      className="rounded border border-sv-green/40 bg-sv-green/10 px-1 py-0 text-[9px] font-medium text-sv-green"
+      title={
+        when
+          ? `From OCPP StatusNotification — last update ${when.toLocaleString()}`
+          : "From an auth-passing OCPP StatusNotification"
+      }
+    >
+      ocpp{ageMin != null && ageMin > 0 ? ` · ${ageMin}m` : ""}
+    </span>
   );
 }
 
