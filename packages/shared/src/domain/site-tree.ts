@@ -87,6 +87,26 @@ export interface SiteTreeChargerNode {
   status: string;
   lastSeenAt: string | null;
   connectorSummary: string;
+  /**
+   * Per-connector OCPP StatusNotification mirror (1.6 §4.9). Distinct
+   * from `online` (= internet reachability): a charger can be online
+   * with all its connectors Faulted, or offline with the last-known
+   * state still being "Charging". Operators want to see both.
+   *
+   * `status` is the raw OCPP status enum (Available, Preparing,
+   * Charging, SuspendedEV, SuspendedEVSE, Finishing, Reserved,
+   * Unavailable, Faulted). `errorCode` is the OCPP errorCode field
+   * when StatusNotification carried a fault. `statusUpdatedAt` is
+   * the timestamp of the last status transition; null when never set.
+   */
+  connectors: Array<{
+    evseIndex: number;
+    connectorIndex: number;
+    type: string;
+    status: string;
+    errorCode: string | null;
+    statusUpdatedAt: string | null;
+  }>;
 }
 
 export interface SiteTreeCircuitNode {

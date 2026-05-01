@@ -377,6 +377,7 @@ function ChargerLine({ charger, indent }: { charger: SiteTreeChargerNode; indent
         </span>
       )}
       <span className="ml-auto flex items-center gap-2 text-[11px] text-ink-400">
+        <ConnectorPills connectors={charger.connectors} />
         <span>{statusText}</span>
         <span
           className="font-mono text-ink-300"
@@ -391,6 +392,118 @@ function ChargerLine({ charger, indent }: { charger: SiteTreeChargerNode; indent
       </span>
     </div>
   );
+}
+
+/**
+ * Per-connector OCPP StatusNotification pills. Distinct from the
+ * online dot (= internet reachability): a charger can be online
+ * with all connectors Faulted, or offline with last-known status
+ * still "Charging". Color tone tracks operator urgency:
+ *   • green  — Available
+ *   • blue   — active (Preparing, Charging, SuspendedEV, SuspendedEVSE, Finishing)
+ *   • amber  — Reserved
+ *   • red    — Faulted
+ *   • grey   — Unavailable / unknown / em-dash
+ *
+ * Pill text uses the OCPP enum verbatim — operators familiar with
+ * 1.6 §4.7 recognize them at a glance, and they're already
+ * human-readable. Hover surfaces evse/connector index, error code
+ * (when set), and the StatusNotification timestamp.
+ */
+function ConnectorPills({
+  connectors,
+}: {
+  connectors: SiteTreeChargerNode["connectors"];
+}) {
+  if (connectors.length === 0) return null;
+  return (
+    <span className="flex items-center gap-1">
+      {connectors.map((c) => (
+        <ConnectorPill key={`${c.evseIndex}-${c.connectorIndex}`} connector={c} />
+      ))}
+    </span>
+  );
+}
+
+function ConnectorPill({
+  connector,
+}: {
+  connector: SiteTreeChargerNode["connectors"][number];
+}) {
+  const tone = statusTone(connector.status);
+  const label = statusLabel(connector.status);
+  const ageText = connector.statusUpdatedAt
+    ? ` · ${formatRelativeDuration(connector.statusUpdatedAt)} ago`
+    : "";
+  const hover =
+    `Connector ${connector.connectorIndex} (${connector.type}) — ${label}` +
+    (connector.errorCode && connector.errorCode !== "NoError"
+      ? ` [${connector.errorCode}]`
+      : "") +
+    ageText;
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] ${tone}`}
+      title={hover}
+    >
+      <span className="font-mono text-[9px] opacity-70">{connector.connectorIndex}</span>
+      <span>{label}</span>
+      {connector.errorCode && connector.errorCode !== "NoError" && (
+        <span className="font-mono text-[9px] opacity-90">!</span>
+      )}
+    </span>
+  );
+}
+
+function statusLabel(s: string): string {
+  // OCPP 1.6 §4.7 enum values; "unknown" is our default when the
+  // charger has not yet sent a StatusNotification.
+  switch (s) {
+    case "Available":
+      return "Available";
+    case "Preparing":
+      return "Preparing";
+    case "Charging":
+      return "Charging";
+    case "SuspendedEV":
+      return "Suspended (EV)";
+    case "SuspendedEVSE":
+      return "Suspended (EVSE)";
+    case "Finishing":
+      return "Finishing";
+    case "Reserved":
+      return "Reserved";
+    case "Unavailable":
+      return "Unavailable";
+    case "Faulted":
+      return "Faulted";
+    case "unknown":
+    case "":
+      return "—";
+    default:
+      return s;
+  }
+}
+
+function statusTone(s: string): string {
+  switch (s) {
+    case "Available":
+      return "bg-emerald-950/40 text-emerald-300 ring-1 ring-emerald-700/30";
+    case "Preparing":
+    case "Charging":
+    case "SuspendedEV":
+    case "SuspendedEVSE":
+    case "Finishing":
+      return "bg-sv-sky/10 text-sv-sky ring-1 ring-sv-sky/30";
+    case "Reserved":
+      return "bg-amber-950/40 text-amber-300 ring-1 ring-amber-700/30";
+    case "Faulted":
+      return "bg-rose-950/40 text-rose-300 ring-1 ring-rose-700/40";
+    case "Unavailable":
+      return "bg-bg-base/50 text-ink-400 ring-1 ring-bg-border";
+    default:
+      return "bg-bg-base/50 text-ink-500 ring-1 ring-bg-border";
+  }
 }
 
 function ChargerCountPill({

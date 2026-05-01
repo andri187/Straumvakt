@@ -309,9 +309,16 @@ export async function listSiteTree(
         evses: {
           orderBy: { evseIndex: "asc" },
           select: {
+            evseIndex: true,
             connectors: {
               orderBy: { connectorIndex: "asc" },
-              select: { type: true },
+              select: {
+                type: true,
+                connectorIndex: true,
+                status: true,
+                errorCode: true,
+                statusUpdatedAt: true,
+              },
             },
           },
         },
@@ -400,6 +407,18 @@ export async function listSiteTree(
         : connectorTypes.length === 1
           ? connectorTypes[0]
           : `${connectorTypes.length}× ${[...new Set(connectorTypes)].join("/")}`;
+    const connectors = c.evses.flatMap((e) =>
+      e.connectors.map((k) => ({
+        evseIndex: e.evseIndex,
+        connectorIndex: k.connectorIndex,
+        type: k.type,
+        status: k.status,
+        errorCode: k.errorCode,
+        statusUpdatedAt: k.statusUpdatedAt
+          ? new Date(k.statusUpdatedAt).toISOString()
+          : null,
+      })),
+    );
     return {
       chargingStationId: c.siteAssetId,
       ocppIdentityId: identity?.id ?? null,
@@ -430,6 +449,7 @@ export async function listSiteTree(
       status: identity?.status ?? "—",
       lastSeenAt: lastSeen ? new Date(lastSeen).toISOString() : null,
       connectorSummary,
+      connectors,
     };
   }
 
