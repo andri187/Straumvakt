@@ -420,13 +420,36 @@ function ConnectorPills({
 }: {
   connectors: SiteTreeChargerNode["connectors"];
 }) {
-  if (connectors.length === 0) return null;
+  // Only render pills for connectors that have a real OCPP 1.6 §4.7
+  // status. Our DB default is the string "unknown" (set when the
+  // SiteAsset / Connector rows are created at import time, before any
+  // StatusNotification arrives). That value is NOT part of the OCPP
+  // enum — surfacing it as a pill would imply a status that doesn't
+  // exist in the protocol. Empty space tells the operator the
+  // protocol-level truth: "the charger hasn't reported yet."
+  const real = connectors.filter((c) => isRealOcppStatus(c.status));
+  if (real.length === 0) return null;
   return (
     <span className="flex items-center gap-1">
-      {connectors.map((c) => (
+      {real.map((c) => (
         <ConnectorPill key={`${c.evseIndex}-${c.connectorIndex}`} connector={c} />
       ))}
     </span>
+  );
+}
+
+function isRealOcppStatus(s: string): boolean {
+  // OCPP 1.6 §4.7 ChargePointStatus enum — exhaustive.
+  return (
+    s === "Available" ||
+    s === "Preparing" ||
+    s === "Charging" ||
+    s === "SuspendedEV" ||
+    s === "SuspendedEVSE" ||
+    s === "Finishing" ||
+    s === "Reserved" ||
+    s === "Unavailable" ||
+    s === "Faulted"
   );
 }
 
@@ -465,34 +488,16 @@ function ConnectorPill({
 }
 
 function statusLabel(s: string): string {
-  // OCPP 1.6 §4.7 enum values; "unknown" is our default when the
-  // charger has not yet sent a StatusNotification.
+  // OCPP 1.6 §4.7 ChargePointStatus enum. The two Suspended variants
+  // get parenthesised qualifiers since "Suspended (EV)" reads better
+  // in the row than the camelCase. Other values pass through verbatim.
+  // ConnectorPills filters out anything outside this enum before we
+  // get here, so no fallback case is needed.
   switch (s) {
-    case "Available":
-      return "Available";
-    case "Preparing":
-      return "Preparing";
-    case "Charging":
-      return "Charging";
     case "SuspendedEV":
       return "Suspended (EV)";
     case "SuspendedEVSE":
       return "Suspended (EVSE)";
-    case "Finishing":
-      return "Finishing";
-    case "Reserved":
-      return "Reserved";
-    case "Unavailable":
-      return "Unavailable";
-    case "Faulted":
-      return "Faulted";
-    case "unknown":
-    case "":
-      // DB default before the charger sends a StatusNotification — we
-      // literally don't know yet. "no status" reads better than an
-      // em-dash and avoids the operator wondering what the punctuation
-      // means.
-      return "no status";
     default:
       return s;
   }
