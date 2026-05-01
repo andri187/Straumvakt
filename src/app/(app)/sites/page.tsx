@@ -358,26 +358,31 @@ function ChargerLine({ charger, indent }: { charger: SiteTreeChargerNode; indent
             : "Not heard from in last 5 min"
         }
       />
-      <Link
-        href={`/chargers/${charger.chargingStationId}`}
-        className="text-ink-100 hover:text-sv-sky truncate"
-        title={`${primary}${secondary ? ` · ${secondary}` : ""}`}
-      >
-        {primary}
-      </Link>
-      {secondary && (
-        <span className="font-mono text-[10px] text-ink-500 truncate">{secondary}</span>
-      )}
-      {charger.decommissioned === true && (
-        <span
-          className="rounded bg-amber-950/40 px-1 py-0.5 text-[9px] text-amber-300"
-          title="Zaptec marks this charger Active=false — retired on the vendor side. Lifetime kWh is preserved from our cache."
+      {/* Identity column — fixed minimum width so the connector pills
+          column lines up vertically across rows. Names truncate within
+          the box rather than pushing the pills around. */}
+      <div className="flex min-w-0 basis-64 shrink-0 items-baseline gap-2">
+        <Link
+          href={`/chargers/${charger.chargingStationId}`}
+          className="text-ink-100 hover:text-sv-sky truncate"
+          title={`${primary}${secondary ? ` · ${secondary}` : ""}`}
         >
-          decommissioned
-        </span>
-      )}
+          {primary}
+        </Link>
+        {secondary && (
+          <span className="font-mono text-[10px] text-ink-500 truncate">{secondary}</span>
+        )}
+        {charger.decommissioned === true && (
+          <span
+            className="shrink-0 rounded bg-amber-950/40 px-1 py-0.5 text-[9px] text-amber-300"
+            title="Zaptec marks this charger Active=false — retired on the vendor side. Lifetime kWh is preserved from our cache."
+          >
+            decommissioned
+          </span>
+        )}
+      </div>
+      <ConnectorPills connectors={charger.connectors} />
       <span className="ml-auto flex items-center gap-2 text-[11px] text-ink-400">
-        <ConnectorPills connectors={charger.connectors} />
         <span>{statusText}</span>
         <span
           className="font-mono text-ink-300"
@@ -435,10 +440,14 @@ function ConnectorPill({
   const ageText = connector.statusUpdatedAt
     ? ` · ${formatRelativeDuration(connector.statusUpdatedAt)} ago`
     : "";
+  // Hover tooltip explains every visible part — leading number =
+  // connector index (charger may have multiple), label = OCPP
+  // StatusNotification status (1.6 §4.7), "!" = non-NoError errorCode.
+  // "no status" appears when the charger has not yet reported.
   const hover =
     `Connector ${connector.connectorIndex} (${connector.type}) — ${label}` +
     (connector.errorCode && connector.errorCode !== "NoError"
-      ? ` [${connector.errorCode}]`
+      ? ` [errorCode: ${connector.errorCode}]`
       : "") +
     ageText;
   return (
@@ -479,7 +488,11 @@ function statusLabel(s: string): string {
       return "Faulted";
     case "unknown":
     case "":
-      return "—";
+      // DB default before the charger sends a StatusNotification — we
+      // literally don't know yet. "no status" reads better than an
+      // em-dash and avoids the operator wondering what the punctuation
+      // means.
+      return "no status";
     default:
       return s;
   }
