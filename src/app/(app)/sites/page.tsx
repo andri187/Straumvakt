@@ -145,6 +145,7 @@ function SiteRow({ site }: { site: SiteTreeNode }) {
             {" · "}<span className="font-mono">{site.siteType}/{site.accessLevel}</span>
           </span>
         </div>
+        <ChargerStatusDots chargers={flatChargers(site)} />
         <KwhPill value={site.lifetimeEnergyKWhTotal} />
         <ChargerCountPill online={site.chargersOnline} offline={site.chargersOffline} />
       </summary>
@@ -415,6 +416,122 @@ function ChargerLine({ charger, indent }: { charger: SiteTreeChargerNode; indent
  * human-readable. Hover surfaces evse/connector index, error code
  * (when set), and the StatusNotification timestamp.
  */
+/**
+ * Site-row charger overview: one colored dot per charger, status-tinted
+ * by the worst-case OCPP enum across the charger's connectors. Lets
+ * the operator scan a collapsed site row and see "5 green, 1 red,
+ * 2 grey" at a glance without expanding.
+ *
+ * Sizing scales with count so the cell never grows the row height
+ * out of proportion:
+ *   ≤ 10 chargers  → single line, full-size (h-2 w-2)
+ *   11 – 30        → two lines, smaller (h-1.5 w-1.5)
+ *   31+            → two lines, smallest (h-1 w-1)
+ *
+ * Two-line layout uses CSS grid with grid-auto-flow: column so dots
+ * fill row 1 then row 2 from left to right (matching natural
+ * reading order — first 11 chargers don't suddenly jump to row 2).
+ */
+function ChargerStatusDots({ chargers }: { chargers: SiteTreeChargerNode[] }) {
+  if (chargers.length === 0) return null;
+  const items = chargers.map((c) => ({
+    primary:
+      c.displayName ||
+      c.serialNumber ||
+      c.identityString ||
+      c.chargingStationId.slice(0, 8),
+    status: derivePrimaryStatus(c),
+  }));
+  const count = items.length;
+  const twoLines = count > 10;
+  const dotClass = twoLines
+    ? count > 30
+      ? "h-1 w-1"
+      : "h-1.5 w-1.5"
+    : "h-2 w-2";
+  const summary = `${count} charger${count === 1 ? "" : "s"} on this site`;
+  if (twoLines) {
+    return (
+      <span
+        className="grid shrink-0 gap-0.5"
+        style={{
+          gridTemplateRows: "repeat(2, minmax(0, 1fr))",
+          gridAutoFlow: "column",
+          gridAutoColumns: "min-content",
+        }}
+        title={summary}
+        aria-label={summary}
+      >
+        {items.map((it, i) => (
+          <span
+            key={i}
+            className={`rounded-full ${dotClass} ${dotColor(it.status)}`}
+            title={`${it.primary} — ${it.status ?? "no status"}`}
+          />
+        ))}
+      </span>
+    );
+  }
+  return (
+    <span
+      className="flex shrink-0 items-center gap-1"
+      title={summary}
+      aria-label={summary}
+    >
+      {items.map((it, i) => (
+        <span
+          key={i}
+          className={`rounded-full ${dotClass} ${dotColor(it.status)}`}
+          title={`${it.primary} — ${it.status ?? "no status"}`}
+        />
+      ))}
+    </span>
+  );
+}
+
+/**
+ * Worst-case status across a charger's connectors. Priority is set by
+ * what the operator wants to spot first: faults dominate, then
+ * reservations, then active sessions, then idle. Connectors with no
+ * source contribute null (= "no status") which the dot renders grey.
+ */
+function derivePrimaryStatus(c: SiteTreeChargerNode): string | null {
+  const real = c.connectors.filter((k) => k.source != null);
+  if (real.length === 0) return null;
+  const priority = [
+    "Faulted",
+    "Reserved",
+    "SuspendedEV",
+    "SuspendedEVSE",
+    "Charging",
+    "Preparing",
+    "Finishing",
+    "Available",
+    "Unavailable",
+  ];
+  for (const p of priority) {
+    if (real.some((k) => k.status === p)) return p;
+  }
+  return real[0].status;
+}
+
+function dotColor(status: string | null): string {
+  if (status == null) return "bg-ink-700";
+  if (status === "Faulted") return "bg-rose-400";
+  if (status === "Reserved") return "bg-amber-400";
+  if (
+    status === "Preparing" ||
+    status === "Charging" ||
+    status === "SuspendedEV" ||
+    status === "SuspendedEVSE" ||
+    status === "Finishing"
+  )
+    return "bg-sv-sky";
+  if (status === "Available") return "bg-emerald-400";
+  if (status === "Unavailable") return "bg-ink-500";
+  return "bg-ink-700";
+}
+
 function ConnectorPills({
   connectors,
 }: {
