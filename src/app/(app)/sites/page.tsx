@@ -420,14 +420,13 @@ function ConnectorPills({
 }: {
   connectors: SiteTreeChargerNode["connectors"];
 }) {
-  // Only render pills for connectors that have a real OCPP 1.6 §4.7
-  // status. Our DB default is the string "unknown" (set when the
-  // SiteAsset / Connector rows are created at import time, before any
-  // StatusNotification arrives). That value is NOT part of the OCPP
-  // enum — surfacing it as a pill would imply a status that doesn't
-  // exist in the protocol. Empty space tells the operator the
-  // protocol-level truth: "the charger hasn't reported yet."
-  const real = connectors.filter((c) => isRealOcppStatus(c.status));
+  // Only render connectors with a known source. source=null means
+  // neither OCPP (gateway projection) nor vendor (Zaptec StateId 710)
+  // has supplied a status — pretending one would invent a state that
+  // doesn't exist in the protocol. The repo writes "ocpp" when our
+  // gateway received a StatusNotification, "vendor" when Zaptec's
+  // ChargerOperationMode mapped onto an OCPP enum, null otherwise.
+  const real = connectors.filter((c) => c.source != null);
   if (real.length === 0) return null;
   return (
     <span className="flex items-center gap-1">
@@ -435,21 +434,6 @@ function ConnectorPills({
         <ConnectorPill key={`${c.evseIndex}-${c.connectorIndex}`} connector={c} />
       ))}
     </span>
-  );
-}
-
-function isRealOcppStatus(s: string): boolean {
-  // OCPP 1.6 §4.7 ChargePointStatus enum — exhaustive.
-  return (
-    s === "Available" ||
-    s === "Preparing" ||
-    s === "Charging" ||
-    s === "SuspendedEV" ||
-    s === "SuspendedEVSE" ||
-    s === "Finishing" ||
-    s === "Reserved" ||
-    s === "Unavailable" ||
-    s === "Faulted"
   );
 }
 
@@ -463,16 +447,23 @@ function ConnectorPill({
   const ageText = connector.statusUpdatedAt
     ? ` · ${formatRelativeDuration(connector.statusUpdatedAt)} ago`
     : "";
+  const sourceText =
+    connector.source === "ocpp"
+      ? "Source: OCPP StatusNotification (gateway-reported)"
+      : connector.source === "vendor"
+        ? "Source: Zaptec ChargerOperationMode (vendor API; OCPP not yet reporting)"
+        : "";
   // Hover tooltip explains every visible part — leading number =
-  // connector index (charger may have multiple), label = OCPP
-  // StatusNotification status (1.6 §4.7), "!" = non-NoError errorCode.
-  // "no status" appears when the charger has not yet reported.
+  // connector index, label = OCPP-enum status (1.6 §4.7), "!" =
+  // non-NoError errorCode, trailing line names the source so the
+  // operator can tell vendor-derived from gateway-direct.
   const hover =
     `Connector ${connector.connectorIndex} (${connector.type}) — ${label}` +
     (connector.errorCode && connector.errorCode !== "NoError"
       ? ` [errorCode: ${connector.errorCode}]`
       : "") +
-    ageText;
+    ageText +
+    (sourceText ? `\n${sourceText}` : "");
   return (
     <span
       className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] ${tone}`}
@@ -482,6 +473,17 @@ function ConnectorPill({
       <span>{label}</span>
       {connector.errorCode && connector.errorCode !== "NoError" && (
         <span className="font-mono text-[9px] opacity-90">!</span>
+      )}
+      {connector.source === "vendor" && (
+        // Small "v" attribution — vendor-derived (Zaptec API) rather
+        // than OCPP-direct. Tells the operator at a glance that this
+        // is a translated value, not a charger-reported one.
+        <span
+          className="font-mono text-[9px] italic opacity-70"
+          aria-label="vendor-derived"
+        >
+          v
+        </span>
       )}
     </span>
   );

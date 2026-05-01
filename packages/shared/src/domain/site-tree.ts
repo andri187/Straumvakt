@@ -106,6 +106,14 @@ export interface SiteTreeChargerNode {
     status: string;
     errorCode: string | null;
     statusUpdatedAt: string | null;
+    /**
+     * Where the status came from. "ocpp" = OCPP StatusNotification
+     * we received via our gateway (most authoritative). "vendor" =
+     * derived from Zaptec's StateId 710 (ChargerOperationMode), used
+     * when OCPP hasn't reported (e.g. anonymous charger). null =
+     * neither source available; pill is hidden in the UI.
+     */
+    source: "ocpp" | "vendor" | null;
   }>;
 }
 

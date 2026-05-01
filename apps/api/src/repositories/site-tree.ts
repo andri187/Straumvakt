@@ -25,6 +25,24 @@ import { openPassword } from "../lib/credential-crypto";
 
 const ONLINE_WINDOW_MS = 5 * 60 * 1000;
 
+// OCPP 1.6 §4.7 ChargePointStatus enum — exhaustive. Used to
+// distinguish a real charger-reported status from our DB default
+// "unknown" string set at import time before any StatusNotification
+// has arrived.
+function isRealOcppStatus(s: string): boolean {
+  return (
+    s === "Available" ||
+    s === "Preparing" ||
+    s === "Charging" ||
+    s === "SuspendedEV" ||
+    s === "SuspendedEVSE" ||
+    s === "Finishing" ||
+    s === "Reserved" ||
+    s === "Unavailable" ||
+    s === "Faulted"
+  );
+}
+
 interface ZaptecLiveSnapshot {
   /**
    * Per-charger config flag. True when vendor credentials work AND
@@ -58,6 +76,45 @@ interface ZaptecLiveSnapshot {
    * toggle. null when the bulk list didn't include an Active value.
    */
   decommissioned: boolean | null;
+  /**
+   * OCPP-equivalent status derived from Zaptec's StateId 710
+   * (ChargerOperationMode). Used as fallback when our OCPP gateway
+   * hasn't received a StatusNotification. null when /state didn't
+   * return the field, or the charger is offline.
+   */
+  vendorConnectorStatus: string | null;
+}
+
+/**
+ * Map Zaptec ChargerOperationMode (StateId 710) onto an OCPP 1.6
+ * §4.7 ChargePointStatus enum value. Operationally these aren't 1:1
+ * — Zaptec is per-charger, OCPP is per-connector — but for the
+ * single-connector AC chargers that dominate the fleet the mapping
+ * is unambiguous and matches operator expectations.
+ *
+ *   0 Unknown               → null  (caller hides the pill)
+ *   1 Disconnected          → Available
+ *   2 Connected_Requesting  → Preparing
+ *   3 Charging              → Charging
+ *   5 Connected_Finished    → Finishing
+ *   6 Connected_Limited     → SuspendedEVSE  (DLB / load-balancer pause)
+ */
+function mapZaptecOpModeToOcpp(rawCode: string | null): string | null {
+  if (rawCode == null) return null;
+  switch (rawCode) {
+    case "1":
+      return "Available";
+    case "2":
+      return "Preparing";
+    case "3":
+      return "Charging";
+    case "5":
+      return "Finishing";
+    case "6":
+      return "SuspendedEVSE";
+    default:
+      return null;
+  }
 }
 
 /**
@@ -153,6 +210,9 @@ async function buildApiActiveMap(
             // "we don't know".
             decommissioned:
               typeof ch.Active === "boolean" ? ch.Active === false : null,
+            // Filled in below from /state (StateId 710) for online
+            // chargers; offline chargers have no live state to read.
+            vendorConnectorStatus: null,
           });
           if (ch.IsOnline === true) {
             onlineToFetch.push({ vendorId: ch.Id, stationId });
@@ -187,10 +247,21 @@ async function buildApiActiveMap(
               detailResult.ok && detailResult.value && typeof detailResult.value.SignedMeterValueKwh === "number"
                 ? (detailResult.value.SignedMeterValueKwh as number)
                 : null;
+            // StateId 710 = ChargerOperationMode. Mapped onto OCPP
+            // ChargePointStatus by mapZaptecOpModeToOcpp; the result
+            // is what UI shows when no OCPP StatusNotification has
+            // arrived for this charger yet.
+            const opModeEntry = stateResult.ok
+              ? stateResult.value.find((s) => s.StateId === 710)
+              : null;
+            const vendorConnectorStatus = mapZaptecOpModeToOcpp(
+              opModeEntry?.ValueAsString ?? null,
+            );
             out.set(stationId, {
               ...existing,
               onlineSince,
               lifetimeEnergyKWh: lifetimeKWh,
+              vendorConnectorStatus,
             });
             if (lifetimeKWh != null) {
               writeThroughs.push(
@@ -242,6 +313,7 @@ async function buildApiActiveMap(
             onlineSince: null,
             lifetimeEnergyKWh: null,
             decommissioned: true,
+            vendorConnectorStatus: null,
           });
         }
       } catch (err) {
@@ -407,17 +479,30 @@ export async function listSiteTree(
         : connectorTypes.length === 1
           ? connectorTypes[0]
           : `${connectorTypes.length}× ${[...new Set(connectorTypes)].join("/")}`;
+    // Connector status with two-source fallback. Prefer OCPP because
+    // it's per-connector and authoritative; fall back to Zaptec's
+    // per-charger ChargerOperationMode (StateId 710) when OCPP is
+    // silent (e.g. anonymous charger that hasn't authenticated against
+    // our gateway). The source field tells the UI which it is.
+    const vendorStatus = liveSnapshot?.vendorConnectorStatus ?? null;
     const connectors = c.evses.flatMap((e) =>
-      e.connectors.map((k) => ({
-        evseIndex: e.evseIndex,
-        connectorIndex: k.connectorIndex,
-        type: k.type,
-        status: k.status,
-        errorCode: k.errorCode,
-        statusUpdatedAt: k.statusUpdatedAt
-          ? new Date(k.statusUpdatedAt).toISOString()
-          : null,
-      })),
+      e.connectors.map((k) => {
+        const ocppReal = isRealOcppStatus(k.status);
+        const useVendor = !ocppReal && vendorStatus != null;
+        return {
+          evseIndex: e.evseIndex,
+          connectorIndex: k.connectorIndex,
+          type: k.type,
+          status: useVendor ? vendorStatus : k.status,
+          errorCode: useVendor ? null : k.errorCode,
+          statusUpdatedAt: useVendor
+            ? null
+            : k.statusUpdatedAt
+              ? new Date(k.statusUpdatedAt).toISOString()
+              : null,
+          source: ocppReal ? "ocpp" : useVendor ? "vendor" : null,
+        } as SiteTreeChargerNode["connectors"][number];
+      }),
     );
     return {
       chargingStationId: c.siteAssetId,
