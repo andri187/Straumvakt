@@ -262,6 +262,18 @@ const nav: NavItem[] = [
             label: { is: "Easee API", en: "Easee API" },
             icon: Plug,
           },
+          {
+            kind: "leaf",
+            href: "/reference/alfen-api",
+            label: { is: "Alfen API", en: "Alfen API" },
+            icon: Cable,
+          },
+          {
+            kind: "leaf",
+            href: "/reference/teltonika-rut",
+            label: { is: "Teltonika RUT", en: "Teltonika RUT" },
+            icon: RadioTower,
+          },
         ],
       },
     ],
