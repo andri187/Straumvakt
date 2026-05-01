@@ -475,6 +475,24 @@ model ChargingStation {
   ipRating         String?       @map("ip_rating")                // IP54, IP65, …
   breakerAmps      Int?          @map("breaker_amps")             // upstream breaker
 
+  // ── Lifetime kWh cache (Sprint 3 / ADR 0013) ──────────────────────
+  // Persisted snapshot of Zaptec SignedMeterValueKwh (the OCMF-signed
+  // cumulative meter reading). Updated write-through on every successful
+  // per-charger detail fetch where the new value ≥ the cached one
+  // (regressions are rejected — meters don't run backwards). Two reasons
+  // to cache:
+  //   1) Survival across offline windows. When Zaptec stops returning
+  //      the value (or returns a stale one) we still show the last known
+  //      total instead of "—".
+  //   2) Survival across decommissioning. Zaptec sometimes drops the
+  //      meter value when a charger goes Active=false; once we've
+  //      observed it we own it.
+  // Decimal(12,3) holds up to 999_999_999.999 kWh — well past any single
+  // charger's lifetime (a 22 kW charger running flat-out for 100 years
+  // would reach ~19M kWh).
+  lifetimeKwhCached      Decimal?  @map("lifetime_kwh_cached") @db.Decimal(12, 3)
+  lifetimeKwhObservedAt  DateTime? @map("lifetime_kwh_observed_at") @db.Timestamptz(6)
+
   // ── Existing relations ───────────────────────────────────────────
   siteAsset        SiteAsset     @relation(fields: [siteAssetId], references: [id], onDelete: Cascade)
   organization     Organization  @relation("StationOperator", fields: [orgId], references: [id])

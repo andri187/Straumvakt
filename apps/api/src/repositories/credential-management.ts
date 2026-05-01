@@ -125,12 +125,6 @@ async function buildTreeFromAuth(
   );
   const hierarchyById = new Map(hierarchies.map((h) => [h.id, h.hierarchy]));
 
-  // Lifetime kWh enrichment — pull SignedMeterValueKwh from the
-  // per-charger detail endpoint for every charger in the tree
-  // (including decommissioned ones; that's the whole point — the
-  // operator wants to see how much energy was delivered before
-  // deciding whether to remove it). One parallel fan-out keeps the
-  // page responsive even with 50+ chargers.
   const allZaptecChargerIds = new Set<string>();
   for (const h of hierarchies) {
     for (const cc of h.hierarchy?.Circuits ?? []) {
@@ -139,17 +133,6 @@ async function buildTreeFromAuth(
       }
     }
   }
-  const lifetimeKWhById = new Map<string, number | null>();
-  await Promise.all(
-    Array.from(allZaptecChargerIds).map(async (id) => {
-      const r = await getChargerDetail(auth.accessToken, id);
-      const kwh =
-        r.ok && r.value && typeof r.value.SignedMeterValueKwh === "number"
-          ? (r.value.SignedMeterValueKwh as number)
-          : null;
-      lifetimeKWhById.set(id, kwh);
-    }),
-  );
 
   // Pull our DB state — every OcppIdentity matched to this credential's
   // chargers. Installation match = vendor_installation_ref equals the
@@ -177,11 +160,82 @@ async function buildTreeFromAuth(
       vendorResourceId: { not: null },
       orgId: auth.ownerOrgId,
     },
-    select: { vendorResourceId: true, chargingStationId: true },
+    select: {
+      vendorResourceId: true,
+      chargingStationId: true,
+      chargingStation: {
+        select: { lifetimeKwhCached: true },
+      },
+    },
   });
   const ourStationByZaptecId = new Map<string, string>();
+  const cachedKwhByZaptecId = new Map<string, number | null>();
   for (const id of ourIdentities) {
-    if (id.vendorResourceId) ourStationByZaptecId.set(id.vendorResourceId, id.chargingStationId);
+    if (id.vendorResourceId) {
+      ourStationByZaptecId.set(id.vendorResourceId, id.chargingStationId);
+      const cached = id.chargingStation?.lifetimeKwhCached;
+      cachedKwhByZaptecId.set(
+        id.vendorResourceId,
+        cached != null ? Number(cached) : null,
+      );
+    }
+  }
+
+  // Lifetime kWh enrichment — pull SignedMeterValueKwh from the
+  // per-charger detail endpoint for every charger in the tree
+  // (including decommissioned ones). One parallel fan-out keeps the
+  // page responsive even with 50+ chargers.
+  //
+  // Write-through cache: for chargers we've imported, persist the
+  // observed value to ChargingStation.lifetime_kwh_cached when it's
+  // higher than what's stored. This makes the value survive offline
+  // windows and Zaptec eventually dropping the field on decommissioned
+  // chargers — once we've seen a number we own it. Regressions
+  // (live < cached) are ignored on the assumption meters don't run
+  // backwards; physical replacements would re-key the OcppIdentity row.
+  const liveKWhById = new Map<string, number | null>();
+  const writeThroughs: Promise<unknown>[] = [];
+  await Promise.all(
+    Array.from(allZaptecChargerIds).map(async (id) => {
+      const r = await getChargerDetail(auth.accessToken, id);
+      const live =
+        r.ok && r.value && typeof r.value.SignedMeterValueKwh === "number"
+          ? (r.value.SignedMeterValueKwh as number)
+          : null;
+      liveKWhById.set(id, live);
+      const stationId = ourStationByZaptecId.get(id);
+      if (stationId && live != null) {
+        const cached = cachedKwhByZaptecId.get(id) ?? null;
+        if (cached == null || live > cached) {
+          writeThroughs.push(
+            db.chargingStation.update({
+              where: { siteAssetId: stationId },
+              data: {
+                lifetimeKwhCached: live,
+                lifetimeKwhObservedAt: new Date(),
+              },
+            }),
+          );
+        }
+      }
+    }),
+  );
+  if (writeThroughs.length > 0) {
+    await Promise.all(writeThroughs);
+  }
+  // Effective display value — max(live, cached). Imported chargers
+  // fall back to cached when Zaptec stops returning a number; non-
+  // imported chargers only ever have live (we can't cache something
+  // we have no row for).
+  const effectiveKWhById = new Map<string, number | null>();
+  for (const id of allZaptecChargerIds) {
+    const live = liveKWhById.get(id) ?? null;
+    const cached = cachedKwhByZaptecId.get(id) ?? null;
+    const effective =
+      live != null && cached != null
+        ? Math.max(live, cached)
+        : (live ?? cached);
+    effectiveKWhById.set(id, effective);
   }
 
   const installations: CredentialInstallationNode[] = zaptecInstallations.map((inst) => {
@@ -210,7 +264,7 @@ async function buildTreeFromAuth(
               isOnline: isOnlineByZaptecId.get(ch.Id) === true,
               imported: ourStationId != null,
               chargingStationId: ourStationId,
-              lifetimeEnergyKWh: lifetimeKWhById.get(ch.Id) ?? null,
+              lifetimeEnergyKWh: effectiveKWhById.get(ch.Id) ?? null,
             };
           }),
       }));

@@ -153,6 +153,12 @@ async function buildApiActiveMap(
         // Both run side-by-side per charger; offline chargers skip
         // both fetches. Best-effort — failures leave fields null and
         // the UI renders em-dashes rather than 500ing the page.
+        //
+        // Write-through: when /detail returns a higher SignedMeterValueKwh
+        // than what's persisted, persist the new value. Caller reads
+        // lifetimeKwhCached from ChargingStation directly, so we don't
+        // need to thread the value through this map.
+        const writeThroughs: Promise<unknown>[] = [];
         await Promise.all(
           onlineToFetch.map(async ({ vendorId, stationId }) => {
             const [stateResult, detailResult] = await Promise.all([
@@ -174,8 +180,28 @@ async function buildApiActiveMap(
               onlineSince,
               lifetimeEnergyKWh: lifetimeKWh,
             });
+            if (lifetimeKWh != null) {
+              writeThroughs.push(
+                db.chargingStation.updateMany({
+                  where: {
+                    siteAssetId: stationId,
+                    OR: [
+                      { lifetimeKwhCached: null },
+                      { lifetimeKwhCached: { lt: lifetimeKWh } },
+                    ],
+                  },
+                  data: {
+                    lifetimeKwhCached: lifetimeKWh,
+                    lifetimeKwhObservedAt: new Date(),
+                  },
+                }),
+              );
+            }
           }),
         );
+        if (writeThroughs.length > 0) {
+          await Promise.all(writeThroughs);
+        }
       } catch (err) {
         console.error("[site-tree] zaptec API-active fetch failed", {
           orgId: cred.ownerOrgId,
@@ -256,7 +282,15 @@ export async function listSiteTree(
           },
         },
       },
-    }),
+    }).then((rows) =>
+      rows.map((r) => ({
+        ...r,
+        // Decimal → number for downstream comparisons. Keeping the row
+        // shape flat avoids a second cast at the chargerNode call site.
+        lifetimeKwhCached:
+          r.lifetimeKwhCached != null ? Number(r.lifetimeKwhCached) : null,
+      })),
+    ),
     db.pendingDiscovery.findMany({
       select: { identityString: true, lastSeenAt: true },
     }),
@@ -340,7 +374,14 @@ export async function listSiteTree(
       // it either. Reserved as a stable null so the UI placeholder
       // maps cleanly when the data lands.
       disconnectsPast24h: null,
-      lifetimeEnergyKWh: liveSnapshot?.lifetimeEnergyKWh ?? null,
+      // Effective lifetime kWh: prefer the live Zaptec read, fall back
+      // to the persisted cache when Zaptec is silent (offline charger,
+      // decommissioned charger, vendor API down). Take the max so a
+      // stale-cached value can't show higher than reality.
+      lifetimeEnergyKWh:
+        liveSnapshot?.lifetimeEnergyKWh != null && c.lifetimeKwhCached != null
+          ? Math.max(liveSnapshot.lifetimeEnergyKWh, c.lifetimeKwhCached)
+          : (liveSnapshot?.lifetimeEnergyKWh ?? c.lifetimeKwhCached ?? null),
       status: identity?.status ?? "—",
       lastSeenAt: lastSeen ? new Date(lastSeen).toISOString() : null,
       connectorSummary,
