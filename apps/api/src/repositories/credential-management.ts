@@ -85,7 +85,19 @@ export async function getCredentialManagementTree(
 ): Promise<CredentialManageTree> {
   if (!kek) throw new Error("kek_unavailable");
   const auth = await unsealAndAuth(db, kek, credentialId);
+  return buildTreeFromAuth(db, auth, credentialId);
+}
 
+// Tree build, extracted so the apply path can share one Zaptec OAuth
+// grant. Zaptec's OAuth endpoint blocks back-to-back token requests
+// from the same client (likely a per-client throttle) — a fresh grant
+// during the GET followed by another during the POST returns
+// invalid_grant on the second call. Always auth once per request.
+async function buildTreeFromAuth(
+  db: PrismaClient,
+  auth: UnsealedCredential,
+  credentialId: string,
+): Promise<CredentialManageTree> {
   // Fetch Zaptec installations + their hierarchies + bulk online list
   // in parallel — one auth, three concurrent calls.
   const [installationsResult, bulkChargersResult] = await Promise.all([
@@ -201,7 +213,11 @@ export async function applyCredentialSelection(
   selectedZaptecIds: string[],
 ): Promise<CredentialApplyResult> {
   if (!kek) throw new Error("kek_unavailable");
-  const tree = await getCredentialManagementTree(db, kek, credentialId);
+  // One auth for the whole request — Zaptec OAuth doesn't tolerate
+  // back-to-back grants. Reuse the same accessToken for the tree
+  // refetch and any add-path lookups.
+  const auth = await unsealAndAuth(db, kek, credentialId);
+  const tree = await buildTreeFromAuth(db, auth, credentialId);
 
   const selected = new Set(selectedZaptecIds);
   const allInTree: CredentialChargerNode[] = tree.installations.flatMap((i) =>
@@ -263,7 +279,6 @@ export async function applyCredentialSelection(
   //      • the existing installation-wide auth_secret_hash (copied from
   //        a sibling charger) — without one we can't provision because
   //        we have no way to know what password Zaptec is sending.
-  const auth = await unsealAndAuth(db, kek, credentialId);
   const stationVendorByZaptecId = new Map<string, { authSecretHash: string }>();
   // Collect siblings per installation in one query.
   const siblings = await db.ocppIdentity.findMany({
