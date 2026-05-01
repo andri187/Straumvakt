@@ -75,6 +75,8 @@ export const REFERENCE_TABS: SectionTab[] = [
   { href: "/reference/rental-service", label: "Rental" },
   { href: "/reference/zaptec-api", label: "Zaptec API" },
   { href: "/reference/easee-api", label: "Easee API" },
+  { href: "/reference/alfen-api", label: "Alfen API" },
+  { href: "/reference/teltonika-rut", label: "Teltonika RUT" },
 ];
 
 export const CHARGERS_TABS: SectionTab[] = [

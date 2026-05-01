@@ -8,10 +8,41 @@
 
 ## Adapter docs
 
-| File | Vendor | Live data | Hardware tier |
+Grouped by V3 `HardwareVendorKind` (per `prisma/schema.prisma` — every vendor here also gets a `hardware.vendors` row tagged with this kind, and every model gets a matching `hardware.models.kind`). The grouping matters because each kind has a different `SiteAssetKind` extension table (`assets.chargers` vs `assets.modems` vs `assets.meters` vs `assets.controllers`) and a different `credential_scope` default.
+
+### `Hardware / Chargers` — `kind = charger_ac`
+
+Drives `properties.installations` (per V3 §10) with `credential_scope = installation` (Zaptec, Easee — vendor-managed cloud) or `credential_scope = none` (Alfen — OCPP-only). Extends `assets.site_assets` via `assets.chargers`.
+
+| File | Vendor | Live data | Models |
 |---|---|---|---|
-| [`zaptec.md`](zaptec.md) | Zaptec AS · Norway | **Yes — Dalvegur 10–14, 20 chargers** | AC (Pro / Go / Go 2 / Apollo) |
-| [`easee.md`](easee.md) | Easee AS · Norway | No (docs + community library only) | AC (Home / Charge / One / Up) + Equalizer meter |
+| [`zaptec.md`](zaptec.md) | Zaptec AS · Norway | **Yes — Dalvegur 10–14, 20 chargers** | Pro / Go / Go 2 / Apollo |
+| [`easee.md`](easee.md) | Easee AS · Norway | No (docs + community library only) | Home / Charge / One / Up |
+| [`alfen.md`](alfen.md) | Alfen NV · Netherlands | No (docs only) | Eve Single / Double Pro-line / Twin 4XL — multi-socket |
+
+DC chargers (Kempower, Tritium, ABB) will land here in a future Phase with `kind = charger_dc` and `credential_scope = identity` (per `OcppIdentity.credentials_ref`).
+
+### `Hardware / 4G modems` — `kind = modem`
+
+Routers / cellular gateways that backhaul chargers + meters at sites without wired internet. Extends `assets.site_assets` via `assets.modems`. No `credential_scope` because the modem is infrastructure — credentials are operator-side (RMS PAT, per-router admin).
+
+| File | Vendor | Live data | Models |
+|---|---|---|---|
+| [`teltonika-rut.md`](teltonika-rut.md) | Teltonika Networks · Lithuania | No (docs only) | RUT240 / RUT360 / RUT955 / RUTX09 / RUTX11 / RUT(M)50 |
+
+### `Hardware / Meters` — `kind = meter`
+
+Submeters and grid-side energy meters. Extends `assets.site_assets` via `assets.meters`. Easee's Equalizer (covered inside [`easee.md`](easee.md)) sits in this class — when extracted, it becomes its own row here.
+
+*(No standalone vendor docs yet.)*
+
+### `Hardware / Controllers` — `kind = controller`
+
+Onsite monitoring + switching devices (Shelly-class). Extends `assets.site_assets` via `assets.controllers`.
+
+*(No vendor docs yet.)*
+
+---
 
 When a vendor file says "(unverified)" against a value, that value is sourced from documentation or a community library, not first-hand observation. Mark verified after the first probe and remove the tag.
 
