@@ -282,11 +282,16 @@ export async function listSiteTree(
       : gatewayHasOcpp
         ? true
         : null;
-    // `online` reflects RUNTIME reachability for the count-pill
-    // aggregation: identity recently seen by gateway projection
-    // (auth-passing OCPP traffic), or pending_discoveries last_seen
-    // within window. Distinct from the config-state emblems.
+    // `online` reflects runtime reachability across both sides:
+    //   • vendor (Zaptec IsOnline) — the most reliable signal when the
+    //     gateway can't authenticate the charger but Zaptec sees it
+    //   • our gateway (auth-passing OCPP traffic) — when Zaptec API is
+    //     unreachable but the charger is talking to us
+    //   • pending_discoveries — gateway heard a connection attempt
+    //     even without auth
+    // Either source within the 5-min window counts as online.
     const online =
+      (liveSnapshot?.vendorOnline === true) ||
       identity?.status === "online" ||
       (lastSeen != null && now - new Date(lastSeen).getTime() < ONLINE_WINDOW_MS) ||
       (pendingSeen != null && now - pendingSeen.getTime() < ONLINE_WINDOW_MS);

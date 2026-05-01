@@ -91,7 +91,6 @@ export default async function SitesPage() {
 
 function SiteRow({ site }: { site: SiteTreeNode }) {
   const total = site.installations.length + site.orphanCircuits.length + site.orphanChargers.length;
-  const ocpp = aggregateOcppState(flatChargers(site));
   return (
     <details className="group" open={total > 0 && total <= 3}>
       <summary className="flex cursor-pointer items-center gap-3 px-4 py-2.5 hover:bg-bg-base/20">
@@ -106,12 +105,6 @@ function SiteRow({ site }: { site: SiteTreeNode }) {
             {" · "}<span className="font-mono">{site.siteType}/{site.accessLevel}</span>
           </span>
         </div>
-        <OcppEmblem
-          scope={{ kind: "site", siteId: site.id }}
-          state={ocpp.state}
-          count={ocpp.count}
-          label={site.displayName}
-        />
         <ChargerCountPill online={site.chargersOnline} offline={site.chargersOffline} />
       </summary>
 
@@ -232,18 +225,8 @@ function CircuitRow({ circuit, indent }: { circuit: SiteTreeCircuitNode; indent:
           {circuit.phaseCount}-phase
           {circuit.ampereCeiling && ` · ${circuit.ampereCeiling}A`}
         </span>
-        <span className="ml-auto flex items-center gap-1.5">
-          {circuit.chargers.length > 0 && (
-            <OcppEmblem
-              scope={{ kind: "circuit", circuitId: circuit.id }}
-              state={aggregateOcppState(circuit.chargers).state}
-              count={aggregateOcppState(circuit.chargers).count}
-              label={circuit.displayName}
-            />
-          )}
-          <span className="text-[10px] text-ink-500">
-            {circuit.chargers.length} charger{circuit.chargers.length === 1 ? "" : "s"}
-          </span>
+        <span className="ml-auto text-[10px] text-ink-500">
+          {circuit.chargers.length} charger{circuit.chargers.length === 1 ? "" : "s"}
         </span>
       </summary>
       <div>
@@ -282,72 +265,40 @@ function formatRelativeDuration(fromISO: string | null): string | null {
 function ChargerLine({ charger, indent }: { charger: SiteTreeChargerNode; indent: number }) {
   const label =
     charger.identityString ?? charger.serialNumber ?? charger.chargingStationId.slice(0, 8);
-  const lastSeen = charger.lastSeenAt
-    ? new Date(charger.lastSeenAt).toLocaleString(undefined, {
-        month: "short",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      })
-    : null;
   const connectedFor = formatRelativeDuration(charger.onlineSince);
-  const onlineDot = charger.online
-    ? "bg-emerald-400"
-    : "bg-ink-600";
+  const onlineDot = charger.online ? "bg-emerald-400" : "bg-ink-600";
+  const statusText = charger.online
+    ? connectedFor
+      ? `online for ${connectedFor}`
+      : "online"
+    : "offline";
+  // Per-charger row is intentionally minimal: dot + identity + a
+  // single human-readable status sentence ("online for 3h 12m" /
+  // "offline"). Vendor/model, connector type, last-seen timestamp,
+  // and the per-charger emblems live on the charger detail page —
+  // putting them inline here makes the tree unreadable at scale.
   return (
     <div
       className="flex items-center gap-2 rounded px-2 py-1 text-xs hover:bg-bg-base/30"
       style={{ paddingLeft: `${1.25 * indent + 1}rem` }}
     >
-      <SourceEmblem label="API" active={charger.apiActive} />
-      {charger.vendor === "Zaptec" && (
-        <OcppEmblem
-          scope={{ kind: "charger", chargingStationId: charger.chargingStationId }}
-          state={aggregateOcppState([charger]).state}
-          count={1}
-          label={label}
-        />
-      )}
+      <span
+        className={`h-2 w-2 shrink-0 rounded-full ${onlineDot}`}
+        title={
+          charger.online
+            ? charger.onlineSince
+              ? `Online since ${new Date(charger.onlineSince).toLocaleString()}`
+              : "Online"
+            : "Not heard from in last 5 min"
+        }
+      />
       <Link
         href={`/chargers/${charger.chargingStationId}`}
         className="font-mono text-ink-100 hover:text-sv-sky truncate"
       >
         {label}
       </Link>
-      {charger.vendor && charger.model && (
-        <span className="text-[10px] text-ink-500 truncate">
-          {charger.vendor} {charger.model}
-        </span>
-      )}
-      <span className="text-[10px] text-ink-500 truncate">{charger.connectorSummary}</span>
-      <span className="ml-auto flex items-center gap-2 text-[10px] text-ink-500">
-        <span
-          className="inline-flex items-center gap-1"
-          title={charger.online ? "Reachable in last 5 min" : "Not heard from in last 5 min"}
-        >
-          <span className={`h-1.5 w-1.5 rounded-full ${onlineDot}`} />
-          <span className="font-mono">{charger.online ? "online" : "offline"}</span>
-        </span>
-        {connectedFor && (
-          <span
-            className="font-mono"
-            title={
-              charger.onlineSince
-                ? `Online since ${new Date(charger.onlineSince).toLocaleString()}`
-                : undefined
-            }
-          >
-            {connectedFor}
-          </span>
-        )}
-        <span
-          className="font-mono"
-          title="24h disconnect count — needs gateway WebSocket event tracking, not yet wired"
-        >
-          {charger.disconnectsPast24h == null ? "—" : `${charger.disconnectsPast24h}↻`}
-        </span>
-        {lastSeen && <span className="font-mono truncate">{lastSeen}</span>}
-      </span>
+      <span className="ml-auto text-[11px] text-ink-400">{statusText}</span>
     </div>
   );
 }
