@@ -1,33 +1,13 @@
 import { z } from "zod";
 
-const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{1,46}[a-z0-9])?$/;
 const COUNTRY_RE = /^[A-Z]{2}$/;
 const KENNITALA_RE = /^\d{6}-?\d{4}$/;
 const IDENTITY_RE = /^[A-Za-z0-9._:-]+$/;
 
-export const OrganizationRoleEnum = z.enum([
-  "csms_provider",
-  "operator",
-  "service_contractor",
-  "installer",
-  "vendor",
-  "asset_owner",
-  "payer",
-  "beneficiary",
-  "customer",
-  "retailer",
-  "dso",
-  "tso",
-  "producer",
-  "aggregator",
-  "public_charging",
-  "home_charging",
-  "emsp",
-  "roaming_hub",
-  "payment_processor",
-  "insurance_provider",
-  "regulator",
-]);
+// Re-exports the OCPI-aligned trimmed enum from inputs/orgs.ts so the
+// onboarding wizard validates against the same set as direct create.
+export { OrganizationRoleEnum } from "./orgs";
+import { OrganizationRoleEnum } from "./orgs";
 
 const SiteTypeEnum = z.enum(["standard", "workplace", "mdu", "hotel", "fleet", "retail"]);
 const SiteAccessLevelEnum = z.enum(["public", "private", "taxi_only"]);
@@ -49,9 +29,6 @@ const optionalString = (max: number) =>
     .transform((v) => (v && v.length > 0 ? v : undefined));
 
 export const OnboardingChainInput = z.object({
-  orgSlug: z
-    .string()
-    .regex(SLUG_RE, { message: "lowercase letters, digits, dashes only; 3–48 chars" }),
   orgDisplayName: z.string().min(1).max(120),
   orgKennitala: z
     .string()
@@ -69,14 +46,6 @@ export const OnboardingChainInput = z.object({
   orgAddressStreet: optionalString(200),
   orgAddressCity: optionalString(80),
   orgAddressPostalCode: optionalString(20),
-  orgContactName: optionalString(120),
-  orgContactEmail: z
-    .string()
-    .email()
-    .optional()
-    .or(z.literal(""))
-    .transform((v) => (v && v.length > 0 ? v : undefined)),
-  orgContactPhone: optionalString(40),
 
   propertyDisplayName: z.string().min(1).max(120),
   propertyStreet: optionalString(200),

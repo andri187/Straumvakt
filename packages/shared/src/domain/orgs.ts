@@ -1,50 +1,59 @@
-// Wire shape of an Organization row as the API returns it. The web app
-// imports this to type its fetches; the API imports it to type its
-// responses. Identical at compile time, no runtime cost.
+// Wire shape of an Organization row as the API returns it. ADR 0014:
+// Iceland-aligned (Fyrirtækjaskrá) field set, OCPI-aligned role
+// taxonomy, slug + free-form addresses/contacts JSON dropped,
+// mainContact references a User.
 
 export type OrgStatus = "active" | "suspended" | "archived";
 
 export type OrganizationRole =
-  | "csms_provider"
-  | "operator"
+  | "cpo"
+  | "emsp"
+  | "hub"
+  | "nsp"
+  | "site_host"
   | "service_contractor"
   | "installer"
   | "vendor"
-  | "asset_owner"
-  | "payer"
-  | "beneficiary"
-  | "customer"
-  | "retailer"
+  | "regulator"
   | "dso"
   | "tso"
-  | "producer"
-  | "aggregator"
-  | "public_charging"
-  | "home_charging"
-  | "emsp"
-  | "roaming_hub"
-  | "payment_processor"
-  | "insurance_provider"
-  | "regulator";
+  | "retailer"
+  | "payment_processor";
+
+export interface OrgAddress {
+  street: string;
+  postalCode: string;
+  city: string;
+}
+
+export interface OrgMainContact {
+  id: string;
+  displayName: string | null;
+  email: string;
+}
 
 export interface OrgSummary {
   id: string;
-  slug: string;
   displayName: string;
   countryCode: string;
   status: OrgStatus;
   kennitala: string | null;
   legalName: string | null;
   legalForm: string | null;
+  legalFormCode: string | null;
   vskNr: string | null;
   leiCode: string | null;
   defaultCurrency: string;
+  postalAddress: OrgAddress | null;
+  legalAddress: OrgAddress | null;
+  municipalityCode: string | null;
+  municipalityName: string | null;
   regulatorLicenceNo: string | null;
   notes: string | null;
   roles: OrganizationRole[];
-  addresses: unknown;
-  contacts: unknown;
   branding: unknown;
+  mainContactUserId: string | null;
+  mainContact: OrgMainContact | null;
   createdAt: string;
   updatedAt: string;
 }

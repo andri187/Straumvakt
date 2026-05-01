@@ -13,7 +13,9 @@ export default async function NewInstallationPage() {
     apiFetchServerJson<{ orgs: OrgSummary[] }>("/api/admin/orgs"),
     apiFetchServerJson<{ vendors: Vendor[] }>("/api/admin/installations"),
   ]);
-  const orgOptions = orgs.filter((o) => o.status !== "archived").map((o) => ({ id: o.id, label: `${o.displayName} (${o.slug})` }));
+  const orgOptions = orgs
+    .filter((o) => o.status !== "archived")
+    .map((o) => ({ id: o.id, label: o.kennitala ? `${o.displayName} · ${o.kennitala}` : o.displayName }));
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-8">

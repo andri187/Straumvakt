@@ -8,7 +8,7 @@ import type {
 type Row = {
   id: string;
   orgId: string;
-  organization: { slug: string; displayName: string };
+  organization: { displayName: string };
   displayName: string;
   locationType: string | null;
   address: unknown;
@@ -23,7 +23,6 @@ function toSummary(r: Row): PropertySummary {
   return {
     id: r.id,
     orgId: r.orgId,
-    orgSlug: r.organization.slug,
     orgDisplayName: r.organization.displayName,
     displayName: r.displayName,
     locationType: r.locationType,
@@ -36,7 +35,7 @@ function toSummary(r: Row): PropertySummary {
   };
 }
 
-const include = { organization: { select: { slug: true, displayName: true } } } as const;
+const include = { organization: { select: { displayName: true } } } as const;
 
 export async function listAllProperties(db: PrismaClient): Promise<PropertySummary[]> {
   const rows = await db.property.findMany({ orderBy: [{ updatedAt: "desc" }], include });

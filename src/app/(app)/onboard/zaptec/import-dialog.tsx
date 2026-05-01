@@ -173,7 +173,7 @@ export function ImportDialog({
                 ) : (
                   orgs.map((o) => (
                     <option key={o.id} value={o.id}>
-                      {o.displayName} ({o.slug})
+                      {o.kennitala ? `${o.displayName} · ${o.kennitala}` : o.displayName}
                     </option>
                   ))
                 )}

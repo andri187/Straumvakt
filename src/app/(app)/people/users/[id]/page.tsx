@@ -95,7 +95,7 @@ export default async function UserDetailPage({
               memberships={memberships}
               availableOrgs={availableOrgs.map((o) => ({
                 id: o.id,
-                slug: o.slug,
+                kennitala: o.kennitala,
                 displayName: o.displayName,
               }))}
             />

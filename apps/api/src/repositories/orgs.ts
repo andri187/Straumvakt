@@ -3,57 +3,69 @@
 // Org rows ARE the tenant boundary every other table is scoped to. They
 // cannot themselves be `withOrgContext`-scoped — creating an Org IS the
 // one operation that crosses the tenant boundary by definition.
-//
-// Ported from the monolith's src/lib/repositories/organizations.ts.
-// Identical contract; the only structural difference is the function
-// signatures take an explicit `prisma` client so the route handler
-// passes its per-request client through.
 
 import type { PrismaClient, Prisma } from "../generated/prisma/client";
-import type { OrgSummary, OrganizationRole, OrgStatus } from "@straumvakt/shared/domain/orgs";
-import type { OrgCreateInput, OrgUpdateInput } from "@straumvakt/shared/inputs/orgs";
+import type {
+  OrgSummary,
+  OrgAddress,
+  OrgMainContact,
+} from "@straumvakt/shared/domain/orgs";
+import type {
+  OrgCreateInput,
+  OrgUpdateInput,
+} from "@straumvakt/shared/inputs/orgs";
 
-type Row = {
-  id: string;
-  slug: string;
-  displayName: string;
-  countryCode: string;
-  status: OrgStatus;
-  kennitala: string | null;
-  legalName: string | null;
-  legalForm: string | null;
-  vskNr: string | null;
-  leiCode: string | null;
-  defaultCurrency: string;
-  regulatorLicenceNo: string | null;
-  notes: string | null;
-  roles: OrganizationRole[];
-  addresses: unknown;
-  contacts: unknown;
-  branding: unknown;
-  createdAt: Date;
-  updatedAt: Date;
-};
+const include = {
+  mainContact: { select: { id: true, displayName: true, email: true } },
+} as const;
+
+type Row = Prisma.OrganizationGetPayload<{ include: typeof include }>;
+
+function toAddress(value: unknown): OrgAddress | null {
+  if (!value || typeof value !== "object") return null;
+  const v = value as Record<string, unknown>;
+  if (
+    typeof v.street === "string" &&
+    typeof v.postalCode === "string" &&
+    typeof v.city === "string"
+  ) {
+    return { street: v.street, postalCode: v.postalCode, city: v.city };
+  }
+  return null;
+}
+
+function toMainContact(row: Row): OrgMainContact | null {
+  if (!row.mainContact) return null;
+  return {
+    id: row.mainContact.id,
+    displayName: row.mainContact.displayName,
+    email: row.mainContact.email,
+  };
+}
 
 function toSummary(row: Row): OrgSummary {
   return {
     id: row.id,
-    slug: row.slug,
     displayName: row.displayName,
     countryCode: row.countryCode,
     status: row.status,
     kennitala: row.kennitala,
     legalName: row.legalName,
     legalForm: row.legalForm,
+    legalFormCode: row.legalFormCode,
     vskNr: row.vskNr,
     leiCode: row.leiCode,
     defaultCurrency: row.defaultCurrency,
+    postalAddress: toAddress(row.postalAddress),
+    legalAddress: toAddress(row.legalAddress),
+    municipalityCode: row.municipalityCode,
+    municipalityName: row.municipalityName,
     regulatorLicenceNo: row.regulatorLicenceNo,
     notes: row.notes,
     roles: row.roles,
-    addresses: row.addresses,
-    contacts: row.contacts,
     branding: row.branding,
+    mainContactUserId: row.mainContactUserId,
+    mainContact: toMainContact(row),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -66,6 +78,7 @@ export async function listOrgs(
   const rows = await db.organization.findMany({
     where: opts?.includeArchived ? undefined : { status: { not: "archived" } },
     orderBy: [{ status: "asc" }, { displayName: "asc" }],
+    include,
   });
   return rows.map(toSummary);
 }
@@ -74,7 +87,10 @@ export async function getOrgById(
   db: PrismaClient,
   orgId: string,
 ): Promise<OrgSummary | null> {
-  const row = await db.organization.findUnique({ where: { id: orgId } });
+  const row = await db.organization.findUnique({
+    where: { id: orgId },
+    include,
+  });
   return row ? toSummary(row) : null;
 }
 
@@ -84,22 +100,26 @@ export async function createOrg(
 ): Promise<OrgSummary> {
   const created = await db.organization.create({
     data: {
-      slug: input.slug,
       displayName: input.displayName,
       countryCode: input.countryCode,
       kennitala: input.kennitala,
       legalName: input.legalName,
       legalForm: input.legalForm,
+      legalFormCode: input.legalFormCode,
       vskNr: input.vskNr,
       leiCode: input.leiCode,
       defaultCurrency: input.defaultCurrency,
+      municipalityCode: input.municipalityCode,
+      municipalityName: input.municipalityName,
       regulatorLicenceNo: input.regulatorLicenceNo,
       notes: input.notes,
       roles: input.roles,
-      addresses: input.addresses as Prisma.InputJsonValue,
-      contacts: input.contacts as Prisma.InputJsonValue,
+      postalAddress: (input.postalAddress ?? null) as Prisma.InputJsonValue,
+      legalAddress: (input.legalAddress ?? null) as Prisma.InputJsonValue,
       branding: input.branding as Prisma.InputJsonValue,
+      mainContactUserId: input.mainContactUserId ?? null,
     },
+    include,
   });
   return toSummary(created);
 }
@@ -109,15 +129,22 @@ export async function updateOrg(
   orgId: string,
   patch: OrgUpdateInput,
 ): Promise<OrgSummary> {
-  const { addresses, contacts, branding, ...rest } = patch;
+  const { postalAddress, legalAddress, branding, ...rest } = patch;
   const updated = await db.organization.update({
     where: { id: orgId },
     data: {
       ...rest,
-      ...(addresses !== undefined ? { addresses: addresses as Prisma.InputJsonValue } : {}),
-      ...(contacts !== undefined ? { contacts: contacts as Prisma.InputJsonValue } : {}),
-      ...(branding !== undefined ? { branding: branding as Prisma.InputJsonValue } : {}),
+      ...(postalAddress !== undefined
+        ? { postalAddress: (postalAddress ?? null) as Prisma.InputJsonValue }
+        : {}),
+      ...(legalAddress !== undefined
+        ? { legalAddress: (legalAddress ?? null) as Prisma.InputJsonValue }
+        : {}),
+      ...(branding !== undefined
+        ? { branding: branding as Prisma.InputJsonValue }
+        : {}),
     },
+    include,
   });
   return toSummary(updated);
 }

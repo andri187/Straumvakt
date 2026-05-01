@@ -5,27 +5,19 @@ import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api-client";
 
 const ORG_ROLES = [
-  "csms_provider",
-  "operator",
+  "cpo",
+  "emsp",
+  "hub",
+  "nsp",
+  "site_host",
   "service_contractor",
   "installer",
   "vendor",
-  "asset_owner",
-  "payer",
-  "beneficiary",
-  "customer",
-  "retailer",
+  "regulator",
   "dso",
   "tso",
-  "producer",
-  "aggregator",
-  "public_charging",
-  "home_charging",
-  "emsp",
-  "roaming_hub",
+  "retailer",
   "payment_processor",
-  "insurance_provider",
-  "regulator",
 ] as const;
 
 const SITE_TYPES = ["standard", "workplace", "mdu", "hotel", "fleet", "retail"] as const;
@@ -43,7 +35,6 @@ const ASSET_CLASSES = ["ac", "dc"] as const;
 
 type FormState = {
   // Org
-  orgSlug: string;
   orgDisplayName: string;
   orgKennitala: string;
   orgLegalName: string;
@@ -58,9 +49,6 @@ type FormState = {
   orgAddressStreet: string;
   orgAddressCity: string;
   orgAddressPostalCode: string;
-  orgContactName: string;
-  orgContactEmail: string;
-  orgContactPhone: string;
   // Property
   propertyDisplayName: string;
   propertyStreet: string;
@@ -95,7 +83,6 @@ type FormState = {
 };
 
 const INITIAL: FormState = {
-  orgSlug: "",
   orgDisplayName: "",
   orgKennitala: "",
   orgLegalName: "",
@@ -110,9 +97,6 @@ const INITIAL: FormState = {
   orgAddressStreet: "",
   orgAddressCity: "",
   orgAddressPostalCode: "",
-  orgContactName: "",
-  orgContactEmail: "",
-  orgContactPhone: "",
   propertyDisplayName: "",
   propertyStreet: "",
   propertyCity: "",
@@ -142,7 +126,6 @@ const INITIAL: FormState = {
 
 type Result = {
   orgId: string;
-  orgSlug: string;
   propertyId: string;
   siteId: string;
   chargingStationId: string;
@@ -227,7 +210,6 @@ export function OnboardForm() {
   }
 
   const valid =
-    s.orgSlug.length > 0 &&
     s.orgDisplayName.length > 0 &&
     s.orgKennitala.length > 0 &&
     s.orgLegalName.length > 0 &&
@@ -243,7 +225,6 @@ export function OnboardForm() {
     <form onSubmit={onSubmit} className="space-y-6">
       <Section title="Organization">
         <Grid>
-          <Field label="Slug" required value={s.orgSlug} onChange={(v) => set("orgSlug", v)} placeholder="straumvakt-pilot" mono hint="lowercase, dashes only" />
           <Field label="Display name" required value={s.orgDisplayName} onChange={(v) => set("orgDisplayName", v)} placeholder="Straumvakt" />
           <Field label="Kennitala" required value={s.orgKennitala} onChange={(v) => set("orgKennitala", v)} placeholder="700101-9999" mono hint="DDMMYY-XXXX" />
           <Field label="Legal name" required value={s.orgLegalName} onChange={(v) => set("orgLegalName", v)} placeholder="Straumvakt ehf." />
@@ -280,13 +261,6 @@ export function OnboardForm() {
             <Field label="Street" value={s.orgAddressStreet} onChange={(v) => set("orgAddressStreet", v)} />
             <Field label="City" value={s.orgAddressCity} onChange={(v) => set("orgAddressCity", v)} />
             <Field label="Postal code" value={s.orgAddressPostalCode} onChange={(v) => set("orgAddressPostalCode", v)} />
-          </Grid>
-        </SubSection>
-        <SubSection title="Primary contact (optional)">
-          <Grid cols={3}>
-            <Field label="Name" value={s.orgContactName} onChange={(v) => set("orgContactName", v)} />
-            <Field label="Email" value={s.orgContactEmail} onChange={(v) => set("orgContactEmail", v)} />
-            <Field label="Phone" value={s.orgContactPhone} onChange={(v) => set("orgContactPhone", v)} />
           </Grid>
         </SubSection>
       </Section>
@@ -402,7 +376,6 @@ function ResultCard({ result, onReset }: { result: Result; onReset: () => void }
       <div className="rounded-md border border-bg-border bg-bg-base/30 p-4">
         <h3 className="mb-2 text-sm font-semibold text-ink-50">Created entities</h3>
         <dl className="grid grid-cols-1 gap-1 font-mono text-xs sm:grid-cols-2">
-          <Row k="Org slug" v={result.orgSlug} />
           <Row k="Org id" v={result.orgId} />
           <Row k="Property id" v={result.propertyId} />
           <Row k="Site id" v={result.siteId} />

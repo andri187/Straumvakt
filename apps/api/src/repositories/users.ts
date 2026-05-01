@@ -80,12 +80,11 @@ export async function listUserMemberships(
 ): Promise<UserMembershipSummary[]> {
   const rows = await db.membership.findMany({
     where: { userId },
-    include: { organization: { select: { slug: true, displayName: true } } },
+    include: { organization: { select: { displayName: true } } },
     orderBy: [{ createdAt: "asc" }],
   });
   return rows.map((m) => ({
     orgId: m.orgId,
-    orgSlug: m.organization.slug,
     orgDisplayName: m.organization.displayName,
     role: m.role,
     createdAt: m.createdAt.toISOString(),

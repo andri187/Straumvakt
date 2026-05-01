@@ -3,37 +3,26 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api-client";
+import type { OrgAddress, OrgMainContact } from "@straumvakt/shared/domain/orgs";
 
 const ROLES = [
-  "csms_provider",
-  "operator",
+  "cpo",
+  "emsp",
+  "hub",
+  "nsp",
+  "site_host",
   "service_contractor",
   "installer",
   "vendor",
-  "asset_owner",
-  "payer",
-  "beneficiary",
-  "customer",
-  "retailer",
+  "regulator",
   "dso",
   "tso",
-  "producer",
-  "aggregator",
-  "public_charging",
-  "home_charging",
-  "emsp",
-  "roaming_hub",
+  "retailer",
   "payment_processor",
-  "insurance_provider",
-  "regulator",
 ] as const;
 
-type AddressBlock = { street?: string; city?: string; postal_code?: string; country?: string };
-type ContactBlock = { name?: string; email?: string; phone?: string };
 // Operator branding — surfaces on driver app + the operator console's
-// org-scoped pages once those land. logoUrl and the two color fields
-// cover most CSMS branding needs; the JSONB column accepts arbitrary
-// extras for future driver-app theming.
+// org-scoped pages once those land.
 type BrandingBlock = {
   logoUrl?: string;
   primaryColor?: string;
@@ -47,26 +36,50 @@ export interface OrgInitial {
   kennitala: string | null;
   legalName: string | null;
   legalForm: string | null;
+  legalFormCode: string | null;
   vskNr: string | null;
   leiCode: string | null;
   defaultCurrency: string;
   regulatorLicenceNo: string | null;
   notes: string | null;
   roles: string[];
-  addresses: { primary?: AddressBlock } & Record<string, unknown>;
-  contacts: { primary?: ContactBlock } & Record<string, unknown>;
+  postalAddress: OrgAddress | null;
+  legalAddress: OrgAddress | null;
+  municipalityCode: string | null;
+  municipalityName: string | null;
   branding: BrandingBlock & Record<string, unknown>;
+  mainContactUserId: string | null;
+  mainContact: OrgMainContact | null;
 }
 
-export function OrgEditPanel({ orgId, initial }: { orgId: string; initial: OrgInitial }) {
+// Members of this org are loaded server-side and passed in. The picker
+// surfaces only users who actually have a Membership in this org —
+// avoids "main contact who can't see the data" anti-pattern.
+export interface MemberOption {
+  userId: string;
+  displayName: string | null;
+  email: string;
+}
+
+export function OrgEditPanel({
+  orgId,
+  initial,
+  members,
+}: {
+  orgId: string;
+  initial: OrgInitial;
+  members: MemberOption[];
+}) {
   const router = useRouter();
   const isArchived = initial.status === "archived";
 
+  // Identity
   const [displayName, setDisplayName] = useState(initial.displayName);
   const [countryCode, setCountryCode] = useState(initial.countryCode);
   const [kennitala, setKennitala] = useState(initial.kennitala ?? "");
   const [legalName, setLegalName] = useState(initial.legalName ?? "");
   const [legalForm, setLegalForm] = useState(initial.legalForm ?? "");
+  const [legalFormCode, setLegalFormCode] = useState(initial.legalFormCode ?? "");
   const [vskNr, setVskNr] = useState(initial.vskNr ?? "");
   const [leiCode, setLeiCode] = useState(initial.leiCode ?? "");
   const [defaultCurrency, setDefaultCurrency] = useState(initial.defaultCurrency);
@@ -74,26 +87,52 @@ export function OrgEditPanel({ orgId, initial }: { orgId: string; initial: OrgIn
   const [notes, setNotes] = useState(initial.notes ?? "");
   const [roles, setRoles] = useState<string[]>(initial.roles ?? []);
 
-  const initialAddr = initial.addresses?.primary ?? {};
-  const [addrStreet, setAddrStreet] = useState(initialAddr.street ?? "");
-  const [addrCity, setAddrCity] = useState(initialAddr.city ?? "");
-  const [addrPostal, setAddrPostal] = useState(initialAddr.postal_code ?? "");
+  // Postal
+  const [postalStreet, setPostalStreet] = useState(initial.postalAddress?.street ?? "");
+  const [postalCode, setPostalCode] = useState(initial.postalAddress?.postalCode ?? "");
+  const [postalCity, setPostalCity] = useState(initial.postalAddress?.city ?? "");
 
-  const initialContact = initial.contacts?.primary ?? {};
-  const [contactName, setContactName] = useState(initialContact.name ?? "");
-  const [contactEmail, setContactEmail] = useState(initialContact.email ?? "");
-  const [contactPhone, setContactPhone] = useState(initialContact.phone ?? "");
+  // Legal
+  const [legalStreet, setLegalStreet] = useState(initial.legalAddress?.street ?? "");
+  const [legalPostalCode, setLegalPostalCode] = useState(initial.legalAddress?.postalCode ?? "");
+  const [legalCity, setLegalCity] = useState(initial.legalAddress?.city ?? "");
 
-  const initialBranding = initial.branding ?? {};
-  const [logoUrl, setLogoUrl] = useState(initialBranding.logoUrl ?? "");
-  const [primaryColor, setPrimaryColor] = useState(initialBranding.primaryColor ?? "");
-  const [secondaryColor, setSecondaryColor] = useState(initialBranding.secondaryColor ?? "");
+  // Municipality
+  const [municipalityCode, setMunicipalityCode] = useState(initial.municipalityCode ?? "");
+  const [municipalityName, setMunicipalityName] = useState(initial.municipalityName ?? "");
+
+  // Branding
+  const [logoUrl, setLogoUrl] = useState(initial.branding?.logoUrl ?? "");
+  const [primaryColor, setPrimaryColor] = useState(initial.branding?.primaryColor ?? "");
+  const [secondaryColor, setSecondaryColor] = useState(initial.branding?.secondaryColor ?? "");
+
+  // Main contact
+  const [mainContactUserId, setMainContactUserId] = useState<string>(
+    initial.mainContactUserId ?? "",
+  );
 
   const [busy, setBusy] = useState<"idle" | "saving" | "archiving">("idle");
   const [error, setError] = useState<string | null>(null);
 
   function toggleRole(r: string) {
     setRoles((prev) => (prev.includes(r) ? prev.filter((x) => x !== r) : [...prev, r]));
+  }
+
+  function copyPostalToLegal() {
+    setLegalStreet(postalStreet);
+    setLegalPostalCode(postalCode);
+    setLegalCity(postalCity);
+  }
+
+  function buildAddress(street: string, code: string, city: string): OrgAddress | null {
+    if (!street && !code && !city) return null;
+    return { street, postalCode: code, city };
+  }
+
+  function addressEquals(a: OrgAddress | null, b: OrgAddress | null) {
+    if (a == null && b == null) return true;
+    if (a == null || b == null) return false;
+    return a.street === b.street && a.postalCode === b.postalCode && a.city === b.city;
   }
 
   async function onSave(e: React.FormEvent<HTMLFormElement>) {
@@ -107,6 +146,7 @@ export function OrgEditPanel({ orgId, initial }: { orgId: string; initial: OrgIn
       if (kennitala !== (initial.kennitala ?? "")) patch.kennitala = kennitala || undefined;
       if (legalName !== (initial.legalName ?? "")) patch.legalName = legalName || undefined;
       if (legalForm !== (initial.legalForm ?? "")) patch.legalForm = legalForm || undefined;
+      if (legalFormCode !== (initial.legalFormCode ?? "")) patch.legalFormCode = legalFormCode || undefined;
       if (vskNr !== (initial.vskNr ?? "")) patch.vskNr = vskNr || undefined;
       if (leiCode !== (initial.leiCode ?? "")) patch.leiCode = leiCode || undefined;
       if (defaultCurrency !== initial.defaultCurrency) patch.defaultCurrency = defaultCurrency;
@@ -114,25 +154,20 @@ export function OrgEditPanel({ orgId, initial }: { orgId: string; initial: OrgIn
       if (notes !== (initial.notes ?? "")) patch.notes = notes || undefined;
       if (JSON.stringify(roles) !== JSON.stringify(initial.roles ?? [])) patch.roles = roles;
 
-      const newAddr = { street: addrStreet || undefined, city: addrCity || undefined, postal_code: addrPostal || undefined, country: countryCode };
-      const oldAddr = { street: initialAddr.street ?? undefined, city: initialAddr.city ?? undefined, postal_code: initialAddr.postal_code ?? undefined, country: initialAddr.country ?? undefined };
-      if (JSON.stringify(newAddr) !== JSON.stringify(oldAddr)) {
-        patch.addresses = (addrStreet || addrCity || addrPostal) ? { ...initial.addresses, primary: newAddr } : { ...initial.addresses, primary: undefined };
-      }
+      const newPostal = buildAddress(postalStreet, postalCode, postalCity);
+      if (!addressEquals(newPostal, initial.postalAddress)) patch.postalAddress = newPostal;
 
-      const newContact = { name: contactName || undefined, email: contactEmail || undefined, phone: contactPhone || undefined };
-      const oldContact = { name: initialContact.name ?? undefined, email: initialContact.email ?? undefined, phone: initialContact.phone ?? undefined };
-      if (JSON.stringify(newContact) !== JSON.stringify(oldContact)) {
-        patch.contacts = (contactName || contactEmail || contactPhone) ? { ...initial.contacts, primary: newContact } : { ...initial.contacts, primary: undefined };
-      }
+      const newLegal = buildAddress(legalStreet, legalPostalCode, legalCity);
+      if (!addressEquals(newLegal, initial.legalAddress)) patch.legalAddress = newLegal;
 
-      // Branding — preserve existing extras (driver-app theming etc.)
-      // by spreading initial.branding then overwriting the editable
-      // keys; empty string clears the field from the JSON object.
+      if (municipalityCode !== (initial.municipalityCode ?? "")) patch.municipalityCode = municipalityCode || undefined;
+      if (municipalityName !== (initial.municipalityName ?? "")) patch.municipalityName = municipalityName || undefined;
+
+      // Branding — preserve unknown extras (driver-app theming).
       const brandingChanged =
-        (logoUrl || "") !== (initialBranding.logoUrl ?? "") ||
-        (primaryColor || "") !== (initialBranding.primaryColor ?? "") ||
-        (secondaryColor || "") !== (initialBranding.secondaryColor ?? "");
+        (logoUrl || "") !== (initial.branding?.logoUrl ?? "") ||
+        (primaryColor || "") !== (initial.branding?.primaryColor ?? "") ||
+        (secondaryColor || "") !== (initial.branding?.secondaryColor ?? "");
       if (brandingChanged) {
         const next: Record<string, unknown> = { ...initial.branding };
         if (logoUrl) next.logoUrl = logoUrl;
@@ -143,6 +178,9 @@ export function OrgEditPanel({ orgId, initial }: { orgId: string; initial: OrgIn
         else delete next.secondaryColor;
         patch.branding = next;
       }
+
+      const nextContactId = mainContactUserId || null;
+      if (nextContactId !== initial.mainContactUserId) patch.mainContactUserId = nextContactId;
 
       if (Object.keys(patch).length === 0) {
         setBusy("idle");
@@ -186,21 +224,27 @@ export function OrgEditPanel({ orgId, initial }: { orgId: string; initial: OrgIn
 
   return (
     <div className="space-y-3">
-      <form onSubmit={onSave} className="space-y-3">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Display name" value={displayName} onChange={setDisplayName} />
-          <Field label="Country" mono value={countryCode} onChange={(v) => setCountryCode(v.toUpperCase().slice(0, 2))} hint="ISO-3166-1 alpha-2" />
-          <Field label="Kennitala" value={kennitala} onChange={setKennitala} mono hint="DDMMYY-XXXX" />
-          <Field label="Legal name" value={legalName} onChange={setLegalName} />
-          <Field label="Legal form" value={legalForm} onChange={setLegalForm} placeholder="ehf. / hf. / sf." />
-          <Field label="VSK no" value={vskNr} onChange={setVskNr} mono />
-          <Field label="LEI code" value={leiCode} onChange={setLeiCode} mono />
-          <Field label="Default currency" value={defaultCurrency} onChange={(v) => setDefaultCurrency(v.toUpperCase().slice(0, 3))} mono />
-          <Field label="Regulator licence no" value={regulatorLicenceNo} onChange={setRegulatorLicenceNo} />
-        </div>
+      <form onSubmit={onSave} className="space-y-4">
+        {/* Identity */}
+        <fieldset className="rounded border border-bg-border/60 p-3">
+          <legend className="px-1 text-[10px] font-semibold uppercase tracking-brand text-ink-400">Identity</legend>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Display name" value={displayName} onChange={setDisplayName} />
+            <Field label="Country" mono value={countryCode} onChange={(v) => setCountryCode(v.toUpperCase().slice(0, 2))} hint="ISO-3166-1 alpha-2" />
+            <Field label="Kennitala" value={kennitala} onChange={setKennitala} mono hint="DDMMYY-XXXX" />
+            <Field label="Legal name (heiti)" value={legalName} onChange={setLegalName} />
+            <Field label="Legal form (rekstrarform)" value={legalForm} onChange={setLegalForm} placeholder="Hlutafélag, almennt (hf)" />
+            <Field label="Legal form code" value={legalFormCode} onChange={setLegalFormCode} mono placeholder="D1" />
+            <Field label="VSK no" value={vskNr} onChange={setVskNr} mono />
+            <Field label="LEI code" value={leiCode} onChange={setLeiCode} mono />
+            <Field label="Default currency" value={defaultCurrency} onChange={(v) => setDefaultCurrency(v.toUpperCase().slice(0, 3))} mono />
+            <Field label="Regulator licence no" value={regulatorLicenceNo} onChange={setRegulatorLicenceNo} />
+          </div>
+        </fieldset>
 
-        <fieldset className="rounded border border-bg-border/60 p-2">
-          <legend className="px-1 text-[10px] font-semibold uppercase tracking-brand text-ink-400">Roles</legend>
+        {/* Roles */}
+        <fieldset className="rounded border border-bg-border/60 p-3">
+          <legend className="px-1 text-[10px] font-semibold uppercase tracking-brand text-ink-400">Roles (OCPI-aligned)</legend>
           <div className="grid grid-cols-2 gap-1 sm:grid-cols-3 md:grid-cols-4">
             {ROLES.map((r) => (
               <label key={r} className="flex cursor-pointer items-center gap-1.5 rounded px-1 py-0.5 text-[11px] text-ink-200 hover:bg-bg-base/40">
@@ -211,33 +255,68 @@ export function OrgEditPanel({ orgId, initial }: { orgId: string; initial: OrgIn
           </div>
         </fieldset>
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <fieldset className="rounded border border-bg-border/60 p-2">
-            <legend className="px-1 text-[10px] font-semibold uppercase tracking-brand text-ink-400">Address</legend>
-            <div className="space-y-2">
-              <Field label="Street" value={addrStreet} onChange={setAddrStreet} compact />
-              <div className="grid gap-2 sm:grid-cols-2">
-                <Field label="City" value={addrCity} onChange={setAddrCity} compact />
-                <Field label="Postal code" value={addrPostal} onChange={setAddrPostal} compact />
+        {/* Addresses */}
+        <fieldset className="rounded border border-bg-border/60 p-3">
+          <legend className="px-1 text-[10px] font-semibold uppercase tracking-brand text-ink-400">Addresses</legend>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <p className="mb-1 text-[10px] font-medium text-ink-400">Póstfang (postal)</p>
+              <div className="space-y-2">
+                <Field label="Street" value={postalStreet} onChange={setPostalStreet} compact />
+                <div className="grid gap-2 sm:grid-cols-[80px_1fr]">
+                  <Field label="Postal" value={postalCode} onChange={setPostalCode} compact mono />
+                  <Field label="City" value={postalCity} onChange={setPostalCity} compact />
+                </div>
               </div>
             </div>
-          </fieldset>
-          <fieldset className="rounded border border-bg-border/60 p-2">
-            <legend className="px-1 text-[10px] font-semibold uppercase tracking-brand text-ink-400">Primary contact</legend>
-            <div className="space-y-2">
-              <Field label="Name" value={contactName} onChange={setContactName} compact />
-              <div className="grid gap-2 sm:grid-cols-2">
-                <Field label="Email" value={contactEmail} onChange={setContactEmail} compact />
-                <Field label="Phone" value={contactPhone} onChange={setContactPhone} compact />
+            <div>
+              <div className="mb-1 flex items-center justify-between">
+                <p className="text-[10px] font-medium text-ink-400">Lögheimili (legal)</p>
+                <button type="button" onClick={copyPostalToLegal} className="rounded border border-bg-border px-2 py-0.5 text-[10px] text-ink-400 hover:bg-bg-base/50">
+                  Copy from postal
+                </button>
+              </div>
+              <div className="space-y-2">
+                <Field label="Street" value={legalStreet} onChange={setLegalStreet} compact />
+                <div className="grid gap-2 sm:grid-cols-[80px_1fr]">
+                  <Field label="Postal" value={legalPostalCode} onChange={setLegalPostalCode} compact mono />
+                  <Field label="City" value={legalCity} onChange={setLegalCity} compact />
+                </div>
               </div>
             </div>
-          </fieldset>
-        </div>
+          </div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-[120px_1fr]">
+            <Field label="Sveitarfélag code" value={municipalityCode} onChange={setMunicipalityCode} compact mono />
+            <Field label="Sveitarfélag name" value={municipalityName} onChange={setMunicipalityName} compact />
+          </div>
+        </fieldset>
 
-        <fieldset className="rounded border border-bg-border/60 p-2">
-          <legend className="px-1 text-[10px] font-semibold uppercase tracking-brand text-ink-400">
-            Branding
-          </legend>
+        {/* Main contact picker */}
+        <fieldset className="rounded border border-bg-border/60 p-3">
+          <legend className="px-1 text-[10px] font-semibold uppercase tracking-brand text-ink-400">Main contact</legend>
+          {members.length === 0 ? (
+            <p className="text-[11px] italic text-ink-500">
+              No members yet. Invite a member to assign one as main contact.
+            </p>
+          ) : (
+            <select
+              value={mainContactUserId}
+              onChange={(e) => setMainContactUserId(e.target.value)}
+              className="w-full rounded-md border border-bg-border bg-bg-base/50 px-3 py-2 text-sm text-ink-50 focus:border-sv-sky focus:outline-none"
+            >
+              <option value="">— none —</option>
+              {members.map((m) => (
+                <option key={m.userId} value={m.userId}>
+                  {m.displayName ? `${m.displayName} (${m.email})` : m.email}
+                </option>
+              ))}
+            </select>
+          )}
+        </fieldset>
+
+        {/* Branding */}
+        <fieldset className="rounded border border-bg-border/60 p-3">
+          <legend className="px-1 text-[10px] font-semibold uppercase tracking-brand text-ink-400">Branding</legend>
           <p className="mb-2 text-[10px] text-ink-500">
             Logo + theme colors. Used by the driver app + org-scoped operator
             views. JSON column accepts arbitrary extras (driver-app theme keys

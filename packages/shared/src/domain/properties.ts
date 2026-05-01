@@ -1,7 +1,6 @@
 export interface PropertySummary {
   id: string;
   orgId: string;
-  orgSlug: string;
   orgDisplayName: string;
   displayName: string;
   locationType: string | null;

@@ -30,7 +30,7 @@ export default async function TenantsPage() {
       type: "Organization",
       href: `/tenants/organizations/${o.id}`,
       name: o.displayName,
-      detail: `slug ${o.slug} · ${o.countryCode}${o.kennitala ? ` · kennitala ${o.kennitala}` : ""}${o.status !== "active" ? ` · ${o.status}` : ""}`,
+      detail: `${o.countryCode}${o.kennitala ? ` · kennitala ${o.kennitala}` : ""}${o.legalForm ? ` · ${o.legalForm}` : ""}${o.status !== "active" ? ` · ${o.status}` : ""}`,
       parent: "—",
       id: o.id,
       updatedAt: o.updatedAt,

@@ -83,6 +83,8 @@ model User {
   // ── Rev-3 / Rev-4 relations (ADRs 0008 + 0010) ───────────────────
   platformAdminGrant      PlatformAdmin?   @relation("PlatformAdminUser")
   platformAdminGrantsMade PlatformAdmin[]  @relation("PlatformAdminGrantedBy")
+  // ── ADR 0014 ──
+  orgsAsMainContact       Organization[]   @relation("OrgMainContact")
   configKeysSet           OcppConfigurationKey[] @relation("ConfigKeySetBy")
   costCentersAsPayer      CostCenter[]     @relation("CostCenterPayerUser")
   driverContracts         DriverContract[]
@@ -117,26 +119,41 @@ model UserCredential {
 model Organization {
   // ── Sprint 0 (ADR 0001) ──────────────────────────────────────────
   id                  String              @id @default(uuid()) @db.Uuid
-  slug                String              @unique
   displayName         String              @map("display_name")
   countryCode         String              @map("country_code") // ISO 3166-1 alpha-2
   status              OrgStatus           @default(active)
   createdAt           DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt           DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  // ── Profile enrichment per ADR 0010 (Sprint 2.6) ─────────────────
+  // ── Profile per ADR 0014 (Iceland-aligned, Fyrirtækjaskrá fields) ─
+  // kennitala is the canonical disambiguator now that slug is gone.
+  // legalName + legalForm + legalFormCode mirror Fyrirtækjaskrá's
+  // (heiti, rekstrarform). postalAddress + legalAddress carry the
+  // structured address shape ({ street, postalCode, city }).
+  // municipalityCode is the 4-digit Hagstofa code; municipalityName
+  // is the denormalised label for display.
   legalName           String?             @map("legal_name")
-  legalForm           String?             @map("legal_form")
+  legalForm           String?             @map("legal_form")             // Human label, e.g. "Hlutafélag, almennt (hf)"
+  legalFormCode       String?             @map("legal_form_code")        // Fyrirtækjaskrá code, e.g. "D1"
   kennitala           String?             @unique
   vskNr               String?             @map("vsk_nr")
   leiCode             String?             @map("lei_code")
   defaultCurrency     String              @map("default_currency") @default("ISK")
-  addresses           Json                @default("{}") @db.JsonB
-  contacts            Json                @default("{}") @db.JsonB
+  postalAddress       Json?               @map("postal_address") @db.JsonB
+  legalAddress        Json?               @map("legal_address") @db.JsonB
+  municipalityCode    String?             @map("municipality_code")
+  municipalityName    String?             @map("municipality_name")
   branding            Json                @default("{}") @db.JsonB
   regulatorLicenceNo  String?             @map("regulator_licence_no")
   roles               OrganizationRole[]  @default([])
   notes               String?             @db.Text
+
+  // ── Main contact (ADR 0014) ──────────────────────────────────────
+  // FK to User. Nullable; SET NULL on user delete so the org row
+  // survives a contact's offboarding. UI ensures the picker only
+  // surfaces users with an active Membership in this org.
+  mainContactUserId   String?             @map("main_contact_user_id") @db.Uuid
+  mainContact         User?               @relation("OrgMainContact", fields: [mainContactUserId], references: [id], onDelete: SetNull)
 
   // ── Existing relations (ChargerHost / ChargerServicePlan dropped per ADR 0009) ─
   memberships         Membership[]
@@ -1755,28 +1772,25 @@ model WebhookDeadLetter {
 // 21-value enum supporting multi-role Org rows.
 // ─────────────────────────────────────────────────────────────────────────────
 
+// OCPI-aligned tenant taxonomy (ADR 0014). Values describe who the
+// org IS, not billing roles (those belong on Contract / CostCenter /
+// DriverContract). Trimmed from the original 21-value set; dropped
+// values were unused by any code consumer and conflated identity
+// with relationships.
 enum OrganizationRole {
-  csms_provider
-  operator
-  service_contractor
-  installer
-  vendor
-  asset_owner
-  payer
-  beneficiary
-  customer
-  retailer
-  dso
-  tso
-  producer
-  aggregator
-  public_charging
-  home_charging
-  emsp
-  roaming_hub
-  payment_processor
-  insurance_provider
-  regulator
+  cpo                   // Charge Point Operator (OCPI)
+  emsp                  // E-Mobility Service Provider (OCPI)
+  hub                   // Roaming hub (OCPI)
+  nsp                   // Navigation/data provider (OCPI)
+  site_host             // Owns the parking/building
+  service_contractor    // Performs maintenance / installation
+  installer             // Sub-set of service_contractor; physical install
+  vendor                // Hardware vendor (Zaptec, Easee, …)
+  regulator             // Regulatory body
+  dso                   // Distribution System Operator
+  tso                   // Transmission System Operator
+  retailer              // Electricity retailer
+  payment_processor     // Stripe, Adyen, …
 
   @@schema("tenancy")
 }

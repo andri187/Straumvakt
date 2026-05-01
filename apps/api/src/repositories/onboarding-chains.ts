@@ -12,7 +12,6 @@ import { recordAuditAction } from "../lib/audit";
 
 export interface OnboardingChainResult {
   orgId: string;
-  orgSlug: string;
   propertyId: string;
   siteId: string;
   chargingStationId: string;
@@ -31,22 +30,14 @@ function generatePassword(): string {
   return hex;
 }
 
-function buildOrgAddresses(input: OnboardingChainInput): unknown {
-  const street = input.orgAddressStreet;
-  const city = input.orgAddressCity;
-  const postalCode = input.orgAddressPostalCode;
-  if (!street && !city && !postalCode) return {};
-  return {
-    primary: { street, city, postal_code: postalCode, country: input.orgCountryCode },
-  };
-}
-
-function buildOrgContacts(input: OnboardingChainInput): unknown {
-  const name = input.orgContactName;
-  const email = input.orgContactEmail;
-  const phone = input.orgContactPhone;
-  if (!name && !email && !phone) return {};
-  return { primary: { name, email, phone } };
+function buildOrgPostalAddress(
+  input: OnboardingChainInput,
+): { street: string; postalCode: string; city: string } | null {
+  const street = input.orgAddressStreet ?? "";
+  const city = input.orgAddressCity ?? "";
+  const postalCode = input.orgAddressPostalCode ?? "";
+  if (!street && !city && !postalCode) return null;
+  return { street, postalCode, city };
 }
 
 function buildPropertyAddress(input: OnboardingChainInput): unknown {
@@ -73,7 +64,6 @@ export async function createOnboardingChain(
     async (tx) => {
     const org = await tx.organization.create({
       data: {
-        slug: input.orgSlug,
         displayName: input.orgDisplayName,
         countryCode: input.orgCountryCode,
         kennitala: input.orgKennitala,
@@ -85,10 +75,9 @@ export async function createOnboardingChain(
         regulatorLicenceNo: input.orgRegulatorLicenceNo,
         notes: input.orgNotes,
         roles: input.orgRoles,
-        addresses: buildOrgAddresses(input) as object,
-        contacts: buildOrgContacts(input) as object,
+        postalAddress: buildOrgPostalAddress(input) ?? undefined,
       },
-      select: { id: true, slug: true },
+      select: { id: true },
     });
 
     const property = await tx.property.create({
@@ -180,7 +169,6 @@ export async function createOnboardingChain(
 
     return {
       orgId: org.id,
-      orgSlug: org.slug,
       propertyId: property.id,
       siteId: site.id,
       chargingStationId: siteAsset.id,

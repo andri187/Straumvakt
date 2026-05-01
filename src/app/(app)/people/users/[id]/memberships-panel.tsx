@@ -24,7 +24,7 @@ export function MembershipsPanel({
 }: {
   userId: string;
   memberships: UserMembershipSummary[];
-  availableOrgs: { id: string; slug: string; displayName: string }[];
+  availableOrgs: { id: string; kennitala: string | null; displayName: string }[];
 }) {
   const router = useRouter();
   const [busyKey, setBusyKey] = useState<string | null>(null);
@@ -127,7 +127,7 @@ export function MembershipsPanel({
               >
                 {m.orgDisplayName}
               </Link>
-              <p className="font-mono text-[11px] text-ink-500">{m.orgSlug}</p>
+              <p className="font-mono text-[11px] text-ink-500">{m.orgId.slice(0, 8)}</p>
             </div>
             <div className="flex items-center gap-2">
               <span

@@ -79,6 +79,8 @@ model User {
   configKeysSet           OcppConfigurationKey[] @relation("ConfigKeySetBy")
   costCentersAsPayer      CostCenter[]     @relation("CostCenterPayerUser")
   driverContracts         DriverContract[]
+  // ── ADR 0014 ──
+  orgsAsMainContact       Organization[]   @relation("OrgMainContact")
 
   @@map("users")
   @@schema("identity")
@@ -110,26 +112,32 @@ model UserCredential {
 model Organization {
   // ── Sprint 0 (ADR 0001) ──────────────────────────────────────────
   id                  String              @id @default(uuid()) @db.Uuid
-  slug                String              @unique
   displayName         String              @map("display_name")
   countryCode         String              @map("country_code") // ISO 3166-1 alpha-2
   status              OrgStatus           @default(active)
   createdAt           DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt           DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  // ── Profile enrichment per ADR 0010 (Sprint 2.6) ─────────────────
+  // ── Profile per ADR 0014 (Iceland-aligned, Fyrirtækjaskrá fields) ─
   legalName           String?             @map("legal_name")
   legalForm           String?             @map("legal_form")
+  legalFormCode       String?             @map("legal_form_code")
   kennitala           String?             @unique
   vskNr               String?             @map("vsk_nr")
   leiCode             String?             @map("lei_code")
   defaultCurrency     String              @map("default_currency") @default("ISK")
-  addresses           Json                @default("{}") @db.JsonB
-  contacts            Json                @default("{}") @db.JsonB
+  postalAddress       Json?               @map("postal_address") @db.JsonB
+  legalAddress        Json?               @map("legal_address") @db.JsonB
+  municipalityCode    String?             @map("municipality_code")
+  municipalityName    String?             @map("municipality_name")
   branding            Json                @default("{}") @db.JsonB
   regulatorLicenceNo  String?             @map("regulator_licence_no")
   roles               OrganizationRole[]  @default([])
   notes               String?             @db.Text
+
+  // ── Main contact (ADR 0014) ──────────────────────────────────────
+  mainContactUserId   String?             @map("main_contact_user_id") @db.Uuid
+  mainContact         User?               @relation("OrgMainContact", fields: [mainContactUserId], references: [id], onDelete: SetNull)
 
   // ── Existing relations (ChargerHost / ChargerServicePlan dropped per ADR 0009) ─
   memberships         Membership[]
@@ -1719,28 +1727,21 @@ model WebhookDeadLetter {
 // 21-value enum supporting multi-role Org rows.
 // ─────────────────────────────────────────────────────────────────────────────
 
+// OCPI-aligned tenant taxonomy (ADR 0014). Trimmed from 21 to 13.
 enum OrganizationRole {
-  csms_provider
-  operator
+  cpo
+  emsp
+  hub
+  nsp
+  site_host
   service_contractor
   installer
   vendor
-  asset_owner
-  payer
-  beneficiary
-  customer
-  retailer
+  regulator
   dso
   tso
-  producer
-  aggregator
-  public_charging
-  home_charging
-  emsp
-  roaming_hub
+  retailer
   payment_processor
-  insurance_provider
-  regulator
 
   @@schema("tenancy")
 }

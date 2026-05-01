@@ -34,7 +34,6 @@ export interface UserSummary {
 
 export interface UserMembershipSummary {
   orgId: string;
-  orgSlug: string;
   orgDisplayName: string;
   role: MembershipRole;
   createdAt: string;

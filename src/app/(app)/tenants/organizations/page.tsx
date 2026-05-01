@@ -68,7 +68,7 @@ export default async function OrganizationsPage({
               <thead className="text-xs text-ink-400">
                 <tr>
                   <th className="px-5 py-2 font-medium">Display name</th>
-                  <th className="px-5 py-2 font-medium">Slug</th>
+                  <th className="px-5 py-2 font-medium">Kennitala</th>
                   <th className="px-5 py-2 font-medium">Country</th>
                   <th className="px-5 py-2 font-medium">Status</th>
                   <th className="px-5 py-2"></th>
@@ -78,7 +78,11 @@ export default async function OrganizationsPage({
                 {orgs.map((o) => (
                   <tr key={o.id} className="border-t border-bg-border/40">
                     <td className="px-5 py-2 font-medium text-ink-50">{o.displayName}</td>
-                    <td className="px-5 py-2 font-mono text-xs text-ink-300">{o.slug}</td>
+                    <td className="px-5 py-2 font-mono text-xs text-ink-300">
+                      {o.kennitala
+                        ? `${o.kennitala.slice(0, 6)}-${o.kennitala.slice(6)}`
+                        : <span className="text-ink-500">—</span>}
+                    </td>
                     <td className="px-5 py-2 text-ink-200">{o.countryCode}</td>
                     <td className="px-5 py-2"><StatusBadge status={o.status} /></td>
                     <td className="px-5 py-2 text-right">
