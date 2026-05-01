@@ -24,6 +24,13 @@ export interface CredentialChargerNode {
   imported: boolean;
   /** Our charging_station_id when imported, null otherwise. */
   chargingStationId: string | null;
+  /**
+   * Lifetime kWh from Zaptec per-charger detail's SignedMeterValueKwh
+   * (the OCMF-signed cumulative meter reading). Null when the field is
+   * absent — typically because Zaptec hasn't observed a session yet, or
+   * the charger has been replaced and the meter was zeroed.
+   */
+  lifetimeEnergyKWh: number | null;
 }
 
 export interface CredentialCircuitNode {

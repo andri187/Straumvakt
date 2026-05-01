@@ -29,6 +29,7 @@ import type {
   CredentialApplyResult,
 } from "@straumvakt/shared/domain/credential-management";
 import {
+  getChargerDetail,
   getInstallationHierarchy,
   getZaptecAccessToken,
   listChargers,
@@ -124,6 +125,32 @@ async function buildTreeFromAuth(
   );
   const hierarchyById = new Map(hierarchies.map((h) => [h.id, h.hierarchy]));
 
+  // Lifetime kWh enrichment — pull SignedMeterValueKwh from the
+  // per-charger detail endpoint for every charger in the tree
+  // (including decommissioned ones; that's the whole point — the
+  // operator wants to see how much energy was delivered before
+  // deciding whether to remove it). One parallel fan-out keeps the
+  // page responsive even with 50+ chargers.
+  const allZaptecChargerIds = new Set<string>();
+  for (const h of hierarchies) {
+    for (const cc of h.hierarchy?.Circuits ?? []) {
+      for (const ch of cc.Chargers ?? []) {
+        if (typeof ch.Id === "string") allZaptecChargerIds.add(ch.Id);
+      }
+    }
+  }
+  const lifetimeKWhById = new Map<string, number | null>();
+  await Promise.all(
+    Array.from(allZaptecChargerIds).map(async (id) => {
+      const r = await getChargerDetail(auth.accessToken, id);
+      const kwh =
+        r.ok && r.value && typeof r.value.SignedMeterValueKwh === "number"
+          ? (r.value.SignedMeterValueKwh as number)
+          : null;
+      lifetimeKWhById.set(id, kwh);
+    }),
+  );
+
   // Pull our DB state — every OcppIdentity matched to this credential's
   // chargers. Installation match = vendor_installation_ref equals the
   // Zaptec installation Id; OR credentials_id FK equals our credential.
@@ -183,6 +210,7 @@ async function buildTreeFromAuth(
               isOnline: isOnlineByZaptecId.get(ch.Id) === true,
               imported: ourStationId != null,
               chargingStationId: ourStationId,
+              lifetimeEnergyKWh: lifetimeKWhById.get(ch.Id) ?? null,
             };
           }),
       }));

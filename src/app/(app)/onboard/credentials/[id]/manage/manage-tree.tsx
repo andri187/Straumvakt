@@ -453,13 +453,36 @@ function ChargerLine({
           decommissioned
         </span>
       )}
-      <span className="ml-auto flex items-center gap-2 text-[10px] text-ink-500">
+      <span className="ml-auto flex items-center gap-2 text-[10px]">
+        <span
+          className="font-mono text-ink-300"
+          title={
+            charger.lifetimeEnergyKWh != null
+              ? "Lifetime energy delivered (Zaptec SignedMeterValueKwh)"
+              : "Lifetime energy unavailable"
+          }
+        >
+          {formatKwh(charger.lifetimeEnergyKWh)} kWh
+        </span>
         {charger.imported ? (
           <span className="text-emerald-300/80">in DB</span>
         ) : (
-          <span>not in DB</span>
+          <span className="text-ink-500">not in DB</span>
         )}
       </span>
     </label>
   );
+}
+
+/**
+ * Format kWh as ###.###,## (Icelandic / European: period thousands,
+ * comma decimal). Returns em-dash for null. Matches the format used
+ * on /sites so operators see consistent numbers across views.
+ */
+function formatKwh(kwh: number | null): string {
+  if (kwh == null) return "—";
+  const fixed = kwh.toFixed(2);
+  const [intPart, fracPart] = fixed.split(".");
+  const grouped = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  return `${grouped},${fracPart}`;
 }
