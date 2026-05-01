@@ -57,9 +57,15 @@ function aggregateOcppState(chargers: SiteTreeChargerNode[]): {
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Sites" };
 
-export default async function SitesPage() {
+export default async function SitesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ "show-decom"?: string }>;
+}) {
+  const params = await searchParams;
+  const showDecom = params["show-decom"] === "1";
   const { tree } = await apiFetchServerJson<{ tree: SiteTreeNode[] }>(
-    "/api/admin/sites/tree",
+    `/api/admin/sites/tree${showDecom ? "?includeDecommissioned=1" : ""}`,
   );
 
   return (
@@ -71,9 +77,12 @@ export default async function SitesPage() {
         primaryAction={{ href: "/sites/new", label: "Add site" }}
       />
 
-      <h2 className="mb-2 text-sm font-semibold uppercase tracking-brand text-ink-300">
-        All sites ({tree.length})
-      </h2>
+      <div className="mb-2 flex items-baseline justify-between gap-3">
+        <h2 className="text-sm font-semibold uppercase tracking-brand text-ink-300">
+          All sites ({tree.length})
+        </h2>
+        <DecomToggle showDecom={showDecom} />
+      </div>
       {tree.length === 0 ? (
         <div className="rounded border border-dashed border-bg-border p-6 text-center text-sm text-ink-500">
           No sites yet.
@@ -86,6 +95,37 @@ export default async function SitesPage() {
         </div>
       )}
     </div>
+  );
+}
+
+// Tree-wide toggle for whether decommissioned chargers (Zaptec
+// Active=false) appear in the rendered tree. Default OFF — the
+// at-a-glance fleet view is for live hardware. Operators flip it ON
+// when they need to audit retired chargers (e.g. "did we lose
+// lifetime kWh on that?"). Server component re-fetches with
+// ?includeDecommissioned=1 so aggregates re-derive from the visible
+// set rather than dragging in retired hardware's totals.
+function DecomToggle({ showDecom }: { showDecom: boolean }) {
+  const href = (showDecom ? "/sites" : "/sites?show-decom=1") as Parameters<
+    typeof Link
+  >[0]["href"];
+  return (
+    <Link
+      href={href}
+      className={
+        "rounded border px-2 py-1 text-[11px] transition " +
+        (showDecom
+          ? "border-amber-500/50 bg-amber-950/30 text-amber-200 hover:bg-amber-950/50"
+          : "border-bg-border bg-bg-base/40 text-ink-400 hover:bg-bg-raised hover:text-ink-100")
+      }
+      title={
+        showDecom
+          ? "Hide decommissioned chargers (Zaptec Active=false)"
+          : "Show decommissioned chargers — retired hardware that's still in our DB"
+      }
+    >
+      {showDecom ? "Hide decommissioned" : "Show decommissioned"}
+    </Link>
   );
 }
 
@@ -327,6 +367,14 @@ function ChargerLine({ charger, indent }: { charger: SiteTreeChargerNode; indent
       </Link>
       {secondary && (
         <span className="font-mono text-[10px] text-ink-500 truncate">{secondary}</span>
+      )}
+      {charger.decommissioned === true && (
+        <span
+          className="rounded bg-amber-950/40 px-1 py-0.5 text-[9px] text-amber-300"
+          title="Zaptec marks this charger Active=false — retired on the vendor side. Lifetime kWh is preserved from our cache."
+        >
+          decommissioned
+        </span>
       )}
       <span className="ml-auto flex items-center gap-2 text-[11px] text-ink-400">
         <span>{statusText}</span>

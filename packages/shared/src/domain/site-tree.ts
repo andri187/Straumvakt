@@ -76,6 +76,14 @@ export interface SiteTreeChargerNode {
    * unreachable / no credential available).
    */
   authRequired: boolean | null;
+  /**
+   * Decommissioned in Zaptec — bulk list returned `Active: false`.
+   * The hardware row still exists in our DB (and may keep its
+   * lifetime kWh), but the operator has retired it on the vendor
+   * side. null = unknown (non-Zaptec / vendor API unreachable).
+   * /sites toggles visibility on this flag; defaults to hidden.
+   */
+  decommissioned: boolean | null;
   status: string;
   lastSeenAt: string | null;
   connectorSummary: string;

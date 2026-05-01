@@ -52,6 +52,12 @@ interface ZaptecLiveSnapshot {
   onlineSince: string | null;
   /** Lifetime kWh from charger detail's SignedMeterValueKwh. Null when missing. */
   lifetimeEnergyKWh: number | null;
+  /**
+   * Zaptec bulk list reported Active=false — operator has retired the
+   * charger on the vendor side. Drives the /sites "show decommissioned"
+   * toggle. null when the bulk list didn't include an Active value.
+   */
+  decommissioned: boolean | null;
 }
 
 /**
@@ -141,6 +147,12 @@ async function buildApiActiveMap(
             vendorOnline: ch.IsOnline === true,
             onlineSince: null,
             lifetimeEnergyKWh: null,
+            // Bulk list returns Active as boolean. null when the field
+            // is missing entirely (older Zaptec firmware / unexpected
+            // shape) so the UI can distinguish "explicitly active" from
+            // "we don't know".
+            decommissioned:
+              typeof ch.Active === "boolean" ? ch.Active === false : null,
           });
           if (ch.IsOnline === true) {
             onlineToFetch.push({ vendorId: ch.Id, stationId });
@@ -217,7 +229,9 @@ async function buildApiActiveMap(
 export async function listSiteTree(
   db: PrismaClient,
   kek?: string,
+  options?: { includeDecommissioned?: boolean },
 ): Promise<SiteTreeNode[]> {
+  const includeDecommissioned = options?.includeDecommissioned ?? false;
   // pending_discoveries is the second source of "online" — populated
   // by the gateway's no-auth hook when a charger connects but doesn't
   // present valid Basic-Auth. Without this, a charger connecting
@@ -382,6 +396,7 @@ export async function listSiteTree(
         liveSnapshot?.lifetimeEnergyKWh != null && c.lifetimeKwhCached != null
           ? Math.max(liveSnapshot.lifetimeEnergyKWh, c.lifetimeKwhCached)
           : (liveSnapshot?.lifetimeEnergyKWh ?? c.lifetimeKwhCached ?? null),
+      decommissioned: liveSnapshot?.decommissioned ?? null,
       status: identity?.status ?? "—",
       lastSeenAt: lastSeen ? new Date(lastSeen).toISOString() : null,
       connectorSummary,
@@ -435,6 +450,15 @@ export async function listSiteTree(
     circuitsBySite.set(cir.siteId, list);
   }
 
+  // When the operator is hiding decommissioned chargers (the default),
+  // we drop them out of the rendered tree entirely — including from
+  // their parent's kWh totals and online/offline counts. Keeps the
+  // numbers consistent with what's visible. Toggle ON for the
+  // decommissioned-fleet view (sums then include retired hardware's
+  // lifetime energy).
+  const visible = (n: SiteTreeChargerNode): boolean =>
+    includeDecommissioned || n.decommissioned !== true;
+
   return sites.map<SiteTreeNode>((s) => {
     const siteChargers = chargersBySite.get(s.id) ?? [];
     const siteInstallations = installationsBySite.get(s.id) ?? [];
@@ -450,13 +474,15 @@ export async function listSiteTree(
       const circuitNodes: SiteTreeCircuitNode[] = installCircuits.map((cir) => {
         const cirChargers = installChargers
           .filter((c) => c.circuitId === cir.id)
-          .map(chargerNode);
+          .map(chargerNode)
+          .filter(visible);
         return circuitNode(cir, cirChargers);
       });
 
       const directChargers = installChargers
         .filter((c) => c.circuitId == null)
-        .map(chargerNode);
+        .map(chargerNode)
+        .filter(visible);
 
       let instOn = 0;
       let instOff = 0;
@@ -489,7 +515,8 @@ export async function listSiteTree(
       .map((cir) => {
         const kids = siteChargers
           .filter((c) => c.installationId == null && c.circuitId === cir.id)
-          .map(chargerNode);
+          .map(chargerNode)
+          .filter(visible);
         kids.forEach((n) => (n.online ? online++ : offline++));
         return circuitNode(cir, kids);
       });
@@ -497,7 +524,8 @@ export async function listSiteTree(
     // Orphan chargers (no installation, no circuit).
     const orphanChargers = siteChargers
       .filter((c) => c.installationId == null && c.circuitId == null)
-      .map(chargerNode);
+      .map(chargerNode)
+      .filter(visible);
     orphanChargers.forEach((n) => (n.online ? online++ : offline++));
 
     const allSiteChargers: SiteTreeChargerNode[] = [
