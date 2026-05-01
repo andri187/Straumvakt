@@ -1,15 +1,9 @@
 // Per-charger Technical Read.
 //
-// Mirrors the structural skeleton at /technical-read but every card
-// is populated with real data for THIS charger. Source tagging on
-// each section follows the same convention as the documentation
-// view: "API" = vendor REST (Zaptec live), "OCPP" = our gateway
-// projections, "BOTH" = field exists on both sides and we merge
-// them here.
-//
-// Sections that haven't been wired yet render their original
-// placeholders — clearly marked so the operator knows it's pending
-// rather than empty/broken.
+// Mirrors the /technical-read layout 1:1 (same section order, same
+// titles, same hints, same grid layout). Each card's body is the
+// original PlaceholderRow when the data isn't wired yet, OR an
+// InfoRow with the real value for THIS charger when we have it.
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -17,9 +11,11 @@ import { cookies } from "next/headers";
 import {
   MapPin,
   ShieldCheck,
+  Clock,
   Radio,
   Signal,
   Thermometer,
+  AlertTriangle,
   Zap,
 } from "lucide-react";
 import { Topbar } from "@/components/topbar";
@@ -40,16 +36,11 @@ export const metadata = { title: "Technical Read · charger" };
 
 const DASH = "—";
 
-function fmt(v: unknown, suffix = ""): string {
-  if (v == null) return DASH;
-  if (typeof v === "number") return Number.isFinite(v) ? `${v}${suffix}` : DASH;
-  if (typeof v === "boolean") return v ? "yes" : "no";
-  if (typeof v === "string") return v.length > 0 ? `${v}${suffix}` : DASH;
-  return DASH;
-}
-function fmtKWh(v: number | null): string {
-  if (v == null) return DASH;
-  return `${v.toFixed(3)} kWh`;
+function fmtDate(v: string | null): string {
+  if (!v) return DASH;
+  const d = new Date(v);
+  if (!Number.isFinite(d.getTime())) return DASH;
+  return d.toLocaleString();
 }
 function fmtKW(w: number | null): string {
   if (w == null) return DASH;
@@ -66,9 +57,6 @@ export default async function ChargerTechnicalReadPage({
   const token = jar.get(adminSessionConfig.SESSION_COOKIE_NAME)?.value;
   const session = await verifyAdminSession(token);
 
-  // Fan out the same two fetches the profile page does — server-side,
-  // parallel, so the only added latency over the profile is the
-  // technical-read Zaptec call (which the profile already pays for).
   const detailRes = await apiFetchServer(`/api/admin/chargers/${id}`);
   if (detailRes.status === 404) notFound();
   if (!detailRes.ok) throw new Error(`HTTP ${detailRes.status}`);
@@ -81,20 +69,23 @@ export default async function ChargerTechnicalReadPage({
     .catch(() => null);
 
   const evse = charger.evses[0];
-  const connector = evse?.connectors[0];
   const identity = charger.ocppIdentities[0];
-
-  const fresh = technicalRead?.fresh === true;
   const t = technicalRead;
+  const fresh = t?.fresh === true;
 
   return (
     <>
-      <Topbar title={`Technical Read · ${identity?.identityString ?? charger.serialNumber ?? id.slice(0, 8)}`} email={session?.email} />
+      <Topbar
+        title={`Technical Read — ${identity?.identityString ?? charger.serialNumber ?? id.slice(0, 8)}`}
+        email={session?.email}
+      />
       <PageShell
         title={`Technical Read — ${identity?.identityString ?? charger.serialNumber ?? id.slice(0, 8)}`}
-        description={`Live diagnostics for the charger. Vendor data fetched from Zaptec each page load; OCPP data populated by gateway projections. ${
-          fresh ? "Vendor reachable." : "Vendor data unreachable — fields fall back where possible."
-        }`}
+        description={
+          fresh
+            ? "Per-charger diagnostics — vendor data live from Zaptec, OCPP data from gateway projections. Fields with a placeholder haven't been wired into the live pipeline yet."
+            : "Per-charger diagnostics — Zaptec vendor data is currently unreachable; rows that need it render placeholders."
+        }
       >
         <div className="mb-3 text-xs text-ink-400">
           <Link
@@ -108,54 +99,69 @@ export default async function ChargerTechnicalReadPage({
         {/* Identity strip */}
         <div className="mb-4 space-y-2">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge text={`Org: ${charger.orgDisplayName}`} />
-            {charger.installationDisplayName && <Badge text={`Installation: ${charger.installationDisplayName}`} />}
-            {charger.warrantyExpires && (
-              <Badge text={`Warranty: ${new Date(charger.warrantyExpires).getTime() > Date.now() ? "in" : "out"} (${charger.warrantyExpires})`} />
-            )}
-            {charger.serialNumber && <Badge text={`Serial: ${charger.serialNumber}`} mono />}
+            <Badge text={`CPO: ${charger.orgDisplayName}`} />
+            <Badge text={`Owner: ${charger.orgDisplayName}`} />
+            <Badge text={`Warranty: ${fmtWarranty(charger.warrantyExpires)}`} />
           </div>
           <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-ink-400">
             <span>
               <MapPin className="mr-1 inline h-3 w-3" />
-              <span className="text-ink-300">{charger.siteDisplayName}</span>
-              {charger.circuitDisplayName && <> · <span className="text-ink-300">{charger.circuitDisplayName}</span></>}
+              <span className="text-ink-300">
+                {charger.installationDisplayName ?? charger.siteDisplayName}
+                {charger.circuitDisplayName ? ` · ${charger.circuitDisplayName}` : ""}
+              </span>
             </span>
-            <span className="font-mono text-[10px] text-ink-500">{charger.chargingStationId}</span>
+            <span className="font-mono text-[10px] text-ink-500">{charger.chargingStationId.slice(0, 8)}</span>
           </div>
         </div>
 
-        <SectionDivider source="api" hint="Vendor REST API · Zaptec live" />
+        {/* API section divider */}
+        <SectionDivider source="api" hint="Vendor REST API · Zaptec / Easee" />
 
-        {/* Active alarms — from warningsBitmask */}
+        {/* Active alarms */}
         <TechSection title="Active alarms" source="api" hint="StateId 803/804">
           {t?.warningsBitmask == null ? (
-            <PlaceholderRow label="Vendor data unreachable" trailing="—" />
-          ) : t.warningsBitmask === 0 ? (
-            <InfoRow label="Notifications + Warnings bitmask" info="0 (none)" mono />
+            <PlaceholderRow label="active alarm bitmask" trailing="vendor data unreachable" />
           ) : (
-            <InfoRow label="Active warnings bitmask" info={`0x${t.warningsBitmask.toString(16)}`} mono />
+            <InfoRow
+              label="active alarm bitmask"
+              info={
+                t.warningsBitmask === 0
+                  ? "0 (none — empty when healthy)"
+                  : `0x${t.warningsBitmask.toString(16)} (warnings active — see Zaptec docs §6.1 SmartWarnings)`
+              }
+              mono
+            />
           )}
         </TechSection>
 
         {/* Live dashboard */}
-        <TechSection title="Live dashboard" source="api" hint="kW · operation mode · phases" className="mt-4">
+        <TechSection title="Live dashboard" source="api" hint="kW hero + status + phase strip" className="mt-4">
           <div className="grid gap-3 sm:grid-cols-3">
-            <DashboardCell icon={Zap} label="Charging power" value={fmtKW(t?.totalChargePowerW ?? null)} />
-            <DashboardCell icon={ShieldCheck} label="Operation mode" value={t?.chargerOperationMode ?? DASH} />
-            <DashboardCell icon={Radio} label="Connector type" value={connector?.type ?? DASH} />
-          </div>
-          <div className="mt-3 grid gap-3 sm:grid-cols-3 text-[11px] font-mono">
-            {t?.phases.map((p, i) => (
-              <div key={i} className="rounded border border-bg-border/40 bg-bg-base/30 p-2">
-                <p className="text-[10px] uppercase tracking-brand text-ink-500">L{i + 1}</p>
-                <p className="text-ink-200">
-                  {p.voltageV != null ? `${p.voltageV.toFixed(0)} V` : DASH}
-                  {" · "}
-                  {p.currentA != null ? `${p.currentA.toFixed(1)} A` : DASH}
-                </p>
-              </div>
-            )) ?? <PlaceholderRow label="phase data unavailable" trailing="—" />}
+            <DashboardColumn
+              icon={Zap}
+              label="Charging power"
+              trailing={fmtKW(t?.totalChargePowerW ?? null)}
+            />
+            <DashboardColumn
+              icon={ShieldCheck}
+              label="Operation mode"
+              trailing={t?.chargerOperationMode ?? DASH}
+            />
+            <DashboardColumn
+              icon={Radio}
+              label="Phases"
+              trailing={
+                t?.phases
+                  ? t.phases
+                      .map(
+                        (p, i) =>
+                          `L${i + 1} ${p.voltageV != null ? `${p.voltageV.toFixed(0)}V` : "—"} / ${p.currentA != null ? `${p.currentA.toFixed(1)}A` : "—"}`,
+                      )
+                      .join(" · ")
+                  : DASH
+              }
+            />
           </div>
         </TechSection>
 
@@ -163,106 +169,173 @@ export default async function ChargerTechnicalReadPage({
         <section className="mt-4 grid grid-cols-2 gap-3 rounded-lg border border-bg-border bg-bg-surface/50 p-4 sm:grid-cols-4 lg:grid-cols-6">
           <Metric icon={Signal} label="Signal" value={t?.signalDbm != null ? `${t.signalDbm} dBm` : DASH} />
           <Metric icon={Radio} label="Comm" value={t?.communicationMode ?? DASH} />
-          <Metric icon={ShieldCheck} label="OCPP" value={
-            t?.authenticationType == null
-              ? DASH
-              : t.authenticationType === 2 || t.authenticationType === 3
-                ? (t.propertyAuthenticationDisabled ? "auth off" : "ready")
-                : "not OCPP"
-          } />
-          <Metric icon={ShieldCheck} label="Firmware" value={t?.firmwareVersion ?? charger.firmwareVersion ?? DASH} mono />
+          <Metric icon={ShieldCheck} label="OCPP" value={ocppPillValue(t)} />
+          <Metric
+            icon={ShieldCheck}
+            label="Firmware"
+            value={t?.firmwareVersion ?? charger.firmwareVersion ?? DASH}
+            mono
+          />
           <Metric icon={ShieldCheck} label="Grid" value={t?.networkType ?? DASH} />
-          <Metric icon={Thermometer} label="Temp" value={t?.internalTemperatureC != null ? `${t.internalTemperatureC.toFixed(1)} °C` : DASH} />
+          <Metric
+            icon={Thermometer}
+            label="Temp"
+            value={t?.internalTemperatureC != null ? `${t.internalTemperatureC.toFixed(1)} °C` : DASH}
+          />
         </section>
+
+        {/* Session timeline */}
+        <TechSection title="Session timeline" source="api" hint="standby → connected → charging → paused → completed" className="mt-5">
+          <div className="flex items-center justify-between gap-2 text-[11px]">
+            {["Standby", "Connected", "Charging", "Paused", "Completed"].map((step, i, a) => (
+              <span key={step} className="flex flex-1 items-center">
+                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-bg-border/60 bg-bg-base/40 font-mono text-ink-500">
+                  {i + 1}
+                </span>
+                <span className="ml-2 text-ink-500 italic">{step}</span>
+                {i < a.length - 1 ? <span className="mx-2 h-px flex-1 bg-bg-border/40" /> : null}
+              </span>
+            ))}
+          </div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 text-xs">
+            <PlaceholderRow label="Last session kWh" trailing="from CompletedSession blob" />
+            <PlaceholderRow label="Last session ended" trailing="ISO timestamp" />
+          </div>
+        </TechSection>
+
+        {/* Completed session (signed meter curve) */}
+        <TechSection title="Completed session — signed meter curve" source="api" hint="StateId 553/554/555 OCMF" className="mt-5">
+          <PlaceholderRow label="kWh delivered" trailing="signed meter value" />
+          <PlaceholderRow label="Curve" trailing="time-series sparkline" />
+          <PlaceholderRow label="Signature" trailing="OCMF envelope · validated" />
+          <InfoRow label="MID" info={t?.mid ?? DASH} mono />
+        </TechSection>
 
         {/* Charge history + Firmware */}
         <div className="mt-5 grid gap-5 lg:grid-cols-2">
           <TechSection title="Charge history" source="api" hint="last N sessions">
-            <PlaceholderRow label="Session list" trailing="not yet wired — Zaptec /api/chargehistory" />
+            <PlaceholderRow label="Session list" trailing="paginated · most-recent-first" />
+            <PlaceholderRow label="Per row" trailing="start / end / kWh / kr / driver tag" />
           </TechSection>
-          <TechSection title="Firmware" source="api" hint="StateId 908/909/911/912">
-            <InfoRow label="Computer SW (911)" info={t?.firmwareVersion ?? charger.firmwareVersion ?? DASH} mono />
-            <PlaceholderRow label="Mainboard SW (908)" trailing="not yet surfaced" />
-            <PlaceholderRow label="Smart bootloader (912)" trailing="not yet surfaced" />
+          <TechSection title="Firmware" source="api" hint="installation rollout state">
+            <InfoRow label="Computer SW" info={t?.firmwareVersion ?? charger.firmwareVersion ?? DASH} mono />
+            <PlaceholderRow label="Mainboard SW" trailing="StateId 909" />
+            <PlaceholderRow label="Smart bootloader" trailing="StateId 911/912" />
+            <PlaceholderRow label="Rollout cohort" trailing="installation-wide schedule" />
           </TechSection>
         </div>
 
         {/* DLB + Authentication */}
         <div className="mt-5 grid gap-5 lg:grid-cols-2">
-          <TechSection title="Dynamic load balancing" source="api" hint="installation-level">
-            <PlaceholderRow label="UseLoadBalancing / MaxCurrent / AvailableCurrent" trailing="installation fetch not wired here yet" />
+          <TechSection title="Dynamic load balancing" source="api" hint="installation-level controller">
+            <PlaceholderRow label="UseLoadBalancing" trailing="installation flag" />
+            <PlaceholderRow label="MaxCurrent" trailing="installation cap (A)" />
+            <PlaceholderRow label="AvailableCurrent" trailing="real-time headroom" />
+            <InfoRow
+              label="Per-charger allocation"
+              info={t?.chargeCurrentSetA != null ? `${t.chargeCurrentSetA.toFixed(1)} A` : DASH}
+            />
           </TechSection>
           <TechSection title="Authentication" source="api" hint="charger + installation">
-            <InfoRow label="Auth mode" info={t?.authenticationTypeLabel ?? DASH} />
-            <InfoRow label="Basic-Auth required" info={
-              t?.propertyAuthenticationDisabled == null
-                ? DASH
-                : t.propertyAuthenticationDisabled
-                  ? "no — disabled"
-                  : "yes"
-            } />
-            <InfoRow label="Default idTag" info={t?.ocppDefaultIdTag ?? DASH} mono />
-            <InfoRow label="Local auth list version (751)" info={t?.authListVersion != null ? String(t.authListVersion) : DASH} mono />
+            <InfoRow
+              label="IsRequiredAuthentication"
+              info={
+                t?.propertyAuthenticationDisabled == null
+                  ? DASH
+                  : t.propertyAuthenticationDisabled
+                    ? "no — disabled"
+                    : "yes"
+              }
+            />
+            <InfoRow label="AuthType" info={t?.authenticationTypeLabel ?? DASH} />
+            <PlaceholderRow label="Last auth attempt" trailing="StateId 752" />
+            <InfoRow
+              label="Local auth list size"
+              info={t?.authListVersion != null ? `version ${t.authListVersion}` : DASH}
+              mono
+            />
           </TechSection>
         </div>
 
-        {/* Network + Hardware identity */}
+        {/* Network + Eco/Schedule */}
         <div className="mt-5 grid gap-5 lg:grid-cols-2">
-          <TechSection title="Network" source="api" hint="StateId 150 / 715 / 809 / 820">
-            <InfoRow label="NetworkType (715)" info={t?.networkType ?? DASH} />
-            <InfoRow label="Communication mode (150)" info={t?.communicationMode ?? DASH} />
-            <InfoRow label="Signal strength (809)" info={t?.signalDbm != null ? `${t.signalDbm} dBm` : DASH} />
-            <InfoRow label="Uptime (820)" info={t?.uptimeHours != null ? `${t.uptimeHours.toFixed(1)} h` : DASH} />
-          </TechSection>
-          <TechSection title="Hardware identity" source="both" hint="OCPP boot mirror + vendor live">
-            <InfoRow label="DeviceId" info={t?.deviceId ?? DASH} mono />
-            <InfoRow label="Charge box serial" info={charger.chargeBoxSerialNumber ?? t?.deviceId ?? DASH} mono />
-            <InfoRow label="MID" info={t?.mid ?? charger.meterSerialNumber ?? DASH} mono />
-            <InfoRow label="MAC (main / Wi-Fi)" info={`${t?.macMain ?? DASH} / ${t?.macWifi ?? DASH}`} mono />
-            <InfoRow label="LTE ICCID / IMSI" info={`${t?.lteIccid ?? charger.iccid ?? DASH} / ${t?.lteImsi ?? charger.imsi ?? DASH}`} mono />
-          </TechSection>
-        </div>
-
-        {/* Environment + Eco/Schedule */}
-        <div className="mt-5 grid gap-5 lg:grid-cols-2">
-          <TechSection title="Environment" source="api" hint="StateId 201/202/270">
-            <InfoRow label="Internal temperature" info={t?.internalTemperatureC != null ? `${t.internalTemperatureC.toFixed(1)} °C` : DASH} />
-            <PlaceholderRow label="Humidity (270)" trailing="not yet surfaced" />
+          <TechSection title="Network" source="api" hint="StateId 100 / 102 / 110 / 152 / 154">
+            <InfoRow label="NetworkType" info={t?.networkType ?? DASH} />
+            <InfoRow label="Communication mode" info={t?.communicationMode ?? DASH} />
+            <InfoRow
+              label="Signal strength"
+              info={t?.signalDbm != null ? `${t.signalDbm} dBm` : DASH}
+            />
+            <PlaceholderRow label="LTE roaming" trailing="StateId 803" />
           </TechSection>
           <TechSection title="Eco / Schedule" source="api" hint="installation-level rules">
-            <PlaceholderRow label="Schedule active / Window / Override" trailing="not yet wired" />
+            <PlaceholderRow label="Schedule active" trailing="installation flag" />
+            <PlaceholderRow label="Window" trailing="time-of-use start / end" />
+            <PlaceholderRow label="Override" trailing="manual operator" />
           </TechSection>
         </div>
 
-        {/* Installation features + Real-time messaging */}
+        {/* Hardware identity + Environment */}
         <div className="mt-5 grid gap-5 lg:grid-cols-2">
-          <TechSection title="Installation features" source="api">
-            <InfoRow label="Routing ID (801)" info={t?.routingId ?? DASH} mono />
-            <InfoRow label="Installation ID (800)" info={t?.installationId ?? charger.installationId ?? DASH} mono />
+          <TechSection title="Hardware identity" source="api" hint="StateId 950 / 951 / 962 / 980">
+            <InfoRow label="Serial number" info={charger.serialNumber ?? t?.serialNo ?? DASH} mono />
+            <InfoRow label="MID" info={t?.mid ?? DASH} mono />
+            <InfoRow label="MAC address" info={t?.macMain ?? DASH} mono />
+            <InfoRow
+              label="LTE identifiers"
+              info={
+                t?.lteIccid || t?.lteImsi
+                  ? `ICCID ${t.lteIccid ?? "—"} · IMSI ${t.lteImsi ?? "—"}`
+                  : `${charger.iccid ? `ICCID ${charger.iccid}` : ""}${charger.imsi ? ` · IMSI ${charger.imsi}` : ""}` || DASH
+              }
+              mono
+            />
           </TechSection>
-          <TechSection title="Real-time messaging" source="api" hint="Zaptec Service Bus push">
-            <PlaceholderRow label="Connection details" trailing="server-side only — not surfaced here" />
+          <TechSection title="Environment" source="api" hint="StateId 507 / 508 / 509 / 553">
+            <InfoRow
+              label="Internal temp 5"
+              info={t?.internalTemperatureC != null ? `${t.internalTemperatureC.toFixed(1)} °C` : DASH}
+            />
+            <PlaceholderRow label="Internal temp 6" trailing="°C" />
+            <PlaceholderRow label="Humidity" trailing="%RH" />
           </TechSection>
         </div>
 
+        {/* Installation features */}
+        <TechSection title="Installation features" source="api" hint="aggregate of installation-level toggles" className="mt-5">
+          <div className="grid gap-2 sm:grid-cols-2">
+            <PlaceholderRow label="UseLoadBalancing" />
+            <PlaceholderRow label="IsRequiredAuthentication" />
+            <InfoRow label="OcppCloudUrl" info={t?.propertyOcppUrl ?? DASH} mono />
+            <PlaceholderRow label="TimeZoneIanaName" />
+            <PlaceholderRow label="ActiveChargerCount" />
+            <PlaceholderRow label="MaxCurrent / AvailableCurrent" />
+          </div>
+        </TechSection>
+
+        {/* Real-time messaging */}
+        <TechSection title="Real-time messaging" source="api" hint="installation messaging endpoint" className="mt-5">
+          <PlaceholderRow label="Connection URL" trailing="vendor cloud URL" />
+          <PlaceholderRow label="Status" trailing="connected / disconnected" />
+          <PlaceholderRow label="Subscription topic" trailing="installation-id key" />
+        </TechSection>
+
+        {/* OCPP section divider */}
         <SectionDivider source="ocpp" hint="OCPP 1.6J · Straumvakt gateway" className="mt-8" />
 
         <div className="mt-4 grid gap-5 lg:grid-cols-2">
-          <TechSection title="OCPP connection" source="ocpp" hint="WebSocket handshake state">
-            <InfoRow label="WS URL (vendor configured)" info={t?.propertyOcppUrl ?? DASH} mono />
-            <InfoRow label="OcppIdentity status" info={identity ? "provisioned" : "—"} />
-            <InfoRow label="Last seen by gateway" info={
-              identity == null
-                ? DASH
-                : "from OcppIdentity.last_seen_at — wire up later"
-            } />
+          <TechSection title="OCPP connection" source="ocpp" hint="WS handshake state">
+            <InfoRow label="WS URL" info={t?.propertyOcppUrl ?? DASH} mono />
+            <PlaceholderRow label="Connected since" trailing="ts of last open" />
+            <PlaceholderRow label="Heartbeat interval" trailing="config key" />
+            <PlaceholderRow label="Disconnect count (24h)" trailing="from gateway log" />
           </TechSection>
-          <TechSection title="Connector status" source="ocpp" hint="connector.status_updated projection">
+          <TechSection title="Connector status" source="ocpp" hint="StatusNotification feed">
             {evse?.connectors.length ? (
               evse.connectors.map((c) => (
                 <InfoRow
                   key={c.id}
-                  label={`Connector #${c.connectorIndex} (${c.type})`}
+                  label={`Connector #${c.connectorIndex}`}
                   info={
                     c.statusUpdatedAt
                       ? `${c.status} · updated ${new Date(c.statusUpdatedAt).toLocaleTimeString()}`
@@ -273,48 +346,91 @@ export default async function ChargerTechnicalReadPage({
             ) : (
               <PlaceholderRow label="No connectors" />
             )}
+            <PlaceholderRow label="Error code" trailing="NoError when healthy" />
+            <PlaceholderRow label="Vendor info" trailing="vendor-specific extension" />
           </TechSection>
         </div>
 
         <div className="mt-5 grid gap-5 lg:grid-cols-2">
           <TechSection title="Meter values" source="ocpp" hint="MeterValues sampling">
-            <InfoRow label="Lifetime energy (vendor)" info={fmtKWh(null)} />
+            <PlaceholderRow label="Energy.Active.Import.Register" trailing="kWh lifetime" />
             <InfoRow label="Power.Active.Import" info={fmtKW(t?.totalChargePowerW ?? null)} />
             <InfoRow
               label="Voltage / Current per phase"
-              info={t?.phases ? t.phases.map((p, i) => `L${i + 1}: ${p.voltageV != null ? `${p.voltageV.toFixed(0)}V` : "—"}/${p.currentA != null ? `${p.currentA.toFixed(1)}A` : "—"}`).join(" · ") : DASH}
+              info={
+                t?.phases
+                  ? t.phases
+                      .map(
+                        (p, i) =>
+                          `L${i + 1} ${p.voltageV != null ? `${p.voltageV.toFixed(0)}V` : "—"}/${p.currentA != null ? `${p.currentA.toFixed(1)}A` : "—"}`,
+                      )
+                      .join(" · ")
+                  : DASH
+              }
               mono
             />
+            <PlaceholderRow label="Sample interval" trailing="config key" />
           </TechSection>
           <TechSection title="Authorization log" source="ocpp" hint="Authorize requests">
-            <PlaceholderRow label="Last token / decision / source" trailing="auth log not yet wired" />
+            <PlaceholderRow label="Last token" trailing="hashed RFID / driver id" />
+            <PlaceholderRow label="Decision" trailing="Accepted / Blocked / Expired" />
+            <PlaceholderRow label="Source" trailing="local list / CSMS / cache" />
           </TechSection>
         </div>
 
         <TechSection title="OCPP configuration" source="ocpp" hint="GetConfiguration round-trip · ADR 0010" className="mt-5">
-          <PlaceholderRow label="Standard keys" trailing="will populate when GetConfiguration command lands and the projection captures the response" />
+          <PlaceholderRow label="HeartbeatInterval" trailing="standard key" />
+          <PlaceholderRow label="MeterValueSampleInterval" trailing="standard key" />
+          <PlaceholderRow label="ConnectorPhaseRotation" trailing="standard key" />
+          <PlaceholderRow label="AuthorizeRemoteTxRequests" trailing="standard key" />
+          <PlaceholderRow label="LocalAuthListEnabled" trailing="standard key" />
+          <PlaceholderRow label="… 33 more standard keys" trailing="see /reference/zaptec-api OCPP section" />
         </TechSection>
 
         <div className="mt-5 grid gap-5 lg:grid-cols-2">
           <TechSection title="Recent messages" source="ocpp" hint="last 50 envelopes either direction">
-            <PlaceholderRow label="message log" trailing="not yet wired" />
+            <PlaceholderRow label="Direction · Action · ts" trailing="BootNotification / Heartbeat / StatusNotification / MeterValues / StartTransaction / StopTransaction" />
+            <PlaceholderRow label="Latency" trailing="round-trip ms" />
           </TechSection>
           <TechSection title="Charging profile" source="ocpp" hint="SetChargingProfile state">
-            <PlaceholderRow label="Active profile" trailing="not yet wired" />
+            <PlaceholderRow label="Active profile" trailing="purpose / kind / stack level" />
+            <PlaceholderRow label="Schedule period" trailing="time + limit (A / W)" />
+            <PlaceholderRow label="Source" trailing="DLB controller / operator / API" />
+          </TechSection>
+        </div>
+
+        {/* Circuit + Actions */}
+        <div className="mt-5 grid gap-5 lg:grid-cols-3">
+          <div className="lg:col-span-2">
+            <TechSection title="Installation circuits" source="api" hint="this charger highlighted in tree">
+              <PlaceholderRow label="Tree shape" trailing="Installation → Circuit → ChargingStation × N" />
+              <PlaceholderRow label="Per circuit" trailing="ampereCeiling · phaseCount · vendorCircuitRef" />
+              <PlaceholderRow label="Per station" trailing="online · operation mode · current draw" />
+            </TechSection>
+          </div>
+          <TechSection title="Actions" source="both" hint="operator-facing">
+            <PlaceholderRow label="Pause / Resume" trailing="commandIds 506/507" />
+            <PlaceholderRow label="Stop session" trailing="commandId 102" />
+            <PlaceholderRow label="Reboot" trailing="commandId 104 · destructive" />
+            <PlaceholderRow label="Update firmware" trailing="commandId 200 · destructive" />
+            <PlaceholderRow label="Clear local auth list" trailing="commandId 261" />
           </TechSection>
         </div>
 
         {/* Metadata footer */}
         <div className="mt-5 grid gap-5 lg:grid-cols-2">
           <TechSection title="Installation metadata" source="api">
-            <InfoRow label="Installation" info={charger.installationDisplayName ?? DASH} />
-            <InfoRow label="Site" info={charger.siteDisplayName} />
-            <InfoRow label="Org" info={charger.orgDisplayName} />
+            <InfoRow label="Name" info={charger.installationDisplayName ?? DASH} />
+            <PlaceholderRow label="Address" />
+            <PlaceholderRow label="Time zone" />
+            <PlaceholderRow label="Active charger count" />
+            <PlaceholderRow label="Created on" />
           </TechSection>
-          <TechSection title="Charger metadata" source="both">
-            <InfoRow label="Vendor / model" info={`${charger.vendor ?? DASH} / ${charger.model ?? DASH}`} />
-            <InfoRow label="Serial number" info={charger.serialNumber ?? DASH} mono />
-            <InfoRow label="Warranty expires" info={fmt(charger.warrantyExpires)} />
+          <TechSection title="Charger metadata" source="api">
+            <InfoRow label="Name" info={identity?.identityString ?? charger.serialNumber ?? DASH} />
+            <InfoRow label="Serial" info={charger.serialNumber ?? DASH} mono />
+            <InfoRow label="Device type" info={`${charger.vendor ?? DASH} / ${charger.model ?? DASH}`} />
+            <InfoRow label="Created on" info={fmtDate(charger.warrantyExpires)} />
             <InfoRow label="Property OCPP URL override" info={t?.propertyOcppUrl ?? DASH} mono />
           </TechSection>
         </div>
@@ -323,14 +439,24 @@ export default async function ChargerTechnicalReadPage({
   );
 }
 
-function Badge({ text, mono }: { text: string; mono?: boolean }) {
+function fmtWarranty(expires: string | null): string {
+  if (!expires) return "—";
+  const t = new Date(expires + "T00:00:00Z").getTime();
+  if (!Number.isFinite(t)) return "—";
+  return t > Date.now() ? `in (until ${expires})` : `out (expired ${expires})`;
+}
+
+function ocppPillValue(t: ChargerTechnicalRead | null): string {
+  if (!t) return DASH;
+  if (t.authenticationType == null) return DASH;
+  const isOcpp = t.authenticationType === 2 || t.authenticationType === 3;
+  if (!isOcpp) return "not OCPP";
+  return t.propertyAuthenticationDisabled ? "auth off" : "ready";
+}
+
+function Badge({ text }: { text: string }) {
   return (
-    <span
-      className={
-        "inline-flex items-center rounded border border-bg-border/60 bg-bg-base/40 px-2 py-0.5 text-[10px] uppercase tracking-brand text-ink-300 " +
-        (mono ? "font-mono" : "")
-      }
-    >
+    <span className="inline-flex items-center rounded border border-bg-border/60 bg-bg-base/40 px-2 py-0.5 font-mono text-[10px] uppercase tracking-brand text-ink-500">
       {text}
     </span>
   );
@@ -347,33 +473,45 @@ function Metric({
   value: string;
   mono?: boolean;
 }) {
+  const empty = value === DASH;
   return (
-    <div className="flex items-center gap-2 min-w-0">
-      <Icon className="h-4 w-4 shrink-0 text-ink-500" />
-      <div className="flex flex-col min-w-0">
+    <div className="flex items-center gap-2">
+      <Icon className="h-4 w-4 text-ink-500" />
+      <div className="flex flex-col">
         <span className="text-[10px] uppercase tracking-brand text-ink-500">{label}</span>
-        <span className={`text-xs text-ink-100 truncate ${mono ? "font-mono" : ""}`}>{value}</span>
+        <span
+          className={
+            "text-xs " +
+            (empty ? "italic text-ink-600" : "text-ink-100") +
+            (mono ? " font-mono" : "")
+          }
+        >
+          {value}
+        </span>
       </div>
     </div>
   );
 }
 
-function DashboardCell({
+function DashboardColumn({
   icon: Icon,
   label,
-  value,
+  trailing,
 }: {
   icon: typeof Zap;
   label: string;
-  value: string;
+  trailing: string;
 }) {
+  const empty = trailing === DASH;
   return (
     <div className="rounded border border-bg-border/40 bg-bg-base/30 p-3">
       <div className="flex items-center gap-2 text-[11px] text-ink-300">
         <Icon className="h-3.5 w-3.5" />
         <span className="font-medium">{label}</span>
       </div>
-      <p className="mt-1 text-sm text-ink-100">{value}</p>
+      <p className={"mt-1 text-[11px] " + (empty ? "italic text-ink-500" : "text-ink-100")}>
+        {trailing}
+      </p>
     </div>
   );
 }
@@ -402,3 +540,7 @@ function SectionDivider({
     </div>
   );
 }
+
+// silence unused-warnings on imports kept for future wiring
+void AlertTriangle;
+void Clock;
