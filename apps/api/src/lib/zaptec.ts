@@ -187,6 +187,14 @@ export interface ZaptecChargerLite {
   IsAuthorizationRequired?: boolean;
   /** Auth mode enum: 0=None, 1=Vendor app, 2=OCPP cloud, 3=Native OCPP. */
   AuthenticationType?: number;
+  /**
+   * ChargerOperationMode — same enum as StateId 710 on /state. Carries
+   * the last-reported value even for offline chargers, which makes
+   * bulk the right source for a per-charger status pill (no extra
+   * round trip). Values: 0=Unknown, 1=Disconnected, 2=Requesting,
+   * 3=Charging, 5=Finished, 6=Limited.
+   */
+  OperatingMode?: number;
 }
 export async function listChargers(
   accessToken: string,

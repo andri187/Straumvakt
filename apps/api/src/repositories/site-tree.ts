@@ -99,9 +99,12 @@ interface ZaptecLiveSnapshot {
  *   5 Connected_Finished    → Finishing
  *   6 Connected_Limited     → SuspendedEVSE  (DLB / load-balancer pause)
  */
-function mapZaptecOpModeToOcpp(rawCode: string | null): string | null {
-  if (rawCode == null) return null;
-  switch (rawCode) {
+function mapZaptecOpModeToOcpp(raw: string | number | null): string | null {
+  if (raw == null) return null;
+  // Bulk list returns OperatingMode as a number; /state's
+  // ValueAsString is a string. Normalise to string for the switch.
+  const code = typeof raw === "number" ? String(raw) : raw;
+  switch (code) {
     case "1":
       return "Available";
     case "2":
@@ -197,6 +200,15 @@ async function buildApiActiveMap(
               ? ((ch as { AuthenticationType?: number }).AuthenticationType as number)
               : null;
           const ocppConfigured = authTypeNum === 2 || authTypeNum === 3;
+          // OperatingMode comes from the bulk list directly (no extra
+          // call). Zaptec keeps the last-reported value for offline
+          // chargers, so this is the right source for a per-charger
+          // status pill regardless of IsOnline. /state below may
+          // refresh it for online chargers but bulk is enough on its
+          // own for the pill to appear.
+          const bulkVendorStatus = mapZaptecOpModeToOcpp(
+            typeof ch.OperatingMode === "number" ? ch.OperatingMode : null,
+          );
           out.set(stationId, {
             apiActive: true,
             ocppConfigured,
@@ -210,9 +222,7 @@ async function buildApiActiveMap(
             // "we don't know".
             decommissioned:
               typeof ch.Active === "boolean" ? ch.Active === false : null,
-            // Filled in below from /state (StateId 710) for online
-            // chargers; offline chargers have no live state to read.
-            vendorConnectorStatus: null,
+            vendorConnectorStatus: bulkVendorStatus,
           });
           if (ch.IsOnline === true) {
             onlineToFetch.push({ vendorId: ch.Id, stationId });
@@ -247,21 +257,23 @@ async function buildApiActiveMap(
               detailResult.ok && detailResult.value && typeof detailResult.value.SignedMeterValueKwh === "number"
                 ? (detailResult.value.SignedMeterValueKwh as number)
                 : null;
-            // StateId 710 = ChargerOperationMode. Mapped onto OCPP
-            // ChargePointStatus by mapZaptecOpModeToOcpp; the result
-            // is what UI shows when no OCPP StatusNotification has
-            // arrived for this charger yet.
+            // StateId 710 from /state — used to refresh the bulk
+            // OperatingMode for online chargers. Only override the
+            // existing snapshot when /state gave us a real value;
+            // otherwise keep what bulk set so we don't blank out a
+            // valid status with null.
             const opModeEntry = stateResult.ok
               ? stateResult.value.find((s) => s.StateId === 710)
               : null;
-            const vendorConnectorStatus = mapZaptecOpModeToOcpp(
+            const refreshedVendorStatus = mapZaptecOpModeToOcpp(
               opModeEntry?.ValueAsString ?? null,
             );
             out.set(stationId, {
               ...existing,
               onlineSince,
               lifetimeEnergyKWh: lifetimeKWh,
-              vendorConnectorStatus,
+              vendorConnectorStatus:
+                refreshedVendorStatus ?? existing.vendorConnectorStatus,
             });
             if (lifetimeKWh != null) {
               writeThroughs.push(
