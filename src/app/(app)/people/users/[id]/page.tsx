@@ -6,12 +6,14 @@ import { PageShell } from "@/components/page-shell";
 import { adminSessionConfig, verifyAdminSession } from "@/lib/admin-session";
 import { apiFetchServer, apiFetchServerJson } from "@/lib/api-client-server";
 import type {
+  IdTokenSummary,
   UserSummary,
   UserMembershipSummary,
 } from "@straumvakt/shared/domain/users";
 import type { OrgSummary } from "@straumvakt/shared/domain/orgs";
 import { UserEditPanel } from "./edit-panel";
 import { MembershipsPanel } from "./memberships-panel";
+import { TokensPanel } from "./tokens-panel";
 
 export const metadata = { title: "User detail" };
 
@@ -50,9 +52,10 @@ export default async function UserDetailPage({
   const detailRes = await apiFetchServer(`/api/admin/users/${id}`);
   if (detailRes.status === 404) notFound();
   if (!detailRes.ok) throw new Error(`HTTP ${detailRes.status}`);
-  const { user, memberships } = (await detailRes.json()) as {
+  const { user, memberships, idTokens } = (await detailRes.json()) as {
     user: UserSummary;
     memberships: UserMembershipSummary[];
+    idTokens: IdTokenSummary[];
   };
   const { orgs } = await apiFetchServerJson<{ orgs: OrgSummary[] }>(
     "/api/admin/orgs",
@@ -78,30 +81,53 @@ export default async function UserDetailPage({
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
-          <section className="rounded-lg border border-bg-border bg-bg-surface/70 shadow-card backdrop-blur">
-            <header className="flex flex-wrap items-baseline justify-between gap-3 border-b border-bg-border bg-bg-base/40 px-5 py-3">
-              <div>
-                <h2 className="text-sm font-semibold text-ink-50">
-                  Memberships ({memberships.length})
-                </h2>
-                <p className="text-xs text-ink-400">
-                  One row per Org this user belongs to. Roles drive nav
-                  restrictions post-pilot — inert during pilot per ADR 0006.
-                </p>
-              </div>
-            </header>
-            <MembershipsPanel
-              userId={user.id}
-              memberships={memberships}
-              availableOrgs={availableOrgs.map((o) => ({
-                id: o.id,
-                kennitala: o.kennitala,
-                displayName: o.displayName,
-              }))}
-            />
-          </section>
+          <div className="space-y-6">
+            <section className="rounded-lg border border-bg-border bg-bg-surface/70 shadow-card backdrop-blur">
+              <header className="flex flex-wrap items-baseline justify-between gap-3 border-b border-bg-border bg-bg-base/40 px-5 py-3">
+                <div>
+                  <h2 className="text-sm font-semibold text-ink-50">
+                    Memberships ({memberships.length})
+                  </h2>
+                  <p className="text-xs text-ink-400">
+                    One row per Org this user belongs to. Roles drive nav
+                    restrictions post-pilot — inert during pilot per ADR 0006.
+                  </p>
+                </div>
+              </header>
+              <MembershipsPanel
+                userId={user.id}
+                memberships={memberships}
+                availableOrgs={availableOrgs.map((o) => ({
+                  id: o.id,
+                  kennitala: o.kennitala,
+                  displayName: o.displayName,
+                }))}
+              />
+            </section>
 
-          <aside className="rounded-lg border border-bg-border bg-bg-surface/70 p-5 shadow-card backdrop-blur">
+            <section className="rounded-lg border border-bg-border bg-bg-surface/70 shadow-card backdrop-blur">
+              <header className="flex flex-wrap items-baseline justify-between gap-3 border-b border-bg-border bg-bg-base/40 px-5 py-3">
+                <div>
+                  <h2 className="text-sm font-semibold text-ink-50">
+                    RFID tokens ({idTokens.filter((t) => t.status === "active").length}{" "}
+                    active / {idTokens.length} total)
+                  </h2>
+                  <p className="text-xs text-ink-400">
+                    Each token authorizes this user at chargers via OCPP
+                    Authorize.req. Closure item 1 from{" "}
+                    <code className="font-mono text-ink-300">
+                      docs/retros/sprint-03.md
+                    </code>{" "}
+                    — primary RFID is auto-minted on user create; add more
+                    here for additional cards or virtual idTags.
+                  </p>
+                </div>
+              </header>
+              <TokensPanel userId={user.id} initialTokens={idTokens} />
+            </section>
+          </div>
+
+          <aside className="space-y-6"><div className="rounded-lg border border-bg-border bg-bg-surface/70 p-5 shadow-card backdrop-blur">
             <h2 className="text-xs font-semibold uppercase tracking-brand text-sv-sky">
               User detail
             </h2>
@@ -144,6 +170,7 @@ export default async function UserDetailPage({
                   address: addressInitial(user.address),
                 }}
               />
+            </div>
             </div>
           </aside>
         </div>

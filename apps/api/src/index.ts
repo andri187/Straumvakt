@@ -27,6 +27,7 @@ import {
   adminVendorCredentialsByOrg,
 } from "./routes/admin/vendor-credentials";
 import { adminGroups } from "./routes/admin/groups";
+import { adminIdTokens } from "./routes/admin/id-tokens";
 import { internalOcppAuth } from "./routes/internal/ocpp-auth";
 import { internalOcppAuthorize } from "./routes/internal/ocpp-authorize";
 import { internalPendingDiscovery } from "./routes/internal/pending-discovery";
@@ -88,6 +89,7 @@ app.route("/api/admin/pending-discoveries", adminPendingDiscoveries);
 app.route("/api/admin/vendor-credentials", adminVendorCredentialsAll);
 app.route("/api/admin/orgs/:orgId/vendor-credentials", adminVendorCredentialsByOrg);
 app.route("/api/admin/groups", adminGroups);
+app.route("/api/admin/tokens", adminIdTokens);
 
 // Internal — gateway → API auth lookup. Gated by OCPP_INGEST_SECRET
 // header (ADR 0004), not the admin session middleware.

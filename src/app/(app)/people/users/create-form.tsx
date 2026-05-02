@@ -1,14 +1,23 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api-client";
 import { lookupPostalCode } from "@/lib/reference/iceland-postal-codes";
+import type { IdTokenSummary, UserSummary } from "@straumvakt/shared/domain/users";
 
 type Audience = "operator" | "driver" | "service";
 
 export function CreateUserForm() {
   const router = useRouter();
+  // Result state — when set, the form is replaced with a confirmation
+  // screen showing the auto-minted RFID UID. The operator copies it
+  // (or programs a card with it) before continuing.
+  const [created, setCreated] = useState<
+    { user: UserSummary; primaryToken: IdTokenSummary } | null
+  >(null);
+  const [copyState, setCopyState] = useState<"idle" | "copied">("idle");
 
   // Identity
   const [email, setEmail] = useState("");
@@ -70,7 +79,7 @@ export function CreateUserForm() {
               countryCode: addrCountry || undefined,
             }
           : undefined;
-      const body = {
+      const submitBody = {
         email,
         audience,
         displayName: displayName || undefined,
@@ -88,7 +97,7 @@ export function CreateUserForm() {
       const res = await apiFetch("/api/admin/users", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify(submitBody),
       });
       if (!res.ok) {
         const b = (await res.json().catch(() => null)) as
@@ -105,13 +114,43 @@ export function CreateUserForm() {
           `HTTP ${res.status}`;
         throw new Error(msg);
       }
-      router.push("/people/users");
+      const body = (await res.json()) as {
+        user: UserSummary;
+        primaryToken: IdTokenSummary;
+      };
+      setCreated(body);
+      // Refresh upstream lists so the new user appears, but stay on
+      // this page so the operator can read/copy the primary RFID UID.
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setSubmitting(false);
     }
+  }
+
+  // Post-submit confirmation: render the auto-minted RFID UID in a
+  // panel and let the operator continue. RFID UIDs are not secrets
+  // (any NFC reader can read them off the physical card) so we show
+  // the value plainly — no one-time-display ceremony.
+  if (created) {
+    return (
+      <CreatedPanel
+        created={created}
+        copyState={copyState}
+        onCopy={async () => {
+          try {
+            await navigator.clipboard.writeText(created.primaryToken.value);
+            setCopyState("copied");
+            setTimeout(() => setCopyState("idle"), 1500);
+          } catch {
+            // Clipboard blocked (older browser / non-secure ctx).
+            // Operator can select-and-copy the visible value.
+            setCopyState("idle");
+          }
+        }}
+      />
+    );
   }
 
   return (
@@ -366,5 +405,90 @@ function Field({
         <span className="mt-0.5 block text-[10px] text-ink-500">{hint}</span>
       )}
     </label>
+  );
+}
+
+function CreatedPanel({
+  created,
+  copyState,
+  onCopy,
+}: {
+  created: { user: UserSummary; primaryToken: IdTokenSummary };
+  copyState: "idle" | "copied";
+  onCopy: () => void;
+}) {
+  const { user, primaryToken } = created;
+  return (
+    <div className="space-y-4">
+      <section className="rounded-lg border border-emerald-500/40 bg-emerald-500/5 p-5 shadow-card">
+        <div className="flex items-baseline gap-2">
+          <span className="rounded bg-emerald-500/30 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-brand text-emerald-100">
+            created
+          </span>
+          <h2 className="text-sm font-semibold text-ink-50">
+            {user.displayName ?? user.email}
+          </h2>
+        </div>
+        <p className="mt-1 text-xs text-ink-300">
+          User <span className="font-mono">{user.email}</span> is on file.
+          Straumvakt minted the primary RFID UID below — program a physical
+          card with this value, or use it as a virtual idTag for testing.
+          Additional tokens can be added from the user detail page.
+        </p>
+
+        <div className="mt-4 rounded-md border border-emerald-500/30 bg-bg-base/40 p-4">
+          <p className="text-[10px] font-semibold uppercase tracking-brand text-emerald-200">
+            Primary RFID UID
+          </p>
+          <div className="mt-2 flex items-center gap-3">
+            <code className="flex-1 select-all rounded bg-bg-base/60 px-3 py-2 font-mono text-base text-emerald-100 ring-1 ring-emerald-500/30">
+              {primaryToken.value}
+            </code>
+            <button
+              type="button"
+              onClick={onCopy}
+              className="rounded-md bg-emerald-500/20 px-3 py-2 text-xs font-medium text-emerald-100 ring-1 ring-emerald-500/40 hover:bg-emerald-500/30"
+            >
+              {copyState === "copied" ? "Copied!" : "Copy"}
+            </button>
+          </div>
+          <p className="mt-2 text-[10px] text-ink-500">
+            Label: <span className="text-ink-300">{primaryToken.label ?? "—"}</span>{" "}
+            · Status:{" "}
+            <span className="text-emerald-300">{primaryToken.status}</span>
+            {" · "}
+            kind: <span className="text-ink-300">{primaryToken.kind}</span>
+          </p>
+        </div>
+
+        <p className="mt-3 text-[11px] text-ink-400">
+          Not a secret — RFID UIDs are physically readable from any NFC
+          card. Visible at any time on the user detail page below.
+        </p>
+      </section>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Link
+          href={
+            `/people/users/${user.id}` as Parameters<typeof Link>[0]["href"]
+          }
+          className="rounded-md bg-sv-sky/20 px-3 py-2 text-xs font-medium text-sv-sky ring-1 ring-sv-sky/30 hover:bg-sv-sky/30"
+        >
+          Go to user detail →
+        </Link>
+        <Link
+          href="/people/users"
+          className="rounded-md border border-bg-border px-3 py-2 text-xs text-ink-300 hover:bg-bg-base/50"
+        >
+          Back to user list
+        </Link>
+        <Link
+          href="/people/users/new"
+          className="rounded-md border border-bg-border px-3 py-2 text-xs text-ink-300 hover:bg-bg-base/50"
+        >
+          Create another
+        </Link>
+      </div>
+    </div>
   );
 }

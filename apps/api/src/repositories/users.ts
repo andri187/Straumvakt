@@ -1,5 +1,6 @@
 import type { PrismaClient, Prisma } from "../generated/prisma/client";
 import type {
+  IdTokenSummary,
   MembershipRole,
   OrgMembershipSummary,
   UserAudience,
@@ -8,6 +9,7 @@ import type {
   UserSummary,
 } from "@straumvakt/shared/domain/users";
 import type { UserCreateInput, UserUpdateInput } from "@straumvakt/shared/inputs/users";
+import { createIdToken } from "./id-tokens";
 
 type Row = {
   id: string;
@@ -144,10 +146,23 @@ export async function listUsersByOrg(
   }));
 }
 
+/**
+ * Create a user and auto-mint one primary RFID IdToken in the same
+ * transaction. Per the 2026-05-02 conversation: every new user gets a
+ * Straumvakt-generated UID up-front; operators can add more tokens
+ * (manual or auto-minted) from the user detail page.
+ *
+ * The primary token's value is shown in the create-user response so
+ * the operator can program a physical card with that UID. RFID UIDs
+ * are not secrets — anyone with NFC-read access to the card can read
+ * them — so we surface the value plainly without one-time-display
+ * ceremony. Future kinds (app_jwt, magic_link) WILL need redaction;
+ * the surface for those is separate.
+ */
 export async function createUser(
   db: PrismaClient,
   input: UserCreateInput,
-): Promise<UserSummary> {
+): Promise<{ user: UserSummary; primaryToken: IdTokenSummary }> {
   const data: Prisma.UserCreateInput = {
     email: input.email.toLowerCase(),
     displayName: input.displayName ?? null,
@@ -168,11 +183,20 @@ export async function createUser(
       : {}),
   };
 
-  const created = await db.user.create({
-    data,
-    include: { credentials: true },
+  const result = await db.$transaction(async (tx) => {
+    const createdRow = await tx.user.create({
+      data,
+      include: { credentials: true },
+    });
+    const tokenSummary = await createIdToken(tx, {
+      userId: createdRow.id,
+      kind: "rfid",
+      label: "Primary",
+    });
+    return { user: toSummary(createdRow), primaryToken: tokenSummary };
   });
-  return toSummary(created);
+
+  return result;
 }
 
 export async function updateUser(
