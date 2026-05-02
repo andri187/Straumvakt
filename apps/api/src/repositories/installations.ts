@@ -70,6 +70,18 @@ export async function listInstallationsBySite(
   });
 }
 
+export async function listInstallationsByOrg(
+  db: PrismaClient,
+  orgId: string,
+): Promise<InstallationSummary[]> {
+  const rows = await db.installation.findMany({
+    where: { orgId },
+    orderBy: [{ displayName: "asc" }],
+    include,
+  });
+  return rows.map(toSummary);
+}
+
 export async function getInstallationById(
   db: PrismaClient,
   id: string,

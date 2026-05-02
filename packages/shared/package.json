@@ -29,7 +29,9 @@
     "./domain/vendor-credentials": "./src/domain/vendor-credentials.ts",
     "./domain/site-tree": "./src/domain/site-tree.ts",
     "./domain/charger-technical-read": "./src/domain/charger-technical-read.ts",
-    "./domain/credential-management": "./src/domain/credential-management.ts"
+    "./domain/credential-management": "./src/domain/credential-management.ts",
+    "./domain/contracts": "./src/domain/contracts.ts",
+    "./domain/family-groups": "./src/domain/family-groups.ts"
   },
   "dependencies": {
     "zod": "^4.3.6"

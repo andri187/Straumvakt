@@ -11,6 +11,9 @@ import {
 } from "../../repositories/orgs";
 import { listPropertiesByOrg } from "../../repositories/properties";
 import { listSitesByOrg } from "../../repositories/sites";
+import { listInstallationsByOrg } from "../../repositories/installations";
+import { listContractsByOrg } from "../../repositories/contracts";
+import { listFamilyGroupsByOrg } from "../../repositories/family-groups";
 import {
   addMembership,
   listOrgMemberships,
@@ -70,6 +73,24 @@ adminOrgs.get("/:id/sites", async (c) => {
   const db = makePrisma(c.env);
   const sites = await listSitesByOrg(db, c.req.param("id"));
   return c.json({ sites });
+});
+
+adminOrgs.get("/:id/installations", async (c) => {
+  const db = makePrisma(c.env);
+  const installations = await listInstallationsByOrg(db, c.req.param("id"));
+  return c.json({ installations });
+});
+
+adminOrgs.get("/:id/contracts", async (c) => {
+  const db = makePrisma(c.env);
+  const contracts = await listContractsByOrg(db, c.req.param("id"));
+  return c.json({ contracts });
+});
+
+adminOrgs.get("/:id/family-groups", async (c) => {
+  const db = makePrisma(c.env);
+  const familyGroups = await listFamilyGroupsByOrg(db, c.req.param("id"));
+  return c.json({ familyGroups });
 });
 
 adminOrgs.get("/:id/properties", async (c) => {
