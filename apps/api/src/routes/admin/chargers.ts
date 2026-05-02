@@ -14,6 +14,7 @@ import {
 } from "@straumvakt/shared/inputs/chargers";
 import { makePrisma } from "../../lib/prisma";
 import { requireAdmin, type AuthVars } from "../../lib/auth-middleware";
+import { requirePermission } from "../../lib/auth/require-permission";
 import {
   createCharger,
   deleteCharger,
@@ -33,13 +34,13 @@ adminChargers.use("*", requireAdmin);
 
 // ── CRUD ─────────────────────────────────────────────────────────────────
 
-adminChargers.get("/", async (c) => {
+adminChargers.get("/", requirePermission("platform.tenant.read"), async (c) => {
   const db = makePrisma(c.env);
   const chargers = await listAllChargers(db);
   return c.json({ chargers });
 });
 
-adminChargers.post("/", async (c) => {
+adminChargers.post("/", requirePermission("charger.write"), async (c) => {
   const raw = (await c.req.json().catch(() => null)) as unknown;
   const parsed = ChargerCreateInput.safeParse(raw);
   if (!parsed.success) return c.json({ error: "validation", issues: parsed.error.issues }, 400);
@@ -55,7 +56,7 @@ adminChargers.post("/", async (c) => {
   );
 });
 
-adminChargers.get("/:id", async (c) => {
+adminChargers.get("/:id", requirePermission("charger.read"), async (c) => {
   const db = makePrisma(c.env);
   const charger = await getChargerById(db, c.req.param("id"));
   if (!charger) return c.json({ error: "not_found" }, 404);
@@ -66,13 +67,17 @@ adminChargers.get("/:id", async (c) => {
 // vendor portal and fetches detail + state. Render the charger
 // detail page in parallel with this so a slow Zaptec response
 // doesn't block the rest of the page.
-adminChargers.get("/:id/technical-read", async (c) => {
-  const db = makePrisma(c.env);
-  const read = await getChargerTechnicalRead(db, c.req.param("id"), c.env.OCPP_CRED_KEK);
-  return c.json({ technicalRead: read });
-});
+adminChargers.get(
+  "/:id/technical-read",
+  requirePermission("charger.read"),
+  async (c) => {
+    const db = makePrisma(c.env);
+    const read = await getChargerTechnicalRead(db, c.req.param("id"), c.env.OCPP_CRED_KEK);
+    return c.json({ technicalRead: read });
+  },
+);
 
-adminChargers.patch("/:id", async (c) => {
+adminChargers.patch("/:id", requirePermission("charger.write"), async (c) => {
   const raw = (await c.req.json().catch(() => null)) as unknown;
   const parsed = ChargerUpdateInput.safeParse(raw);
   if (!parsed.success) return c.json({ error: "validation", issues: parsed.error.issues }, 400);
@@ -86,7 +91,7 @@ adminChargers.patch("/:id", async (c) => {
 // trying to connect with the same identity_string, the auth-fail path
 // in /api/internal/ocpp-auth will record a fresh pending_discoveries
 // row, so it re-appears in /chargers/pending.
-adminChargers.delete("/:id", async (c) => {
+adminChargers.delete("/:id", requirePermission("charger.write"), async (c) => {
   const db = makePrisma(c.env);
   await deleteCharger(db, c.req.param("id"));
   return c.json({ ok: true });
@@ -101,7 +106,10 @@ adminChargers.delete("/:id", async (c) => {
 // { commandId, status: "pending" } so callers can poll/correlate via
 // the event log.
 
-adminChargers.post("/:ocppIdentityId/remote-start", async (c) => {
+adminChargers.post(
+  "/:ocppIdentityId/remote-start",
+  requirePermission("charger.remote_start"),
+  async (c) => {
   const raw = (await c.req.json().catch(() => null)) as unknown;
   const parsed = RemoteStartBody.safeParse(raw);
   if (!parsed.success) {
@@ -124,9 +132,13 @@ adminChargers.post("/:ocppIdentityId/remote-start", async (c) => {
     requestedBy: null,
   });
   return c.json({ commandId: enqueued.id, status: enqueued.status }, 202);
-});
+  },
+);
 
-adminChargers.post("/:ocppIdentityId/remote-stop", async (c) => {
+adminChargers.post(
+  "/:ocppIdentityId/remote-stop",
+  requirePermission("charger.remote_stop"),
+  async (c) => {
   const raw = (await c.req.json().catch(() => null)) as unknown;
   const parsed = RemoteStopBody.safeParse(raw);
   if (!parsed.success) {
@@ -146,9 +158,13 @@ adminChargers.post("/:ocppIdentityId/remote-stop", async (c) => {
     requestedBy: null,
   });
   return c.json({ commandId: enqueued.id, status: enqueued.status }, 202);
-});
+  },
+);
 
-adminChargers.post("/:ocppIdentityId/get-configuration", async (c) => {
+adminChargers.post(
+  "/:ocppIdentityId/get-configuration",
+  requirePermission("charger.config"),
+  async (c) => {
   // Body is optional — empty body = query all keys.
   let raw: unknown = {};
   const ct = c.req.header("content-type") ?? "";
@@ -177,9 +193,13 @@ adminChargers.post("/:ocppIdentityId/get-configuration", async (c) => {
     requestedBy: null,
   });
   return c.json({ commandId: enqueued.id, status: enqueued.status }, 202);
-});
+  },
+);
 
-adminChargers.post("/:ocppIdentityId/change-configuration", async (c) => {
+adminChargers.post(
+  "/:ocppIdentityId/change-configuration",
+  requirePermission("charger.config"),
+  async (c) => {
   const raw = (await c.req.json().catch(() => null)) as unknown;
   const parsed = ChangeConfigurationBody.safeParse(raw);
   if (!parsed.success) {
@@ -199,4 +219,5 @@ adminChargers.post("/:ocppIdentityId/change-configuration", async (c) => {
     requestedBy: null,
   });
   return c.json({ commandId: enqueued.id, status: enqueued.status }, 202);
-});
+  },
+);

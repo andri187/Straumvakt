@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { UserCreateInput, UserUpdateInput } from "@straumvakt/shared/inputs/users";
 import { makePrisma } from "../../lib/prisma";
 import { requireAdmin, type AuthVars } from "../../lib/auth-middleware";
+import { requirePermission } from "../../lib/auth/require-permission";
 import {
   createUser,
   getUserById,
@@ -19,13 +20,17 @@ export const adminUsers = new Hono<{ Bindings: Env; Variables: AuthVars }>();
 
 adminUsers.use("*", requireAdmin);
 
-adminUsers.get("/", async (c) => {
+// Cross-tenant user list — platform staff only.
+adminUsers.get("/", requirePermission("platform.tenant.read"), async (c) => {
   const db = makePrisma(c.env);
   const users = await listUsers(db, { includeDeleted: c.req.query("includeDeleted") === "true" });
   return c.json({ users });
 });
 
-adminUsers.post("/", async (c) => {
+// Creating a User row is platform-staff bootstrap today (no org binding
+// at create time); Sprint 5 invite flow makes this org-scoped via
+// member.invite at /api/admin/orgs/:orgId/memberships.
+adminUsers.post("/", requirePermission("platform.tenant.write"), async (c) => {
   const raw = (await c.req.json().catch(() => null)) as unknown;
   const parsed = UserCreateInput.safeParse(raw);
   if (!parsed.success) return c.json({ error: "validation", issues: parsed.error.issues }, 400);
@@ -42,7 +47,7 @@ adminUsers.post("/", async (c) => {
   }
 });
 
-adminUsers.get("/:id", async (c) => {
+adminUsers.get("/:id", requirePermission("member.read"), async (c) => {
   const db = makePrisma(c.env);
   // The id_tokens table is part of the 2026-05-02 user-profile-enrichment
   // migration. If staging Neon hasn't had `prisma migrate deploy` run for
@@ -66,7 +71,7 @@ adminUsers.get("/:id", async (c) => {
   return c.json({ user, memberships, idTokens });
 });
 
-adminUsers.patch("/:id", async (c) => {
+adminUsers.patch("/:id", requirePermission("member.write"), async (c) => {
   const raw = (await c.req.json().catch(() => null)) as unknown;
   const parsed = UserUpdateInput.safeParse(raw);
   if (!parsed.success) return c.json({ error: "validation", issues: parsed.error.issues }, 400);
@@ -85,13 +90,13 @@ adminUsers.patch("/:id", async (c) => {
 // adminIdTokens in apps/api/src/index.ts) so the URL doesn't repeat the
 // userId — tokens are unique system-wide.
 
-adminUsers.get("/:id/tokens", async (c) => {
+adminUsers.get("/:id/tokens", requirePermission("member.read"), async (c) => {
   const db = makePrisma(c.env);
   const tokens = await listIdTokensForUser(db, c.req.param("id"));
   return c.json({ tokens });
 });
 
-adminUsers.post("/:id/tokens", async (c) => {
+adminUsers.post("/:id/tokens", requirePermission("member.write"), async (c) => {
   const raw = (await c.req.json().catch(() => null)) as unknown;
   if (!raw || typeof raw !== "object") {
     return c.json({ error: "body required" }, 400);

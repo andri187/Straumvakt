@@ -11,6 +11,7 @@
 import { Hono } from "hono";
 import { makePrisma } from "../../lib/prisma";
 import { requireAdmin, type AuthVars } from "../../lib/auth-middleware";
+import { requirePermission } from "../../lib/auth/require-permission";
 import {
   backfillPrimaryRfidForUsersWithoutTokens,
   getIdTokenById,
@@ -26,36 +27,45 @@ adminIdTokens.use("*", requireAdmin);
 //
 // POST /api/admin/tokens/backfill
 //
-// Idempotent: only mints for users with zero IdToken rows. Operator
-// runs this once after the closure-item-1 deploy so existing users
-// line up with the "every user has a primary RFID" invariant. Mounted
-// BEFORE the /:tokenId routes so the literal "backfill" path doesn't
-// get captured as a tokenId param.
+// Touches every user row → platform-staff only.
+// Idempotent: only mints for users with zero IdToken rows.
 
-adminIdTokens.post("/backfill", async (c) => {
-  const db = makePrisma(c.env);
-  const report = await backfillPrimaryRfidForUsersWithoutTokens(db);
-  return c.json(report);
-});
+adminIdTokens.post(
+  "/backfill",
+  requirePermission("platform.tenant.write"),
+  async (c) => {
+    const db = makePrisma(c.env);
+    const report = await backfillPrimaryRfidForUsersWithoutTokens(db);
+    return c.json(report);
+  },
+);
 
-adminIdTokens.get("/:tokenId", async (c) => {
-  const db = makePrisma(c.env);
-  const token = await getIdTokenById(db, c.req.param("tokenId"));
-  if (!token) return c.json({ error: "not_found" }, 404);
-  return c.json({ token });
-});
-
-adminIdTokens.delete("/:tokenId", async (c) => {
-  const db = makePrisma(c.env);
-  try {
-    const token = await revokeIdToken(db, c.req.param("tokenId"));
+adminIdTokens.get(
+  "/:tokenId",
+  requirePermission("member.read"),
+  async (c) => {
+    const db = makePrisma(c.env);
+    const token = await getIdTokenById(db, c.req.param("tokenId"));
+    if (!token) return c.json({ error: "not_found" }, 404);
     return c.json({ token });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    // Prisma P2025 — record to update not found.
-    if (msg.includes("Record to update not found")) {
-      return c.json({ error: "not_found" }, 404);
+  },
+);
+
+adminIdTokens.delete(
+  "/:tokenId",
+  requirePermission("member.write"),
+  async (c) => {
+    const db = makePrisma(c.env);
+    try {
+      const token = await revokeIdToken(db, c.req.param("tokenId"));
+      return c.json({ token });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      // Prisma P2025 — record to update not found.
+      if (msg.includes("Record to update not found")) {
+        return c.json({ error: "not_found" }, 404);
+      }
+      throw err;
     }
-    throw err;
-  }
-});
+  },
+);

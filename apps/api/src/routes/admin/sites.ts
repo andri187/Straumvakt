@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { SiteCreateInput, SiteUpdateInput } from "@straumvakt/shared/inputs/sites";
 import { makePrisma } from "../../lib/prisma";
 import { requireAdmin, type AuthVars } from "../../lib/auth-middleware";
+import { requirePermission } from "../../lib/auth/require-permission";
 import {
   createSite,
   deleteSite,
@@ -20,13 +21,13 @@ export const adminSites = new Hono<{ Bindings: Env; Variables: AuthVars }>();
 
 adminSites.use("*", requireAdmin);
 
-adminSites.get("/", async (c) => {
+adminSites.get("/", requirePermission("platform.tenant.read"), async (c) => {
   const db = makePrisma(c.env);
   const sites = await listAllSites(db);
   return c.json({ sites });
 });
 
-adminSites.get("/tree", async (c) => {
+adminSites.get("/tree", requirePermission("platform.tenant.read"), async (c) => {
   const db = makePrisma(c.env);
   const includeDecommissioned = c.req.query("includeDecommissioned") === "1";
   // KEK is required to decrypt vendor credentials for the per-charger
@@ -38,7 +39,7 @@ adminSites.get("/tree", async (c) => {
   return c.json({ tree });
 });
 
-adminSites.post("/", async (c) => {
+adminSites.post("/", requirePermission("site.write"), async (c) => {
   const raw = (await c.req.json().catch(() => null)) as unknown;
   const parsed = SiteCreateInput.safeParse(raw);
   if (!parsed.success) return c.json({ error: "validation", issues: parsed.error.issues }, 400);
@@ -47,14 +48,14 @@ adminSites.post("/", async (c) => {
   return c.json({ site }, 201);
 });
 
-adminSites.get("/:siteId", async (c) => {
+adminSites.get("/:siteId", requirePermission("site.read"), async (c) => {
   const db = makePrisma(c.env);
   const site = await getSiteById(db, c.req.param("siteId"));
   if (!site) return c.json({ error: "not_found" }, 404);
   return c.json({ site });
 });
 
-adminSites.patch("/:siteId", async (c) => {
+adminSites.patch("/:siteId", requirePermission("site.write"), async (c) => {
   const raw = (await c.req.json().catch(() => null)) as unknown;
   const parsed = SiteUpdateInput.safeParse(raw);
   if (!parsed.success) return c.json({ error: "validation", issues: parsed.error.issues }, 400);
@@ -63,7 +64,7 @@ adminSites.patch("/:siteId", async (c) => {
   return c.json({ site });
 });
 
-adminSites.delete("/:siteId", async (c) => {
+adminSites.delete("/:siteId", requirePermission("site.delete"), async (c) => {
   const db = makePrisma(c.env);
   await deleteSite(db, c.req.param("siteId"));
   return c.json({ ok: true });
@@ -73,37 +74,42 @@ const MoveSiteBody = z.object({
   targetOrgId: z.string().uuid(),
 });
 
-adminSites.post("/:siteId/move", async (c) => {
-  const raw = (await c.req.json().catch(() => null)) as unknown;
-  const parsed = MoveSiteBody.safeParse(raw);
-  if (!parsed.success) {
-    return c.json({ error: "validation", issues: parsed.error.issues }, 400);
-  }
-  const db = makePrisma(c.env);
-  try {
-    const result = await moveSiteToOrg(
-      db,
-      c.req.param("siteId"),
-      parsed.data.targetOrgId,
-      null,
-    );
-    return c.json({ result });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg === "site_not_found") return c.json({ error: msg }, 404);
-    if (msg === "target_org_not_found") return c.json({ error: msg }, 400);
-    if (msg === "already_in_target_org") return c.json({ error: msg }, 400);
-    throw err;
-  }
-});
+// Cross-org move — destructive (cascade reassignment). Platform-only.
+adminSites.post(
+  "/:siteId/move",
+  requirePermission("platform.tenant.write"),
+  async (c) => {
+    const raw = (await c.req.json().catch(() => null)) as unknown;
+    const parsed = MoveSiteBody.safeParse(raw);
+    if (!parsed.success) {
+      return c.json({ error: "validation", issues: parsed.error.issues }, 400);
+    }
+    const db = makePrisma(c.env);
+    try {
+      const result = await moveSiteToOrg(
+        db,
+        c.req.param("siteId"),
+        parsed.data.targetOrgId,
+        null,
+      );
+      return c.json({ result });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg === "site_not_found") return c.json({ error: msg }, 404);
+      if (msg === "target_org_not_found") return c.json({ error: msg }, 400);
+      if (msg === "already_in_target_org") return c.json({ error: msg }, 400);
+      throw err;
+    }
+  },
+);
 
-adminSites.get("/:siteId/circuits", async (c) => {
+adminSites.get("/:siteId/circuits", requirePermission("site.read"), async (c) => {
   const db = makePrisma(c.env);
   const circuits = await listCircuitsBySite(db, c.req.param("siteId"));
   return c.json({ circuits });
 });
 
-adminSites.get("/:siteId/installations", async (c) => {
+adminSites.get("/:siteId/installations", requirePermission("site.read"), async (c) => {
   const db = makePrisma(c.env);
   const installations = await listInstallationsBySite(db, c.req.param("siteId"));
   return c.json({ installations });

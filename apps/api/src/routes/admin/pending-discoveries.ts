@@ -6,6 +6,7 @@
 import { Hono } from "hono";
 import { makePrisma } from "../../lib/prisma";
 import { requireAdmin, type AuthVars } from "../../lib/auth-middleware";
+import { requirePermission } from "../../lib/auth/require-permission";
 import {
   clearIdlePendingDiscoveries,
   deletePendingDiscovery,
@@ -15,25 +16,39 @@ import type { Env } from "../../bindings";
 
 export const adminPendingDiscoveries = new Hono<{ Bindings: Env; Variables: AuthVars }>();
 
+// Pending discoveries are pre-onboarding observations of chargers that
+// connect with no credentials — platform-only signal, no tenant scope.
 adminPendingDiscoveries.use("*", requireAdmin);
 
-adminPendingDiscoveries.get("/", async (c) => {
-  const db = makePrisma(c.env);
-  const pending = await listPendingDiscoveries(db);
-  return c.json({ pending });
-});
+adminPendingDiscoveries.get(
+  "/",
+  requirePermission("platform.tenant.read"),
+  async (c) => {
+    const db = makePrisma(c.env);
+    const pending = await listPendingDiscoveries(db);
+    return c.json({ pending });
+  },
+);
 
 // Bulk-delete idle (last_seen > 5 min ago) rows. Path is registered
 // before /:identityString so Hono routes it correctly — Hono matches
 // in registration order.
-adminPendingDiscoveries.post("/clear-idle", async (c) => {
-  const db = makePrisma(c.env);
-  const count = await clearIdlePendingDiscoveries(db);
-  return c.json({ ok: true, deleted: count });
-});
+adminPendingDiscoveries.post(
+  "/clear-idle",
+  requirePermission("platform.tenant.write"),
+  async (c) => {
+    const db = makePrisma(c.env);
+    const count = await clearIdlePendingDiscoveries(db);
+    return c.json({ ok: true, deleted: count });
+  },
+);
 
-adminPendingDiscoveries.delete("/:identityString", async (c) => {
-  const db = makePrisma(c.env);
-  await deletePendingDiscovery(db, c.req.param("identityString"));
-  return c.json({ ok: true });
-});
+adminPendingDiscoveries.delete(
+  "/:identityString",
+  requirePermission("platform.tenant.write"),
+  async (c) => {
+    const db = makePrisma(c.env);
+    await deletePendingDiscovery(db, c.req.param("identityString"));
+    return c.json({ ok: true });
+  },
+);

@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { CircuitCreateInput, CircuitUpdateInput } from "@straumvakt/shared/inputs/circuits";
 import { makePrisma } from "../../lib/prisma";
 import { requireAdmin, type AuthVars } from "../../lib/auth-middleware";
+import { requirePermission } from "../../lib/auth/require-permission";
 import {
   createCircuit,
   deleteCircuit,
@@ -15,13 +16,14 @@ export const adminCircuits = new Hono<{ Bindings: Env; Variables: AuthVars }>();
 
 adminCircuits.use("*", requireAdmin);
 
-adminCircuits.get("/", async (c) => {
+// Circuits are site-level children; site.read/write covers them.
+adminCircuits.get("/", requirePermission("platform.tenant.read"), async (c) => {
   const db = makePrisma(c.env);
   const circuits = await listAllCircuits(db);
   return c.json({ circuits });
 });
 
-adminCircuits.post("/", async (c) => {
+adminCircuits.post("/", requirePermission("site.write"), async (c) => {
   const raw = (await c.req.json().catch(() => null)) as unknown;
   const parsed = CircuitCreateInput.safeParse(raw);
   if (!parsed.success) return c.json({ error: "validation", issues: parsed.error.issues }, 400);
@@ -30,14 +32,14 @@ adminCircuits.post("/", async (c) => {
   return c.json({ circuit }, 201);
 });
 
-adminCircuits.get("/:id", async (c) => {
+adminCircuits.get("/:id", requirePermission("site.read"), async (c) => {
   const db = makePrisma(c.env);
   const circuit = await getCircuitById(db, c.req.param("id"));
   if (!circuit) return c.json({ error: "not_found" }, 404);
   return c.json({ circuit });
 });
 
-adminCircuits.patch("/:id", async (c) => {
+adminCircuits.patch("/:id", requirePermission("site.write"), async (c) => {
   const raw = (await c.req.json().catch(() => null)) as unknown;
   const parsed = CircuitUpdateInput.safeParse(raw);
   if (!parsed.success) return c.json({ error: "validation", issues: parsed.error.issues }, 400);
@@ -46,7 +48,7 @@ adminCircuits.patch("/:id", async (c) => {
   return c.json({ circuit });
 });
 
-adminCircuits.delete("/:id", async (c) => {
+adminCircuits.delete("/:id", requirePermission("site.delete"), async (c) => {
   const db = makePrisma(c.env);
   await deleteCircuit(db, c.req.param("id"));
   return c.json({ ok: true });

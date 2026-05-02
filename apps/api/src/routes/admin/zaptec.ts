@@ -12,6 +12,7 @@ import { Hono } from "hono";
 import { ZaptecImportInput } from "@straumvakt/shared/inputs/zaptec-import";
 import { z } from "zod";
 import { requireAdmin, type AuthVars } from "../../lib/auth-middleware";
+import { requirePermission } from "../../lib/auth/require-permission";
 import { makePrisma } from "../../lib/prisma";
 import {
   getChargerDetail,
@@ -55,9 +56,13 @@ function zaptecErrorResponse(err: ZaptecError) {
 
 export const adminZaptec = new Hono<{ Bindings: Env; Variables: AuthVars }>();
 
+// Zaptec wizard endpoints are platform-only — they cross tenant
+// boundaries during charger onboarding. platform.tenant.read for
+// diagnostic / read-only operations; platform.tenant.write for
+// anything that creates Straumvakt rows or writes credentials.
 adminZaptec.use("*", requireAdmin);
 
-adminZaptec.post("/discover", async (c) => {
+adminZaptec.post("/discover", requirePermission("platform.tenant.read"), async (c) => {
   const raw = (await c.req.json().catch(() => null)) as unknown;
   const parsed = DiscoverBody.safeParse(raw);
   if (!parsed.success) {
@@ -164,7 +169,7 @@ const InspectBody = z.object({
   zaptecInstallationId: z.string().uuid(),
 });
 
-adminZaptec.post("/inspect", async (c) => {
+adminZaptec.post("/inspect", requirePermission("platform.tenant.read"), async (c) => {
   const raw = (await c.req.json().catch(() => null)) as unknown;
   const parsed = InspectBody.safeParse(raw);
   if (!parsed.success) {
@@ -259,7 +264,7 @@ const ProbeUsersBody = z.object({
   zaptecInstallationId: z.string().uuid(),
 });
 
-adminZaptec.post("/probe-users", async (c) => {
+adminZaptec.post("/probe-users", requirePermission("platform.tenant.read"), async (c) => {
   const raw = (await c.req.json().catch(() => null)) as unknown;
   const parsed = ProbeUsersBody.safeParse(raw);
   if (!parsed.success) {
@@ -366,7 +371,7 @@ const BulkAuthBody = z.object({
   enabled: z.boolean(),
 });
 
-adminZaptec.post("/bulk-auth", async (c) => {
+adminZaptec.post("/bulk-auth", requirePermission("platform.tenant.write"), async (c) => {
   const raw = (await c.req.json().catch(() => null)) as unknown;
   const parsed = BulkAuthBody.safeParse(raw);
   if (!parsed.success) {
@@ -391,7 +396,7 @@ adminZaptec.post("/bulk-auth", async (c) => {
   }
 });
 
-adminZaptec.post("/import", async (c) => {
+adminZaptec.post("/import", requirePermission("platform.tenant.write"), async (c) => {
   const raw = (await c.req.json().catch(() => null)) as unknown;
   const parsed = ZaptecImportInput.safeParse(raw);
   if (!parsed.success) {
