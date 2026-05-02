@@ -7,8 +7,10 @@ import {
   deleteSite,
   getSiteById,
   listAllSites,
+  moveSiteToOrg,
   updateSite,
 } from "../../repositories/sites";
+import { z } from "zod";
 import { listInstallationsBySite } from "../../repositories/installations";
 import { listCircuitsBySite } from "../../repositories/circuits";
 import { listSiteTree } from "../../repositories/site-tree";
@@ -65,6 +67,34 @@ adminSites.delete("/:siteId", async (c) => {
   const db = makePrisma(c.env);
   await deleteSite(db, c.req.param("siteId"));
   return c.json({ ok: true });
+});
+
+const MoveSiteBody = z.object({
+  targetOrgId: z.string().uuid(),
+});
+
+adminSites.post("/:siteId/move", async (c) => {
+  const raw = (await c.req.json().catch(() => null)) as unknown;
+  const parsed = MoveSiteBody.safeParse(raw);
+  if (!parsed.success) {
+    return c.json({ error: "validation", issues: parsed.error.issues }, 400);
+  }
+  const db = makePrisma(c.env);
+  try {
+    const result = await moveSiteToOrg(
+      db,
+      c.req.param("siteId"),
+      parsed.data.targetOrgId,
+      null,
+    );
+    return c.json({ result });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg === "site_not_found") return c.json({ error: msg }, 404);
+    if (msg === "target_org_not_found") return c.json({ error: msg }, 400);
+    if (msg === "already_in_target_org") return c.json({ error: msg }, 400);
+    throw err;
+  }
 });
 
 adminSites.get("/:siteId/circuits", async (c) => {

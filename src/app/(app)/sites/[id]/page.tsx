@@ -3,8 +3,10 @@ import { notFound } from "next/navigation";
 import { SectionTabs, OPERATIONS_TABS } from "@/components/section-tabs";
 import { apiFetchServer } from "@/lib/api-client-server";
 import type { SiteSummary } from "@straumvakt/shared/domain/sites";
+import type { OrgSummary } from "@straumvakt/shared/domain/orgs";
 import { DeleteButton } from "@/components/delete-button";
 import { EditSitePanel } from "./edit-panel";
+import { MoveSiteButton } from "./move-site-button";
 
 export const dynamic = "force-dynamic";
 
@@ -45,10 +47,16 @@ function extractNotes(raw: unknown): string {
 
 export default async function SiteDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const res = await apiFetchServer(`/api/admin/sites/${id}`);
-  if (res.status === 404) notFound();
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const { site } = (await res.json()) as { site: SiteSummary };
+  const [siteRes, orgsRes] = await Promise.all([
+    apiFetchServer(`/api/admin/sites/${id}`),
+    apiFetchServer(`/api/admin/orgs?includeArchived=false`),
+  ]);
+  if (siteRes.status === 404) notFound();
+  if (!siteRes.ok) throw new Error(`HTTP ${siteRes.status}`);
+  const { site } = (await siteRes.json()) as { site: SiteSummary };
+  const { orgs } = orgsRes.ok
+    ? ((await orgsRes.json()) as { orgs: OrgSummary[] })
+    : { orgs: [] };
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-8">
@@ -86,7 +94,26 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ id:
         }}
       />
 
-      <section className="mt-8 rounded-lg border border-rose-700/30 bg-rose-950/10 p-4">
+      <section className="mt-8 space-y-4 rounded-lg border border-amber-700/30 bg-amber-950/10 p-4">
+        <div>
+          <h2 className="text-sm font-semibold text-amber-200">Manage site</h2>
+          <p className="mt-1 text-xs text-amber-300/80">
+            Move this site (and everything under it — installations, circuits,
+            chargers, sessions, history) to a different organization. The
+            cascade runs in one transaction. Tariff anchors and vendor-credential
+            links are cleared and need to be re-set in the new org.
+          </p>
+        </div>
+        <MoveSiteButton
+          siteId={site.id}
+          siteDisplayName={site.displayName}
+          currentOrgId={site.orgId}
+          currentOrgDisplayName={site.orgDisplayName}
+          orgs={orgs}
+        />
+      </section>
+
+      <section className="mt-4 rounded-lg border border-rose-700/30 bg-rose-950/10 p-4">
         <div className="flex items-baseline justify-between gap-4">
           <div>
             <h2 className="text-sm font-semibold text-rose-200">Danger zone</h2>

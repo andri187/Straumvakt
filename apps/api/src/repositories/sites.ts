@@ -1,6 +1,7 @@
-import type { PrismaClient } from "../generated/prisma/client";
+import type { PrismaClient, Prisma } from "../generated/prisma/client";
 import type { SiteSummary } from "@straumvakt/shared/domain/sites";
 import type { SiteCreateInput, SiteUpdateInput } from "@straumvakt/shared/inputs/sites";
+import { recordAuditAction } from "../lib/audit";
 
 const include = {
   organization: { select: { displayName: true } },
@@ -141,5 +142,324 @@ export async function deleteSite(db: PrismaClient, id: string): Promise<void> {
       await tx.site.delete({ where: { id } });
     },
     { timeout: 60_000, maxWait: 30_000 },
+  );
+}
+
+export interface MoveSiteResult {
+  siteId: string;
+  fromOrgId: string;
+  toOrgId: string;
+  newPropertyId: string;
+  // Counts of rows whose org_id was updated.
+  affected: {
+    installations: number;
+    circuits: number;
+    siteAssets: number;
+    chargingStations: number;
+    evses: number;
+    connectors: number;
+    ocppIdentities: number;
+    chargeSessions: number;
+    meterValues: number;
+    reservations: number;
+    vendorAssetRefs: number;
+    externalCpmsRefs: number;
+    capabilityProfiles: number;
+    controlRoutingPolicies: number;
+  };
+  // What was nulled out (cross-org references that no longer apply).
+  cleared: {
+    siteTariffs: boolean;
+    installationCredentials: number;
+    installationRetailerTariffs: number;
+  };
+}
+
+/**
+ * Move a Site (and everything physically + logically under it) to a
+ * different organization. Tenancy invariant: every row in the subtree
+ * shares an org_id; this function updates them all atomically.
+ *
+ * Auto-creates a property in the target org mirroring the source
+ * property's displayName + address so the site has a valid parent in
+ * the new tenant. Operator can rename / merge properties afterwards.
+ *
+ * NULLs out cross-org references (tariff anchors, vendor credentials)
+ * because they belong to the source org's catalogue. Operator
+ * re-links them in the target org.
+ *
+ * What does NOT move: Memberships, VendorCredentials, Contracts,
+ * DriverContracts, CostCenters, Tariff catalogue rows. Those are
+ * tenant-owned in the original org and stay there.
+ */
+export async function moveSiteToOrg(
+  db: PrismaClient,
+  siteId: string,
+  targetOrgId: string,
+  actorUserId: string | null,
+): Promise<MoveSiteResult> {
+  return db.$transaction(
+    async (tx) => {
+      const site = await tx.site.findUnique({
+        where: { id: siteId },
+        include: {
+          property: true,
+        },
+      });
+      if (!site) throw new Error("site_not_found");
+
+      const fromOrgId = site.orgId;
+      if (fromOrgId === targetOrgId) {
+        throw new Error("already_in_target_org");
+      }
+
+      const targetOrg = await tx.organization.findUnique({
+        where: { id: targetOrgId },
+        select: { id: true },
+      });
+      if (!targetOrg) throw new Error("target_org_not_found");
+
+      // Auto-create a mirror property in target org. Always create
+      // fresh — picking an existing property would require operator
+      // input. Mirror keeps the location data intact; operator can
+      // merge/rename later.
+      const newProperty = await tx.property.create({
+        data: {
+          orgId: targetOrgId,
+          displayName: site.property.displayName,
+          locationType: site.property.locationType,
+          address: site.property.address as Prisma.InputJsonValue,
+          latitude: site.property.latitude,
+          longitude: site.property.longitude,
+          provisioningStatus: site.property.provisioningStatus,
+        },
+        select: { id: true },
+      });
+
+      // Collect ChargingStation IDs under this site (via SiteAsset).
+      // These drive the EVSE/Connector/OcppIdentity/Session cascades.
+      const siteAssetRows = await tx.siteAsset.findMany({
+        where: { siteId },
+        select: { id: true },
+      });
+      const stationIds = siteAssetRows.map((s) => s.id);
+
+      // Update org_id on every level of the subtree. Each updateMany
+      // is scoped via foreign-key chains the schema already supports.
+      const installations = await tx.installation.updateMany({
+        where: { siteId },
+        data: { orgId: targetOrgId },
+      });
+      const circuits = await tx.circuit.updateMany({
+        where: { siteId },
+        data: { orgId: targetOrgId },
+      });
+      const siteAssets = await tx.siteAsset.updateMany({
+        where: { siteId },
+        data: { orgId: targetOrgId },
+      });
+      const chargingStations =
+        stationIds.length > 0
+          ? await tx.chargingStation.updateMany({
+              where: { siteAssetId: { in: stationIds } },
+              data: { orgId: targetOrgId },
+            })
+          : { count: 0 };
+      const evses =
+        stationIds.length > 0
+          ? await tx.eVSE.updateMany({
+              where: { chargingStationId: { in: stationIds } },
+              data: { orgId: targetOrgId },
+            })
+          : { count: 0 };
+      const evseRows =
+        stationIds.length > 0
+          ? await tx.eVSE.findMany({
+              where: { chargingStationId: { in: stationIds } },
+              select: { id: true },
+            })
+          : [];
+      const evseIds = evseRows.map((e) => e.id);
+      const connectors =
+        evseIds.length > 0
+          ? await tx.connector.updateMany({
+              where: { evseId: { in: evseIds } },
+              data: { orgId: targetOrgId },
+            })
+          : { count: 0 };
+      const ocppIdentities =
+        stationIds.length > 0
+          ? await tx.ocppIdentity.updateMany({
+              where: { chargingStationId: { in: stationIds } },
+              data: { orgId: targetOrgId },
+            })
+          : { count: 0 };
+      const sessionRows =
+        stationIds.length > 0
+          ? await tx.chargeSession.findMany({
+              where: { chargingStationId: { in: stationIds } },
+              select: { id: true },
+            })
+          : [];
+      const sessionIds = sessionRows.map((s) => s.id);
+      const chargeSessions =
+        stationIds.length > 0
+          ? await tx.chargeSession.updateMany({
+              where: { chargingStationId: { in: stationIds } },
+              data: { orgId: targetOrgId },
+            })
+          : { count: 0 };
+      // MeterValue is keyed by sessionId, not chargingStationId; cascade
+      // via the session list we just collected.
+      const meterValues =
+        sessionIds.length > 0
+          ? await tx.meterValue.updateMany({
+              where: { sessionId: { in: sessionIds } },
+              data: { orgId: targetOrgId },
+            })
+          : { count: 0 };
+      const connectorIds: string[] =
+        evseIds.length > 0
+          ? (
+              await tx.connector.findMany({
+                where: { evseId: { in: evseIds } },
+                select: { id: true },
+              })
+            ).map((c) => c.id)
+          : [];
+      const reservations =
+        connectorIds.length > 0
+          ? await tx.reservation.updateMany({
+              where: { connectorId: { in: connectorIds } },
+              data: { orgId: targetOrgId },
+            })
+          : { count: 0 };
+      const vendorAssetRefs =
+        stationIds.length > 0
+          ? await tx.vendorAssetRef.updateMany({
+              where: { chargingStationId: { in: stationIds } },
+              data: { orgId: targetOrgId },
+            })
+          : { count: 0 };
+      const externalCpmsRefs =
+        stationIds.length > 0
+          ? await tx.externalCpmsRef.updateMany({
+              where: { chargingStationId: { in: stationIds } },
+              data: { orgId: targetOrgId },
+            })
+          : { count: 0 };
+      const capabilityProfiles =
+        stationIds.length > 0
+          ? await tx.capabilityProfile.updateMany({
+              where: { chargingStationId: { in: stationIds } },
+              data: { orgId: targetOrgId },
+            })
+          : { count: 0 };
+      const controlRoutingPolicies =
+        stationIds.length > 0
+          ? await tx.controlRoutingPolicy.updateMany({
+              where: { chargingStationId: { in: stationIds } },
+              data: { orgId: targetOrgId },
+            })
+          : { count: 0 };
+
+      // Clear cross-org references. Tariff anchors point to the source
+      // org's tariff catalogue; vendor-credentials FKs point to source
+      // org's credentials. Operator re-links in the target org.
+      const installationsBefore = await tx.installation.findMany({
+        where: { siteId },
+        select: { credentialsId: true, retailerTariffId: true },
+      });
+      const installationCredentialsCount = installationsBefore.filter((i) => i.credentialsId !== null).length;
+      const installationRetailerTariffsCount = installationsBefore.filter((i) => i.retailerTariffId !== null).length;
+      await tx.installation.updateMany({
+        where: { siteId },
+        data: {
+          credentialsId: null,
+          retailerTariffId: null,
+        },
+      });
+
+      const siteBefore = await tx.site.findUnique({
+        where: { id: siteId },
+        select: {
+          dsoTariffId: true,
+          usrfTariffId: true,
+          usrfPremTariffId: true,
+          xtrrfTariffId: true,
+          spvivfTariffId: true,
+        },
+      });
+      const siteHadTariffs =
+        !!siteBefore &&
+        (siteBefore.dsoTariffId ||
+          siteBefore.usrfTariffId ||
+          siteBefore.usrfPremTariffId ||
+          siteBefore.xtrrfTariffId ||
+          siteBefore.spvivfTariffId);
+
+      // Update the site itself last — flips org_id + property_id +
+      // clears tariffs in one statement.
+      await tx.site.update({
+        where: { id: siteId },
+        data: {
+          orgId: targetOrgId,
+          propertyId: newProperty.id,
+          dsoTariffId: null,
+          usrfTariffId: null,
+          usrfPremTariffId: null,
+          xtrrfTariffId: null,
+          spvivfTariffId: null,
+        },
+      });
+
+      const result: MoveSiteResult = {
+        siteId,
+        fromOrgId,
+        toOrgId: targetOrgId,
+        newPropertyId: newProperty.id,
+        affected: {
+          installations: installations.count,
+          circuits: circuits.count,
+          siteAssets: siteAssets.count,
+          chargingStations: chargingStations.count,
+          evses: evses.count,
+          connectors: connectors.count,
+          ocppIdentities: ocppIdentities.count,
+          chargeSessions: chargeSessions.count,
+          meterValues: meterValues.count,
+          reservations: reservations.count,
+          vendorAssetRefs: vendorAssetRefs.count,
+          externalCpmsRefs: externalCpmsRefs.count,
+          capabilityProfiles: capabilityProfiles.count,
+          controlRoutingPolicies: controlRoutingPolicies.count,
+        },
+        cleared: {
+          siteTariffs: !!siteHadTariffs,
+          installationCredentials: installationCredentialsCount,
+          installationRetailerTariffs: installationRetailerTariffsCount,
+        },
+      };
+
+      // Audit lands under the target org (where the site now lives).
+      await recordAuditAction(tx, {
+        orgId: targetOrgId,
+        actorUserId,
+        actorKind: "user",
+        action: "site.move_to_org",
+        targetType: "site",
+        targetId: siteId,
+        metadata: {
+          fromOrgId,
+          toOrgId: targetOrgId,
+          newPropertyId: newProperty.id,
+          affected: result.affected,
+          cleared: result.cleared,
+        },
+      });
+
+      return result;
+    },
+    { timeout: 90_000, maxWait: 30_000 },
   );
 }

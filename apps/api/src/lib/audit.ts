@@ -16,8 +16,15 @@ export interface AuditActionInput {
   metadata?: Record<string, unknown>;
 }
 
+// Accept either a PrismaClient or a Prisma.TransactionClient so callers
+// inside db.$transaction can write the audit row in the same tx.
+type AuditDb =
+  | PrismaClient
+  | Pick<PrismaClient, "auditAction">
+  | Prisma.TransactionClient;
+
 export async function recordAuditAction(
-  db: PrismaClient,
+  db: AuditDb,
   input: AuditActionInput,
 ): Promise<void> {
   await db.auditAction.create({
