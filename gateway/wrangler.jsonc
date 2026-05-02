@@ -21,8 +21,12 @@
     }
   ],
 
-  // Service Binding to the main app for auth lookups + event ingest. The
-  // binding name 'MAIN_APP' maps to the 'hlada' Worker on the same account.
+  // Service Binding to the API Worker on this environment for auth
+  // lookups + event ingest. The binding name 'MAIN_APP' is environment-
+  // dependent: production resolves to 'hlada' (UI Worker; pre-cutover);
+  // staging resolves to 'hlada-api-staging' (API Worker; Sprint S1
+  // cutover already shipped). Production cutover (gateway → 'hlada-api')
+  // is deferred to Sprint 4 per docs/retros/sprint-03.md carry-forward.
   "services": [
     {
       "binding": "MAIN_APP",

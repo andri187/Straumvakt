@@ -2,9 +2,20 @@
  * Gateway → main-app ingest client.
  *
  * After the translator produces a domain event envelope from an OCPP
- * message, we POST it to main app's `/api/ocpp/events` route over the
- * Cloudflare Service Binding. Matches the contract the main-app
- * repository (`src/lib/repositories/events.ts`) expects.
+ * message, we POST it to the main-app's `/api/ocpp/events` route over
+ * the Cloudflare Service Binding. Resolves per environment:
+ *
+ *   • staging  → MAIN_APP=hlada-api-staging (the API Worker)
+ *   • prod     → MAIN_APP=hlada (the UI Worker, pre-cutover)
+ *
+ * Both environments mount `/api/ocpp/events`: api-staging picked it up
+ * in Sprint S1 (apps/api/src/routes/internal/ocpp-events.ts); the UI
+ * Worker has had it since Sprint 1.1. The URL stays `/api/ocpp/events`
+ * for both surfaces during the cutover window. Sprint 4 renames it to
+ * `/api/internal/ocpp-events` for prefix consistency with the other
+ * internal routes — that rename happens atomically alongside the
+ * production binding flip (gateway → hlada-api) and the UI Worker
+ * route deletion.
  *
  * The caller (the DO) decides whether to retry on failure — this
  * module just returns the structured outcome.

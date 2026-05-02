@@ -30,6 +30,7 @@ import { adminGroups } from "./routes/admin/groups";
 import { adminIdTokens } from "./routes/admin/id-tokens";
 import { internalOcppAuth } from "./routes/internal/ocpp-auth";
 import { internalOcppAuthorize } from "./routes/internal/ocpp-authorize";
+import { internalOcppEvents } from "./routes/internal/ocpp-events";
 import { internalPendingDiscovery } from "./routes/internal/pending-discovery";
 import { makePrisma } from "./lib/prisma";
 import { buildRegistry } from "./lib/dispatch-targets";
@@ -95,6 +96,11 @@ app.route("/api/admin/tokens", adminIdTokens);
 // header (ADR 0004), not the admin session middleware.
 app.route("/api/internal/ocpp-auth", internalOcppAuth);
 app.route("/api/internal/ocpp-authorize", internalOcppAuthorize);
+// Mounted at /api/ocpp/events (not /api/internal/ocpp-events) to match
+// what the gateway already POSTs to. The prefix-consistency rename is
+// deferred to Sprint 4 to land atomically with the production binding
+// flip (gateway → hlada-api) and the UI Worker route deletion.
+app.route("/api/ocpp/events", internalOcppEvents);
 app.route("/api/internal/pending-discovery", internalPendingDiscovery);
 
 app.notFound((c) => c.json({ error: "not_found", path: c.req.path }, 404));
