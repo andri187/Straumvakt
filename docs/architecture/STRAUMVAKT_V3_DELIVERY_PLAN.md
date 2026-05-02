@@ -576,74 +576,138 @@ are checked. Specifically:
 
 ---
 
-## 7. Sprint 4 — Data Storage Lifecycle
+## 7. Sprint 4 — Membership + Permissions Foundation (ADR 0014 build order)
 
-> **Pilot scope (per [ADR 0006](../adr/0006-pilot-scope-rev2-2026-04-25.md)):**
-> First concrete implementation of V3 §8 retention classes. Without
-> this, `events.event_log` `raw_protocol` rows accumulate indefinitely
-> and the database becomes expensive long before pilot hits scale.
-> The Commercial Model that previously sat in this slot moves to
-> Sprint 5; the Issue Engine that previously sat in Sprint 5 moved
-> entirely to post-pilot per ADR 0006 (tag D).
+> **Scope shift recorded in [ADR 0015](../adr/0015-sprint-3-scope-swap-ocpi-to-identity.md):**
+> Sprint 3 absorbed identity-foundation work that ADR 0014 originally
+> scheduled for here. With that schema landed, Sprint 4 picks up ADR
+> 0014's "Sprint 4 (membership + permissions foundation)" build-order
+> items and ships the first real role-aware authorization. The
+> previous occupant of this slot — **Data Storage Lifecycle** — slips
+> to **Sprint 6**: at the pilot scale (20 chargers × 30 days = ~3 M
+> events) the unbounded growth that motivated the original placement
+> isn't blocking, while membership + permissions IS blocking real
+> customer onboarding (ADR 0014 §"These gaps will block"). Plus the
+> Sprint 3 carry-forward items (production cutover for events ingest,
+> per-installation `enforceAuthorize` flag) land here so they don't
+> haunt Sprint 5.
 
-**Goal.** The five retention classes from architecture canon §8 are
-enforced by real machinery: nightly aggregation, age-out jobs,
-cold-archive scaffolding. The platform's data lifecycle is no longer
-implicit.
+**Goal.** Operators stop being a binary `requireAdmin` check and
+become real role-bearers. Customer admins can invite team members in
+Sprint 5; this sprint lays the model and middleware that Sprint 5
+plugs into. Plus the production gateway flip and per-installation
+auth-enforce flag — Sprint 3 carry-forward closure items.
 
-**Entry.** Sprint 3 exit met.
+**Entry.** Sprint 3 closure list checked (membership scaffolding
+shipped, S1 events-ingest port live on staging, Authorize handler in
+shadow mode, ADR 0015 + retro committed).
 
-**Exit.** Nightly aggregation job has fired ≥ 7 times against
-production-shape data (synthetic if needed); aggregate rows match
-underlying `raw_protocol` rows by sum / count assertions; synthetic
-age-out test demonstrably purges only `raw_protocol` rows older than
-the configured TTL while preserving `financial` and `operational`
-classes; cold-archive scaffolding writes `issue_history` to R2 EU
-jurisdiction.
+**Exit.** All six milestones below have a green test or a hand-tested
+round-trip; the last `requireAdmin` call in `apps/api/src/routes/admin/*`
+is replaced with `requirePermission`; production gateway binds to
+`hlada-api` (not `hlada`) and the events route is renamed to
+`/api/internal/ocpp-events`; Dalvegur runs with `Installation.enforceAuthorize=true`
+and only seeded RFIDs charge.
 
 **Milestones.**
 
-- **4.1** Retention-class column enforced on `events.event_log`. Every
-  row has `retention_class` ∈ {financial, operational, raw_protocol,
-  aggregate, issue_history}. Existing rows backfilled to a sensible
-  default (most are `raw_protocol`).
-  - *Exit:* `SELECT retention_class, COUNT(*)` shows expected
-    distribution; null count = 0.
+- **4.1** Membership / Platform schema additions. `MembershipRole` +
+  `MembershipStatus` enums; `Membership` lifecycle fields
+  (`invitedById`, `invitedAt`, `acceptedAt`, `suspendedAt`, `revokedAt`,
+  `scopeSiteIds[]`, `scopePropertyIds[]`); `PlatformAdmin` → `PlatformGrant`
+  rename with role + lifecycle + nullable scope JSON. **Additive
+  only** per Rule 4 — drops only the `PlatformAdmin` table after
+  backfill into `PlatformGrant`.
+  - *Exit:* migration applies cleanly to a fresh local Neon branch;
+    every existing `PlatformAdmin` row materialised as `PlatformGrant`
+    with `role='platform_admin'`; every existing `Membership` row
+    backfilled with `role='admin'`, `status='active'`,
+    `acceptedAt=createdAt`.
 
-- **4.2** Nightly aggregation job. Cloudflare Cron Trigger runs at
-  03:00 Europe/Reykjavik; reads `raw_protocol` rows since the last
-  watermark; writes `aggregate` rows (per-charger, per-hour) capturing
-  message counts, energy delta, fault count.
-  - *Exit:* Job runs in staging for 7 consecutive nights; aggregate
-    rows match underlying raw rows by spot-check assertions.
+- **4.2** Permission catalogue + role-to-permission map. `~30` atomic
+  verbs in `apps/api/src/lib/auth/permissions.ts` per ADR 0014's
+  Layer-4 listing; `MEMBERSHIP_ROLE_PERMISSIONS` and
+  `PLATFORM_ROLE_PERMISSIONS` records mapping each enum value to its
+  bundle. Exhaustive-switch test asserts every enum value has an
+  entry.
+  - *Exit:* permission set documented in code; map covers every
+    `MembershipRole` and `PlatformRole` value; type test catches new
+    enum values that don't have a map entry.
 
-- **4.3** `raw_protocol` age-out. Configurable TTL (default 30 days,
-  pilot default 60); a daily job deletes `raw_protocol` rows older
-  than TTL **only where the corresponding aggregate row exists**.
-  - *Exit:* Synthetic test passes — ageing a row older than TTL with
-    a matching aggregate row → row deleted; ageing a row older than
-    TTL without a matching aggregate row → row retained, alert raised.
+- **4.3** `requirePermission(perm)` middleware + admin-route
+  migration. New middleware in `apps/api/src/lib/auth/`. Migrate
+  `apps/api/src/routes/admin/*` route-by-route. `requireAdmin` stays
+  during the transition for routes not yet migrated.
+  - *Exit:* every admin route gated by either `requirePermission(...)`
+    or `requireAdmin`; no orphan-style guards. Test per migrated
+    route: minimal-permission user → 200; insufficient-permission user
+    → 403.
 
-- **4.4** Financial + operational retention "kept hot indefinitely."
-  Explicit policy doc + migration test that rows of these classes are
-  not touched by any age-out job.
-  - *Exit:* Policy doc lives in `/docs/runbooks/retention-classes.md`;
-    age-out unit test asserts financial / operational rows are
-    untouched.
+- **4.4** Sidebar restructure (Operations / Tenants / Platform tiers
+  per ADR 0014 §"Sidebar navigation reflecting this model"). Move
+  Properties under Operations; rename current Accounts navigation to
+  Tenants with three sub-tabs (Organizations / Agents / Drivers); add
+  a Platform group visible only to `PlatformGrant` holders.
+  - *Exit:* sidebar visibility responds to membership / platform
+    grants; `requirePermission`-gated nav items hide for users
+    without the verb; manual smoke against three test users (operator
+    member, platform admin, no-perms).
 
-- **4.5** Cold-archive scaffolding for `issue_history`. R2 EU bucket,
-  monthly archive job (will run for the first time post-pilot when
-  issue data exists). Scaffolding lands now so the contract is set
-  before issue data starts flowing post-pilot.
-  - *Exit:* R2 bucket configured; monthly job exists behind a feature
-    flag (issue history is post-pilot per ADR 0006 tag D); runbook
-    entry written.
+- **4.5** Production cutover for events-ingest path. Per Sprint 3
+  retro carry-forward. Atomic deploy: production gateway binding
+  flips `hlada` → `hlada-api`; rename `/api/ocpp/events` to
+  `/api/internal/ocpp-events` on api Worker; gateway URL flips; UI
+  Worker route deleted (`src/app/api/ocpp/events/`,
+  `src/lib/ocpp/{event-envelope,projections,bootstrap,ingest-auth}.ts`,
+  `src/lib/repositories/events.ts`).
+  - *Exit:* production gateway smoke list passes (`OcppIdentity.lastSeenAt`
+    ticks on Heartbeat; `Connector.status` flips on StatusNotification;
+    `ChargeSession` row appears on StartTransaction). UI Worker
+    serves only `/(app)/*` routes; the events ingest path 404s
+    cleanly on UI Worker (loud failure for any stale poster).
 
-**Risks.** Aggregation correctness is high-trust — once `raw_protocol`
-rows are aged out, you can't reconstruct them from aggregate. Ship
-the aggregator behind a "do nothing" feature flag for one full week
-in staging before age-out runs against real data. CLAUDE.md Rule 5
-applies — downstream billing math depends on these rows surviving.
+- **4.6** `Installation.enforceAuthorize` flag + per-installation
+  enforced auth. Schema column added (boolean, default false). Gateway
+  reads the flag from the API authorize response; when `true`, replies
+  per the verdict; when `false`, stays in shadow mode (today's
+  behaviour). Operator flips Dalvegur to `enforceAuthorize=true` once
+  the IdToken table is verified seeded.
+  - *Exit:* test charger swipe with seeded RFID → Accepted, session
+    starts; swipe with unknown idTag → Rejected, no session; flag
+    flip from operator UI persists and applies on the next
+    Authorize.req.
+
+**Risks.**
+
+- **Schema migration in 4.1 is the largest single change since Sprint
+  0** — touches `Membership`, `User`, replaces `PlatformAdmin`, trims
+  `OrganizationRole` enum (already trimmed in Sprint 3 prep). Rule 4
+  applies; explicit operator instruction needed before each schema
+  edit. Migration runs once against staging Neon; backfill is the
+  irreversible part. Test against a scratch branch first.
+- **4.3 admin-route migration is mechanical but spans ~30 routes** —
+  easy to miss one. Watch for routes still using `requireAdmin` after
+  the migration sweep with a grep. Don't remove `requireAdmin` until
+  every route is on the new middleware.
+- **4.5 atomic deploy** — gateway and api Worker must deploy together.
+  If gateway flips first while api Worker still serves old URL,
+  production loses event ingest for the deploy window. Sequence: API
+  mounts new URL → smoke → gateway URL flip → smoke → UI Worker
+  route delete → smoke.
+- **4.6 enforceAuthorize=true on Dalvegur is a customer-impacting
+  flip** — without seeded tokens, every swipe rejects. Confirm IdToken
+  table state (Sprint 3 backfill ran cleanly + every operator-known
+  card has a row) before flipping.
+
+**Out of scope (Sprint 5+).**
+
+- Invite flow (agent + driver self-registration) → Sprint 5 per ADR 0014.
+- Impersonation flow (audit + session swap + max duration) → Sprint 5.
+- Postgres RLS as defense-in-depth → Sprint 9.
+- AuditAction append-only DB enforcement → Sprint 9.
+- MFA mandatory for `PlatformGrant` holders → Sprint 9.
+- Data Storage Lifecycle (retention classes + nightly aggregation +
+  age-out + cold archive) → **Sprint 6** (slipped from this slot).
 
 ---
 
