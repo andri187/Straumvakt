@@ -440,61 +440,139 @@ CRUD form explosion is the obvious time sink — keep forms minimal
 
 ---
 
-## 6. Sprint 3 — OCPI Foundation (CPO-only for pilot)
+## 6. Sprint 3 — Identity Foundation (ADR 0014 closure + S1 events-ingest fix)
 
-> **Pilot scope (per [ADR 0005](../adr/0005-pilot-scope-tightening-2026-04-25.md), tag A):**
-> CPO-side ships in pilot. **eMSP endpoints + OCPI token push to
-> roaming partners are deferred to post-pilot.** Token translator
-> stays — it supports the CPO-side authorize path (charger sends
-> RFID, we resolve to a local user). The Driver Experience sprint
-> that previously sat in this slot moved entirely to post-pilot per
-> [ADR 0006](../adr/0006-pilot-scope-rev2-2026-04-25.md) (tag B).
+> **Scope swap recorded in [ADR 0015](../adr/0015-sprint-3-scope-swap-ocpi-to-identity.md):**
+> The original Sprint 3 ("OCPI Foundation (CPO-only for pilot)") deferred
+> mid-sprint when ADR 0014 work substituted. OCPI moves to a new **Sprint 14
+> — OCPI Foundation (post-pilot)**. The gbtNotes scale-plan item **S1
+> (events-ingest path fix)** absorbs into this sprint's closure list. This
+> rewrite preserves Sprint 3's slot in the calendar but replaces its goal
+> with the work that actually shipped + the operational items that must close
+> alongside it.
 
-**Goal.** OCPI is a foundation seam, not a Phase-5 scaffold. CPO-side
-endpoints respond correctly; external Property/Site shadow records
-work. Pilot is CPO-only; eMSP shipping post-pilot.
+**Goal.** ADR 0014's Build-Order *"NOW (Sprint 3 finish)"* items land. The
+identity-model schema additions (`UserAudience`, `IdToken`, `UserVendorRef`,
+`VendorUserGroup`, `VendorUserGroupMembership`, `Vehicle`) gain at least
+one write path each so they exit orphan-table status. The events-ingest
+path on staging is fixed so projections actually fire under inbound
+charger traffic. The OCPP Authorize handler on the gateway either becomes
+real or Dalvegur reverts to anonymous — the unsafe middle is closed. Sprint 3
+has a known-true exit and Sprint 4 can pull from the membership-and-permissions
+queue without inheriting Sprint 3 carry-forward.
 
-**Entry.** Sprint 2 exit met (admin onboarding flow demonstrable).
+**Entry.** Sprint 2 exit met (admin onboarding flow demonstrable). ADR 0014
+authored (2026-05-01). ADR 0015 authored (2026-05-02).
 
-**Exit.** OCPI 2.2.1 **CPO** endpoints respond to contract tests.
-Token translator works for the CPO-receive direction (RFID UID + any
-locally-issued OCPI token resolve to a user). Hub connection code
-exists for future use but no live partner contracted.
+**Exit.** All items in [docs/retros/sprint-03.md "closure list"](../retros/sprint-03.md)
+are checked. Specifically:
+
+1. Identity-schema new tables have repository-level write paths (not just DDL).
+2. gbtNotes Sprint S1 lands: `/api/ocpp/events` ports to `apps/api`,
+   gateway URL one-line update, UI-Worker-side route deleted, smoke list
+   passes (BootNotification, Heartbeat, MeterValues, StatusNotification,
+   StartTransaction → ChargeSession row, StopTransaction).
+3. Dalvegur is not running with `AuthenticationType=2` against a stub
+   gateway. Either the gateway Authorize handler is real (per the design
+   sketched 2026-05-02), or the Zaptec installation is reverted to
+   `AuthenticationType=0`. Pick one; not picking is not an option.
+4. ADR 0015, this delivery plan edit, and the Sprint 3 retro are committed
+   on the working branch.
 
 **Milestones.**
 
-- **3.1** CPO endpoints: `/ocpi/cpo/2.2.1/locations`,
-  `/ocpi/cpo/2.2.1/sessions`, `/ocpi/cpo/2.2.1/cdrs`,
-  `/ocpi/cpo/2.2.1/tariffs`, `/ocpi/cpo/2.2.1/tokens` (authorize).
-  Projections from our data into OCPI shapes.
-  - *Exit:* Contract test against OCPI 2.2.1 reference spec passes.
+- **3.1** ADR 0014 schema landed.
+  - *Status:* DONE — migration `20260502120000_user_profile_enrichment`,
+    commit history under `[Sprint 3 / ADR 0014]` tag.
+  - *Exit:* `npx prisma validate` clean against the new schema; migrations
+    apply cleanly to a fresh local Neon branch.
 
-- **3.2** ~~eMSP endpoints~~ — **deferred per ADR 0005 (tag A).**
-  `/ocpi/emsp/2.2.1/tokens` (push) and `/ocpi/emsp/2.2.1/cdrs` (pull)
-  ship post-pilot together with OCPI token push to roaming partners.
-  Schema (`roaming.external_properties`, `roaming.cdr_queue`) stays
-  in place from Sprint 0 so the post-pilot work is additive.
+- **3.2** Orphan-table write paths. Each of `IdToken`, `UserVendorRef`,
+  `VendorUserGroup`, `Vehicle` gains at least one repository function
+  that writes (not just lists). Manual admin user-create extension is
+  the canonical path for `IdToken` and `UserVendorRef` — operator creates
+  a user in `/people/users/new` and attaches RFID tokens inline in the
+  same form. `VendorUserGroup` keeps its current "deferred sync engine"
+  stance but stops being claimed as part of Sprint 3 closure (its write
+  path is a Sprint 4+ concern).
+  - *Exit:* a hand-tested round trip — create a user with an RFID token
+    via the admin form; row exists in `identity.id_tokens`; surfaces in
+    the user-detail page; revoke works; idempotent re-create surfaces
+    the existing row instead of duplicating.
 
-- **3.3** Token translator (CPO-receive only). `roaming.ocpi_tokens`
-  table maps OCPI tokens to our users / family groups / cards.
-  Authorize requests from chargers flow through: charger → OCPP
-  gateway → authorize check (local RFID or known token) → response.
-  - *Exit:* Authorization works for a local RFID UID and a known
-    locally-issued token.
+- **3.3** Sprint S1 events-ingest port. Per
+  [`gbtNotes/2026-05-01-ocpp-ingest-current-state-and-gaps.md`](../../gbtNotes/2026-05-01-ocpp-ingest-current-state-and-gaps.md)
+  and the seven sharpenings from
+  [`gbtNotes/ocpp-ingest-note-review.md`](../../gbtNotes/ocpp-ingest-note-review.md).
+  Files port from `src/lib/ocpp/{event-envelope,projections,bootstrap}` and
+  `src/lib/repositories/events` into `apps/api/src/lib/ocpp/*` and
+  `apps/api/src/lib/repositories/events.ts`. New Hono handler at
+  `apps/api/src/routes/internal/ocpp-events.ts`, mounted at
+  `/api/internal/ocpp-events` (renamed from `/api/ocpp/events` for prefix
+  consistency). Gateway `gateway/src/ingest-client.ts` updated. UI-Worker-side
+  `src/app/api/ocpp/events/route.ts` and supporting files **deleted in the
+  same change set** to avoid a foot-gun where both routes accept traffic.
+  Idempotency-key derivation, transaction boundary, and dedupe TTL
+  preserved exactly. Auth-secret parity diff between the two existing
+  ingest-auth modules done before cutover.
+  - *Exit:* staging gateway forwards a synthetic event; `apps/api`
+    accepts; ingest test passes for missing header / malformed JSON /
+    invalid envelope / idempotent replay / fresh event success;
+    `OcppIdentity.lastSeenAt` ticks on Heartbeat from a real charger;
+    `Connector.status` flips on StatusNotification; a `ChargeSession`
+    row appears on StartTransaction.
 
-- **3.4** Hub connector scaffold. A `roaming.hub_connections` table
-  with fields for Hubject, Gireve, or direct peer. Schema only — no
-  live partner credentials configured during pilot.
-  - *Exit:* Hub connection row can be created and listed in console;
-    real connection lands when eMSP ships post-pilot.
+- **3.4** OCPP Authorize handler real-or-revert. Operator chooses one:
+  - **(a)** Replace gateway `Authorize.req` and `StartTransaction.req`
+    stubs with calls to a new `/api/internal/ocpp-authorize` route. Route
+    looks up `IdToken` by `value`, applies status + scope rules, returns
+    OCPP-shaped `idTagInfo`. Per-installation `enforceAuthorize` flag
+    defaults `false` (shadow mode — log verdicts, return Accepted) so
+    deployment doesn't break customers. Flip to `true` per-installation
+    once the IdToken table is seeded.
+  - **(b)** Operator reverts Dalvegur installation to `AuthenticationType=0`
+    in the Zaptec portal. Dev stub stays in the gateway as documented
+    in `identity-do.ts:206-207`. Real handler ships in Sprint 4 or later.
+  - *Exit:* whichever path was picked, verified against the live Dalvegur
+    installation. The unsafe middle ("auth required + stub gateway")
+    is closed.
 
-- **3.5** Contract tests for OCPI 2.2.1 CPO schemas. Vendored JSON
-  Schemas in the repo. Nightly CI.
-  - *Exit:* `npm run test:ocpi-contract` passes for the CPO surface.
+- **3.5** Reconciliation docs. ADR 0015, this delivery-plan §6 rewrite,
+  the Sprint 3 retro at `docs/retros/sprint-03.md`. Retro names
+  carry-forward items into Sprint 4 explicitly.
+  - *Exit:* all three docs committed; ADR 0015 cross-referenced in
+    ADR 0014 (`Relates to:` line); delivery plan §11 (post-pilot timeline)
+    references the new Sprint 14 OCPI placement.
 
-**Risks.** OCPI 2.2.1 has real ambiguities (party IDs, versioning
-semantics, tariff alternatives). Follow the Virta / Hubject interop
-docs closely. Book 2–3 days of spec-reading before coding.
+**Risks.**
+
+- **3.2 surface area is larger than it looks.** Five new tables, each
+  needing one write path. The admin form rewrite is the bulk of it.
+  If a write path surfaces a schema issue (e.g., `VendorUserGroup`
+  tenancy semantics unclear), the milestone carries forward to Sprint 4
+  as captured carry-forward, not silent drift. Capture in the retro.
+- **3.3 is a coordinated gateway+API deploy.** Atomicity matters. Plan
+  a deploy window outside customer traffic. Production cutover
+  (gateway from `hlada` to `hlada-api`) is **deferred to Sprint 4** —
+  Sprint 3 only cuts staging. The note's review §10 covers the
+  production sequence.
+- **3.4 cannot drift.** It's the operational safety item. Pick a path
+  on day one of the closure window; do not let the unsafe middle persist.
+
+**Out of scope (deferred to Sprint 4 or later).**
+
+- `MembershipRole` + `MembershipStatus` enums and lifecycle fields → Sprint 4.
+- `requirePermission(...)` middleware migration from `requireAdmin` → Sprint 4.
+- Invite flow + driver self-registration → Sprint 5.
+- Membership scope narrowing (`scopeSiteIds`, `scopePropertyIds`) → Sprint 4.
+- `PlatformGrant` rename + role bundling → Sprint 4.
+- Sidebar restructure (Operations / Tenants / Platform per ADR 0014's
+  navigation section) → Sprint 4 (UI work paired with the permissions migration).
+- VendorUserGroup write/sync paths → Sprint 4 or later.
+- OCPI Foundation work (originally 3.1–3.5) → **Sprint 14 (post-pilot)**.
+  Schema scaffolding (`roaming.external_properties`, `roaming.cdr_queue`,
+  `roaming.ocpi_tokens`, `roaming.hub_connections`) stays in place from
+  Sprint 0 so the post-pilot add is additive, not migration-bearing.
 
 ---
 
