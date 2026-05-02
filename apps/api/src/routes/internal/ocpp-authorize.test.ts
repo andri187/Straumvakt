@@ -2,6 +2,10 @@
 // load-bearing function; the Hono surface is thin (header gate + JSON
 // validation), so most tests drive the resolver directly with a
 // hand-rolled PrismaLike mock.
+//
+// Every result includes the per-installation `enforceAuthorize` flag
+// (Sprint 4 4.6) — defaults to false when the identity / installation
+// chain is missing, true only when the operator has flipped the flag.
 
 import { describe, expect, it } from "vitest";
 import { resolveAuthorize, type PrismaLike } from "./ocpp-authorize";
@@ -15,7 +19,10 @@ interface TokenRow {
 }
 
 interface IdentityRow {
-  chargingStation: { installationId: string | null } | null;
+  chargingStation: {
+    installationId: string | null;
+    installation: { enforceAuthorize: boolean } | null;
+  } | null;
 }
 
 function makeDb({
@@ -35,6 +42,20 @@ function makeDb({
   };
 }
 
+/** Convenience for tests: build an identity row with the given
+ *  installationId + enforce flag (defaults closed). */
+function id(
+  installationId: string | null,
+  enforceAuthorize = false,
+): IdentityRow {
+  return {
+    chargingStation: {
+      installationId,
+      installation: installationId ? { enforceAuthorize } : null,
+    },
+  };
+}
+
 const INPUT = {
   idTag: "DEAD-BEEF",
   identityId: "11111111-1111-1111-1111-111111111111",
@@ -44,7 +65,11 @@ const INPUT = {
 describe("resolveAuthorize", () => {
   it("returns Invalid/unknown_id_tag when token row is missing", async () => {
     const result = await resolveAuthorize(makeDb(), INPUT);
-    expect(result).toEqual({ verdict: "Invalid", reason: "unknown_id_tag" });
+    expect(result).toEqual({
+      verdict: "Invalid",
+      reason: "unknown_id_tag",
+      enforceAuthorize: false,
+    });
   });
 
   it("returns Accepted with userId for an active unscoped token", async () => {
@@ -63,6 +88,7 @@ describe("resolveAuthorize", () => {
       reason: "ok",
       userId: "user-1",
       idTokenId: "token-1",
+      enforceAuthorize: false,
     });
   });
 
@@ -81,6 +107,7 @@ describe("resolveAuthorize", () => {
       verdict: "Blocked",
       reason: "revoked",
       idTokenId: "token-2",
+      enforceAuthorize: false,
     });
   });
 
@@ -99,6 +126,7 @@ describe("resolveAuthorize", () => {
       verdict: "Expired",
       reason: "expired_status",
       idTokenId: "token-3",
+      enforceAuthorize: false,
     });
   });
 
@@ -117,6 +145,7 @@ describe("resolveAuthorize", () => {
       verdict: "Blocked",
       reason: "suspended",
       idTokenId: "token-4",
+      enforceAuthorize: false,
     });
   });
 
@@ -135,6 +164,7 @@ describe("resolveAuthorize", () => {
       verdict: "Expired",
       reason: "expiry_passed",
       idTokenId: "token-6",
+      enforceAuthorize: false,
     });
   });
 
@@ -162,7 +192,7 @@ describe("resolveAuthorize", () => {
         expiresAt: null,
         scopeInstallationId: "inst-A",
       },
-      identity: { chargingStation: { installationId: "inst-A" } },
+      identity: id("inst-A"),
     });
     const result = await resolveAuthorize(db, INPUT);
     expect(result.verdict).toBe("Accepted");
@@ -178,13 +208,14 @@ describe("resolveAuthorize", () => {
         expiresAt: null,
         scopeInstallationId: "inst-A",
       },
-      identity: { chargingStation: { installationId: "inst-B" } },
+      identity: id("inst-B"),
     });
     const result = await resolveAuthorize(db, INPUT);
     expect(result).toEqual({
       verdict: "Invalid",
       reason: "scope_mismatch",
       idTokenId: "token-9",
+      enforceAuthorize: false,
     });
   });
 
@@ -197,7 +228,7 @@ describe("resolveAuthorize", () => {
         expiresAt: null,
         scopeInstallationId: "inst-A",
       },
-      identity: { chargingStation: { installationId: null } },
+      identity: id(null),
     });
     const result = await resolveAuthorize(db, INPUT);
     expect(result.verdict).toBe("Invalid");
@@ -222,30 +253,6 @@ describe("resolveAuthorize", () => {
     expect(result.reason).toBe("scope_mismatch");
   });
 
-  it("does not look up the identity when the token has no scope", async () => {
-    let identityCalls = 0;
-    const db: PrismaLike = {
-      idToken: {
-        findUnique: async () => ({
-          id: "token-12",
-          userId: "user-1",
-          status: "active",
-          expiresAt: null,
-          scopeInstallationId: null,
-        }),
-      },
-      ocppIdentity: {
-        findUnique: async () => {
-          identityCalls += 1;
-          return null;
-        },
-      },
-    };
-    const result = await resolveAuthorize(db, INPUT);
-    expect(result.verdict).toBe("Accepted");
-    expect(identityCalls).toBe(0);
-  });
-
   it("returns Invalid/unknown_status for a status the resolver doesn't recognise", async () => {
     // Defensive — IdTokenStatus is closed today but Prisma may add
     // values; default-deny on unknown.
@@ -263,6 +270,67 @@ describe("resolveAuthorize", () => {
       verdict: "Invalid",
       reason: "unknown_status",
       idTokenId: "token-13",
+      enforceAuthorize: false,
     });
+  });
+});
+
+describe("resolveAuthorize — enforceAuthorize flag", () => {
+  it("returns enforceAuthorize:true when the installation has the flag set", async () => {
+    const db = makeDb({
+      token: {
+        id: "token-e1",
+        userId: "user-1",
+        status: "active",
+        expiresAt: null,
+        scopeInstallationId: null,
+      },
+      identity: id("inst-PROD", true),
+    });
+    const result = await resolveAuthorize(db, INPUT);
+    expect(result.verdict).toBe("Accepted");
+    expect(result.enforceAuthorize).toBe(true);
+  });
+
+  it("returns enforceAuthorize:false when identity has no installation chain", async () => {
+    const db = makeDb({
+      token: {
+        id: "token-e2",
+        userId: "user-1",
+        status: "active",
+        expiresAt: null,
+        scopeInstallationId: null,
+      },
+      identity: null,
+    });
+    const result = await resolveAuthorize(db, INPUT);
+    expect(result.enforceAuthorize).toBe(false);
+  });
+
+  it("returns enforceAuthorize:true even on a denied verdict (gateway needs flag for every reply)", async () => {
+    const db = makeDb({
+      token: {
+        id: "token-e3",
+        userId: "user-1",
+        status: "revoked",
+        expiresAt: null,
+        scopeInstallationId: null,
+      },
+      identity: id("inst-PROD", true),
+    });
+    const result = await resolveAuthorize(db, INPUT);
+    expect(result.verdict).toBe("Blocked");
+    expect(result.enforceAuthorize).toBe(true);
+  });
+
+  it("returns enforceAuthorize:true for unknown_id_tag verdicts when the identity's installation enforces", async () => {
+    const db = makeDb({
+      // No token row at all — unknown idTag
+      identity: id("inst-PROD", true),
+    });
+    const result = await resolveAuthorize(db, INPUT);
+    expect(result.verdict).toBe("Invalid");
+    expect(result.reason).toBe("unknown_id_tag");
+    expect(result.enforceAuthorize).toBe(true);
   });
 });

@@ -31,5 +31,9 @@ export const InstallationUpdateInput = z.object({
   credentialsStatus: optionalString(40),
   onboardingStatus: OnboardingStatus.optional(),
   retailerTariffId: z.string().uuid().optional().nullable(),
+  // Sprint 4 / ADR 0014 milestone 4.6 — per-installation auth-enforce
+  // gate. Operator flips after verifying IdToken table is seeded.
+  // Defaults to false on schema add.
+  enforceAuthorize: z.boolean().optional(),
 });
 export type InstallationUpdateInput = z.infer<typeof InstallationUpdateInput>;

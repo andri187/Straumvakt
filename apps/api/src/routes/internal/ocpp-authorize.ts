@@ -15,10 +15,13 @@
 //
 // Request body:
 //   { idTag: string, identityId: UUID, orgId: UUID }
-// 200: { verdict, reason, userId?, idTokenId? }
+// 200: { verdict, reason, userId?, idTokenId?, enforceAuthorize }
 //      verdict ∈ Accepted | Blocked | Expired | Invalid
 //      reason  is a stable enum value for observability
 //      userId is set only when verdict === "Accepted"
+//      enforceAuthorize comes from the Installation (Sprint 4 4.6).
+//      The gateway honours the verdict only when this is true; when
+//      false (default) it logs the verdict but always replies Accepted.
 // 400: malformed body
 // 401: missing/bad ingest secret
 
@@ -36,6 +39,13 @@ export interface AuthorizeResult {
   reason: AuthorizeReason;
   userId?: string;
   idTokenId?: string;
+  /**
+   * Per-installation auth-enforce gate (Sprint 4 milestone 4.6).
+   * Defaults to false on resolve failure (orphan identity / Installation
+   * row not found / DB column missing pre-migration) so the gateway
+   * stays in shadow mode until the operator explicitly opts in.
+   */
+  enforceAuthorize: boolean;
 }
 
 export type AuthorizeReason =
@@ -87,26 +97,46 @@ internalOcppAuthorize.post("/", async (c) => {
  * works against a real DB or a hand-rolled mock. Returns the OCPP-shaped
  * verdict the gateway needs.
  *
- * Decision rules (Sprint 3 closure scope):
+ * Decision rules:
  *   1. IdToken not found → Invalid
  *   2. status='revoked' → Blocked
- *   3. status='expired' → Expired
- *   4. status='conflict' or 'pending' → Invalid (don't leak why)
+ *   3. status='suspended' → Blocked
+ *   4. status='expired' → Expired
  *   5. status='active' but expiresAt < now → Expired
  *   6. status='active' AND expiry OK AND scopeInstallationId set:
  *        resolve identity's installation; mismatch → Invalid
  *        (don't leak that a token exists for another installation)
  *   7. All checks pass → Accepted with userId
  *
- * Sprint 4+ adds: contract-level checks (DriverContract status, payer
- * org status), per-installation enforceAuthorize flag (gateway listens
- * to the verdict only when set), live token-cache invalidation on
- * revoke. Out of scope here.
+ * Always returns the enforceAuthorize flag (Sprint 4 4.6) for the
+ * Installation the OCPP identity belongs to, defaulted to false when
+ * the identity row is missing or unattached. The gateway DO uses the
+ * flag to decide whether to honour the verdict.
  */
 export async function resolveAuthorize(
   db: PrismaLike,
   input: { idTag: string; identityId: string; orgId: string },
 ): Promise<AuthorizeResult> {
+  // Resolve the identity → installation chain ONCE up-front so we can
+  // include enforceAuthorize on every response (including failure
+  // paths). Defaulting to false keeps the gateway in shadow mode for
+  // any identity that isn't yet wired up.
+  const identity = await db.ocppIdentity.findUnique({
+    where: { id: input.identityId },
+    select: {
+      chargingStation: {
+        select: {
+          installationId: true,
+          installation: { select: { enforceAuthorize: true } },
+        },
+      },
+    },
+  });
+  const installationId =
+    identity?.chargingStation?.installationId ?? null;
+  const enforceAuthorize =
+    identity?.chargingStation?.installation?.enforceAuthorize ?? false;
+
   const token = await db.idToken.findUnique({
     where: { value: input.idTag },
     select: {
@@ -119,37 +149,32 @@ export async function resolveAuthorize(
   });
 
   if (!token) {
-    return { verdict: "Invalid", reason: "unknown_id_tag" };
+    return { verdict: "Invalid", reason: "unknown_id_tag", enforceAuthorize };
   }
 
   switch (token.status) {
     case "revoked":
-      return { verdict: "Blocked", reason: "revoked", idTokenId: token.id };
+      return { verdict: "Blocked", reason: "revoked", idTokenId: token.id, enforceAuthorize };
     case "suspended":
-      return { verdict: "Blocked", reason: "suspended", idTokenId: token.id };
+      return { verdict: "Blocked", reason: "suspended", idTokenId: token.id, enforceAuthorize };
     case "expired":
-      return { verdict: "Expired", reason: "expired_status", idTokenId: token.id };
+      return { verdict: "Expired", reason: "expired_status", idTokenId: token.id, enforceAuthorize };
     case "active":
       break;
     default:
       // Defensive — the IdTokenStatus enum is closed today (active |
       // suspended | revoked | expired) but Prisma may add values
       // without us noticing. Don't accept on unknown status.
-      return { verdict: "Invalid", reason: "unknown_status", idTokenId: token.id };
+      return { verdict: "Invalid", reason: "unknown_status", idTokenId: token.id, enforceAuthorize };
   }
 
   if (token.expiresAt && token.expiresAt.getTime() <= Date.now()) {
-    return { verdict: "Expired", reason: "expiry_passed", idTokenId: token.id };
+    return { verdict: "Expired", reason: "expiry_passed", idTokenId: token.id, enforceAuthorize };
   }
 
   if (token.scopeInstallationId) {
-    const identity = await db.ocppIdentity.findUnique({
-      where: { id: input.identityId },
-      select: { chargingStation: { select: { installationId: true } } },
-    });
-    const installationId = identity?.chargingStation?.installationId ?? null;
     if (!installationId || installationId !== token.scopeInstallationId) {
-      return { verdict: "Invalid", reason: "scope_mismatch", idTokenId: token.id };
+      return { verdict: "Invalid", reason: "scope_mismatch", idTokenId: token.id, enforceAuthorize };
     }
   }
 
@@ -158,6 +183,7 @@ export async function resolveAuthorize(
     reason: "ok",
     userId: token.userId,
     idTokenId: token.id,
+    enforceAuthorize,
   };
 }
 
@@ -187,9 +213,19 @@ export interface PrismaLike {
   ocppIdentity: {
     findUnique: (args: {
       where: { id: string };
-      select: { chargingStation: { select: { installationId: true } } };
+      select: {
+        chargingStation: {
+          select: {
+            installationId: true;
+            installation: { select: { enforceAuthorize: true } };
+          };
+        };
+      };
     }) => Promise<{
-      chargingStation: { installationId: string | null } | null;
+      chargingStation: {
+        installationId: string | null;
+        installation: { enforceAuthorize: boolean } | null;
+      } | null;
     } | null>;
   };
 }

@@ -26,6 +26,7 @@ type Row = {
   credentialsStatus: string | null;
   onboardingStatus: string;
   retailerTariffId: string | null;
+  enforceAuthorize: boolean;
   metadata: unknown;
   createdAt: Date;
   updatedAt: Date;
@@ -48,6 +49,7 @@ function toSummary(r: Row): InstallationSummary {
     credentialsStatus: r.credentialsStatus,
     onboardingStatus: r.onboardingStatus,
     retailerTariffId: r.retailerTariffId,
+    enforceAuthorize: r.enforceAuthorize,
     metadata: r.metadata,
     createdAt: r.createdAt.toISOString(),
     updatedAt: r.updatedAt.toISOString(),

@@ -5,6 +5,7 @@ import { apiFetchServer, apiFetchServerJson } from "@/lib/api-client-server";
 import type { InstallationSummary } from "@straumvakt/shared/domain/installations";
 import { DeleteButton } from "@/components/delete-button";
 import { EditInstallationPanel } from "./edit-panel";
+import { EnforceAuthorizeToggle } from "./enforce-authorize-toggle";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +49,15 @@ export default async function InstallationDetailPage({ params }: { params: Promi
           onboardingStatus: installation.onboardingStatus,
           retailerTariffId: installation.retailerTariffId ?? "",
         }}
+      />
+
+      <EnforceAuthorizeToggle
+        installationId={installation.id}
+        // Defensive fallback for the brief deploy window where the
+        // UI is on the new code but the api Worker still returns
+        // pre-Sprint-4.6 InstallationSummary without enforceAuthorize.
+        // Defaults to shadow mode (false) — safe.
+        initialEnforce={installation.enforceAuthorize ?? false}
       />
 
       {installation.metadata != null &&

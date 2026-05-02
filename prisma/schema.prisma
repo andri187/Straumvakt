@@ -723,6 +723,17 @@ model Installation {
   // ── Rev-3 (ADR 0008 — REPF anchor) ───────────────────────────────
   retailerTariffId       String?                       @map("retailer_tariff_id") @db.Uuid
 
+  // ── ADR 0014 / Sprint 4 milestone 4.6 — auth-enforce gate ────────
+  // When true, the OCPP gateway honours the verdict from
+  // /api/internal/ocpp-authorize for every Authorize.req at this
+  // installation's chargers (Reject/Block/Expire/Accept). When false
+  // (default), the gateway logs the verdict for observability but
+  // always replies Accepted — today's shadow-mode behaviour.
+  // Operator flips per-installation once the IdToken table is
+  // verified seeded (Sprint 3 backfill) AND every operator-known
+  // card has a row.
+  enforceAuthorize       Boolean                       @default(false) @map("enforce_authorize")
+
   // ── Existing relations ───────────────────────────────────────────
   organization           Organization                  @relation(fields: [orgId], references: [id], onDelete: Cascade)
   site                   Site                          @relation(fields: [siteId], references: [id], onDelete: Cascade)

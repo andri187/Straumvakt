@@ -34,15 +34,18 @@ import type { GatewayEnv } from "./auth";
 
 /**
  * Verdict shape returned by /api/internal/ocpp-authorize. Mirrors
- * `AuthorizeResult` in apps/api but kept loose here — the gateway only
- * logs the verdict; the reply to the charger is always Accepted in
- * Sprint 3's shadow-mode posture (closure item 3 of the Sprint 3 retro).
+ * `AuthorizeResult` in apps/api. Gateway honours `verdict` only when
+ * `enforceAuthorize` is true (Sprint 4 milestone 4.6 — per-installation
+ * flag set by operator after IdToken table is verified seeded). When
+ * false, gateway logs the verdict but always replies Accepted —
+ * Sprint 3's shadow-mode posture preserved as the safe default.
  */
 interface AuthorizeVerdict {
   verdict: "Accepted" | "Blocked" | "Expired" | "Invalid";
   reason: string;
   userId?: string;
   idTokenId?: string;
+  enforceAuthorize: boolean;
 }
 
 /**
@@ -227,35 +230,80 @@ export class IdentityDurableObject {
       console.error("[ocpp-gw] ingest rejected", outcome.status, outcome.error);
     }
 
-    // Sprint 3 closure item 3 — Authorize handler "shadow mode."
-    // For Authorize.req and StartTransaction.req the charger carries an
-    // idTag. Resolve it through the API's IdToken lookup, log the
-    // verdict, but **always reply Accepted to the charger** until
-    // per-installation enforcement lands (Sprint 4). Lets us start
-    // logging real RFID activity at Dalvegur without breaking customer
-    // charging while the IdToken table is still being populated.
+    // Sprint 3 closure item 3 + Sprint 4 milestone 4.6 — Authorize
+    // handler. Resolve the idTag through the API's IdToken lookup,
+    // log the verdict, then either:
+    //   • reply per the verdict if Installation.enforceAuthorize=true
+    //     (operator has flipped the flag after seeding the IdToken
+    //     table)
+    //   • reply Accepted regardless (shadow mode) when false.
+    // The shadow-mode log line keeps working in both states so the
+    // operator can watch verdicts pre-flip and verify post-flip.
+    let authResolverVerdict: AuthorizeVerdict | null = null;
     if (frame.action === "Authorize" || frame.action === "StartTransaction") {
       const idTag = stringField(frame.payload, "idTag");
       if (idTag && this.meta) {
-        const verdict = await this.requestAuthorizeVerdict(idTag, frame.action);
+        authResolverVerdict = await this.requestAuthorizeVerdict(
+          idTag,
+          frame.action,
+        );
         // Single-line shape so Cloudflare tail / Logpush stays grep-able.
-        console.log("[ocpp-gw] authorize.shadow", {
+        console.log("[ocpp-gw] authorize.evaluated", {
           identityString: this.meta.identityString,
           action: frame.action,
           idTag,
-          verdict: verdict?.verdict ?? "upstream_error",
-          reason: verdict?.reason ?? "upstream_error",
-          userId: verdict?.userId,
-          idTokenId: verdict?.idTokenId,
+          verdict: authResolverVerdict?.verdict ?? "upstream_error",
+          reason: authResolverVerdict?.reason ?? "upstream_error",
+          userId: authResolverVerdict?.userId,
+          idTokenId: authResolverVerdict?.idTokenId,
+          enforceAuthorize: authResolverVerdict?.enforceAuthorize ?? false,
+          mode: authResolverVerdict?.enforceAuthorize ? "enforced" : "shadow",
         });
       }
     }
 
-    // Reply with a stub CallResult. Authorize/StartTransaction are
-    // hardcoded Accepted (shadow mode) — when Sprint 4 wires the
-    // per-installation enforce flag, this branch consults the verdict
-    // returned by requestAuthorizeVerdict above.
-    ws.send(serializeCallResult(frame.uniqueId, this.stubResponseFor(frame.action)));
+    // Compute the response. For Authorize and StartTransaction with
+    // enforceAuthorize=true, the verdict from the API gates the reply.
+    // For everything else (heartbeat, status, meter values, or any
+    // failed lookup), the dev-stub response is used — which reads
+    // Accepted for the auth-relevant frames anyway.
+    const responsePayload = this.responseFor(
+      frame.action,
+      authResolverVerdict,
+    );
+    ws.send(serializeCallResult(frame.uniqueId, responsePayload));
+  }
+
+  /**
+   * Build the OCPP CallResult payload for an inbound Call. For
+   * Authorize/StartTransaction with `enforceAuthorize=true`, honour
+   * the API's verdict (Reject/Block/Expire/Accept). For everything
+   * else (or when enforceAuthorize=false / upstream_error), fall back
+   * to the stub response which is Accepted for these actions.
+   */
+  private responseFor(
+    action: string,
+    authVerdict: AuthorizeVerdict | null,
+  ): Record<string, unknown> {
+    const stub = this.stubResponseFor(action);
+    if (action !== "Authorize" && action !== "StartTransaction") {
+      return stub;
+    }
+    if (!authVerdict || !authVerdict.enforceAuthorize) {
+      return stub;
+    }
+    // Enforced path. Authorize and StartTransaction both reply with
+    // an idTagInfo whose status field carries the verdict verbatim.
+    // StartTransaction additionally needs a transactionId — preserved
+    // from the stub regardless of verdict (charger needs the id even
+    // on a refused start, per OCPP 1.6 §6.6).
+    if (action === "Authorize") {
+      return { idTagInfo: { status: authVerdict.verdict } };
+    }
+    return {
+      ...stub,
+      idTagInfo: { status: authVerdict.verdict },
+    };
   }
 
   /**
