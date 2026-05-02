@@ -1,499 +1,678 @@
-import { cookies } from "next/headers";
-import { Topbar } from "@/components/topbar";
-import { PageShell } from "@/components/page-shell";
-import { adminSessionConfig, verifyAdminSession } from "@/lib/admin-session";
-import { BackfillRfidButton } from "./backfill-rfid-button";
+// Dashboard page now renders the homepage concept from
+// docs/app/homepage-concept.html.
+//
+// CSS is embedded verbatim from that file, with every selector scoped
+// under .sv-home-concept to avoid leaking into the sidebar/topbar styles
+// the rest of the (app) shell uses.
+//
+// The previous Sprint 3 closure dashboard is archived at
+// docs/app/dashboard-original.tsx — copy back over this file to restore.
 
 export const metadata = { title: "Dashboard" };
 
-export default async function DashboardPage() {
-  const jar = await cookies();
-  const token = jar.get(adminSessionConfig.SESSION_COOKIE_NAME)?.value;
-  const session = await verifyAdminSession(token);
-  const email = session?.email;
+const conceptStyles = `
+.sv-home-concept {
+  --bg: #070b16;
+  --surface: #0b1220;
+  --raised: #111a2e;
+  --inset: #0e1626;
+  --border: #1e2a44;
+  --ring: #2b3a5e;
+  --text: #f5f7fa;
+  --muted: #97a3b8;
+  --soft: #c8d1e0;
+  --green: #3ee9a7;
+  --teal: #2bd3c9;
+  --blue: #2bb6e8;
+  --sky: #6fb8f0;
+  --amber: #f4c95d;
+  --red: #ff6b6b;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: var(--text);
+  background:
+    radial-gradient(900px 500px at 78% -5%, rgba(43, 182, 232, .16), transparent 64%),
+    radial-gradient(760px 440px at 0% 0%, rgba(62, 233, 167, .1), transparent 62%),
+    var(--bg);
+  min-height: 100vh;
+}
 
+.sv-home-concept *, .sv-home-concept *::before, .sv-home-concept *::after { box-sizing: border-box; }
+
+.sv-home-concept a { color: inherit; text-decoration: none; }
+
+.sv-home-concept .page { min-height: 100vh; }
+
+.sv-home-concept .nav {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 64px;
+  padding: 0 clamp(18px, 4vw, 56px);
+  border-bottom: 1px solid rgba(30, 42, 68, .75);
+  background: rgba(7, 11, 22, .78);
+  backdrop-filter: blur(16px);
+}
+
+.sv-home-concept .mark {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.sv-home-concept .logo {
+  width: 34px;
+  height: 34px;
+  display: block;
+  filter: drop-shadow(0 12px 28px rgba(43,182,232,.25));
+}
+
+.sv-home-concept .word { min-width: 0; }
+
+.sv-home-concept .word strong {
+  display: block;
+  font-size: 17px;
+  letter-spacing: -0.01em;
+  background: linear-gradient(135deg, var(--green), var(--teal) 55%, var(--blue));
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  line-height: 1.1;
+}
+
+.sv-home-concept .word span {
+  display: block;
+  margin-top: 3px;
+  color: var(--sky);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.sv-home-concept .navlinks {
+  display: flex;
+  gap: 22px;
+  align-items: center;
+  color: var(--soft);
+  font-size: 13px;
+}
+
+.sv-home-concept .navlinks a:hover { color: var(--text); }
+
+.sv-home-concept .hero {
+  display: grid;
+  grid-template-columns: minmax(320px, 0.9fr) minmax(520px, 1.1fr);
+  gap: clamp(30px, 5vw, 70px);
+  align-items: center;
+  min-height: calc(100vh - 64px);
+  padding: clamp(34px, 5vw, 72px) clamp(18px, 4vw, 56px) 52px;
+}
+
+.sv-home-concept .eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 10px;
+  border: 1px solid rgba(111, 184, 240, .28);
+  border-radius: 7px;
+  color: var(--sky);
+  background: rgba(17, 26, 46, .64);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.sv-home-concept .eyebrow i {
+  display: block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 16px var(--green);
+}
+
+.sv-home-concept h1 {
+  max-width: 780px;
+  margin: 18px 0 0;
+  font-size: clamp(42px, 6.4vw, 82px);
+  line-height: .95;
+  letter-spacing: 0;
+}
+
+.sv-home-concept .lead {
+  max-width: 640px;
+  margin: 22px 0 0;
+  color: var(--soft);
+  font-size: clamp(17px, 1.8vw, 21px);
+  line-height: 1.55;
+}
+
+.sv-home-concept .lead strong { color: var(--text); font-weight: 750; }
+
+.sv-home-concept .buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 30px;
+}
+
+.sv-home-concept .button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  padding: 0 16px;
+  border-radius: 7px;
+  font-size: 14px;
+  font-weight: 800;
+  border: 1px solid var(--ring);
+  background: var(--raised);
+  color: var(--text);
+}
+
+.sv-home-concept .button.primary {
+  color: #06131a;
+  background: linear-gradient(135deg, var(--green), var(--teal) 55%, var(--blue));
+  border-color: transparent;
+}
+
+.sv-home-concept .plain-note {
+  margin-top: 26px;
+  display: grid;
+  gap: 8px;
+  max-width: 610px;
+}
+
+.sv-home-concept .plain-note p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.sv-home-concept .plain-note b { color: var(--sky); }
+
+.sv-home-concept .visual {
+  position: relative;
+  min-height: 610px;
+  border: 1px solid rgba(43, 58, 94, .85);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(17, 26, 46, .94), rgba(11, 18, 32, .94)),
+    repeating-linear-gradient(0deg, transparent 0 31px, rgba(255,255,255,.035) 32px),
+    repeating-linear-gradient(90deg, transparent 0 31px, rgba(255,255,255,.035) 32px);
+  box-shadow: 0 1px 0 rgba(255,255,255,.03) inset, 0 24px 70px rgba(0,0,0,.36);
+  overflow: hidden;
+}
+
+.sv-home-concept .visual-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 18px;
+  border-bottom: 1px solid rgba(43, 58, 94, .8);
+  background: rgba(7, 11, 22, .45);
+}
+
+.sv-home-concept .visual-header strong {
+  font-size: 13px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.sv-home-concept .status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.sv-home-concept .status i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 18px currentColor;
+}
+
+.sv-home-concept .map {
+  position: relative;
+  height: 430px;
+  margin: 28px;
+}
+
+.sv-home-concept .node {
+  position: absolute;
+  min-width: 142px;
+  padding: 11px 12px;
+  border: 1px solid rgba(111, 184, 240, .34);
+  border-radius: 8px;
+  background: rgba(7, 11, 22, .86);
+  box-shadow: 0 12px 28px rgba(0,0,0,.2);
+}
+
+.sv-home-concept .node small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.sv-home-concept .node strong {
+  display: block;
+  margin-top: 3px;
+  font-size: 15px;
+}
+
+.sv-home-concept .node .mini {
+  display: flex;
+  gap: 5px;
+  margin-top: 9px;
+}
+
+.sv-home-concept .mini span {
+  height: 6px;
+  flex: 1;
+  border-radius: 999px;
+  background: rgba(151,163,184,.2);
+}
+
+.sv-home-concept .mini span.on { background: linear-gradient(90deg, var(--green), var(--blue)); }
+
+.sv-home-concept .org { left: 16px; top: 58px; }
+.sv-home-concept .site { left: 214px; top: 58px; }
+.sv-home-concept .install { left: 412px; top: 58px; }
+.sv-home-concept .station { left: 412px; top: 198px; }
+.sv-home-concept .ocpp { left: 214px; top: 280px; }
+.sv-home-concept .vendor { left: 16px; top: 280px; }
+
+.sv-home-concept svg.lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.sv-home-concept .line {
+  fill: none;
+  stroke: rgba(111, 184, 240, .42);
+  stroke-width: 2;
+}
+
+.sv-home-concept .line.hot {
+  stroke: url(#sv-flow);
+  stroke-width: 3;
+  stroke-dasharray: 10 8;
+  animation: sv-dash 1.7s linear infinite;
+}
+
+@keyframes sv-dash { to { stroke-dashoffset: -36; } }
+
+.sv-home-concept .caption-card {
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  bottom: 24px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.sv-home-concept .caption {
+  min-height: 86px;
+  padding: 13px;
+  border: 1px solid rgba(43, 58, 94, .9);
+  border-radius: 8px;
+  background: rgba(14, 22, 38, .92);
+}
+
+.sv-home-concept .caption strong {
+  display: block;
+  margin-bottom: 7px;
+  font-size: 13px;
+}
+
+.sv-home-concept .caption p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.42;
+}
+
+.sv-home-concept .band {
+  padding: 18px clamp(18px, 4vw, 56px) 70px;
+}
+
+.sv-home-concept .section-head {
+  max-width: 780px;
+  margin-bottom: 22px;
+}
+
+.sv-home-concept .section-head h2 {
+  margin: 0;
+  font-size: clamp(26px, 3vw, 40px);
+  letter-spacing: 0;
+}
+
+.sv-home-concept .section-head p {
+  margin: 10px 0 0;
+  color: var(--soft);
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+.sv-home-concept .cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+
+.sv-home-concept .info {
+  min-height: 220px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(11, 18, 32, .74);
+  box-shadow: 0 1px 0 rgba(255,255,255,.03) inset, 0 12px 30px rgba(0,0,0,.18);
+}
+
+.sv-home-concept .icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  margin-bottom: 16px;
+  border-radius: 8px;
+  color: #06131a;
+  background: linear-gradient(135deg, var(--green), var(--blue));
+  font-weight: 900;
+}
+
+.sv-home-concept .info h3 { margin: 0; font-size: 17px; }
+
+.sv-home-concept .info p {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+@media (max-width: 1050px) {
+  .sv-home-concept .hero {
+    grid-template-columns: 1fr;
+    min-height: auto;
+  }
+  .sv-home-concept .visual { min-height: 560px; }
+  .sv-home-concept .cards { grid-template-columns: repeat(2, 1fr); }
+  .sv-home-concept .navlinks { display: none; }
+}
+
+@media (max-width: 640px) {
+  .sv-home-concept .hero { padding-top: 28px; }
+  .sv-home-concept .visual { display: none; }
+  .sv-home-concept .cards { grid-template-columns: 1fr; }
+  .sv-home-concept h1 { font-size: 44px; }
+}
+`;
+
+export default function DashboardPage() {
   return (
-    <>
-      <Topbar title="Dashboard" email={email} />
-      <PageShell
-        title="Straumvakt"
-        description="Mid-Sprint 3 (Identity Foundation). Scope swap recorded in ADR 0015 — the original OCPI Foundation deferred to a new Sprint 14 (post-pilot); ADR 0014 identity work substituted. Sprint 3 closes when the four closure items below check. Sprint 4 (Membership + Permissions + Data Lifecycle) is queued."
-      >
-        {/* Operational alert — Dalvegur unsafe-middle */}
-        <div className="rounded-lg border border-rose-700/40 bg-rose-950/30 p-5 shadow-card">
-          <div className="flex items-start gap-3">
-            <span className="mt-0.5 rounded bg-rose-500/30 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-brand text-rose-100">
-              operational
+    <div className="sv-home-concept">
+      <style dangerouslySetInnerHTML={{ __html: conceptStyles }} />
+      <div className="page">
+        <nav className="nav">
+          <a className="mark" href="#">
+            <svg className="logo" viewBox="0 0 120 120" fill="none" aria-hidden="true">
+              <defs>
+                <linearGradient
+                  id="svHomeBolt"
+                  x1="40"
+                  y1="20"
+                  x2="80"
+                  y2="100"
+                  gradientUnits="userSpaceOnUse"
+                >
+                  <stop offset="0%" stopColor="#8EF5C7" />
+                  <stop offset="100%" stopColor="#6FDCEA" />
+                </linearGradient>
+              </defs>
+              <path
+                d="M 84 18 L 54 18 A 24 24 0 0 0 30 42 L 30 60"
+                stroke="#3EE9A7"
+                strokeWidth="13"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M 36 102 L 66 102 A 24 24 0 0 0 90 78 L 90 60"
+                stroke="#2BB6E8"
+                strokeWidth="13"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M 66 28 L 44 66 L 58 66 L 52 96 L 78 56 L 62 56 Z"
+                fill="url(#svHomeBolt)"
+              />
+            </svg>
+            <span className="word">
+              <strong>Straumvakt</strong>
+              <span>Control · Overview · Convenience</span>
             </span>
-            <div>
-              <h2 className="text-sm font-semibold text-rose-100">
-                Dalvegur Authorize handler — pick a path before Sprint 3 closes
-              </h2>
-              <p className="mt-1 text-xs text-rose-200/90">
-                Zaptec installation flipped to{" "}
-                <code className="font-mono">AuthenticationType=2</code> on
-                2026-05-02 for probing. Gateway DO at{" "}
-                <code className="font-mono">gateway/src/identity-do.ts:218–219</code>{" "}
-                returns hardcoded <code className="font-mono">Accepted</code>{" "}
-                for every Authorize.req. Customers can charge today only because
-                the stub default-accepts — incidental, not designed.
+          </a>
+          <div className="navlinks">
+            <a href="#what">What it is</a>
+            <a href="#how">How it works</a>
+            <a href="#why">Why it matters</a>
+          </div>
+        </nav>
+
+        <section className="hero" id="what">
+          <div>
+            <span className="eyebrow">
+              <i></i> Charging operating platform for real sites
+            </span>
+            <h1>One place to run chargers, people, power, and billing.</h1>
+            <p className="lead">
+              Straumvakt helps operators understand and manage EV charging
+              sites. It keeps the <strong>physical reality</strong> clear:
+              properties, sites, installations, circuits, chargers, meters,
+              modems, controllers, drivers, sessions, and costs.
+            </p>
+            <div className="buttons">
+              <a className="button primary" href="#how">
+                See the simple map
+              </a>
+              <a className="button" href="#why">
+                Read the plain explanation
+              </a>
+            </div>
+            <div className="plain-note">
+              <p>
+                <b>Not just OCPP.</b> Straumvakt can work through OCPP, vendor
+                APIs like Zaptec and Easee, external CPMS imports, or read-only
+                data.
               </p>
-              <ul className="mt-2 space-y-1 text-xs text-rose-200/90">
-                <li>
-                  <span className="font-semibold text-rose-100">(a)</span> Ship
-                  the real <code className="font-mono">/api/internal/ocpp-authorize</code>{" "}
-                  route + IdToken lookup. Per-installation{" "}
-                  <code className="font-mono">enforceAuthorize</code> flag in
-                  shadow mode (default false) so deployment doesn't break customers.
-                </li>
-                <li>
-                  <span className="font-semibold text-rose-100">(b)</span> Revert
-                  Dalvegur to <code className="font-mono">AuthenticationType=0</code>{" "}
-                  in the Zaptec portal. Stub stays as documented; real handler
-                  ships Sprint 4+.
-                </li>
-              </ul>
-              <p className="mt-2 text-[11px] text-rose-300/70">
-                Default to (b) if (a)'s design isn't approved within the
-                closure window. (b) is fully reversible.
+              <p>
+                <b>Not just a dashboard.</b> It is the operating layer that
+                connects assets, contracts, events, issues, and billing.
               </p>
             </div>
           </div>
-        </div>
 
-        {/* Row 1 — sprint cards */}
-        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <article className="rounded-lg border border-bg-border bg-bg-surface/70 p-5 shadow-card backdrop-blur">
-            <h2 className="text-xs font-semibold uppercase tracking-brand text-sv-green">
-              Sprint 0–2 · done
-            </h2>
-            <p className="mt-2 text-sm font-semibold text-ink-50">
-              Foundation · OCPP · Onboarding
-            </p>
-            <p className="mt-1 text-xs text-ink-300">
-              V3 schema · hardware catalog · gateway Worker + DOs · admin
-              CRUD · Zaptec wizard · cost-center splitting · Circuit tier ·
-              org/profile reshape.
-              <span className="ml-1 text-ink-500">
-                ADR 0001–0012.
+          <div className="visual" aria-label="Straumvakt operating map">
+            <div className="visual-header">
+              <strong>Live operating map</strong>
+              <span className="status">
+                <i></i> domain events flowing
               </span>
-            </p>
-          </article>
+            </div>
+            <div className="map">
+              <svg className="lines" viewBox="0 0 610 430" preserveAspectRatio="none">
+                <defs>
+                  <linearGradient id="sv-flow" x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0%" stopColor="#3ee9a7" />
+                    <stop offset="58%" stopColor="#2bd3c9" />
+                    <stop offset="100%" stopColor="#2bb6e8" />
+                  </linearGradient>
+                </defs>
+                <path className="line hot" d="M158 92 H214" />
+                <path className="line hot" d="M356 92 H412" />
+                <path className="line" d="M484 132 V198" />
+                <path className="line hot" d="M412 238 H356 C300 238 286 280 286 280" />
+                <path className="line" d="M214 320 H158" />
+                <path className="line hot" d="M86 280 C86 212 178 190 214 132" />
+              </svg>
 
-          <article className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-5 shadow-card backdrop-blur">
-            <h2 className="text-xs font-semibold uppercase tracking-brand text-amber-300">
-              Sprint 3 · in flight · 4 closure items
-            </h2>
-            <p className="mt-2 text-sm font-semibold text-ink-50">
-              Identity Foundation
-            </p>
-            <p className="mt-1 text-xs text-ink-300">
-              Schema landed (UserAudience, IdToken, UserVendorRef,
-              VendorUserGroup, Vehicle). Orphan-table write paths,
-              S1 events-ingest port, Authorize handler decision,
-              reconciliation docs pending.
-              <span className="ml-1 text-ink-500">
-                ADR 0014, 0015.
-              </span>
-            </p>
-          </article>
-
-          <article className="rounded-lg border border-brand-500/40 bg-brand-500/10 p-5 shadow-card backdrop-blur">
-            <h2 className="text-xs font-semibold uppercase tracking-brand text-sv-sky">
-              Sprint 4 · queued
-            </h2>
-            <p className="mt-2 text-sm font-semibold text-ink-50">
-              Membership + Permissions + Data Lifecycle
-            </p>
-            <p className="mt-1 text-xs text-ink-300">
-              MembershipRole/Status enums · invite lifecycle · scope
-              narrowing · PlatformGrant rename · requirePermission middleware ·
-              retention classes enforced · nightly aggregation ·
-              raw_protocol age-out · prod cutover for events ingest.
-              <span className="ml-1 text-ink-500">ADR 0014 build-order.</span>
-            </p>
-          </article>
-
-          <article className="rounded-lg border border-bg-border bg-bg-surface/70 p-5 shadow-card backdrop-blur">
-            <h2 className="text-xs font-semibold uppercase tracking-brand text-ink-400">
-              Sprint 5 → 13 · pilot path
-            </h2>
-            <p className="mt-2 text-sm font-semibold text-ink-50">
-              Invite flow · Tariff · Reports · Pilot Go-Live
-            </p>
-            <p className="mt-1 text-xs text-ink-300">
-              Driver self-registration (S5) · tariff engine (S5/6) · report
-              exports (S6/7) · outbound hardening + load test (S7/8) ·
-              security hardening (S9) · pilot cutover (S10).
-              <span className="block mt-1 text-ink-500">
-                Sprint 14 (post-pilot): OCPI Foundation re-promoted.
-              </span>
-            </p>
-          </article>
-        </div>
-
-        {/* Row 2 — Sprint 3 closure list + ADR trail */}
-        <div className="mt-6 grid gap-4 lg:grid-cols-2">
-          <section className="rounded-lg border border-amber-500/30 bg-bg-surface/70 p-5 shadow-card backdrop-blur">
-            <h2 className="text-xs font-semibold uppercase tracking-brand text-amber-300">
-              Sprint 3 closure list · gates Sprint 4 entry
-            </h2>
-            <p className="mt-1 text-[11px] text-ink-400">
-              All four must check before Sprint 4 may begin. See{" "}
-              <code className="font-mono text-ink-300">
-                docs/retros/sprint-03.md
-              </code>
-              .
-            </p>
-            <ol className="mt-3 space-y-3 text-sm text-ink-200">
-              <li className="flex gap-2">
-                <span className="mt-0.5 text-emerald-300">1.</span>
-                <div className="flex-1">
-                  <p className="font-medium text-ink-50">
-                    Orphan-table write paths{" "}
-                    <span className="text-emerald-300">· shipped</span>
-                  </p>
-                  <p className="text-xs text-ink-300">
-                    <code className="font-mono text-ink-400">IdToken</code>{" "}
-                    full write path + UI; primary RFID auto-mints on user
-                    create.{" "}
-                    <code className="font-mono text-ink-400">UserVendorRef</code>{" "}
-                    +{" "}
-                    <code className="font-mono text-ink-400">Vehicle</code>{" "}
-                    repo stubs land; first real callers Sprint 4+.
-                    VendorUserGroup deferred to Sprint 4.
-                  </p>
-                  <div className="mt-2">
-                    <p className="text-[10px] uppercase tracking-brand text-ink-400">
-                      Backfill existing users
-                    </p>
-                    <p className="text-[11px] text-ink-400">
-                      Pre-existing user rows have zero tokens. Run this once
-                      to mint a primary RFID for each. Idempotent.
-                    </p>
-                    <div className="mt-1.5">
-                      <BackfillRfidButton />
-                    </div>
-                  </div>
+              <div className="node org">
+                <small>Legal entity</small>
+                <strong>Operator / owner / payer</strong>
+                <div className="mini">
+                  <span className="on"></span>
+                  <span className="on"></span>
+                  <span></span>
                 </div>
-              </li>
-              <li className="flex gap-2">
-                <span className="mt-0.5 text-amber-300">2.</span>
-                <div>
-                  <p className="font-medium text-ink-50">
-                    Sprint S1 — events-ingest port
-                  </p>
-                  <p className="text-xs text-ink-300">
-                    <code className="font-mono text-ink-400">/api/ocpp/events</code>{" "}
-                    moves from UI Worker to{" "}
-                    <code className="font-mono text-ink-400">apps/api</code>,
-                    renamed{" "}
-                    <code className="font-mono text-ink-400">/api/internal/ocpp-events</code>.
-                    Gateway URL update + UI route deletion in same change.
-                    Atomic deploy. Production cutover deferred to Sprint 4.
-                  </p>
-                  <p className="mt-1 text-[11px] italic text-ink-500">
-                    2–3 hours per gbtNotes. Smoke: lastSeenAt ticks, status
-                    flips, ChargeSession appears on StartTransaction.
-                  </p>
+              </div>
+              <div className="node site">
+                <small>Physical place</small>
+                <strong>Property and site</strong>
+                <div className="mini">
+                  <span className="on"></span>
+                  <span className="on"></span>
+                  <span className="on"></span>
                 </div>
-              </li>
-              <li className="flex gap-2">
-                <span className="mt-0.5 text-amber-300">3.</span>
-                <div>
-                  <p className="font-medium text-ink-50">
-                    OCPP Authorize handler — real or revert
-                  </p>
-                  <p className="text-xs text-ink-300">
-                    Pick path (a) ship real lookup with shadow-mode flag, or
-                    (b) revert Dalvegur to anonymous. The unsafe middle
-                    (auth required + stub gateway) closes either way.
-                  </p>
-                  <p className="mt-1 text-[11px] italic text-ink-500">
-                    Operational priority — see alert above. Decide day one
-                    of closure window.
-                  </p>
+              </div>
+              <div className="node install">
+                <small>Electrical grouping</small>
+                <strong>Installation and circuits</strong>
+                <div className="mini">
+                  <span className="on"></span>
+                  <span className="on"></span>
+                  <span></span>
                 </div>
-              </li>
-              <li className="flex gap-2">
-                <span className="mt-0.5 text-amber-300">4.</span>
-                <div>
-                  <p className="font-medium text-ink-50">
-                    Reconciliation docs · committed
-                  </p>
-                  <p className="text-xs text-ink-300">
-                    ADR 0015 · delivery plan §6 rewrite · this dashboard ·
-                    sprint-03 retro. Drafted 2026-05-02. ADR 0014 needs a
-                    forward-reference line to ADR 0015. All committed on the
-                    working branch.
-                  </p>
-                  <p className="mt-1 text-[11px] italic text-ink-500">
-                    Drafted; commit pending operator sign-off (Rule 1).
-                  </p>
+              </div>
+              <div className="node station">
+                <small>Physical assets</small>
+                <strong>Chargers, meters, modems</strong>
+                <div className="mini">
+                  <span className="on"></span>
+                  <span></span>
+                  <span className="on"></span>
                 </div>
-              </li>
-            </ol>
-          </section>
+              </div>
+              <div className="node ocpp">
+                <small>Control plane</small>
+                <strong>OCPP / vendor / CPMS</strong>
+                <div className="mini">
+                  <span className="on"></span>
+                  <span className="on"></span>
+                  <span className="on"></span>
+                </div>
+              </div>
+              <div className="node vendor">
+                <small>Source of truth</small>
+                <strong>Events and billing</strong>
+                <div className="mini">
+                  <span className="on"></span>
+                  <span className="on"></span>
+                  <span className="on"></span>
+                </div>
+              </div>
+            </div>
 
-          <section className="rounded-lg border border-bg-border bg-bg-surface/70 p-5 shadow-card backdrop-blur">
-            <h2 className="text-xs font-semibold uppercase tracking-brand text-sv-sky">
-              ADR trail · most-recent first
-            </h2>
-            <ul className="mt-3 space-y-2 text-sm text-ink-200">
-              <li>
-                <span className="font-mono text-xs text-amber-300">0015</span>{" "}
-                <span className="font-medium">Sprint 3 scope swap</span>
-                <span className="ml-2 text-xs text-ink-400">
-                  OCPI deferred to new Sprint 14 · ADR 0014 substituted ·
-                  gbtNotes S1 absorbed
-                </span>
-              </li>
-              <li>
-                <span className="font-mono text-xs text-amber-300">0014</span>{" "}
-                <span className="font-medium">
-                  Identity, Tenancy, Authorization
-                </span>
-                <span className="ml-2 text-xs text-ink-400">
-                  4-layer model · UserAudience · MembershipRole ·
-                  PlatformGrant · permission catalogue
-                </span>
-              </li>
-              <li>
-                <span className="font-mono text-xs text-sv-green">0013</span>{" "}
-                <span className="font-medium">
-                  Five-tier topology — Pages + Workers + DOs + Queues + Neon
-                </span>
-                <span className="ml-2 text-xs text-ink-400">
-                  apps/api stood up · UI Worker thinning out · Prisma WASM
-                  unblocked
-                </span>
-              </li>
-              <li>
-                <span className="font-mono text-xs text-sv-green">0012</span>{" "}
-                <span className="font-medium">
-                  Protocol-neutral physical model
-                </span>
-                <span className="ml-2 text-xs text-ink-400">
-                  EVSE/Connector anchored · OCPP/OEM-API/OCPI all overlay this
-                </span>
-              </li>
-              <li>
-                <span className="font-mono text-xs text-sv-green">0011</span>{" "}
-                <span className="font-medium">Control-plane optionality</span>
-                <span className="ml-2 text-xs text-ink-400">
-                  external CPMS overlay · imported sessions/CDRs as authority
-                </span>
-              </li>
-              <li>
-                <span className="font-mono text-xs text-ink-400">0010</span>{" "}
-                <span className="font-medium">
-                  Org/User profile enrichment
-                </span>
-                <span className="ml-2 text-xs text-ink-400">
-                  21-value OrganizationRole · kennitala · multi-role
-                </span>
-              </li>
-              <li>
-                <span className="font-mono text-xs text-ink-400">0008</span>{" "}
-                <span className="font-medium">Cost-center splitting</span>
-                <span className="ml-2 text-xs text-ink-400">
-                  inherited contracts · cost-factor catalogue · driver
-                  contracts · kWh-cap accumulators
-                </span>
-              </li>
-              <li>
-                <span className="font-mono text-xs text-ink-500">
-                  0001–0007
-                </span>{" "}
-                <span className="font-medium">Foundation set</span>
-                <span className="ml-2 text-xs text-ink-400">
-                  V3 schema · hardware catalog · pilot scope rev 1+2 ·
-                  Service Binding · Circuit tier
-                </span>
-              </li>
-            </ul>
-          </section>
-        </div>
-
-        {/* Row 3 — current state snapshot + design references */}
-        <div className="mt-6 grid gap-4 lg:grid-cols-2">
-          <section className="rounded-lg border border-bg-border bg-bg-surface/70 p-5 shadow-card backdrop-blur">
-            <h2 className="text-xs font-semibold uppercase tracking-brand text-sv-sky">
-              Current state · 2026-05-02
-            </h2>
-            <dl className="mt-3 space-y-2 text-sm text-ink-200">
-              <div className="flex gap-3">
-                <dt className="w-32 shrink-0 text-xs uppercase tracking-brand text-ink-400">
-                  Branch
-                </dt>
-                <dd className="font-mono text-xs text-ink-50">staging</dd>
-              </div>
-              <div className="flex gap-3">
-                <dt className="w-32 shrink-0 text-xs uppercase tracking-brand text-ink-400">
-                  Pilot site
-                </dt>
-                <dd>
-                  Dalvegur 10–14 · 20 chargers · OcppCloudUrl points at{" "}
-                  <code className="font-mono text-xs text-ink-300">
-                    straumvakt-ocpp-staging
-                  </code>
-                </dd>
-              </div>
-              <div className="flex gap-3">
-                <dt className="w-32 shrink-0 text-xs uppercase tracking-brand text-ink-400">
-                  Auth state
-                </dt>
-                <dd className="text-rose-200">
-                  AuthenticationType=2 (auth required) + stub gateway —
-                  unsafe middle, see alert
-                </dd>
-              </div>
-              <div className="flex gap-3">
-                <dt className="w-32 shrink-0 text-xs uppercase tracking-brand text-ink-400">
-                  Events ingest
-                </dt>
-                <dd className="text-amber-200">
-                  Staging 404s post-Boot (S1 not yet shipped) · production
-                  works
-                </dd>
-              </div>
-              <div className="flex gap-3">
-                <dt className="w-32 shrink-0 text-xs uppercase tracking-brand text-ink-400">
-                  Identity tables
-                </dt>
-                <dd>
-                  DDL landed · IdToken / UserVendorRef / Vehicle have no
-                  write paths (orphan)
-                </dd>
-              </div>
-              <div className="flex gap-3">
-                <dt className="w-32 shrink-0 text-xs uppercase tracking-brand text-ink-400">
-                  Zaptec API ceiling
-                </dt>
-                <dd>
-                  ROPC tier · 15-user charge-history slice via{" "}
-                  <code className="font-mono text-xs text-ink-300">
-                    DetailLevel=1
-                  </code>{" "}
-                  · /api/Users 403 · full ~50-user list portal-only
-                </dd>
-              </div>
-              <div className="flex gap-3">
-                <dt className="w-32 shrink-0 text-xs uppercase tracking-brand text-ink-400">
-                  Drift recorded
-                </dt>
-                <dd>
-                  ADR 0015 + delivery plan §6 + sprint-03 retro drafted ·
-                  awaiting commit
-                </dd>
-              </div>
-            </dl>
-          </section>
-
-          <section className="rounded-lg border border-bg-border bg-bg-surface/70 p-5 shadow-card backdrop-blur">
-            <h2 className="text-xs font-semibold uppercase tracking-brand text-sv-sky">
-              Design references
-            </h2>
-            <ul className="mt-3 space-y-2 text-sm text-ink-200">
-              <li>
-                <a
-                  href="/cost_center_splitting_model.svg"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-sv-green hover:text-sv-sky"
-                >
-                  Cost-center splitting model
-                </a>
-                <span className="ml-2 text-xs text-ink-400">
-                  ADR 0008 · 8 cost factors · driver-contract routing
-                </span>
-              </li>
-              <li>
-                <a
-                  href="/straumvakt_roadmap.svg"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-sv-green hover:text-sv-sky"
-                >
-                  Pilot roadmap (rev 2)
-                </a>
-                <span className="ml-2 text-xs text-ink-400">
-                  Phase-banded · what defers (tags A–F) · stale on Sprint 3 swap
-                </span>
-              </li>
-              <li>
-                <a
-                  href="/data-model.svg"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-sv-green hover:text-sv-sky"
-                >
-                  Data model map
-                </a>
-                <span className="ml-2 text-xs text-ink-400">
-                  Every Postgres namespace and its tables in one frame
-                </span>
-              </li>
-              <li>
-                <a
-                  href="/entity_relationships.svg"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-sv-green hover:text-sv-sky"
-                >
-                  Entity relationships
-                </a>
-                <span className="ml-2 text-xs text-ink-400">
-                  People-side · hardware-side · charge session as the binding row
-                </span>
-              </li>
-              <li className="border-t border-bg-border/60 pt-2">
-                <p className="text-xs uppercase tracking-brand text-ink-400">
-                  gbtNotes (working set)
+            <div className="caption-card">
+              <div className="caption">
+                <strong>See the site clearly</strong>
+                <p>
+                  From organization down to every circuit, charger, meter,
+                  modem, and controller.
                 </p>
-                <p className="mt-1 text-xs text-ink-300">
-                  <code className="font-mono">
-                    scale-to-4000-chargers-sprint-plan.md
-                  </code>{" "}
-                  · review · ocpp-ingest gap-check · review · two
-                  architecture SVGs. Sx numbering reconciled into delivery
-                  Sprints 3–11 per ADR 0015.
+              </div>
+              <div className="caption">
+                <strong>Use any control path</strong>
+                <p>
+                  Native OCPP, Zaptec/Easee APIs, external CPMS, or read-only
+                  imports.
                 </p>
-              </li>
-            </ul>
-          </section>
-        </div>
+              </div>
+              <div className="caption">
+                <strong>Keep one event truth</strong>
+                <p>
+                  Sessions, faults, commands, and meter values become canonical
+                  events.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
 
-        {/* Row 4 — pilot framing (unchanged) */}
-        <div className="mt-6">
-          <section className="rounded-lg border border-bg-border bg-bg-surface/70 p-5 shadow-card backdrop-blur">
-            <h2 className="text-xs font-semibold uppercase tracking-brand text-sv-sky">
-              Pilot framing
-            </h2>
-            <p className="mt-3 text-sm text-ink-200">
-              Admin-functionality only. No driver-facing surface. No money
-              movement during the 30-day pilot window. Drivers exist as inert
-              admin-created records mapped to RFID idTags, with the polymorphic
-              IdToken table from ADR 0014 carrying the lookup for both today's
-              manual entry and tomorrow's OCPP-flip-driven discovery.
+        <section className="band" id="how">
+          <div className="section-head">
+            <h2>In plain terms</h2>
+            <p>
+              Straumvakt is the layer between messy field reality and daily
+              operations. It helps people answer simple questions quickly.
             </p>
-            <p className="mt-2 text-sm text-ink-200">
-              Three concepts kept distinct on every charger:{" "}
-              <span className="text-sv-green">owner</span> (hardware),{" "}
-              <span className="text-sv-sky">operator</span> (org_id, runs
-              sessions),{" "}
-              <span className="text-amber-300">payer</span> (resolved at
-              session-stop via contract chain). ADR 0014 adds a fourth axis:{" "}
-              <span className="text-ink-50">audience</span> (operator vs
-              driver), discriminated on the User row.
+          </div>
+          <div className="cards">
+            <article className="info">
+              <div className="icon">1</div>
+              <h3>What do we own or operate?</h3>
+              <p>
+                Organizations, properties, sites, installations, circuits,
+                chargers, connectors, meters, modems, and controllers are
+                modeled as real physical things.
+              </p>
+            </article>
+            <article className="info">
+              <div className="icon">2</div>
+              <h3>How are chargers controlled?</h3>
+              <p>
+                Each asset can be controlled through the right path: OCPP, OEM
+                API, an external CPMS, or no control at all when the site is
+                read-only.
+              </p>
+            </article>
+            <article className="info">
+              <div className="icon">3</div>
+              <h3>What happened?</h3>
+              <p>
+                Every command, status change, session, fault, and meter reading
+                is preserved as an event so reports and audits have a common
+                foundation.
+              </p>
+            </article>
+            <article className="info">
+              <div className="icon">4</div>
+              <h3>Who pays for what?</h3>
+              <p>
+                Contracts, tariffs, cost centers, drivers, workplaces, owners,
+                and service fees are tied back to sessions and physical assets.
+              </p>
+            </article>
+          </div>
+        </section>
+
+        <section className="band" id="why">
+          <div className="section-head">
+            <h2>Built for operators, technicians, and finance</h2>
+            <p>
+              The goal is not to force every charger into one protocol. The
+              goal is to make a charging operation understandable, supportable,
+              and billable even when different vendors and control systems are
+              involved.
             </p>
-            <p className="mt-2 text-xs text-ink-400">
-              You are signed in{email ? ` as ${email}` : ""}. Operator console
-              wires up over Sprints 3–4 — the closure list above is the queue.
-            </p>
-          </section>
-        </div>
-      </PageShell>
-    </>
+          </div>
+        </section>
+      </div>
+    </div>
   );
 }
