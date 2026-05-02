@@ -42,6 +42,10 @@
       (currently free-form; default to `'admin'` for any unrecognised
       value)
 
+> Diagram: [`docs/architecture/permission-flow.svg`](../architecture/permission-flow.svg)
+> shows the runtime flow (request → middleware → lookups → resolver →
+> verdict) and the full catalogue + role bundles in one frame.
+
 ## Milestone 4.2 — Permission catalogue + role-to-permission map
 
 - [ ] `apps/api/src/lib/auth/permissions.ts` with the ~30 atomic

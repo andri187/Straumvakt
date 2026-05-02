@@ -1,0 +1,291 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1100" font-family="ui-sans-serif, system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif">
+  <!--
+    Sprint 4 / ADR 0014 — Permission flow.
+    Top half: runtime flow (request → middleware → lookups → resolver → verdict).
+    Bottom half: catalogue + role-to-permission bundles reference card.
+  -->
+
+  <defs>
+    <linearGradient id="header-gradient" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#3ee9a7"/>
+      <stop offset="0.55" stop-color="#2bd3c9"/>
+      <stop offset="1" stop-color="#2bb6e8"/>
+    </linearGradient>
+    <linearGradient id="surface" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#111a2e"/>
+      <stop offset="1" stop-color="#0b1220"/>
+    </linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#6fb8f0"/>
+    </marker>
+    <marker id="arrow-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#f4c95d"/>
+    </marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#ff6b6b"/>
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#3ee9a7"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1600" height="1100" fill="#070b16"/>
+
+  <!-- Title -->
+  <text x="40" y="48" font-size="22" font-weight="700" fill="url(#header-gradient)" letter-spacing="-0.01em">Straumvakt · Permission flow</text>
+  <text x="40" y="74" font-size="13" fill="#97a3b8">ADR 0014 · Sprint 4 milestones 4.2 (catalogue) + 4.3 (middleware). One request, two lookups, one verdict.</text>
+
+  <!-- ════════ TOP HALF — RUNTIME FLOW ════════ -->
+
+  <!-- Section label -->
+  <text x="40" y="120" font-size="11" font-weight="700" fill="#6fb8f0" letter-spacing="0.18em">RUNTIME · PER REQUEST</text>
+  <line x1="40" y1="132" x2="1560" y2="132" stroke="#1e2a44" stroke-width="1"/>
+
+  <!-- 1. Request box -->
+  <rect x="40" y="160" width="220" height="110" rx="8" fill="url(#surface)" stroke="#2b3a5e"/>
+  <text x="50" y="183" font-size="10" font-weight="700" fill="#6fb8f0" letter-spacing="0.16em">HTTP REQUEST</text>
+  <text x="50" y="208" font-size="13" fill="#f5f7fa" font-family="monospace">POST /api/admin/sites/:id</text>
+  <text x="50" y="227" font-size="11" fill="#c8d1e0">Cookie: admin session</text>
+  <text x="50" y="244" font-size="11" fill="#c8d1e0">Body: { displayName, ... }</text>
+  <text x="50" y="261" font-size="10" fill="#97a3b8" font-style="italic">orgId resolved from path or session</text>
+
+  <!-- arrow request → middleware -->
+  <line x1="260" y1="215" x2="320" y2="215" stroke="#6fb8f0" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- 2. requirePermission middleware -->
+  <rect x="320" y="140" width="280" height="200" rx="8" fill="#0e1626" stroke="#3ee9a7"/>
+  <text x="334" y="165" font-size="10" font-weight="700" fill="#3ee9a7" letter-spacing="0.16em">MIDDLEWARE</text>
+  <text x="334" y="190" font-size="13" font-weight="700" fill="#f5f7fa" font-family="monospace">requirePermission("site.write")</text>
+  <text x="334" y="212" font-size="11" fill="#c8d1e0">apps/api/src/lib/auth/</text>
+  <line x1="334" y1="226" x2="586" y2="226" stroke="#1e2a44"/>
+  <text x="334" y="246" font-size="11" fill="#c8d1e0">1. read session → userId</text>
+  <text x="334" y="263" font-size="11" fill="#c8d1e0">2. read :orgId from path</text>
+  <text x="334" y="280" font-size="11" fill="#c8d1e0">3. fan out two lookups in parallel</text>
+  <text x="334" y="297" font-size="11" fill="#c8d1e0">4. call effectivePermissions(...)</text>
+  <text x="334" y="314" font-size="11" fill="#c8d1e0">5. hasPermission(perms, "site.write")</text>
+  <text x="334" y="331" font-size="11" fill="#c8d1e0">6. continue (200) or short-circuit (403)</text>
+
+  <!-- arrows middleware → lookups -->
+  <line x1="600" y1="200" x2="680" y2="190" stroke="#6fb8f0" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="600" y1="280" x2="680" y2="290" stroke="#6fb8f0" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- 3a. Membership lookup -->
+  <rect x="680" y="140" width="280" height="120" rx="8" fill="url(#surface)" stroke="#2b3a5e"/>
+  <text x="694" y="163" font-size="10" font-weight="700" fill="#6fb8f0" letter-spacing="0.16em">LOOKUP A · TENANCY</text>
+  <text x="694" y="187" font-size="13" font-weight="700" fill="#f5f7fa" font-family="monospace">tenancy.memberships</text>
+  <text x="694" y="206" font-size="11" fill="#c8d1e0">where (orgId, userId)</text>
+  <text x="694" y="222" font-size="11" fill="#c8d1e0"><tspan font-weight="700" fill="#f4c95d">filter: status = 'active'</tspan></text>
+  <text x="694" y="240" font-size="11" fill="#97a3b8" font-style="italic">→ role · scopeSiteIds[] · scopePropertyIds[]</text>
+
+  <!-- 3b. PlatformGrant lookup -->
+  <rect x="680" y="270" width="280" height="120" rx="8" fill="url(#surface)" stroke="#2b3a5e"/>
+  <text x="694" y="293" font-size="10" font-weight="700" fill="#6fb8f0" letter-spacing="0.16em">LOOKUP B · IDENTITY</text>
+  <text x="694" y="317" font-size="13" font-weight="700" fill="#f5f7fa" font-family="monospace">identity.platform_grants</text>
+  <text x="694" y="336" font-size="11" fill="#c8d1e0">where (userId)</text>
+  <text x="694" y="352" font-size="11" fill="#c8d1e0"><tspan font-weight="700" fill="#f4c95d">filter: status = 'active' AND</tspan></text>
+  <text x="759" y="368" font-size="11" font-weight="700" fill="#f4c95d">(expiresAt IS NULL OR expiresAt &gt; NOW())</text>
+
+  <!-- arrows lookups → resolver -->
+  <line x1="960" y1="200" x2="1020" y2="240" stroke="#6fb8f0" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="960" y1="330" x2="1020" y2="290" stroke="#6fb8f0" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- 4. effectivePermissions resolver -->
+  <rect x="1020" y="160" width="320" height="220" rx="8" fill="#0e1626" stroke="#2bd3c9"/>
+  <text x="1034" y="183" font-size="10" font-weight="700" fill="#2bd3c9" letter-spacing="0.16em">PURE RESOLVER</text>
+  <text x="1034" y="207" font-size="13" font-weight="700" fill="#f5f7fa" font-family="monospace">effectivePermissions(m, g)</text>
+
+  <rect x="1034" y="222" width="290" height="56" rx="5" fill="#070b16" stroke="#1e2a44"/>
+  <text x="1044" y="240" font-size="10" font-weight="700" fill="#3ee9a7">MEMBERSHIP_ROLE_PERMISSIONS</text>
+  <text x="1044" y="255" font-size="10" font-family="monospace" fill="#c8d1e0">[m.role] : Permission[]</text>
+  <text x="1044" y="271" font-size="10" font-family="monospace" fill="#97a3b8">e.g. admin → 19 verbs</text>
+
+  <text x="1175" y="297" font-size="14" fill="#f4c95d" font-family="monospace" text-anchor="middle">∪</text>
+
+  <rect x="1034" y="304" width="290" height="56" rx="5" fill="#070b16" stroke="#1e2a44"/>
+  <text x="1044" y="322" font-size="10" font-weight="700" fill="#2bb6e8">PLATFORM_ROLE_PERMISSIONS</text>
+  <text x="1044" y="337" font-size="10" font-family="monospace" fill="#c8d1e0">[g.role] : Permission[]</text>
+  <text x="1044" y="353" font-size="10" font-family="monospace" fill="#97a3b8">e.g. auditor → 2 verbs</text>
+
+  <!-- arrow resolver → verdict -->
+  <line x1="1340" y1="270" x2="1410" y2="270" stroke="#6fb8f0" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- 5. Verdict -->
+  <rect x="1410" y="180" width="160" height="180" rx="8" fill="url(#surface)" stroke="#2b3a5e"/>
+  <text x="1421" y="203" font-size="10" font-weight="700" fill="#6fb8f0" letter-spacing="0.16em">VERDICT</text>
+  <text x="1421" y="225" font-size="13" font-weight="700" fill="#f5f7fa" font-family="monospace">hasPermission</text>
+  <text x="1421" y="241" font-size="11" fill="#c8d1e0" font-family="monospace">  (perms, needed)?</text>
+  <line x1="1421" y1="252" x2="1559" y2="252" stroke="#1e2a44"/>
+  <rect x="1421" y="262" width="138" height="40" rx="5" fill="rgba(62,233,167,0.1)" stroke="#3ee9a7"/>
+  <text x="1490" y="278" font-size="11" font-weight="700" fill="#3ee9a7" text-anchor="middle">200</text>
+  <text x="1490" y="294" font-size="10" fill="#c8d1e0" text-anchor="middle">→ route handler</text>
+  <rect x="1421" y="310" width="138" height="40" rx="5" fill="rgba(255,107,107,0.1)" stroke="#ff6b6b"/>
+  <text x="1490" y="326" font-size="11" font-weight="700" fill="#ff6b6b" text-anchor="middle">403</text>
+  <text x="1490" y="342" font-size="10" fill="#c8d1e0" text-anchor="middle">{ error: "forbidden" }</text>
+
+  <!-- Caption — source of truth -->
+  <text x="40" y="395" font-size="11" fill="#97a3b8" font-style="italic">Notes ·
+    <tspan fill="#c8d1e0">Membership.scopeSiteIds / scopePropertyIds narrow which rows the handler may touch — applied at the repo layer, NOT here.</tspan></text>
+  <text x="40" y="412" font-size="11" fill="#97a3b8" font-style="italic">
+    <tspan fill="#c8d1e0">A user may have ZERO of {membership, platform grant} (then perms = []), one of, or both — both bundles union with dedup.</tspan></text>
+  <text x="40" y="429" font-size="11" fill="#97a3b8" font-style="italic">
+    <tspan fill="#c8d1e0">Source: apps/api/src/lib/auth/permissions.ts (catalogue + maps + resolver) · permissions.test.ts (90/90 invariants).</tspan></text>
+
+  <!-- ════════ BOTTOM HALF — REFERENCE ════════ -->
+
+  <text x="40" y="490" font-size="11" font-weight="700" fill="#6fb8f0" letter-spacing="0.18em">REFERENCE · CATALOGUE + BUNDLES</text>
+  <line x1="40" y1="502" x2="1560" y2="502" stroke="#1e2a44" stroke-width="1"/>
+
+  <!-- Per-tenant catalogue (column 1) -->
+  <rect x="40" y="525" width="320" height="540" rx="8" fill="url(#surface)" stroke="#2b3a5e"/>
+  <text x="56" y="550" font-size="10" font-weight="700" fill="#3ee9a7" letter-spacing="0.16em">PER-TENANT CATALOGUE · 25 verbs</text>
+  <text x="56" y="567" font-size="9" fill="#97a3b8" font-style="italic">Bound to (orgId, userId) Membership</text>
+
+  <g font-family="monospace" font-size="11" fill="#c8d1e0">
+    <text x="56" y="595">org.read · org.write</text>
+    <text x="56" y="617" font-weight="700" fill="#f4c95d">member.*</text>
+    <text x="76" y="635">read · invite · write · remove</text>
+    <text x="56" y="660" font-weight="700" fill="#f4c95d">site.*</text>
+    <text x="76" y="678">read · write · delete</text>
+    <text x="56" y="703" font-weight="700" fill="#f4c95d">property.*</text>
+    <text x="76" y="721">read · write · delete</text>
+    <text x="56" y="746" font-weight="700" fill="#f4c95d">charger.*</text>
+    <text x="76" y="764">read · write · config</text>
+    <text x="76" y="782">remote_start · remote_stop</text>
+    <text x="56" y="807" font-weight="700" fill="#f4c95d">billing.*</text>
+    <text x="76" y="825">read · write · export</text>
+    <text x="56" y="850" font-weight="700" fill="#f4c95d">tariff.*</text>
+    <text x="76" y="868">read · write</text>
+    <text x="56" y="893" font-weight="700" fill="#f4c95d">contract.*</text>
+    <text x="76" y="911">read · write</text>
+    <text x="56" y="936">audit.read</text>
+  </g>
+
+  <!-- Platform catalogue (column 2) -->
+  <rect x="380" y="525" width="320" height="540" rx="8" fill="url(#surface)" stroke="#2b3a5e"/>
+  <text x="396" y="550" font-size="10" font-weight="700" fill="#2bb6e8" letter-spacing="0.16em">PLATFORM CATALOGUE · 15 verbs</text>
+  <text x="396" y="567" font-size="9" fill="#97a3b8" font-style="italic">Bound to userId PlatformGrant (Straumvakt staff)</text>
+
+  <g font-family="monospace" font-size="11" fill="#c8d1e0">
+    <text x="396" y="595" font-weight="700" fill="#f4c95d">platform.tenant.*</text>
+    <text x="416" y="613">read · write · delete</text>
+    <text x="396" y="638">platform.impersonate</text>
+    <text x="396" y="660">platform.support.action</text>
+    <text x="396" y="685" font-weight="700" fill="#f4c95d">platform.feature_flag.*</text>
+    <text x="416" y="703">read · write</text>
+    <text x="396" y="728" font-weight="700" fill="#f4c95d">platform.tariff_catalogue.*</text>
+    <text x="416" y="746">read · write</text>
+    <text x="396" y="771">platform.migration.run</text>
+    <text x="396" y="793">platform.audit.read</text>
+    <text x="396" y="818" font-weight="700" fill="#f4c95d">platform.finance.*</text>
+    <text x="416" y="836">read · write</text>
+    <text x="396" y="861" font-weight="700" fill="#f4c95d">platform.grant.*</text>
+    <text x="416" y="879">read · write</text>
+  </g>
+
+  <!-- Membership role bundles (column 3) -->
+  <rect x="720" y="525" width="430" height="540" rx="8" fill="url(#surface)" stroke="#2b3a5e"/>
+  <text x="736" y="550" font-size="10" font-weight="700" fill="#3ee9a7" letter-spacing="0.16em">MEMBERSHIP ROLE → BUNDLE</text>
+  <text x="736" y="567" font-size="9" fill="#97a3b8" font-style="italic">7 active roles + 4 deprecated (mapped to nearest equivalent)</text>
+
+  <g font-size="11" font-family="monospace">
+    <!-- owner -->
+    <rect x="736" y="582" width="80" height="22" rx="3" fill="#1e2a44"/>
+    <text x="776" y="598" fill="#3ee9a7" font-weight="700" text-anchor="middle">owner</text>
+    <text x="826" y="598" fill="#c8d1e0">→ all 25 per-tenant verbs</text>
+    <!-- admin -->
+    <rect x="736" y="612" width="80" height="22" rx="3" fill="#1e2a44"/>
+    <text x="776" y="628" fill="#2bd3c9" font-weight="700" text-anchor="middle">admin</text>
+    <text x="826" y="628" fill="#c8d1e0">→ manager + member.{invite,write,remove}</text>
+    <text x="826" y="643" fill="#c8d1e0" font-size="10">+ billing.{r,w} + tariff.write + contract.write</text>
+    <text x="826" y="657" fill="#c8d1e0" font-size="10">+ property.write + audit.read</text>
+    <!-- manager -->
+    <rect x="736" y="668" width="80" height="22" rx="3" fill="#1e2a44"/>
+    <text x="776" y="684" fill="#2bb6e8" font-weight="700" text-anchor="middle">manager</text>
+    <text x="826" y="684" fill="#c8d1e0">→ technician + site.write + charger.write</text>
+    <text x="826" y="699" fill="#c8d1e0" font-size="10">+ tariff.read + contract.read + member.read</text>
+    <!-- technician -->
+    <rect x="736" y="710" width="80" height="22" rx="3" fill="#1e2a44"/>
+    <text x="776" y="726" fill="#6fb8f0" font-weight="700" text-anchor="middle">technician</text>
+    <text x="826" y="726" fill="#c8d1e0">→ viewer + charger.{config,</text>
+    <text x="826" y="741" fill="#c8d1e0" font-size="10">remote_start, remote_stop}</text>
+    <!-- finance -->
+    <rect x="736" y="752" width="80" height="22" rx="3" fill="#1e2a44"/>
+    <text x="776" y="768" fill="#f4c95d" font-weight="700" text-anchor="middle">finance</text>
+    <text x="826" y="768" fill="#c8d1e0">→ viewer + billing.{r,w,export}</text>
+    <text x="826" y="783" fill="#c8d1e0" font-size="10">+ contract.{r,w} + tariff.read</text>
+    <!-- support -->
+    <rect x="736" y="794" width="80" height="22" rx="3" fill="#1e2a44"/>
+    <text x="776" y="810" fill="#f4c95d" font-weight="700" text-anchor="middle">support</text>
+    <text x="826" y="810" fill="#c8d1e0">→ all .read verbs (read-only across org)</text>
+    <!-- viewer -->
+    <rect x="736" y="824" width="80" height="22" rx="3" fill="#1e2a44"/>
+    <text x="776" y="840" fill="#97a3b8" font-weight="700" text-anchor="middle">viewer</text>
+    <text x="826" y="840" fill="#c8d1e0">→ org.read + site.read + charger.read</text>
+    <text x="826" y="855" fill="#c8d1e0" font-size="10">+ property.read · 4 verbs</text>
+    <!-- divider -->
+    <line x1="736" y1="876" x2="1140" y2="876" stroke="#1e2a44" stroke-dasharray="3 3"/>
+    <text x="736" y="893" fill="#97a3b8" font-style="italic" font-size="10">Deprecated · pre-ADR-0014 (Sprint 9 cleanup):</text>
+    <!-- deprecated rows -->
+    <text x="736" y="912" fill="#97a3b8">operator</text>
+    <text x="826" y="912" fill="#97a3b8" font-size="10">→ same bundle as manager</text>
+    <text x="736" y="930" fill="#97a3b8">helper</text>
+    <text x="826" y="930" fill="#97a3b8" font-size="10">→ same as technician</text>
+    <text x="736" y="948" fill="#97a3b8">contractor</text>
+    <text x="826" y="948" fill="#97a3b8" font-size="10">→ same as technician</text>
+    <text x="736" y="966" fill="#97a3b8">driver</text>
+    <text x="826" y="966" fill="#ff6b6b" font-size="10">→ [] (audience='driver' on User instead)</text>
+  </g>
+
+  <!-- Platform role bundles (column 4) -->
+  <rect x="1170" y="525" width="400" height="540" rx="8" fill="url(#surface)" stroke="#2b3a5e"/>
+  <text x="1186" y="550" font-size="10" font-weight="700" fill="#2bb6e8" letter-spacing="0.16em">PLATFORM ROLE → BUNDLE</text>
+  <text x="1186" y="567" font-size="9" fill="#97a3b8" font-style="italic">Straumvakt staff override; OR&apos;d with membership at runtime</text>
+
+  <g font-size="11" font-family="monospace">
+    <!-- super_user -->
+    <rect x="1186" y="582" width="120" height="22" rx="3" fill="#1e2a44"/>
+    <text x="1246" y="598" fill="#3ee9a7" font-weight="700" text-anchor="middle">super_user</text>
+    <text x="1316" y="598" fill="#c8d1e0">→ all 15 platform.* verbs</text>
+    <text x="1316" y="613" fill="#97a3b8" font-size="10">founders / CTO; mints platform grants</text>
+    <!-- platform_admin -->
+    <rect x="1186" y="624" width="120" height="22" rx="3" fill="#1e2a44"/>
+    <text x="1246" y="640" fill="#2bd3c9" font-weight="700" text-anchor="middle">platform_admin</text>
+    <text x="1316" y="640" fill="#c8d1e0">→ tenant.{r,w,d} + impersonate</text>
+    <text x="1316" y="655" fill="#c8d1e0" font-size="10">+ feature_flag.* + tariff_catalogue.*</text>
+    <text x="1316" y="670" fill="#c8d1e0" font-size="10">+ migration.run + audit.read + grant.read</text>
+    <text x="1316" y="685" fill="#97a3b8" font-size="10">lead engineers / on-call</text>
+    <!-- support_agent -->
+    <rect x="1186" y="697" width="120" height="22" rx="3" fill="#1e2a44"/>
+    <text x="1246" y="713" fill="#2bb6e8" font-weight="700" text-anchor="middle">support_agent</text>
+    <text x="1316" y="713" fill="#c8d1e0">→ tenant.read + impersonate</text>
+    <text x="1316" y="728" fill="#c8d1e0" font-size="10">+ support.action + audit.read</text>
+    <text x="1316" y="743" fill="#97a3b8" font-size="10">read all + impersonate; no tenant writes</text>
+    <!-- sales_cs -->
+    <rect x="1186" y="755" width="120" height="22" rx="3" fill="#1e2a44"/>
+    <text x="1246" y="771" fill="#6fb8f0" font-weight="700" text-anchor="middle">sales_cs</text>
+    <text x="1316" y="771" fill="#c8d1e0">→ tenant.{read, write*} + audit.read</text>
+    <text x="1316" y="786" fill="#97a3b8" font-size="10">*column-restricted in repo (notes/tags only)</text>
+    <!-- finance_internal -->
+    <rect x="1186" y="798" width="120" height="22" rx="3" fill="#1e2a44"/>
+    <text x="1246" y="814" fill="#f4c95d" font-weight="700" text-anchor="middle">finance_internal</text>
+    <text x="1316" y="814" fill="#c8d1e0">→ finance.{r,w} + tenant.read</text>
+    <text x="1316" y="829" fill="#97a3b8" font-size="10">Straumvakt&apos;s own books, NOT customer billing</text>
+    <!-- auditor -->
+    <rect x="1186" y="841" width="120" height="22" rx="3" fill="#1e2a44"/>
+    <text x="1246" y="857" fill="#97a3b8" font-weight="700" text-anchor="middle">auditor</text>
+    <text x="1316" y="857" fill="#c8d1e0">→ tenant.read + audit.read</text>
+    <text x="1316" y="872" fill="#97a3b8" font-size="10">read-only · time-limited via expiresAt</text>
+
+    <!-- Note: super_user explicit list -->
+    <line x1="1186" y1="895" x2="1556" y2="895" stroke="#1e2a44" stroke-dasharray="3 3"/>
+    <text x="1186" y="915" fill="#97a3b8" font-style="italic" font-size="10">super_user uses an explicit list, NOT a wildcard, so adding a new</text>
+    <text x="1186" y="929" fill="#97a3b8" font-style="italic" font-size="10">platform verb forces a deliberate decision (TS test catches it).</text>
+    <text x="1186" y="958" fill="#c8d1e0" font-size="10">A future grant.write to anyone except super_user requires</text>
+    <text x="1186" y="972" fill="#c8d1e0" font-size="10">an explicit edit to PLATFORM_ROLE_PERMISSIONS — recoverable.</text>
+  </g>
+
+  <!-- Footer -->
+  <text x="40" y="1090" font-size="10" fill="#97a3b8">Source: apps/api/src/lib/auth/permissions.ts · ADR 0014 §"Layer 4 — Authorization (PBAC)" · Sprint 4 milestones 4.2 + 4.3</text>
+  <text x="1560" y="1090" font-size="10" fill="#97a3b8" text-anchor="end">Generated 2026-05-02 · Straumvakt</text>
+</svg>
