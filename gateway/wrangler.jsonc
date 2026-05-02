@@ -21,16 +21,22 @@
     }
   ],
 
-  // Service Binding to the API Worker on this environment for auth
-  // lookups + event ingest. The binding name 'MAIN_APP' is environment-
-  // dependent: production resolves to 'hlada' (UI Worker; pre-cutover);
-  // staging resolves to 'hlada-api-staging' (API Worker; Sprint S1
-  // cutover already shipped). Production cutover (gateway → 'hlada-api')
-  // is deferred to Sprint 4 per docs/retros/sprint-03.md carry-forward.
+  // Service Binding to the API Worker for auth lookups + event ingest.
+  // Sprint 4.5 production cutover: both environments now bind to the
+  // API Worker (post-Sprint-S1 the API Worker hosts every internal
+  // route the gateway calls — ocpp-auth, ocpp-authorize, pending-
+  // discovery, ocpp-events).
+  //   prod    → hlada-api
+  //   staging → hlada-api-staging
+  // The UI Worker (hlada / hlada-staging) is no longer in the gateway
+  // path; once gateway redeploys land in both environments, the dead
+  // code in src/lib/ocpp/* + src/app/api/ocpp/events/ + src/app/api/
+  // internal/ocpp-auth/ on the UI Worker side gets deleted in a
+  // follow-up commit.
   "services": [
     {
       "binding": "MAIN_APP",
-      "service": "hlada"
+      "service": "hlada-api"
     }
   ],
 

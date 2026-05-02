@@ -96,11 +96,15 @@ app.route("/api/admin/tokens", adminIdTokens);
 // header (ADR 0004), not the admin session middleware.
 app.route("/api/internal/ocpp-auth", internalOcppAuth);
 app.route("/api/internal/ocpp-authorize", internalOcppAuthorize);
-// Mounted at /api/ocpp/events (not /api/internal/ocpp-events) to match
-// what the gateway already POSTs to. The prefix-consistency rename is
-// deferred to Sprint 4 to land atomically with the production binding
-// flip (gateway → hlada-api) and the UI Worker route deletion.
+// Sprint 4.5 production cutover — dual-mount during transition.
+// /api/ocpp/events: legacy URL that today's gateway still posts to.
+// /api/internal/ocpp-events: new URL the post-cutover gateway uses.
+// Both routes share the same handler. The legacy URL stays mounted
+// until the gateway has been redeployed everywhere with the new URL,
+// then a follow-up commit drops it (along with the UI-Worker-side
+// dead code in src/lib/ocpp/* and src/app/api/ocpp/events/).
 app.route("/api/ocpp/events", internalOcppEvents);
+app.route("/api/internal/ocpp-events", internalOcppEvents);
 app.route("/api/internal/pending-discovery", internalPendingDiscovery);
 
 app.notFound((c) => c.json({ error: "not_found", path: c.req.path }, 404));

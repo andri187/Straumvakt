@@ -1,21 +1,21 @@
 /**
- * Gateway → main-app ingest client.
+ * Gateway → API Worker ingest client.
  *
  * After the translator produces a domain event envelope from an OCPP
- * message, we POST it to the main-app's `/api/ocpp/events` route over
- * the Cloudflare Service Binding. Resolves per environment:
+ * message, we POST it to `/api/internal/ocpp-events` on the bound
+ * MAIN_APP service. Sprint 4.5 production cutover renames the URL
+ * from `/api/ocpp/events` for prefix consistency with the other
+ * internal routes (ocpp-auth, ocpp-authorize, pending-discovery).
  *
- *   • staging  → MAIN_APP=hlada-api-staging (the API Worker)
- *   • prod     → MAIN_APP=hlada (the UI Worker, pre-cutover)
+ * Bindings per environment (after Sprint 4.5):
+ *   • staging → MAIN_APP=hlada-api-staging
+ *   • prod    → MAIN_APP=hlada-api
  *
- * Both environments mount `/api/ocpp/events`: api-staging picked it up
- * in Sprint S1 (apps/api/src/routes/internal/ocpp-events.ts); the UI
- * Worker has had it since Sprint 1.1. The URL stays `/api/ocpp/events`
- * for both surfaces during the cutover window. Sprint 4 renames it to
- * `/api/internal/ocpp-events` for prefix consistency with the other
- * internal routes — that rename happens atomically alongside the
- * production binding flip (gateway → hlada-api) and the UI Worker
- * route deletion.
+ * The api Worker dual-mounts both URLs during the transition window
+ * so a stale gateway binary or an out-of-order deploy doesn't 404.
+ * Once both gateway environments are redeployed with this code, a
+ * follow-up commit drops the legacy `/api/ocpp/events` mount on the
+ * api Worker.
  *
  * The caller (the DO) decides whether to retry on failure — this
  * module just returns the structured outcome.
@@ -51,7 +51,7 @@ export async function postEvent(
 ): Promise<IngestOutcome> {
   try {
     const resp = await env.MAIN_APP.fetch(
-      new Request("https://main.internal/api/ocpp/events", {
+      new Request("https://main.internal/api/internal/ocpp-events", {
         method: "POST",
         headers: {
           "content-type": "application/json",
