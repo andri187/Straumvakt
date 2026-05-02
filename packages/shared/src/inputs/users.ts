@@ -13,6 +13,34 @@ export const UserCreateInput = z.object({
   displayName: z.string().min(1).max(120).optional(),
   password: z.string().min(12).max(180).optional(),
   audience: UserAudienceEnum.default("operator"),
+  // ── Profile fields available at create time ──────────────────────
+  // Same shape as UserUpdateInput but optional. Provided here so the
+  // operator can capture full profile in one go (Iceland operators
+  // typically know name + kennitala + phone at invite time).
+  firstName: optionalString(120),
+  middleName: optionalString(120),
+  lastName: optionalString(120),
+  kennitala: z
+    .string()
+    .regex(KENNITALA_RE, { message: "format: DDMMYY-XXXX" })
+    .optional()
+    .transform((v) => (v ? v.replace(/-/g, "") : undefined)),
+  phone: optionalString(40),
+  locale: z.string().min(2).max(10).optional(),
+  timezone: z.string().min(1).max(60).optional(),
+  dateOfBirth: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, { message: "format: yyyy-mm-dd" })
+    .optional(),
+  photoUrl: optionalString(500),
+  address: z
+    .object({
+      street: z.string().max(200).optional(),
+      city: z.string().max(80).optional(),
+      postalCode: z.string().max(20).optional(),
+      countryCode: z.string().regex(/^[A-Z]{2}$/).optional(),
+    })
+    .optional(),
 });
 export type UserCreateInput = z.infer<typeof UserCreateInput>;
 

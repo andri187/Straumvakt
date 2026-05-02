@@ -148,12 +148,28 @@ export async function createUser(
   db: PrismaClient,
   input: UserCreateInput,
 ): Promise<UserSummary> {
+  const data: Prisma.UserCreateInput = {
+    email: input.email.toLowerCase(),
+    displayName: input.displayName ?? null,
+    audience: input.audience,
+    ...(input.firstName ? { firstName: input.firstName } : {}),
+    ...(input.middleName ? { middleName: input.middleName } : {}),
+    ...(input.lastName ? { lastName: input.lastName } : {}),
+    ...(input.kennitala ? { kennitala: input.kennitala } : {}),
+    ...(input.phone ? { phone: input.phone } : {}),
+    ...(input.locale ? { locale: input.locale } : {}),
+    ...(input.timezone ? { timezone: input.timezone } : {}),
+    ...(input.dateOfBirth
+      ? { dateOfBirth: new Date(input.dateOfBirth) }
+      : {}),
+    ...(input.photoUrl ? { photoUrl: input.photoUrl } : {}),
+    ...(input.address
+      ? { address: input.address as Prisma.InputJsonValue }
+      : {}),
+  };
+
   const created = await db.user.create({
-    data: {
-      email: input.email.toLowerCase(),
-      displayName: input.displayName ?? null,
-      audience: input.audience,
-    },
+    data,
     include: { credentials: true },
   });
   return toSummary(created);
