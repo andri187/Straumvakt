@@ -17,8 +17,10 @@ import {
   deleteVendorCredential,
   getVendorCredentialById,
   listVendorCredentials,
+  moveVendorCredentialToOrg,
   updateVendorCredential,
 } from "../../repositories/vendor-credentials";
+import { z } from "zod";
 import {
   applyCredentialSelection,
   getCredentialManagementTree,
@@ -106,6 +108,33 @@ adminVendorCredentialsAll.post("/:id/apply", async (c) => {
     if (msg === "credential_password_missing") return c.json({ error: msg }, 400);
     if (msg === "zaptec_auth_failed") return c.json({ error: msg }, 502);
     if (msg === "kek_unavailable") return c.json({ error: msg }, 500);
+    throw err;
+  }
+});
+
+const MoveCredentialBody = z.object({
+  targetOrgId: z.string().uuid(),
+});
+
+adminVendorCredentialsAll.post("/:id/move", async (c) => {
+  const raw = (await c.req.json().catch(() => null)) as unknown;
+  const parsed = MoveCredentialBody.safeParse(raw);
+  if (!parsed.success) {
+    return c.json({ error: "validation", issues: parsed.error.issues }, 400);
+  }
+  const db = makePrisma(c.env);
+  try {
+    const result = await moveVendorCredentialToOrg(
+      db,
+      c.req.param("id"),
+      parsed.data.targetOrgId,
+    );
+    return c.json({ result });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg === "credential_not_found") return c.json({ error: msg }, 404);
+    if (msg === "target_org_not_found") return c.json({ error: msg }, 400);
+    if (msg === "already_in_target_org") return c.json({ error: msg }, 400);
     throw err;
   }
 });

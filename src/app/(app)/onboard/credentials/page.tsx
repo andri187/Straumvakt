@@ -2,6 +2,7 @@ import Link from "next/link";
 import { SectionTabs, ONBOARD_TABS } from "@/components/section-tabs";
 import { apiFetchServerJson } from "@/lib/api-client-server";
 import type { VendorCredentialSummary } from "@straumvakt/shared/domain/vendor-credentials";
+import type { OrgSummary } from "@straumvakt/shared/domain/orgs";
 import { CredentialActions } from "./credential-actions";
 
 export const dynamic = "force-dynamic";
@@ -13,9 +14,12 @@ export const metadata = { title: "Onboard · Vendor credentials" };
 // user is platform admin in pilot mode.
 
 export default async function VendorCredentialsPage() {
-  const { credentials } = await apiFetchServerJson<{ credentials: VendorCredentialSummary[] }>(
-    "/api/admin/vendor-credentials",
-  );
+  const [{ credentials }, { orgs }] = await Promise.all([
+    apiFetchServerJson<{ credentials: VendorCredentialSummary[] }>(
+      "/api/admin/vendor-credentials",
+    ),
+    apiFetchServerJson<{ orgs: OrgSummary[] }>("/api/admin/orgs"),
+  ]);
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-8">
@@ -97,7 +101,12 @@ export default async function VendorCredentialsPage() {
                     {c.notes ?? <span className="text-ink-500">—</span>}
                   </td>
                   <td className="px-3 py-2 text-right">
-                    <CredentialActions credentialId={c.id} status={c.status} />
+                    <CredentialActions
+                      credentialId={c.id}
+                      ownerOrgId={c.ownerOrgId}
+                      status={c.status}
+                      orgs={orgs}
+                    />
                   </td>
                 </tr>
               ))}

@@ -226,6 +226,74 @@ export async function deleteVendorCredential(
   await db.vendorCredential.delete({ where: { id } });
 }
 
+export interface MoveCredentialResult {
+  credentialId: string;
+  fromOrgId: string;
+  toOrgId: string;
+  // Installations whose credentials_id was NULLed because they're in
+  // a different org than the credential is moving to. Operator
+  // re-links them via the wizard or manually.
+  unlinkedInstallationCount: number;
+}
+
+/**
+ * Reassign a vendor credential's owner_org_id. After the move:
+ *   • Installations in the target org keep their link (FK still
+ *     points at the same credential row).
+ *   • Installations in any OTHER org get credentials_id = NULL
+ *     because a cross-tenant FK violates the multi-tenant invariant.
+ *
+ * Common case: operator moved a Site to a new org (Site move flow
+ * already NULL'd credentials_id on those installations) and now
+ * wants the credential to follow.
+ */
+export async function moveVendorCredentialToOrg(
+  db: PrismaClient,
+  credentialId: string,
+  targetOrgId: string,
+): Promise<MoveCredentialResult> {
+  return db.$transaction(
+    async (tx) => {
+      const cred = await tx.vendorCredential.findUnique({
+        where: { id: credentialId },
+        select: { id: true, ownerOrgId: true },
+      });
+      if (!cred) throw new Error("credential_not_found");
+      if (cred.ownerOrgId === targetOrgId) {
+        throw new Error("already_in_target_org");
+      }
+      const target = await tx.organization.findUnique({
+        where: { id: targetOrgId },
+        select: { id: true },
+      });
+      if (!target) throw new Error("target_org_not_found");
+
+      // NULL credentials_id on any installation that's NOT in the
+      // target org — those would become cross-tenant after the move.
+      const unlinked = await tx.installation.updateMany({
+        where: {
+          credentialsId: credentialId,
+          orgId: { not: targetOrgId },
+        },
+        data: { credentialsId: null },
+      });
+
+      await tx.vendorCredential.update({
+        where: { id: credentialId },
+        data: { ownerOrgId: targetOrgId },
+      });
+
+      return {
+        credentialId,
+        fromOrgId: cred.ownerOrgId,
+        toOrgId: targetOrgId,
+        unlinkedInstallationCount: unlinked.count,
+      };
+    },
+    { timeout: 30_000, maxWait: 15_000 },
+  );
+}
+
 /**
  * Decrypt the stored password for a credential. Used server-side to
  * re-auth against the vendor's API. Updates last_used_at as a side
