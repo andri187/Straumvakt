@@ -153,6 +153,7 @@ export const IdTokenUpdateInput = z.object({
 export type IdTokenUpdateInput = z.infer<typeof IdTokenUpdateInput>;
 
 export const MEMBERSHIP_ROLES = [
+  // Pre-ADR-0014 (deprecated; Sprint 9 cleanup).
   "owner",
   "admin",
   "operator",
@@ -160,6 +161,11 @@ export const MEMBERSHIP_ROLES = [
   "contractor",
   "driver",
   "viewer",
+  // ADR 0014.
+  "manager",
+  "technician",
+  "finance",
+  "support",
 ] as const;
 export type MembershipRoleValue = (typeof MEMBERSHIP_ROLES)[number];
 

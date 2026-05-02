@@ -2,14 +2,36 @@ export type UserStatus = "active" | "suspended" | "deleted";
 
 export type UserAudience = "operator" | "driver" | "service";
 
+// MembershipRole carries both the pre-ADR-0014 values (deprecated;
+// retained until Sprint 9 RLS rebuild) AND the new ADR 0014 bundles.
+// Sprint 4 milestone 4.2's permission catalogue maps only the new
+// values; deprecated values fall through to the no-permission default.
 export type MembershipRole =
+  // Pre-ADR-0014 — deprecated.
   | "owner"
   | "admin"
   | "operator"
   | "helper"
   | "contractor"
   | "driver"
-  | "viewer";
+  | "viewer"
+  // ADR 0014.
+  | "manager"
+  | "technician"
+  | "finance"
+  | "support";
+
+export type MembershipStatus = "invited" | "active" | "suspended" | "revoked";
+
+export type PlatformRole =
+  | "super_user"
+  | "platform_admin"
+  | "support_agent"
+  | "sales_cs"
+  | "finance_internal"
+  | "auditor";
+
+export type PlatformGrantStatus = "active" | "suspended" | "revoked";
 
 export interface UserSummary {
   id: string;

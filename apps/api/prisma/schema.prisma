@@ -86,8 +86,12 @@ model User {
   ocpiTokens     OcpiToken[]
 
   // ── Rev-3 / Rev-4 relations (ADRs 0008 + 0010) ───────────────────
-  platformAdminGrant      PlatformAdmin?   @relation("PlatformAdminUser")
-  platformAdminGrantsMade PlatformAdmin[]  @relation("PlatformAdminGrantedBy")
+  // ── ADR 0014 / Sprint 4 — PlatformAdmin replaced by PlatformGrant.
+  platformGrant          PlatformGrant?  @relation("PlatformGrantUser")
+  platformGrantsMade     PlatformGrant[] @relation("PlatformGrantedBy")
+  platformGrantsRevoked  PlatformGrant[] @relation("PlatformGrantRevokedBy")
+  // Membership lifecycle — invitedBy back-relation (ADR 0014).
+  membershipsInvited     Membership[]    @relation("MembershipInviter")
   configKeysSet           OcppConfigurationKey[] @relation("ConfigKeySetBy")
   costCentersAsPayer      CostCenter[]     @relation("CostCenterPayerUser")
   driverContracts         DriverContract[]
@@ -384,20 +388,35 @@ enum OrgStatus {
 }
 
 model Membership {
-  orgId        String         @map("org_id") @db.Uuid
-  userId       String         @map("user_id") @db.Uuid
+  orgId        String           @map("org_id") @db.Uuid
+  userId       String           @map("user_id") @db.Uuid
   role         MembershipRole
-  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdAt    DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  organization Organization   @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // ── ADR 0014 / Sprint 4 — lifecycle + invite-flow plumbing ───────
+  status       MembershipStatus @default(active)
+
+  invitedById      String?  @map("invited_by_id") @db.Uuid
+  invitedAt        DateTime? @map("invited_at") @db.Timestamptz(6)
+  acceptedAt       DateTime? @map("accepted_at") @db.Timestamptz(6)
+  suspendedAt      DateTime? @map("suspended_at") @db.Timestamptz(6)
+  revokedAt        DateTime? @map("revoked_at") @db.Timestamptz(6)
+
+  scopeSiteIds     String[] @default([]) @map("scope_site_ids") @db.Uuid
+  scopePropertyIds String[] @default([]) @map("scope_property_ids") @db.Uuid
+
+  organization Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invitedBy    User?            @relation("MembershipInviter", fields: [invitedById], references: [id])
 
   @@id([orgId, userId])
+  @@index([orgId, status])
   @@map("memberships")
   @@schema("tenancy")
 }
 
 enum MembershipRole {
+  // Pre-ADR-0014 values; deprecated. Sprint 9 RLS rebuild removes them.
   owner
   admin
   operator
@@ -405,6 +424,21 @@ enum MembershipRole {
   contractor
   driver
   viewer
+
+  // ADR 0014 — new role bundles.
+  manager
+  technician
+  finance
+  support
+
+  @@schema("tenancy")
+}
+
+enum MembershipStatus {
+  invited
+  active
+  suspended
+  revoked
 
   @@schema("tenancy")
 }
@@ -1927,25 +1961,43 @@ enum OrganizationRole {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// identity — PlatformAdmin (ADR 0008)
+// identity — PlatformGrant (ADR 0014, replaces PlatformAdmin from ADR 0008)
 // ─────────────────────────────────────────────────────────────────────────────
 
-model PlatformAdmin {
-  userId          String              @id @map("user_id") @db.Uuid
-  level           PlatformAdminLevel
-  grantedAt       DateTime            @default(now()) @map("granted_at") @db.Timestamptz(6)
-  grantedByUserId String?             @map("granted_by_user_id") @db.Uuid
+model PlatformGrant {
+  userId        String              @id @map("user_id") @db.Uuid
+  role          PlatformRole
+  status        PlatformGrantStatus @default(active)
+  grantedById   String?             @map("granted_by_id") @db.Uuid
+  grantedAt     DateTime            @default(now()) @map("granted_at") @db.Timestamptz(6)
+  expiresAt     DateTime?           @map("expires_at") @db.Timestamptz(6)
+  revokedAt     DateTime?           @map("revoked_at") @db.Timestamptz(6)
+  revokedById   String?             @map("revoked_by_id") @db.Uuid
+  scope         Json?
 
-  user            User                @relation("PlatformAdminUser", fields: [userId], references: [id], onDelete: Cascade)
-  grantedBy       User?               @relation("PlatformAdminGrantedBy", fields: [grantedByUserId], references: [id])
+  user          User @relation("PlatformGrantUser", fields: [userId], references: [id], onDelete: Cascade)
+  grantedBy     User? @relation("PlatformGrantedBy", fields: [grantedById], references: [id])
+  revokedBy     User? @relation("PlatformGrantRevokedBy", fields: [revokedById], references: [id])
 
-  @@map("platform_admins")
+  @@map("platform_grants")
   @@schema("identity")
 }
 
-enum PlatformAdminLevel {
-  read_only
-  superuser
+enum PlatformRole {
+  super_user
+  platform_admin
+  support_agent
+  sales_cs
+  finance_internal
+  auditor
+
+  @@schema("identity")
+}
+
+enum PlatformGrantStatus {
+  active
+  suspended
+  revoked
 
   @@schema("identity")
 }
