@@ -3,6 +3,7 @@ import { OrgInputs } from "@straumvakt/shared";
 import { MembershipCreateInput } from "@straumvakt/shared/inputs/users";
 import { makePrisma } from "../../lib/prisma";
 import { requireAdmin, type AuthVars } from "../../lib/auth-middleware";
+import { requirePermission } from "../../lib/auth/require-permission";
 import {
   createOrg,
   getOrgById,
@@ -23,48 +24,84 @@ import type { Env } from "../../bindings";
 
 export const adminOrgs = new Hono<{ Bindings: Env; Variables: AuthVars }>();
 
+// Sprint 4 milestone 4.3 — five routes migrated to requirePermission
+// as proof-of-concept for the M2 partial sweep. requireAdmin still
+// gates session loading at the router level; requirePermission then
+// checks the verb. Bootstrap admin (single-user, env-var) gets god-
+// mode through the middleware until Sprint 5 multi-user lands. See
+// docs/notes/2026-05-02-permission-hierarchy-review.md for the
+// hierarchy concerns flagged for Sprint 4.4 / 9 review.
 adminOrgs.use("*", requireAdmin);
 
-adminOrgs.get("/", async (c) => {
-  const includeArchived = c.req.query("includeArchived") === "true";
-  const db = makePrisma(c.env);
-  const orgs = await listOrgs(db, { includeArchived });
-  return c.json({ orgs });
-});
+// Cross-tenant list — only platform staff (with platform.tenant.read)
+// see every org. Customer admins should hit GET /:id for their own org.
+adminOrgs.get(
+  "/",
+  requirePermission("platform.tenant.read"),
+  async (c) => {
+    const includeArchived = c.req.query("includeArchived") === "true";
+    const db = makePrisma(c.env);
+    const orgs = await listOrgs(db, { includeArchived });
+    return c.json({ orgs });
+  },
+);
 
-adminOrgs.post("/", async (c) => {
-  const raw = (await c.req.json().catch(() => null)) as unknown;
-  const parsed = OrgInputs.OrgCreateInput.safeParse(raw);
-  if (!parsed.success) return c.json({ error: "validation", issues: parsed.error.issues }, 400);
-  const db = makePrisma(c.env);
-  const org = await createOrg(db, parsed.data);
-  return c.json({ org }, 201);
-});
+// Creating a new org is a platform-staff action — the platform
+// onboards new customers; customer admins don't bootstrap their own
+// org via this surface.
+adminOrgs.post(
+  "/",
+  requirePermission("platform.tenant.write"),
+  async (c) => {
+    const raw = (await c.req.json().catch(() => null)) as unknown;
+    const parsed = OrgInputs.OrgCreateInput.safeParse(raw);
+    if (!parsed.success) return c.json({ error: "validation", issues: parsed.error.issues }, 400);
+    const db = makePrisma(c.env);
+    const org = await createOrg(db, parsed.data);
+    return c.json({ org }, 201);
+  },
+);
 
-adminOrgs.get("/:id", async (c) => {
-  const db = makePrisma(c.env);
-  const org = await getOrgById(db, c.req.param("id"));
-  if (!org) return c.json({ error: "not_found" }, 404);
-  return c.json({ org });
-});
+// Per-org read — members of the org with org.read OR platform staff
+// (via platform.tenant.read expansion).
+adminOrgs.get(
+  "/:id",
+  requirePermission("org.read", { orgIdParam: "id" }),
+  async (c) => {
+    const db = makePrisma(c.env);
+    const org = await getOrgById(db, c.req.param("id"));
+    if (!org) return c.json({ error: "not_found" }, 404);
+    return c.json({ org });
+  },
+);
 
-adminOrgs.patch("/:id", async (c) => {
-  const raw = (await c.req.json().catch(() => null)) as unknown;
-  const parsed = OrgInputs.OrgUpdateInput.safeParse(raw);
-  if (!parsed.success) return c.json({ error: "validation", issues: parsed.error.issues }, 400);
-  const db = makePrisma(c.env);
-  const org = await updateOrg(db, c.req.param("id"), parsed.data);
-  return c.json({ org });
-});
+// Per-org write — owner-level membership OR platform.tenant.write.
+adminOrgs.patch(
+  "/:id",
+  requirePermission("org.write", { orgIdParam: "id" }),
+  async (c) => {
+    const raw = (await c.req.json().catch(() => null)) as unknown;
+    const parsed = OrgInputs.OrgUpdateInput.safeParse(raw);
+    if (!parsed.success) return c.json({ error: "validation", issues: parsed.error.issues }, 400);
+    const db = makePrisma(c.env);
+    const org = await updateOrg(db, c.req.param("id"), parsed.data);
+    return c.json({ org });
+  },
+);
 
-adminOrgs.post("/:id/archive", async (c) => {
-  const db = makePrisma(c.env);
-  const updated = await db.organization.update({
-    where: { id: c.req.param("id") },
-    data: { status: "archived" },
-  });
-  return c.json({ org: { id: updated.id, status: updated.status } });
-});
+// Archive is destructive — owner-level OR platform.tenant.delete.
+adminOrgs.post(
+  "/:id/archive",
+  requirePermission("org.write", { orgIdParam: "id" }),
+  async (c) => {
+    const db = makePrisma(c.env);
+    const updated = await db.organization.update({
+      where: { id: c.req.param("id") },
+      data: { status: "archived" },
+    });
+    return c.json({ org: { id: updated.id, status: updated.status } });
+  },
+);
 
 // Nested org endpoints — used by create forms in the UI to populate
 // dropdowns scoped to a specific org.
