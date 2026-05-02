@@ -127,6 +127,30 @@ export async function getChargerDetail(
 }
 
 /**
+ * Generic GET helper that returns the raw response body and status —
+ * used by the diagnostic route to probe undocumented or
+ * partially-documented endpoints (e.g. /api/userGroups). Caller
+ * decides how to interpret the payload.
+ */
+export async function rawZaptecGet(
+  accessToken: string,
+  path: string,
+): Promise<{ status: number; body: unknown }> {
+  const res = await fetch(`${ZAPTEC_BASE}${path}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  }).catch(() => null);
+  if (!res) return { status: 0, body: { error: "unreachable" } };
+  const text = await res.text().catch(() => "");
+  let body: unknown = text;
+  try {
+    body = JSON.parse(text);
+  } catch {
+    /* keep as text */
+  }
+  return { status: res.status, body };
+}
+
+/**
  * PUT /api/chargers/{id} — write Property* fields on a charger.
  * Body is keyed by the property name (e.g. `PropertyAuthenticationDisabled`,
  * `PropertyOcppDefaultIdTag`). Returns the updated charger detail.

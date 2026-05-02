@@ -19,6 +19,7 @@ import {
   getZaptecAccessToken,
   listChargers,
   listInstallations,
+  rawZaptecGet,
   type ZaptecError,
   type ZaptecHierarchyCircuit,
   type ZaptecHierarchyCharger,
@@ -229,6 +230,111 @@ adminZaptec.post("/inspect", async (c) => {
   );
 
   return c.json({ chargers: details });
+});
+
+/**
+ * POST /api/admin/zaptec/probe-users
+ *
+ * One-shot diagnostic: hits the Zaptec endpoints related to users
+ * with access to an installation, and returns the raw responses so
+ * we can see what the API actually exposes. Used during the design
+ * of the agent-import flow (ADR 0014 follow-up).
+ *
+ * Probes (best-effort — Zaptec's portal exposes "Users" tab on each
+ * installation but the API surface for this is partially documented
+ * and varies by installation type):
+ *   • /api/installation/{id}                  → may include UserGroups[]
+ *   • /api/userGroups                         → list groups visible to credential
+ *   • /api/userGroups/{groupId}               → group detail with members
+ *   • /api/userGroupMemberships               → flat user×group rows
+ *   • /api/users                              → users (rare, may 403)
+ *   • /api/installation/{id}/users            → speculative direct path
+ *   • /api/chargeHistory/users                → wild guess
+ *
+ * Returns the raw status + body for each probe so we can pick the
+ * right shape. No side effects, admin-gated.
+ */
+const ProbeUsersBody = z.object({
+  credentialId: z.string().uuid(),
+  zaptecInstallationId: z.string().uuid(),
+});
+
+adminZaptec.post("/probe-users", async (c) => {
+  const raw = (await c.req.json().catch(() => null)) as unknown;
+  const parsed = ProbeUsersBody.safeParse(raw);
+  if (!parsed.success) {
+    return c.json({ error: "validation", issues: parsed.error.issues }, 400);
+  }
+
+  const db = makePrisma(c.env);
+  const creds = await unsealVendorCredentialPassword(
+    db,
+    parsed.data.credentialId,
+    c.env.OCPP_CRED_KEK,
+  ).catch((err) => ({ error: err instanceof Error ? err.message : String(err) }));
+  if ("error" in creds) {
+    return c.json({ error: creds.error }, 400);
+  }
+
+  const tokenResult = await getZaptecAccessToken(creds.username, creds.password);
+  if (!tokenResult.ok) {
+    const r = zaptecErrorResponse(tokenResult.error);
+    return c.json(r.body, r.code);
+  }
+  const accessToken = tokenResult.value;
+  const installationId = parsed.data.zaptecInstallationId;
+
+  const probes: { path: string; status: number; body: unknown }[] = [];
+  const tryGet = async (path: string) => {
+    const r = await rawZaptecGet(accessToken, path);
+    probes.push({ path, status: r.status, body: r.body });
+    return r;
+  };
+
+  // 1) Installation detail — see if it includes UserGroups[].
+  const inst = await tryGet(`/api/installation/${installationId}`);
+
+  // 2) userGroups list, scoped by credential.
+  await tryGet(`/api/userGroups`);
+
+  // 3) Speculative direct paths.
+  await tryGet(`/api/installation/${installationId}/users`);
+  await tryGet(`/api/installation/${installationId}/userGroups`);
+
+  // 4) If installation detail surfaced UserGroup IDs, drill into each.
+  const userGroupIds: string[] = [];
+  if (
+    inst.status === 200 &&
+    inst.body &&
+    typeof inst.body === "object"
+  ) {
+    const b = inst.body as Record<string, unknown>;
+    const candidates = [b.UserGroups, b.userGroups, b.UserGroupIds];
+    for (const c of candidates) {
+      if (Array.isArray(c)) {
+        for (const item of c) {
+          if (typeof item === "string") userGroupIds.push(item);
+          else if (item && typeof item === "object") {
+            const o = item as Record<string, unknown>;
+            const id = o.Id ?? o.id;
+            if (typeof id === "string") userGroupIds.push(id);
+          }
+        }
+      }
+    }
+  }
+  for (const gid of userGroupIds.slice(0, 10)) {
+    await tryGet(`/api/userGroups/${gid}`);
+  }
+
+  // 5) Flat memberships endpoint, if it exists.
+  await tryGet(`/api/userGroupMemberships`);
+
+  return c.json({
+    installationId,
+    discoveredUserGroupIds: userGroupIds,
+    probes,
+  });
 });
 
 /**
