@@ -148,6 +148,22 @@ model Organization {
   roles               OrganizationRole[]  @default([])
   notes               String?             @db.Text
 
+  // ── Contacts (ADR 0014 follow-up) ────────────────────────────────
+  // Structured array of contact rows. Shape per item:
+  //   { role: "main" | "billing" | "technical" | "support" |
+  //           "emergency" | "other",
+  //     name: string,
+  //     email?: string,
+  //     phone?: string,
+  //     notes?: string }
+  // The "main" role is the org's primary point of contact. When a
+  // mainContactUserId is set (FK below), it takes precedence over
+  // any role=main entry here — the typed FK is authoritative once a
+  // User exists. Pre-User orgs (operator types contact info before
+  // inviting) keep the raw entry; invite flow promotes it to a User
+  // and clears the raw "main" role.
+  contacts            Json                @default("[]") @db.JsonB
+
   // ── Main contact (ADR 0014) ──────────────────────────────────────
   // FK to User. Nullable; SET NULL on user delete so the org row
   // survives a contact's offboarding. UI ensures the picker only

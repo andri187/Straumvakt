@@ -35,6 +35,41 @@ export const AddressInput = z.object({
 });
 export type AddressInput = z.infer<typeof AddressInput>;
 
+export const OrgContactRoleEnum = z.enum([
+  "main",
+  "billing",
+  "technical",
+  "support",
+  "emergency",
+  "other",
+]);
+
+// One row of the contacts JSONB. Empty email/phone are stored as null
+// (zod normalises). Notes is free-form (e.g. "After 16:00 only").
+export const OrgContactInput = z.object({
+  role: OrgContactRoleEnum,
+  name: z.string().min(1).max(120),
+  email: z
+    .string()
+    .email()
+    .nullable()
+    .optional()
+    .transform((v) => v ?? null),
+  phone: z
+    .string()
+    .max(40)
+    .nullable()
+    .optional()
+    .transform((v) => v ?? null),
+  notes: z
+    .string()
+    .max(500)
+    .nullable()
+    .optional()
+    .transform((v) => v ?? null),
+});
+export type OrgContactInput = z.infer<typeof OrgContactInput>;
+
 const optionalString = (max: number) =>
   z
     .string()
@@ -73,6 +108,7 @@ export const OrgCreateInput = z.object({
   roles: z.array(OrganizationRoleEnum).default([]),
   branding: z.record(z.string(), z.unknown()).default({}),
   mainContactUserId: z.string().uuid().optional().nullable(),
+  contacts: z.array(OrgContactInput).default([]),
 });
 export type OrgCreateInput = z.infer<typeof OrgCreateInput>;
 
@@ -103,5 +139,6 @@ export const OrgUpdateInput = z.object({
   roles: z.array(OrganizationRoleEnum).optional(),
   branding: z.record(z.string(), z.unknown()).optional(),
   mainContactUserId: z.string().uuid().optional().nullable(),
+  contacts: z.array(OrgContactInput).optional(),
 });
 export type OrgUpdateInput = z.infer<typeof OrgUpdateInput>;

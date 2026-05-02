@@ -135,6 +135,12 @@ model Organization {
   roles               OrganizationRole[]  @default([])
   notes               String?             @db.Text
 
+  // ── Contacts (ADR 0014 follow-up) ────────────────────────────────
+  // Array of {role, name, email?, phone?, notes?} contact rows.
+  // FK mainContactUserId below takes precedence for the "main" role
+  // when a User is linked.
+  contacts            Json                @default("[]") @db.JsonB
+
   // ── Main contact (ADR 0014) ──────────────────────────────────────
   mainContactUserId   String?             @map("main_contact_user_id") @db.Uuid
   mainContact         User?               @relation("OrgMainContact", fields: [mainContactUserId], references: [id], onDelete: SetNull)

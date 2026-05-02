@@ -105,10 +105,34 @@ export default async function OrganizationDetailPage({
               label="Main contact"
               value={
                 org.mainContact
-                  ? `${org.mainContact.displayName ?? org.mainContact.email}${org.mainContact.displayName ? ` · ${org.mainContact.email}` : ""}`
-                  : null
+                  ? `${org.mainContact.displayName ?? org.mainContact.email}${org.mainContact.displayName ? ` · ${org.mainContact.email}` : ""} · linked user`
+                  : (() => {
+                      const raw = org.contacts.find((c) => c.role === "main");
+                      if (!raw) return null;
+                      const parts = [raw.name, raw.email, raw.phone].filter(Boolean);
+                      return `${parts.join(" · ")} · pre-User`;
+                    })()
               }
             />
+            {org.contacts.filter((c) => c.role !== "main").length > 0 && (
+              <Row
+                label="Other contacts"
+                value={
+                  <ul className="space-y-1 text-[12px]">
+                    {org.contacts
+                      .filter((c) => c.role !== "main")
+                      .map((c, i) => (
+                        <li key={i}>
+                          <span className="rounded bg-ink-800/60 px-1 py-0.5 text-[9px] uppercase text-ink-300">
+                            {c.role}
+                          </span>{" "}
+                          {[c.name, c.email, c.phone].filter(Boolean).join(" · ")}
+                        </li>
+                      ))}
+                  </ul>
+                }
+              />
+            )}
           </div>
         </div>
 
@@ -146,6 +170,7 @@ export default async function OrganizationDetailPage({
                 branding: (org.branding ?? {}) as { logoUrl?: string; primaryColor?: string; secondaryColor?: string },
                 mainContactUserId: org.mainContactUserId,
                 mainContact: org.mainContact,
+                contacts: org.contacts,
               }}
             />
           </div>

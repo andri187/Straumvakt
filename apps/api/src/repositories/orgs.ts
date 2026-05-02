@@ -8,6 +8,8 @@ import type { PrismaClient, Prisma } from "../generated/prisma/client";
 import type {
   OrgSummary,
   OrgAddress,
+  OrgContact,
+  OrgContactRole,
   OrgMainContact,
 } from "@straumvakt/shared/domain/orgs";
 import type {
@@ -43,6 +45,38 @@ function toMainContact(row: Row): OrgMainContact | null {
   };
 }
 
+const CONTACT_ROLES: readonly OrgContactRole[] = [
+  "main",
+  "billing",
+  "technical",
+  "support",
+  "emergency",
+  "other",
+];
+
+function toContacts(value: unknown): OrgContact[] {
+  if (!Array.isArray(value)) return [];
+  const out: OrgContact[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object") continue;
+    const o = item as Record<string, unknown>;
+    if (typeof o.name !== "string") continue;
+    const role: OrgContactRole = (CONTACT_ROLES as readonly string[]).includes(
+      o.role as string,
+    )
+      ? (o.role as OrgContactRole)
+      : "other";
+    out.push({
+      role,
+      name: o.name,
+      email: typeof o.email === "string" && o.email.length > 0 ? o.email : null,
+      phone: typeof o.phone === "string" && o.phone.length > 0 ? o.phone : null,
+      notes: typeof o.notes === "string" && o.notes.length > 0 ? o.notes : null,
+    });
+  }
+  return out;
+}
+
 function toSummary(row: Row): OrgSummary {
   return {
     id: row.id,
@@ -66,6 +100,7 @@ function toSummary(row: Row): OrgSummary {
     branding: row.branding,
     mainContactUserId: row.mainContactUserId,
     mainContact: toMainContact(row),
+    contacts: toContacts(row.contacts),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -117,6 +152,7 @@ export async function createOrg(
       postalAddress: (input.postalAddress ?? null) as Prisma.InputJsonValue,
       legalAddress: (input.legalAddress ?? null) as Prisma.InputJsonValue,
       branding: input.branding as Prisma.InputJsonValue,
+      contacts: input.contacts as Prisma.InputJsonValue,
       mainContactUserId: input.mainContactUserId ?? null,
     },
     include,
@@ -129,7 +165,7 @@ export async function updateOrg(
   orgId: string,
   patch: OrgUpdateInput,
 ): Promise<OrgSummary> {
-  const { postalAddress, legalAddress, branding, ...rest } = patch;
+  const { postalAddress, legalAddress, branding, contacts, ...rest } = patch;
   const updated = await db.organization.update({
     where: { id: orgId },
     data: {
@@ -142,6 +178,9 @@ export async function updateOrg(
         : {}),
       ...(branding !== undefined
         ? { branding: branding as Prisma.InputJsonValue }
+        : {}),
+      ...(contacts !== undefined
+        ? { contacts: contacts as Prisma.InputJsonValue }
         : {}),
     },
     include,

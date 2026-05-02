@@ -32,6 +32,22 @@ export interface OrgMainContact {
   email: string;
 }
 
+export type OrgContactRole =
+  | "main"
+  | "billing"
+  | "technical"
+  | "support"
+  | "emergency"
+  | "other";
+
+export interface OrgContact {
+  role: OrgContactRole;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  notes: string | null;
+}
+
 export interface OrgSummary {
   id: string;
   displayName: string;
@@ -54,6 +70,7 @@ export interface OrgSummary {
   branding: unknown;
   mainContactUserId: string | null;
   mainContact: OrgMainContact | null;
+  contacts: OrgContact[];
   createdAt: string;
   updatedAt: string;
 }
