@@ -12,6 +12,7 @@ import { Hono } from "hono";
 import { makePrisma } from "../../lib/prisma";
 import { requireAdmin, type AuthVars } from "../../lib/auth-middleware";
 import {
+  backfillPrimaryRfidForUsersWithoutTokens,
   getIdTokenById,
   revokeIdToken,
 } from "../../repositories/id-tokens";
@@ -20,6 +21,22 @@ import type { Env } from "../../bindings";
 export const adminIdTokens = new Hono<{ Bindings: Env; Variables: AuthVars }>();
 
 adminIdTokens.use("*", requireAdmin);
+
+// ── One-shot backfill — pre-existing users get a primary RFID ────────
+//
+// POST /api/admin/tokens/backfill
+//
+// Idempotent: only mints for users with zero IdToken rows. Operator
+// runs this once after the closure-item-1 deploy so existing users
+// line up with the "every user has a primary RFID" invariant. Mounted
+// BEFORE the /:tokenId routes so the literal "backfill" path doesn't
+// get captured as a tokenId param.
+
+adminIdTokens.post("/backfill", async (c) => {
+  const db = makePrisma(c.env);
+  const report = await backfillPrimaryRfidForUsersWithoutTokens(db);
+  return c.json(report);
+});
 
 adminIdTokens.get("/:tokenId", async (c) => {
   const db = makePrisma(c.env);

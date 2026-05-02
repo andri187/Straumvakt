@@ -5,6 +5,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  backfillPrimaryRfidForUsersWithoutTokens,
   createIdToken,
   mintRfidValue,
 } from "./id-tokens";
@@ -203,5 +204,192 @@ describe("createIdToken", () => {
         value: "CAFEBABE",
       }),
     ).rejects.toThrow(/Unique constraint/);
+  });
+});
+
+describe("backfillPrimaryRfidForUsersWithoutTokens", () => {
+  function makeBackfillDb(state: {
+    users: Array<{ id: string; email: string; createdAt: Date }>;
+    initialTokens: StoredRow[];
+  }) {
+    const tokens = [...state.initialTokens];
+    let nextId = tokens.length + 1;
+    return {
+      tokens,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      db: {
+        user: {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          findMany: async ({ where }: any) => {
+            // Mirror the `idTokens: { none: {} }` filter: return only
+            // users with zero token rows. Other where clauses ignored.
+            const wantsNoTokens =
+              where?.idTokens?.none !== undefined;
+            return state.users
+              .filter((u) =>
+                wantsNoTokens
+                  ? !tokens.some((t) => t.userId === u.id)
+                  : true,
+              )
+              .sort(
+                (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
+              )
+              .map((u) => ({ id: u.id, email: u.email }));
+          },
+        },
+        idToken: {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          create: async ({ data }: any) => {
+            if (tokens.some((t) => t.value === data.value)) {
+              throw new Error(
+                "Unique constraint failed on the fields: (`value`)",
+              );
+            }
+            const now = new Date();
+            const row: StoredRow = {
+              id: `bk-${nextId++}`,
+              userId: data.userId,
+              kind: data.kind,
+              value: data.value,
+              vendorIssuedBy: null,
+              vendorTokenId: null,
+              label: data.label ?? null,
+              status: "active",
+              expiresAt: null,
+              lastUsedAt: null,
+              scopeInstallationId: null,
+              createdAt: now,
+              updatedAt: now,
+            };
+            tokens.push(row);
+            return row;
+          },
+        },
+      } as unknown as PrismaClient,
+    };
+  }
+
+  it("mints one primary RFID per user with zero tokens; skips users who already have at least one", async () => {
+    const t0 = new Date("2026-01-01");
+    const t1 = new Date("2026-02-01");
+    const t2 = new Date("2026-03-01");
+    const { db, tokens } = makeBackfillDb({
+      users: [
+        { id: "u-1", email: "anna@x.is", createdAt: t0 },
+        { id: "u-2", email: "bjorn@x.is", createdAt: t1 },
+        { id: "u-3", email: "doddi@x.is", createdAt: t2 },
+      ],
+      initialTokens: [
+        // u-2 already has a token; only u-1 and u-3 should get backfilled
+        {
+          id: "existing-1",
+          userId: "u-2",
+          kind: "rfid",
+          value: "EXISTING1",
+          vendorIssuedBy: null,
+          vendorTokenId: null,
+          label: "Pre-existing",
+          status: "active",
+          expiresAt: null,
+          lastUsedAt: null,
+          scopeInstallationId: null,
+          createdAt: new Date("2025-12-01"),
+          updatedAt: new Date("2025-12-01"),
+        },
+      ],
+    });
+
+    const report = await backfillPrimaryRfidForUsersWithoutTokens(db);
+
+    expect(report.scanned).toBe(2);
+    expect(report.minted).toBe(2);
+    expect(report.errors).toBe(0);
+    expect(report.mintedDetails.map((d) => d.email).sort()).toEqual([
+      "anna@x.is",
+      "doddi@x.is",
+    ]);
+    // u-2's pre-existing token is untouched; two new tokens created.
+    expect(tokens.length).toBe(3);
+    // Newly-minted tokens carry the backfill label.
+    const minted = tokens.filter((t) => t.label === "Primary (backfill)");
+    expect(minted.map((m) => m.userId).sort()).toEqual(["u-1", "u-3"]);
+  });
+
+  it("re-running is idempotent (no users left to mint for)", async () => {
+    const { db } = makeBackfillDb({
+      users: [{ id: "u-1", email: "x@y.is", createdAt: new Date() }],
+      initialTokens: [
+        {
+          id: "t-1",
+          userId: "u-1",
+          kind: "rfid",
+          value: "ALREADY01",
+          vendorIssuedBy: null,
+          vendorTokenId: null,
+          label: "Primary",
+          status: "active",
+          expiresAt: null,
+          lastUsedAt: null,
+          scopeInstallationId: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ],
+    });
+    const report = await backfillPrimaryRfidForUsersWithoutTokens(db);
+    expect(report.scanned).toBe(0);
+    expect(report.minted).toBe(0);
+    expect(report.errors).toBe(0);
+  });
+
+  it("collects per-user errors without aborting the whole backfill", async () => {
+    // Pre-load a token whose value happens to be the FIRST value
+    // mintRfidValue produces under our patched RNG, so the new-mint
+    // call collides 5 times in a row → throws → captured as error,
+    // backfill continues with the next user (whose RNG state advances).
+    const fixedBytes = new Uint8Array([0xde, 0xad, 0xbe, 0xef]);
+    const real = crypto.getRandomValues;
+    crypto.getRandomValues = ((arr: Uint8Array) => {
+      arr.set(fixedBytes);
+      return arr;
+    }) as typeof crypto.getRandomValues;
+    try {
+      const { db } = makeBackfillDb({
+        users: [
+          { id: "u-1", email: "alice@x.is", createdAt: new Date(0) },
+          { id: "u-2", email: "bob@x.is", createdAt: new Date(1) },
+        ],
+        // Pre-existing token under user-other with the same UID the
+        // mint will produce — every retry collides.
+        initialTokens: [
+          {
+            id: "blocker",
+            userId: "user-other",
+            kind: "rfid",
+            value: "DEADBEEF",
+            vendorIssuedBy: null,
+            vendorTokenId: null,
+            label: "blocker",
+            status: "active",
+            expiresAt: null,
+            lastUsedAt: null,
+            scopeInstallationId: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        ],
+      });
+      const report =
+        await backfillPrimaryRfidForUsersWithoutTokens(db);
+      expect(report.scanned).toBe(2);
+      expect(report.minted).toBe(0);
+      expect(report.errors).toBe(2);
+      expect(report.errorDetails.map((e) => e.email).sort()).toEqual([
+        "alice@x.is",
+        "bob@x.is",
+      ]);
+    } finally {
+      crypto.getRandomValues = real;
+    }
   });
 });

@@ -214,3 +214,78 @@ export async function getIdTokenById(
   })) as IdTokenRow | null;
   return row ? toSummary(row) : null;
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// One-shot backfill — give pre-existing User rows their primary RFID
+// ─────────────────────────────────────────────────────────────────────
+
+export interface BackfillRfidReport {
+  /** Users scanned that had zero IdToken rows. */
+  scanned: number;
+  /** Users for which a new primary RFID was minted. */
+  minted: number;
+  /** Users where minting threw (DB constraint, etc). */
+  errors: number;
+  /** Per-user details. Trimmed to the first 100 of each so a large
+   *  backfill doesn't return a 5 MB JSON. */
+  mintedDetails: Array<{ userId: string; email: string; value: string }>;
+  errorDetails: Array<{ userId: string; email: string; error: string }>;
+}
+
+/**
+ * Find every User row that has zero IdToken rows and mint one primary
+ * RFID for them. Idempotent — re-running skips users who now have at
+ * least one IdToken (active OR otherwise). The operator runs this
+ * once after the closure-item-1 deploy lands so existing users line
+ * up with the new "every user has a primary RFID" invariant.
+ *
+ * Per-user errors are collected, not thrown. A single user failing
+ * (P2002 collision against an exotic value, etc) shouldn't abort the
+ * whole backfill — the operator can re-run after triage.
+ *
+ * Backfill operates on the entire User table; for tenant-scoped scope,
+ * pass a userIds filter (Sprint 4 might want this, today we don't).
+ */
+export async function backfillPrimaryRfidForUsersWithoutTokens(
+  db: PrismaClient,
+): Promise<BackfillRfidReport> {
+  const users = await db.user.findMany({
+    where: {
+      idTokens: { none: {} },
+    },
+    select: { id: true, email: true },
+    orderBy: [{ createdAt: "asc" }],
+  });
+
+  const mintedDetails: BackfillRfidReport["mintedDetails"] = [];
+  const errorDetails: BackfillRfidReport["errorDetails"] = [];
+
+  for (const u of users) {
+    try {
+      const token = await createIdToken(db, {
+        userId: u.id,
+        kind: "rfid",
+        label: "Primary (backfill)",
+      });
+      mintedDetails.push({
+        userId: u.id,
+        email: u.email,
+        value: token.value,
+      });
+    } catch (err) {
+      errorDetails.push({
+        userId: u.id,
+        email: u.email,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  return {
+    scanned: users.length,
+    minted: mintedDetails.length,
+    errors: errorDetails.length,
+    mintedDetails: mintedDetails.slice(0, 100),
+    errorDetails: errorDetails.slice(0, 100),
+  };
+}
