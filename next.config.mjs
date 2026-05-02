@@ -13,6 +13,23 @@ const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   typedRoutes: true,
+  // Legacy /tenants/* URLs redirect to /accounts/* — operators may
+  // have bookmarks from before the section rename. Permanent so
+  // browsers cache. Wildcard catches every sub-path.
+  async redirects() {
+    return [
+      {
+        source: "/tenants",
+        destination: "/accounts",
+        permanent: true,
+      },
+      {
+        source: "/tenants/:path*",
+        destination: "/accounts/:path*",
+        permanent: true,
+      },
+    ];
+  },
   experimental: {
     workerThreads: false,
     cpus: 2,

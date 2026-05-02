@@ -122,7 +122,7 @@ export function MembershipsPanel({
           >
             <div className="min-w-0">
               <Link
-                href={`/tenants/organizations/${m.orgId}`}
+                href={`/accounts/organizations/${m.orgId}` as Parameters<typeof Link>[0]["href"]}
                 className="text-sm font-medium text-ink-50 hover:text-sv-sky"
               >
                 {m.orgDisplayName}

@@ -54,11 +54,11 @@ export const OPERATIONS_TABS: SectionTab[] = [
   { href: "/chargers", label: "Chargers" },
 ];
 
-export const TENANTS_TABS: SectionTab[] = [
-  { href: "/tenants", label: "All", exact: true },
-  { href: "/tenants/organizations", label: "Organizations" },
-  { href: "/tenants/properties", label: "Properties" },
-  { href: "/tenants/groups", label: "Groups" },
+export const ACCOUNTS_TABS: SectionTab[] = [
+  { href: "/accounts", label: "All", exact: true },
+  { href: "/accounts/organizations", label: "Organizations" },
+  { href: "/accounts/properties", label: "Properties" },
+  { href: "/accounts/groups", label: "Groups" },
   { href: "/people/users", label: "Users" },
 ];
 

@@ -140,7 +140,7 @@ function SiteRow({ site }: { site: SiteTreeNode }) {
             {site.displayName}
           </Link>
           <span className="text-[11px] text-ink-500 truncate">
-            <Link className="text-sv-sky hover:underline" href={`/tenants/organizations/${site.orgId}`}>{site.orgDisplayName}</Link>
+            <Link className="text-sv-sky hover:underline" href={`/accounts/organizations/${site.orgId}` as Parameters<typeof Link>[0]["href"]}>{site.orgDisplayName}</Link>
             {" · "}{site.propertyDisplayName}
             {" · "}<span className="font-mono">{site.siteType}/{site.accessLevel}</span>
           </span>

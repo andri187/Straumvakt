@@ -27,7 +27,7 @@ export default async function CircuitDetailPage({ params }: { params: Promise<{ 
       <header className="mb-6 border-b border-bg-border pb-4">
         <h1 className="text-2xl font-semibold text-ink-50">{circuit.displayName}</h1>
         <p className="mt-1 text-sm text-ink-400">
-          Org <Link href={`/tenants/organizations/${circuit.orgId}`} className="text-sv-sky hover:underline">{circuit.orgDisplayName}</Link>
+          Org <Link href={`/accounts/organizations/${circuit.orgId}` as Parameters<typeof Link>[0]["href"]} className="text-sv-sky hover:underline">{circuit.orgDisplayName}</Link>
           {" · "}Site <span className="text-ink-300">{circuit.siteDisplayName}</span>
           {circuit.installationDisplayName && <> · Installation <span className="text-ink-300">{circuit.installationDisplayName}</span></>}
         </p>

@@ -14,7 +14,7 @@ export default async function NewPropertyPage() {
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-8">
-      <Link href="/tenants/properties" className="mb-4 inline-block text-xs text-ink-400 hover:text-sv-sky">
+      <Link href="/accounts/properties" className="mb-4 inline-block text-xs text-ink-400 hover:text-sv-sky">
         ← Back to properties
       </Link>
       <header className="mb-6 border-b border-bg-border pb-4">

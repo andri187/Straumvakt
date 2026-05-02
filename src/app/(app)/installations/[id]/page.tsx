@@ -28,7 +28,7 @@ export default async function InstallationDetailPage({ params }: { params: Promi
       <header className="mb-6 border-b border-bg-border pb-4">
         <h1 className="text-2xl font-semibold text-ink-50">{installation.displayName}</h1>
         <p className="mt-1 text-sm text-ink-400">
-          Org <Link href={`/tenants/organizations/${installation.orgId}`} className="text-sv-sky hover:underline">{installation.orgDisplayName}</Link>
+          Org <Link href={`/accounts/organizations/${installation.orgId}` as Parameters<typeof Link>[0]["href"]} className="text-sv-sky hover:underline">{installation.orgDisplayName}</Link>
           {" · "}Site <span className="text-ink-300">{installation.siteDisplayName}</span>
           {installation.vendorSlug && <> · Vendor <span className="font-mono text-sv-sky">{installation.vendorSlug}</span></>}
         </p>

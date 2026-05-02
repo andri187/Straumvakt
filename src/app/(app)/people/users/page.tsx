@@ -2,13 +2,13 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
-import { SectionTabs, TENANTS_TABS } from "@/components/section-tabs";
+import { SectionTabs, ACCOUNTS_TABS } from "@/components/section-tabs";
 import { ActionBar } from "@/components/action-bar";
 import { adminSessionConfig, verifyAdminSession } from "@/lib/admin-session";
 import { apiFetchServerJson } from "@/lib/api-client-server";
 import type { UserSummary } from "@straumvakt/shared/domain/users";
 
-export const metadata = { title: "Tenants · Users" };
+export const metadata = { title: "Accounts · Users" };
 
 export default async function UsersPage({
   searchParams,
@@ -27,12 +27,12 @@ export default async function UsersPage({
 
   return (
     <>
-      <Topbar title="Tenants · Users" email={session?.email} />
+      <Topbar title="Accounts · Users" email={session?.email} />
       <PageShell
         title="Users"
         description="Platform-level user records — staff plus drivers. Per ADR 0006, drivers are inert during pilot."
       >
-        <SectionTabs tabs={TENANTS_TABS} />
+        <SectionTabs tabs={ACCOUNTS_TABS} />
         <ActionBar
           title="Users"
           description={

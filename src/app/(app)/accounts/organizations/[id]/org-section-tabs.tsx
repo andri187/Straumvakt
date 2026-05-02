@@ -10,7 +10,7 @@ import { usePathname } from "next/navigation";
  */
 export function OrgSectionTabs({ orgId }: { orgId: string }) {
   const pathname = usePathname();
-  const base = `/tenants/organizations/${orgId}`;
+  const base = `/accounts/organizations/${orgId}`;
   const tabs: { href: string; label: string; exact?: boolean }[] = [
     { href: base, label: "Profile", exact: true },
     { href: `${base}/sites`, label: "Sites" },

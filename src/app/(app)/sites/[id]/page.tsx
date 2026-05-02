@@ -67,7 +67,7 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ id:
       <header className="mb-6 border-b border-bg-border pb-4">
         <h1 className="text-2xl font-semibold text-ink-50">{site.displayName}</h1>
         <p className="mt-1 text-sm text-ink-400">
-          Site under <Link href={`/tenants/organizations/${site.orgId}`} className="text-sv-sky hover:underline">{site.orgDisplayName}</Link>
+          Site under <Link href={`/accounts/organizations/${site.orgId}` as Parameters<typeof Link>[0]["href"]} className="text-sv-sky hover:underline">{site.orgDisplayName}</Link>
           {" · "}Property <span className="text-ink-300">{site.propertyDisplayName}</span>
         </p>
         <p className="mt-1 font-mono text-[10px] text-ink-500">{site.id}</p>

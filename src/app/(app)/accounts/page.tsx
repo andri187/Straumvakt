@@ -1,12 +1,12 @@
 import Link from "next/link";
-import { SectionTabs, TENANTS_TABS } from "@/components/section-tabs";
+import { SectionTabs, ACCOUNTS_TABS } from "@/components/section-tabs";
 import { apiFetchServerJson } from "@/lib/api-client-server";
 import type { OrgSummary } from "@straumvakt/shared/domain/orgs";
 import type { PropertySummary } from "@straumvakt/shared/domain/properties";
 import type { UserSummary } from "@straumvakt/shared/domain/users";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Tenants" };
+export const metadata = { title: "Accounts" };
 
 type Row = {
   type: "Organization" | "Property" | "User";
@@ -18,7 +18,7 @@ type Row = {
   updatedAt: string;
 };
 
-export default async function TenantsPage() {
+export default async function AccountsPage() {
   const [{ orgs }, { properties }, { users }] = await Promise.all([
     apiFetchServerJson<{ orgs: OrgSummary[] }>("/api/admin/orgs?includeArchived=true"),
     apiFetchServerJson<{ properties: PropertySummary[] }>("/api/admin/properties"),
@@ -28,7 +28,7 @@ export default async function TenantsPage() {
   const rows: Row[] = [
     ...orgs.map((o): Row => ({
       type: "Organization",
-      href: `/tenants/organizations/${o.id}`,
+      href: `/accounts/organizations/${o.id}`,
       name: o.displayName,
       detail: `${o.countryCode}${o.kennitala ? ` · kennitala ${o.kennitala}` : ""}${o.legalForm ? ` · ${o.legalForm}` : ""}${o.status !== "active" ? ` · ${o.status}` : ""}`,
       parent: "—",
@@ -37,7 +37,7 @@ export default async function TenantsPage() {
     })),
     ...properties.map((p): Row => ({
       type: "Property",
-      href: `/tenants/properties`,
+      href: `/accounts/properties`,
       name: p.displayName,
       detail: p.locationType ?? "",
       parent: p.orgDisplayName,
@@ -63,9 +63,9 @@ export default async function TenantsPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-8">
-      <SectionTabs tabs={TENANTS_TABS} />
+      <SectionTabs tabs={ACCOUNTS_TABS} />
       <header className="mb-6">
-        <h1 className="text-2xl font-semibold text-ink-50">Tenants</h1>
+        <h1 className="text-2xl font-semibold text-ink-50">Accounts</h1>
         <p className="mt-1 text-sm text-ink-400">
           Combined view across Organizations ({counts.org}), Properties ({counts.property}), and Users ({counts.user}). Click a row to drill in.
         </p>

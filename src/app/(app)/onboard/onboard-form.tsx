@@ -388,7 +388,7 @@ function ResultCard({ result, onReset }: { result: Result; onReset: () => void }
 
       <div className="flex gap-2">
         <a
-          href={`/tenants/organizations/${result.orgId}`}
+          href={`/accounts/organizations/${result.orgId}`}
           className="rounded-md bg-sv-sky/20 px-3 py-2 text-sm font-medium text-sv-sky ring-1 ring-sv-sky/30 transition-colors hover:bg-sv-sky/30"
         >
           View organization →

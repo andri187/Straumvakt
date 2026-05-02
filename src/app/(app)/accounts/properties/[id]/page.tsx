@@ -22,14 +22,14 @@ export default async function PropertyDetailPage({
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-8">
-      <Link href="/tenants/properties" className="mb-4 inline-block text-xs text-ink-400 hover:text-sv-sky">
+      <Link href="/accounts/properties" className="mb-4 inline-block text-xs text-ink-400 hover:text-sv-sky">
         ← Back to properties
       </Link>
       <header className="mb-6 border-b border-bg-border pb-4">
         <h1 className="text-2xl font-semibold text-ink-50">{property.displayName}</h1>
         <p className="mt-1 text-sm text-ink-400">
           Property under{" "}
-          <Link href={`/tenants/organizations/${property.orgId}`} className="text-sv-sky hover:underline">
+          <Link href={`/accounts/organizations/${property.orgId}` as Parameters<typeof Link>[0]["href"]} className="text-sv-sky hover:underline">
             {property.orgDisplayName}
           </Link>
           {property.locationType && <span className="ml-2 font-mono text-ink-500">{property.locationType}</span>}
@@ -63,7 +63,7 @@ export default async function PropertyDetailPage({
           </div>
           <DeleteButton
             endpoint={`/api/admin/properties/${property.id}`}
-            redirectTo="/tenants/properties"
+            redirectTo="/accounts/properties"
             confirmText={`Delete property "${property.displayName}" and ALL sites / installations / circuits / chargers under it? This cannot be undone.`}
             label="Delete property"
           />

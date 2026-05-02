@@ -1,11 +1,11 @@
 import Link from "next/link";
-import { SectionTabs, TENANTS_TABS } from "@/components/section-tabs";
+import { SectionTabs, ACCOUNTS_TABS } from "@/components/section-tabs";
 import { apiFetchServerJson } from "@/lib/api-client-server";
 import type { FamilyGroupSummary } from "@straumvakt/shared/domain/family-groups";
 import type { VendorUserGroupSummary } from "@straumvakt/shared/domain/vendor-user-groups";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Tenants · Groups" };
+export const metadata = { title: "Accounts · Groups" };
 
 /**
  * Cross-org groups directory. Surfaces every kind of grouping in one
@@ -44,7 +44,7 @@ export default async function GroupsPage({
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-8">
-      <SectionTabs tabs={TENANTS_TABS} />
+      <SectionTabs tabs={ACCOUNTS_TABS} />
 
       <header className="mb-4 border-b border-bg-border pb-4">
         <h1 className="text-2xl font-semibold text-ink-50">Groups</h1>
@@ -86,7 +86,7 @@ export default async function GroupsPage({
                       {g.displayName}
                     </span>
                     <Link
-                      href={`/tenants/organizations/${g.orgId}`}
+                      href={`/accounts/organizations/${g.orgId}` as Parameters<typeof Link>[0]["href"]}
                       className="shrink-0 text-[11px] text-sv-sky hover:underline"
                     >
                       {g.orgDisplayName}
@@ -125,7 +125,7 @@ export default async function GroupsPage({
                       {g.name}
                     </span>
                     <Link
-                      href={`/tenants/organizations/${g.orgId}`}
+                      href={`/accounts/organizations/${g.orgId}` as Parameters<typeof Link>[0]["href"]}
                       className="shrink-0 text-[11px] text-sv-sky hover:underline"
                     >
                       {g.orgDisplayName}
@@ -181,8 +181,8 @@ function KindChip({
 }) {
   const active = current === value;
   const href = (value === "all"
-    ? "/tenants/groups"
-    : `/tenants/groups?kind=${value}`) as Parameters<typeof Link>[0]["href"];
+    ? "/accounts/groups"
+    : `/accounts/groups?kind=${value}`) as Parameters<typeof Link>[0]["href"];
   return (
     <Link
       href={href}

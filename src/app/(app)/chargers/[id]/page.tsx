@@ -53,7 +53,7 @@ export default async function ChargerDetailPage({ params }: { params: Promise<{ 
           <WarrantyEmblem expires={charger.warrantyExpires} />
         </div>
         <p className="mt-0.5 text-xs text-ink-400">
-          <Link href={`/tenants/organizations/${charger.orgId}`} className="text-sv-sky hover:underline">{charger.orgDisplayName}</Link>
+          <Link href={`/accounts/organizations/${charger.orgId}` as Parameters<typeof Link>[0]["href"]} className="text-sv-sky hover:underline">{charger.orgDisplayName}</Link>
           {" · "}<span className="text-ink-300">{charger.siteDisplayName}</span>
           {charger.installationDisplayName && <> · <span className="text-ink-300">{charger.installationDisplayName}</span></>}
           {charger.circuitDisplayName && <> · <span className="text-ink-300">{charger.circuitDisplayName}</span></>}

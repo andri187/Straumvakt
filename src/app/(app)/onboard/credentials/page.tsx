@@ -73,7 +73,7 @@ export default async function VendorCredentialsPage() {
                   <td className="px-3 py-2 font-mono text-xs text-ink-100">{c.username}</td>
                   <td className="px-3 py-2">
                     <Link
-                      href={`/tenants/organizations/${c.ownerOrgId}`}
+                      href={`/accounts/organizations/${c.ownerOrgId}` as Parameters<typeof Link>[0]["href"]}
                       className="text-sv-sky hover:underline"
                     >
                       {c.ownerOrgDisplayName}

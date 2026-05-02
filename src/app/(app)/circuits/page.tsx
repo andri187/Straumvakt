@@ -41,7 +41,7 @@ export default async function CircuitsPage() {
                 {c.phaseCount}p{c.ampereCeiling && ` · ${c.ampereCeiling}A`}
               </span>
               <span className="min-w-0 flex-1 truncate text-ink-500">
-                <Link className="text-sv-sky hover:underline" href={`/tenants/organizations/${c.orgId}`}>
+                <Link className="text-sv-sky hover:underline" href={`/accounts/organizations/${c.orgId}` as Parameters<typeof Link>[0]["href"]}>
                   {c.orgDisplayName}
                 </Link>
                 {" · "}

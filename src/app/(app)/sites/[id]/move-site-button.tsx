@@ -89,10 +89,10 @@ export function MoveSiteButton({
         <p className="text-[11px] italic text-ink-400">
           No other active organizations available. Create one first at{" "}
           <a
-            href="/tenants/organizations/new"
+            href="/accounts/organizations/new"
             className="text-sv-sky hover:underline"
           >
-            Tenants → New
+            Accounts → New
           </a>
           .
         </p>

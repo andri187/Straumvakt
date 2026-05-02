@@ -129,7 +129,7 @@ export function CreateOrgForm() {
           `HTTP ${res.status}`;
         throw new Error(msg);
       }
-      router.push("/tenants/organizations");
+      router.push("/accounts/organizations");
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));

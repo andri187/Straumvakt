@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { SectionTabs, TENANTS_TABS } from "@/components/section-tabs";
+import { SectionTabs, ACCOUNTS_TABS } from "@/components/section-tabs";
 import { ActionBar } from "@/components/action-bar";
 import { apiFetchServerJson } from "@/lib/api-client-server";
 import type { PropertySummary } from "@straumvakt/shared/domain/properties";
@@ -13,11 +13,11 @@ export default async function PropertiesPage() {
   );
   return (
     <div className="mx-auto max-w-6xl px-6 py-8">
-      <SectionTabs tabs={TENANTS_TABS} />
+      <SectionTabs tabs={ACCOUNTS_TABS} />
       <ActionBar
         title="Properties"
         description="Physical locations under an Organization. A Site lives inside a Property; a Property may contain many Sites."
-        primaryAction={{ href: "/tenants/properties/new", label: "Add property" }}
+        primaryAction={{ href: "/accounts/properties/new", label: "Add property" }}
       />
 
       <h2 className="mb-2 text-sm font-semibold uppercase tracking-brand text-ink-300">
@@ -34,13 +34,13 @@ export default async function PropertiesPage() {
               <div className="flex items-baseline justify-between">
                 <div>
                   <div className="text-sm font-medium text-ink-50">
-                    <Link href={`/tenants/properties/${p.id}`} className="hover:text-sv-sky">
+                    <Link href={`/accounts/properties/${p.id}`} className="hover:text-sv-sky">
                       {p.displayName}
                     </Link>
                   </div>
                   <div className="text-xs text-ink-500">
                     Org:{" "}
-                    <Link className="text-sv-sky hover:underline" href={`/tenants/organizations/${p.orgId}`}>
+                    <Link className="text-sv-sky hover:underline" href={`/accounts/organizations/${p.orgId}` as Parameters<typeof Link>[0]["href"]}>
                       {p.orgDisplayName}
                     </Link>
                     {p.locationType && <span className="ml-2 font-mono text-ink-400">{p.locationType}</span>}

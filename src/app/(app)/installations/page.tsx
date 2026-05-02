@@ -45,7 +45,7 @@ export default async function InstallationsPage() {
                 </span>
               )}
               <span className="min-w-0 flex-1 truncate text-ink-500">
-                <Link className="text-sv-sky hover:underline" href={`/tenants/organizations/${i.orgId}`}>
+                <Link className="text-sv-sky hover:underline" href={`/accounts/organizations/${i.orgId}` as Parameters<typeof Link>[0]["href"]}>
                   {i.orgDisplayName}
                 </Link>
                 {" · "}

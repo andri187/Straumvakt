@@ -2,13 +2,13 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
-import { SectionTabs, TENANTS_TABS } from "@/components/section-tabs";
+import { SectionTabs, ACCOUNTS_TABS } from "@/components/section-tabs";
 import { ActionBar } from "@/components/action-bar";
 import { adminSessionConfig, verifyAdminSession } from "@/lib/admin-session";
 import { apiFetchServerJson } from "@/lib/api-client-server";
 import type { OrgSummary } from "@straumvakt/shared/domain/orgs";
 
-export const metadata = { title: "Tenants · Organizations" };
+export const metadata = { title: "Accounts · Organizations" };
 
 export default async function OrganizationsPage({
   searchParams,
@@ -27,26 +27,26 @@ export default async function OrganizationsPage({
 
   return (
     <>
-      <Topbar title="Tenants · Organizations" email={session?.email} />
+      <Topbar title="Accounts · Organizations" email={session?.email} />
       <PageShell
         title="Organizations"
         description="Every Org is a SaaS tenant on Straumvakt — the CPO. Each Org owns Hosts, Properties, Sites, and downstream entities via org_id."
       >
-        <SectionTabs tabs={TENANTS_TABS} />
+        <SectionTabs tabs={ACCOUNTS_TABS} />
         <ActionBar
           title="Organizations"
           description={
             <>
               Platform-admin view. Org status: active / suspended / archived.{" "}
               <Link
-                href={includeArchived ? "/tenants/organizations" : "/tenants/organizations?archived=1"}
+                href={includeArchived ? "/accounts/organizations" : "/accounts/organizations?archived=1"}
                 className="text-sv-sky hover:underline"
               >
                 {includeArchived ? "Hide archived" : "Show archived"}
               </Link>
             </>
           }
-          primaryAction={{ href: "/tenants/organizations/new", label: "Add organization" }}
+          primaryAction={{ href: "/accounts/organizations/new", label: "Add organization" }}
         />
 
         <section className="rounded-lg border border-bg-border bg-bg-surface/70 shadow-card backdrop-blur">
@@ -86,7 +86,7 @@ export default async function OrganizationsPage({
                     <td className="px-5 py-2 text-ink-200">{o.countryCode}</td>
                     <td className="px-5 py-2"><StatusBadge status={o.status} /></td>
                     <td className="px-5 py-2 text-right">
-                      <Link href={`/tenants/organizations/${o.id}`} className="text-xs text-sv-green hover:text-sv-sky">
+                      <Link href={`/accounts/organizations/${o.id}` as Parameters<typeof Link>[0]["href"]} className="text-xs text-sv-green hover:text-sv-sky">
                         Manage →
                       </Link>
                     </td>

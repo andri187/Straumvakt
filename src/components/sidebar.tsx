@@ -99,26 +99,26 @@ const nav: NavItem[] = [
   },
   {
     kind: "group",
-    basePath: "/tenants",
-    label: { is: "Tenants", en: "Tenants" },
+    basePath: "/accounts",
+    label: { is: "Accounts", en: "Accounts" },
     icon: Briefcase,
-    defaultHref: "/tenants",
+    defaultHref: "/accounts",
     children: [
       {
         kind: "leaf",
-        href: "/tenants/organizations",
+        href: "/accounts/organizations",
         label: { is: "Organizations", en: "Organizations" },
         icon: Network,
       },
       {
         kind: "leaf",
-        href: "/tenants/properties",
+        href: "/accounts/properties",
         label: { is: "Properties", en: "Properties" },
         icon: Building2,
       },
       {
         kind: "leaf",
-        href: "/tenants/groups",
+        href: "/accounts/groups",
         label: { is: "Groups", en: "Groups" },
         icon: Users,
       },
