@@ -104,63 +104,100 @@ adminOrgs.post(
 );
 
 // Nested org endpoints — used by create forms in the UI to populate
-// dropdowns scoped to a specific org.
+// dropdowns scoped to a specific org. Each maps to the read-verb of
+// the resource being listed; member-management uses member.* verbs.
 
-adminOrgs.get("/:id/sites", async (c) => {
-  const db = makePrisma(c.env);
-  const sites = await listSitesByOrg(db, c.req.param("id"));
-  return c.json({ sites });
-});
+adminOrgs.get(
+  "/:id/sites",
+  requirePermission("site.read", { orgIdParam: "id" }),
+  async (c) => {
+    const db = makePrisma(c.env);
+    const sites = await listSitesByOrg(db, c.req.param("id"));
+    return c.json({ sites });
+  },
+);
 
-adminOrgs.get("/:id/installations", async (c) => {
-  const db = makePrisma(c.env);
-  const installations = await listInstallationsByOrg(db, c.req.param("id"));
-  return c.json({ installations });
-});
+// Installations are site-level children; site.read is the appropriate
+// gate (no separate installation.read verb in the catalogue today).
+adminOrgs.get(
+  "/:id/installations",
+  requirePermission("site.read", { orgIdParam: "id" }),
+  async (c) => {
+    const db = makePrisma(c.env);
+    const installations = await listInstallationsByOrg(db, c.req.param("id"));
+    return c.json({ installations });
+  },
+);
 
-adminOrgs.get("/:id/contracts", async (c) => {
-  const db = makePrisma(c.env);
-  const contracts = await listContractsByOrg(db, c.req.param("id"));
-  return c.json({ contracts });
-});
+adminOrgs.get(
+  "/:id/contracts",
+  requirePermission("contract.read", { orgIdParam: "id" }),
+  async (c) => {
+    const db = makePrisma(c.env);
+    const contracts = await listContractsByOrg(db, c.req.param("id"));
+    return c.json({ contracts });
+  },
+);
 
-adminOrgs.get("/:id/family-groups", async (c) => {
-  const db = makePrisma(c.env);
-  const familyGroups = await listFamilyGroupsByOrg(db, c.req.param("id"));
-  return c.json({ familyGroups });
-});
+// Family groups are billing-side metadata; contract.read is the
+// closest verb in the current catalogue.
+adminOrgs.get(
+  "/:id/family-groups",
+  requirePermission("contract.read", { orgIdParam: "id" }),
+  async (c) => {
+    const db = makePrisma(c.env);
+    const familyGroups = await listFamilyGroupsByOrg(db, c.req.param("id"));
+    return c.json({ familyGroups });
+  },
+);
 
-adminOrgs.get("/:id/properties", async (c) => {
-  const db = makePrisma(c.env);
-  const properties = await listPropertiesByOrg(db, c.req.param("id"));
-  return c.json({ properties });
-});
+adminOrgs.get(
+  "/:id/properties",
+  requirePermission("property.read", { orgIdParam: "id" }),
+  async (c) => {
+    const db = makePrisma(c.env);
+    const properties = await listPropertiesByOrg(db, c.req.param("id"));
+    return c.json({ properties });
+  },
+);
 
-adminOrgs.get("/:id/users", async (c) => {
-  const db = makePrisma(c.env);
-  const users = await listUsersByOrg(db, c.req.param("id"));
-  return c.json({ users });
-});
+adminOrgs.get(
+  "/:id/users",
+  requirePermission("member.read", { orgIdParam: "id" }),
+  async (c) => {
+    const db = makePrisma(c.env);
+    const users = await listUsersByOrg(db, c.req.param("id"));
+    return c.json({ users });
+  },
+);
 
-adminOrgs.get("/:id/memberships", async (c) => {
-  const db = makePrisma(c.env);
-  const memberships = await listOrgMemberships(db, c.req.param("id"));
-  return c.json({ memberships });
-});
+adminOrgs.get(
+  "/:id/memberships",
+  requirePermission("member.read", { orgIdParam: "id" }),
+  async (c) => {
+    const db = makePrisma(c.env);
+    const memberships = await listOrgMemberships(db, c.req.param("id"));
+    return c.json({ memberships });
+  },
+);
 
-adminOrgs.post("/:id/memberships", async (c) => {
-  const raw = (await c.req.json().catch(() => null)) as unknown;
-  const parsed = MembershipCreateInput.safeParse(raw);
-  if (!parsed.success) return c.json({ error: "validation", issues: parsed.error.issues }, 400);
-  const db = makePrisma(c.env);
-  try {
-    const membership = await addMembership(db, c.req.param("id"), parsed.data.userId, parsed.data.role);
-    return c.json({ membership }, 201);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("Unique constraint")) {
-      return c.json({ error: "already_member" }, 409);
+adminOrgs.post(
+  "/:id/memberships",
+  requirePermission("member.invite", { orgIdParam: "id" }),
+  async (c) => {
+    const raw = (await c.req.json().catch(() => null)) as unknown;
+    const parsed = MembershipCreateInput.safeParse(raw);
+    if (!parsed.success) return c.json({ error: "validation", issues: parsed.error.issues }, 400);
+    const db = makePrisma(c.env);
+    try {
+      const membership = await addMembership(db, c.req.param("id"), parsed.data.userId, parsed.data.role);
+      return c.json({ membership }, 201);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("Unique constraint")) {
+        return c.json({ error: "already_member" }, 409);
+      }
+      throw err;
     }
-    throw err;
-  }
-});
+  },
+);
