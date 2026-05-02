@@ -8,6 +8,9 @@ export function CreateUserForm() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [audience, setAudience] = useState<"operator" | "driver" | "service">(
+    "operator",
+  );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -22,6 +25,7 @@ export function CreateUserForm() {
         body: JSON.stringify({
           email,
           displayName: displayName || undefined,
+          audience,
         }),
       });
       if (!res.ok) {
@@ -55,6 +59,33 @@ export function CreateUserForm() {
           onChange={setDisplayName}
           placeholder="Anna Jónsdóttir"
         />
+        <label className="block sm:col-span-2">
+          <span className="block text-[11px] font-semibold uppercase tracking-brand text-ink-400">
+            Audience
+          </span>
+          <select
+            value={audience}
+            onChange={(e) =>
+              setAudience(e.target.value as typeof audience)
+            }
+            className="mt-1 w-full rounded-md border border-bg-border bg-bg-base/50 px-3 py-2 text-sm text-ink-50 focus:border-sv-sky focus:outline-none"
+          >
+            <option value="operator">
+              Operator — web portal user (org agent)
+            </option>
+            <option value="driver">
+              Driver — mobile app / RFID consumer
+            </option>
+            <option value="service">
+              Service — API-key principal (future)
+            </option>
+          </select>
+          <span className="mt-0.5 block text-[10px] text-ink-500">
+            Operator users sign in via the web portal. Drivers
+            authenticate via the mobile app or RFID. Most manually-
+            created users are operators.
+          </span>
+        </label>
       </div>
 
       {error && (

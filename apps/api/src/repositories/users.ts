@@ -1,7 +1,8 @@
-import type { PrismaClient } from "../generated/prisma/client";
+import type { PrismaClient, Prisma } from "../generated/prisma/client";
 import type {
   MembershipRole,
   OrgMembershipSummary,
+  UserAudience,
   UserMembershipSummary,
   UserStatus,
   UserSummary,
@@ -13,9 +14,11 @@ type Row = {
   email: string;
   displayName: string | null;
   status: UserStatus;
+  audience: UserAudience;
   kennitala: string | null;
   phone: string | null;
   locale: string;
+  timezone: string;
   notes: string | null;
   firstName: string | null;
   middleName: string | null;
@@ -23,6 +26,14 @@ type Row = {
   dateOfBirth: Date | null;
   photoUrl: string | null;
   address: unknown;
+  emailVerifiedAt: Date | null;
+  phoneVerifiedAt: Date | null;
+  lastSeenAt: Date | null;
+  consentTosAt: Date | null;
+  consentPrivacyAt: Date | null;
+  consentMarketingAt: Date | null;
+  metadata: unknown;
+  deletedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
   credentials: { passwordHash: string | null } | null;
@@ -34,17 +45,26 @@ function toSummary(row: Row): UserSummary {
     email: row.email,
     displayName: row.displayName,
     status: row.status,
+    audience: row.audience,
     kennitala: row.kennitala,
     phone: row.phone,
     locale: row.locale,
+    timezone: row.timezone,
     notes: row.notes,
     firstName: row.firstName,
     middleName: row.middleName,
     lastName: row.lastName,
-    // Date column → yyyy-mm-dd ISO date (no time portion).
     dateOfBirth: row.dateOfBirth ? row.dateOfBirth.toISOString().slice(0, 10) : null,
     photoUrl: row.photoUrl,
     address: row.address,
+    emailVerifiedAt: row.emailVerifiedAt?.toISOString() ?? null,
+    phoneVerifiedAt: row.phoneVerifiedAt?.toISOString() ?? null,
+    lastSeenAt: row.lastSeenAt?.toISOString() ?? null,
+    consentTosAt: row.consentTosAt?.toISOString() ?? null,
+    consentPrivacyAt: row.consentPrivacyAt?.toISOString() ?? null,
+    consentMarketingAt: row.consentMarketingAt?.toISOString() ?? null,
+    metadata: row.metadata,
+    deletedAt: row.deletedAt?.toISOString() ?? null,
     hasCredentials: !!row.credentials?.passwordHash,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -132,6 +152,7 @@ export async function createUser(
     data: {
       email: input.email.toLowerCase(),
       displayName: input.displayName ?? null,
+      audience: input.audience,
     },
     include: { credentials: true },
   });
@@ -163,6 +184,36 @@ export async function updateUser(
   }
   if (patch.photoUrl !== undefined) data.photoUrl = patch.photoUrl;
   if (patch.address !== undefined) data.address = patch.address;
+  if (patch.audience !== undefined) data.audience = patch.audience;
+  if (patch.timezone !== undefined) data.timezone = patch.timezone;
+  if (patch.emailVerifiedAt !== undefined) {
+    data.emailVerifiedAt = patch.emailVerifiedAt
+      ? new Date(patch.emailVerifiedAt)
+      : null;
+  }
+  if (patch.phoneVerifiedAt !== undefined) {
+    data.phoneVerifiedAt = patch.phoneVerifiedAt
+      ? new Date(patch.phoneVerifiedAt)
+      : null;
+  }
+  if (patch.consentTosAt !== undefined) {
+    data.consentTosAt = patch.consentTosAt
+      ? new Date(patch.consentTosAt)
+      : null;
+  }
+  if (patch.consentPrivacyAt !== undefined) {
+    data.consentPrivacyAt = patch.consentPrivacyAt
+      ? new Date(patch.consentPrivacyAt)
+      : null;
+  }
+  if (patch.consentMarketingAt !== undefined) {
+    data.consentMarketingAt = patch.consentMarketingAt
+      ? new Date(patch.consentMarketingAt)
+      : null;
+  }
+  if (patch.metadata !== undefined) {
+    data.metadata = patch.metadata as Prisma.InputJsonValue;
+  }
 
   const updated = await db.user.update({
     where: { id: userId },

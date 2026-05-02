@@ -52,23 +52,55 @@ model User {
   status         UserStatus       @default(active)
   createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt      DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt      DateTime?        @map("deleted_at") @db.Timestamptz(6)
 
   // ── Profile enrichment per ADR 0010 (Sprint 2.6) ─────────────────
   kennitala      String?          @unique
   phone          String?
   locale         String           @default("is")
+  timezone       String           @default("Atlantic/Reykjavik")
   notes          String?          @db.Text
 
   // ── Profile enrichment round 2 (Sprint 3) ────────────────────────
-  // displayName above is kept as the operator-facing label; the parts
-  // below let the UI render proper "Last, First Middle" + power any
-  // future kennitala-driven address lookups.
   firstName      String?          @map("first_name")
   middleName     String?          @map("middle_name")
   lastName       String?          @map("last_name")
   dateOfBirth    DateTime?        @map("date_of_birth") @db.Date
   photoUrl       String?          @map("photo_url")
   address        Json             @default("{}") @map("address") @db.JsonB
+
+  // ── ADR 0014 (audience + verification + activity + GDPR) ─────────
+  // audience: operator (web portal agent of an org), driver (mobile
+  // app / RFID consumer), service (API-key principal — Sprint 11+).
+  // Designed in ADR 0014; landed during user-profile enrichment so
+  // API-onboarded drivers can be distinguished from invited agents
+  // without a schema retrofit when OCPP-auth comes online.
+  audience       UserAudience     @default(operator)
+
+  // Verification timestamps (set when email/phone OTP completes).
+  // Required for driver self-registration flow; used today as a soft
+  // signal in the UI — operator-side users have no verification path
+  // yet so values stay null for that audience.
+  emailVerifiedAt DateTime?       @map("email_verified_at") @db.Timestamptz(6)
+  phoneVerifiedAt DateTime?       @map("phone_verified_at") @db.Timestamptz(6)
+
+  // lastSeenAt is updated on any user-attributable event (login,
+  // session, future Authorize). Useful for stale-account cleanup
+  // and as a hint for the future token cache layer's invalidation
+  // signal. Cheap to write, cheap to skip — no event coupling yet.
+  lastSeenAt     DateTime?        @map("last_seen_at") @db.Timestamptz(6)
+
+  // GDPR consent timestamps. ToS + privacy are operator-facing
+  // (operator agents accepted on signup); marketing is opt-in for
+  // drivers in the app. All three nullable; UI shows the date when set.
+  consentTosAt        DateTime?   @map("consent_tos_at") @db.Timestamptz(6)
+  consentPrivacyAt    DateTime?   @map("consent_privacy_at") @db.Timestamptz(6)
+  consentMarketingAt  DateTime?   @map("consent_marketing_at") @db.Timestamptz(6)
+
+  // Catch-all metadata. Vendor-imported users land any extra Zaptec
+  // fields here so we don't lose them across re-syncs. Avoid using
+  // for fields that are queryable — those get proper columns.
+  metadata       Json             @default("{}") @db.JsonB
 
   // ── Existing relations ───────────────────────────────────────────
   credentials    UserCredential?
@@ -89,6 +121,22 @@ model User {
   costCentersAsPayer      CostCenter[]     @relation("CostCenterPayerUser")
   driverContracts         DriverContract[]
 
+  // ── Vendor identity + auth artefacts (API-onboarding scaffolding) ─
+  // UserVendorRef bridges our User.id ↔ vendor user IDs (Zaptec UUIDs).
+  // One human can hold multiple Zaptec accounts across installations —
+  // each becomes a row here. Stable join key for re-syncs.
+  vendorRefs     UserVendorRef[]
+  // IdToken is the polymorphic auth artefact (RFID UID, app JWT,
+  // magic link). Indexed for hot-path Authorize lookups when OCPP-auth
+  // comes online. Today populated by Zaptec sync; tomorrow self-issued
+  // tokens land here too with kind="app_jwt".
+  idTokens       IdToken[]
+  // Vendor user-group memberships (Zaptec UserGroup mirror).
+  vendorGroupMemberships VendorUserGroupMembership[]
+  // EVs the driver has registered. Optional but useful for fleet
+  // contracts and driver-side UX ("which car charged?").
+  vehicles       Vehicle[]
+
   @@map("users")
   @@schema("identity")
 }
@@ -99,6 +147,199 @@ enum UserStatus {
   deleted
 
   @@schema("identity")
+}
+
+// ── ADR 0014 (audience discriminator) ──────────────────────────────
+// Distinguishes web-portal users (operator agents) from mobile-app
+// end-users (drivers). Today every operator-imported user defaults
+// to "operator"; Zaptec-synced drivers get "driver". Service kind
+// reserved for API-key principals.
+enum UserAudience {
+  operator
+  driver
+  service
+
+  @@schema("identity")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// identity — UserVendorRef (ADR 0014 / API-onboarding)
+// Maps our User.id ↔ vendor user IDs. Many-to-one (one User can hold
+// multiple vendor refs across installations). Sync-friendly: stable
+// composite uniqueness on (vendor_slug, vendor_user_id) survives
+// re-syncs and dedup-by-email.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model UserVendorRef {
+  id                  String           @id @default(uuid()) @db.Uuid
+  userId              String           @map("user_id") @db.Uuid
+  vendorSlug          String           @map("vendor_slug")    // e.g. "zaptec"
+  vendorUserId        String           @map("vendor_user_id")
+  vendorEmail         String?          @map("vendor_email")
+  vendorRoleHint      String?          @map("vendor_role_hint") // "Owner" | "Admin" | "User" — vendor-shaped, display only
+  scopeInstallationId String?          @map("scope_installation_id") @db.Uuid
+  status              VendorRefStatus  @default(active)
+  lastSyncedAt        DateTime         @default(now()) @map("last_synced_at") @db.Timestamptz(6)
+  metadata            Json             @default("{}") @db.JsonB
+  createdAt           DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user                User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scopeInstallation   Installation?    @relation("InstallationVendorUserRefs", fields: [scopeInstallationId], references: [id], onDelete: SetNull)
+
+  @@unique([vendorSlug, vendorUserId])
+  @@index([userId])
+  @@index([scopeInstallationId])
+  @@map("user_vendor_refs")
+  @@schema("identity")
+}
+
+enum VendorRefStatus {
+  active
+  inactive_at_vendor   // user removed from vendor side; we keep history
+  removed_at_vendor    // hard-removed at vendor, not just deactivated
+
+  @@schema("identity")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// identity — IdToken (RFID, app JWT, magic link, …)
+// Polymorphic auth artefact. Built with `kind` discriminator from day
+// one so that when OCPP-auth flips, self-issued tokens (kind="app_jwt")
+// land in the same table without schema retrofit. The hot-path
+// Authorize lookup (future Sprint H) will go through (status, value)
+// composite index.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model IdToken {
+  id                  String           @id @default(uuid()) @db.Uuid
+  userId              String           @map("user_id") @db.Uuid
+  kind                IdTokenKind
+  // Canonical OCPP idTag value. For RFID this is the UID hex; for
+  // app/JWT tokens this is the JWT-derived ID. UNIQUE so any
+  // Authorize lookup is O(1).
+  value               String           @unique
+  // Who issued it. "zaptec" when we mirror a Zaptec RFID; null when
+  // we issued (future). Set so we can route re-sync vs self-managed
+  // updates correctly.
+  vendorIssuedBy      String?          @map("vendor_issued_by")
+  // Vendor's internal ID for re-sync correlation.
+  vendorTokenId       String?          @map("vendor_token_id")
+  // Operator-friendly label ("Andri black tag"). Optional.
+  label               String?
+  status              IdTokenStatus    @default(active)
+  expiresAt           DateTime?        @map("expires_at") @db.Timestamptz(6)
+  lastUsedAt          DateTime?        @map("last_used_at") @db.Timestamptz(6)
+  // Optional narrowing: this token only valid at one installation.
+  // Empty = valid wherever the user has access.
+  scopeInstallationId String?          @map("scope_installation_id") @db.Uuid
+  metadata            Json             @default("{}") @db.JsonB
+  createdAt           DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user                User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scopeInstallation   Installation?    @relation("InstallationIdTokens", fields: [scopeInstallationId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([status, value])
+  @@index([scopeInstallationId])
+  @@index([vendorIssuedBy, vendorTokenId])
+  @@map("id_tokens")
+  @@schema("identity")
+}
+
+enum IdTokenKind {
+  rfid
+  app_jwt
+  magic_link
+  zaptec_proxy   // we know about it but Zaptec issues + validates it (today's mirror case)
+  ocpi_token     // received from a roaming partner via OCPI
+  manual         // operator-created for testing / break-glass
+
+  @@schema("identity")
+}
+
+enum IdTokenStatus {
+  active
+  suspended
+  revoked
+  expired
+
+  @@schema("identity")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// identity — VendorUserGroup mirror (Zaptec UserGroups)
+// Captures vendor-side group membership + role-within-group so policy
+// information survives sync. When OCPP-auth lands, this informs the
+// Authorize handler ("user has Admin role in this installation's group
+// → reject if charger is in a restricted-to-Admin sub-scope").
+// ─────────────────────────────────────────────────────────────────────────────
+
+model VendorUserGroup {
+  id              String           @id @default(uuid()) @db.Uuid
+  vendorSlug      String           @map("vendor_slug")
+  vendorGroupId   String           @map("vendor_group_id")
+  installationId  String           @map("installation_id") @db.Uuid
+  name            String
+  metadata        Json             @default("{}") @db.JsonB
+  lastSyncedAt    DateTime         @default(now()) @map("last_synced_at") @db.Timestamptz(6)
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  installation    Installation     @relation("InstallationVendorUserGroups", fields: [installationId], references: [id], onDelete: Cascade)
+  memberships     VendorUserGroupMembership[]
+
+  @@unique([vendorSlug, vendorGroupId])
+  @@index([installationId])
+  @@map("vendor_user_groups")
+  @@schema("identity")
+}
+
+model VendorUserGroupMembership {
+  groupId    String           @map("group_id") @db.Uuid
+  userId     String           @map("user_id") @db.Uuid
+  // Vendor-shaped role string. "Owner" | "Admin" | "User" for Zaptec.
+  // Kept as string so other vendors with different role taxonomies
+  // can land here without enum changes.
+  role       String
+  metadata   Json             @default("{}") @db.JsonB
+  createdAt  DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  group      VendorUserGroup  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, userId])
+  @@index([userId])
+  @@map("vendor_user_group_memberships")
+  @@schema("identity")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// people — Vehicle (driver-owned EV)
+// One user can have many vehicles. Useful for fleet contract scoping,
+// session attribution UX ("which car was charging?"), and battery-aware
+// smart charging when that lands.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Vehicle {
+  id                  String           @id @default(uuid()) @db.Uuid
+  userId              String           @map("user_id") @db.Uuid
+  make                String?
+  model               String?
+  year                Int?
+  licensePlate        String?          @map("license_plate")
+  vin                 String?          @unique
+  batteryCapacityKwh  Decimal?         @map("battery_capacity_kwh") @db.Decimal(6, 2)
+  metadata            Json             @default("{}") @db.JsonB
+  createdAt           DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user                User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("vehicles")
+  @@schema("people")
 }
 
 model UserCredential {
@@ -443,6 +684,11 @@ model Installation {
 
   // ── Tariff-definition relation (rev-3) ───────────────────────────
   retailerTariff         TariffDefinition?             @relation("InstallationRetailerTariff", fields: [retailerTariffId], references: [id])
+
+  // ── ADR 0014 / API onboarding (back-relations) ───────────────────
+  vendorUserRefs         UserVendorRef[]               @relation("InstallationVendorUserRefs")
+  scopedIdTokens         IdToken[]                     @relation("InstallationIdTokens")
+  vendorUserGroups       VendorUserGroup[]             @relation("InstallationVendorUserGroups")
 
   @@index([orgId, siteId])
   @@index([vendorId])

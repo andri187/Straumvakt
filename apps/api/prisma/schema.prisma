@@ -48,11 +48,13 @@ model User {
   status         UserStatus       @default(active)
   createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt      DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt      DateTime?        @map("deleted_at") @db.Timestamptz(6)
 
   // ── Profile enrichment per ADR 0010 (Sprint 2.6) ─────────────────
   kennitala      String?          @unique
   phone          String?
   locale         String           @default("is")
+  timezone       String           @default("Atlantic/Reykjavik")
   notes          String?          @db.Text
 
   // ── Profile enrichment round 2 (Sprint 3) ────────────────────────
@@ -62,6 +64,16 @@ model User {
   dateOfBirth    DateTime?        @map("date_of_birth") @db.Date
   photoUrl       String?          @map("photo_url")
   address        Json             @default("{}") @map("address") @db.JsonB
+
+  // ── ADR 0014 (audience + verification + activity + GDPR) ─────────
+  audience            UserAudience @default(operator)
+  emailVerifiedAt     DateTime?    @map("email_verified_at") @db.Timestamptz(6)
+  phoneVerifiedAt     DateTime?    @map("phone_verified_at") @db.Timestamptz(6)
+  lastSeenAt          DateTime?    @map("last_seen_at") @db.Timestamptz(6)
+  consentTosAt        DateTime?    @map("consent_tos_at") @db.Timestamptz(6)
+  consentPrivacyAt    DateTime?    @map("consent_privacy_at") @db.Timestamptz(6)
+  consentMarketingAt  DateTime?    @map("consent_marketing_at") @db.Timestamptz(6)
+  metadata            Json         @default("{}") @db.JsonB
 
   // ── Existing relations ───────────────────────────────────────────
   credentials    UserCredential?
@@ -82,6 +94,12 @@ model User {
   // ── ADR 0014 ──
   orgsAsMainContact       Organization[]   @relation("OrgMainContact")
 
+  // ── Vendor identity + auth artefacts (API-onboarding) ───────────
+  vendorRefs              UserVendorRef[]
+  idTokens                IdToken[]
+  vendorGroupMemberships  VendorUserGroupMembership[]
+  vehicles                Vehicle[]
+
   @@map("users")
   @@schema("identity")
 }
@@ -92,6 +110,157 @@ enum UserStatus {
   deleted
 
   @@schema("identity")
+}
+
+enum UserAudience {
+  operator
+  driver
+  service
+
+  @@schema("identity")
+}
+
+// ── UserVendorRef (ADR 0014 / API-onboarding) ───────────────────────
+
+model UserVendorRef {
+  id                  String           @id @default(uuid()) @db.Uuid
+  userId              String           @map("user_id") @db.Uuid
+  vendorSlug          String           @map("vendor_slug")
+  vendorUserId        String           @map("vendor_user_id")
+  vendorEmail         String?          @map("vendor_email")
+  vendorRoleHint      String?          @map("vendor_role_hint")
+  scopeInstallationId String?          @map("scope_installation_id") @db.Uuid
+  status              VendorRefStatus  @default(active)
+  lastSyncedAt        DateTime         @default(now()) @map("last_synced_at") @db.Timestamptz(6)
+  metadata            Json             @default("{}") @db.JsonB
+  createdAt           DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user                User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scopeInstallation   Installation?    @relation("InstallationVendorUserRefs", fields: [scopeInstallationId], references: [id], onDelete: SetNull)
+
+  @@unique([vendorSlug, vendorUserId])
+  @@index([userId])
+  @@index([scopeInstallationId])
+  @@map("user_vendor_refs")
+  @@schema("identity")
+}
+
+enum VendorRefStatus {
+  active
+  inactive_at_vendor
+  removed_at_vendor
+
+  @@schema("identity")
+}
+
+// ── IdToken (RFID, app JWT, magic link, …) ──────────────────────────
+
+model IdToken {
+  id                  String           @id @default(uuid()) @db.Uuid
+  userId              String           @map("user_id") @db.Uuid
+  kind                IdTokenKind
+  value               String           @unique
+  vendorIssuedBy      String?          @map("vendor_issued_by")
+  vendorTokenId       String?          @map("vendor_token_id")
+  label               String?
+  status              IdTokenStatus    @default(active)
+  expiresAt           DateTime?        @map("expires_at") @db.Timestamptz(6)
+  lastUsedAt          DateTime?        @map("last_used_at") @db.Timestamptz(6)
+  scopeInstallationId String?          @map("scope_installation_id") @db.Uuid
+  metadata            Json             @default("{}") @db.JsonB
+  createdAt           DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user                User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scopeInstallation   Installation?    @relation("InstallationIdTokens", fields: [scopeInstallationId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([status, value])
+  @@index([scopeInstallationId])
+  @@index([vendorIssuedBy, vendorTokenId])
+  @@map("id_tokens")
+  @@schema("identity")
+}
+
+enum IdTokenKind {
+  rfid
+  app_jwt
+  magic_link
+  zaptec_proxy
+  ocpi_token
+  manual
+
+  @@schema("identity")
+}
+
+enum IdTokenStatus {
+  active
+  suspended
+  revoked
+  expired
+
+  @@schema("identity")
+}
+
+// ── VendorUserGroup mirror (Zaptec UserGroups) ──────────────────────
+
+model VendorUserGroup {
+  id              String           @id @default(uuid()) @db.Uuid
+  vendorSlug      String           @map("vendor_slug")
+  vendorGroupId   String           @map("vendor_group_id")
+  installationId  String           @map("installation_id") @db.Uuid
+  name            String
+  metadata        Json             @default("{}") @db.JsonB
+  lastSyncedAt    DateTime         @default(now()) @map("last_synced_at") @db.Timestamptz(6)
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  installation    Installation     @relation("InstallationVendorUserGroups", fields: [installationId], references: [id], onDelete: Cascade)
+  memberships     VendorUserGroupMembership[]
+
+  @@unique([vendorSlug, vendorGroupId])
+  @@index([installationId])
+  @@map("vendor_user_groups")
+  @@schema("identity")
+}
+
+model VendorUserGroupMembership {
+  groupId    String           @map("group_id") @db.Uuid
+  userId     String           @map("user_id") @db.Uuid
+  role       String
+  metadata   Json             @default("{}") @db.JsonB
+  createdAt  DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  group      VendorUserGroup  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, userId])
+  @@index([userId])
+  @@map("vendor_user_group_memberships")
+  @@schema("identity")
+}
+
+// ── Vehicle (driver-owned EV) ───────────────────────────────────────
+
+model Vehicle {
+  id                  String           @id @default(uuid()) @db.Uuid
+  userId              String           @map("user_id") @db.Uuid
+  make                String?
+  model               String?
+  year                Int?
+  licensePlate        String?          @map("license_plate")
+  vin                 String?          @unique
+  batteryCapacityKwh  Decimal?         @map("battery_capacity_kwh") @db.Decimal(6, 2)
+  metadata            Json             @default("{}") @db.JsonB
+  createdAt           DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user                User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("vehicles")
+  @@schema("people")
 }
 
 model UserCredential {
@@ -413,6 +582,11 @@ model Installation {
 
   // ── Tariff-definition relation (rev-3) ───────────────────────────
   retailerTariff         TariffDefinition?             @relation("InstallationRetailerTariff", fields: [retailerTariffId], references: [id])
+
+  // ── ADR 0014 / API onboarding (back-relations) ───────────────────
+  vendorUserRefs         UserVendorRef[]               @relation("InstallationVendorUserRefs")
+  scopedIdTokens         IdToken[]                     @relation("InstallationIdTokens")
+  vendorUserGroups       VendorUserGroup[]             @relation("InstallationVendorUserGroups")
 
   @@index([orgId, siteId])
   @@index([vendorId])
