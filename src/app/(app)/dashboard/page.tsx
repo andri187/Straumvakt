@@ -49,8 +49,8 @@ const conceptStyles = `
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 64px;
-  padding: 0 clamp(18px, 4vw, 56px);
+  height: 56px;
+  padding: 0 clamp(14px, 3vw, 40px);
   border-bottom: 1px solid rgba(30, 42, 68, .75);
   background: rgba(7, 11, 22, .78);
   backdrop-filter: blur(16px);
@@ -106,11 +106,10 @@ const conceptStyles = `
 
 .sv-home-concept .hero {
   display: grid;
-  grid-template-columns: minmax(320px, 0.9fr) minmax(520px, 1.1fr);
-  gap: clamp(30px, 5vw, 70px);
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+  gap: clamp(20px, 3vw, 48px);
   align-items: center;
-  min-height: calc(100vh - 64px);
-  padding: clamp(34px, 5vw, 72px) clamp(18px, 4vw, 56px) 52px;
+  padding: clamp(24px, 4vw, 56px) clamp(14px, 3vw, 40px) 40px;
 }
 
 .sv-home-concept .eyebrow {
@@ -137,17 +136,17 @@ const conceptStyles = `
 
 .sv-home-concept h1 {
   max-width: 780px;
-  margin: 18px 0 0;
-  font-size: clamp(42px, 6.4vw, 82px);
-  line-height: .95;
+  margin: 16px 0 0;
+  font-size: clamp(28px, 4.4vw, 64px);
+  line-height: 1;
   letter-spacing: 0;
 }
 
 .sv-home-concept .lead {
   max-width: 640px;
-  margin: 22px 0 0;
+  margin: 18px 0 0;
   color: var(--soft);
-  font-size: clamp(17px, 1.8vw, 21px);
+  font-size: clamp(14px, 1.4vw, 19px);
   line-height: 1.55;
 }
 
@@ -198,7 +197,8 @@ const conceptStyles = `
 
 .sv-home-concept .visual {
   position: relative;
-  min-height: 610px;
+  display: flex;
+  flex-direction: column;
   border: 1px solid rgba(43, 58, 94, .85);
   border-radius: 8px;
   background:
@@ -207,6 +207,7 @@ const conceptStyles = `
     repeating-linear-gradient(90deg, transparent 0 31px, rgba(255,255,255,.035) 32px);
   box-shadow: 0 1px 0 rgba(255,255,255,.03) inset, 0 24px 70px rgba(0,0,0,.36);
   overflow: hidden;
+  container-type: inline-size;
 }
 
 .sv-home-concept .visual-header {
@@ -243,14 +244,15 @@ const conceptStyles = `
 
 .sv-home-concept .map {
   position: relative;
-  height: 430px;
-  margin: 28px;
+  aspect-ratio: 610 / 430;
+  margin: clamp(12px, 2.4cqi, 28px);
+  flex: 1 1 auto;
 }
 
 .sv-home-concept .node {
   position: absolute;
-  min-width: 142px;
-  padding: 11px 12px;
+  width: clamp(120px, 25cqi, 168px);
+  padding: clamp(7px, 1.4cqi, 11px) clamp(8px, 1.6cqi, 12px);
   border: 1px solid rgba(111, 184, 240, .34);
   border-radius: 8px;
   background: rgba(7, 11, 22, .86);
@@ -260,14 +262,15 @@ const conceptStyles = `
 .sv-home-concept .node small {
   display: block;
   color: var(--muted);
-  font-size: 11px;
+  font-size: clamp(9px, 1.4cqi, 11px);
   line-height: 1.25;
 }
 
 .sv-home-concept .node strong {
   display: block;
   margin-top: 3px;
-  font-size: 15px;
+  font-size: clamp(11px, 1.8cqi, 15px);
+  line-height: 1.2;
 }
 
 .sv-home-concept .node .mini {
@@ -285,12 +288,12 @@ const conceptStyles = `
 
 .sv-home-concept .mini span.on { background: linear-gradient(90deg, var(--green), var(--blue)); }
 
-.sv-home-concept .org { left: 16px; top: 58px; }
-.sv-home-concept .site { left: 214px; top: 58px; }
-.sv-home-concept .install { left: 412px; top: 58px; }
-.sv-home-concept .station { left: 412px; top: 198px; }
-.sv-home-concept .ocpp { left: 214px; top: 280px; }
-.sv-home-concept .vendor { left: 16px; top: 280px; }
+.sv-home-concept .org { left: 2.6%; top: 13.5%; }
+.sv-home-concept .site { left: 35.1%; top: 13.5%; }
+.sv-home-concept .install { left: 67.5%; top: 13.5%; }
+.sv-home-concept .station { left: 67.5%; top: 46%; }
+.sv-home-concept .ocpp { left: 35.1%; top: 65.1%; }
+.sv-home-concept .vendor { left: 2.6%; top: 65.1%; }
 
 .sv-home-concept svg.lines {
   position: absolute;
@@ -317,18 +320,15 @@ const conceptStyles = `
 @keyframes sv-dash { to { stroke-dashoffset: -36; } }
 
 .sv-home-concept .caption-card {
-  position: absolute;
-  left: 28px;
-  right: 28px;
-  bottom: 24px;
+  flex: 0 0 auto;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 10px;
+  padding: 0 clamp(12px, 2.4cqi, 28px) clamp(12px, 2.4cqi, 24px);
 }
 
 .sv-home-concept .caption {
-  min-height: 86px;
-  padding: 13px;
+  padding: clamp(10px, 1.6cqi, 13px);
   border: 1px solid rgba(43, 58, 94, .9);
   border-radius: 8px;
   background: rgba(14, 22, 38, .92);
@@ -336,48 +336,47 @@ const conceptStyles = `
 
 .sv-home-concept .caption strong {
   display: block;
-  margin-bottom: 7px;
-  font-size: 13px;
+  margin-bottom: 6px;
+  font-size: clamp(11px, 1.5cqi, 13px);
 }
 
 .sv-home-concept .caption p {
   margin: 0;
   color: var(--muted);
-  font-size: 12px;
+  font-size: clamp(10px, 1.4cqi, 12px);
   line-height: 1.42;
 }
 
 .sv-home-concept .band {
-  padding: 18px clamp(18px, 4vw, 56px) 70px;
+  padding: 16px clamp(14px, 3vw, 40px) clamp(40px, 5vw, 64px);
 }
 
 .sv-home-concept .section-head {
   max-width: 780px;
-  margin-bottom: 22px;
+  margin-bottom: 18px;
 }
 
 .sv-home-concept .section-head h2 {
   margin: 0;
-  font-size: clamp(26px, 3vw, 40px);
+  font-size: clamp(20px, 2.4vw, 36px);
   letter-spacing: 0;
 }
 
 .sv-home-concept .section-head p {
-  margin: 10px 0 0;
+  margin: 8px 0 0;
   color: var(--soft);
-  font-size: 16px;
+  font-size: clamp(13px, 1.2vw, 15px);
   line-height: 1.55;
 }
 
 .sv-home-concept .cards {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
 }
 
 .sv-home-concept .info {
-  min-height: 220px;
-  padding: 18px;
+  padding: clamp(14px, 1.6vw, 18px);
   border: 1px solid var(--border);
   border-radius: 8px;
   background: rgba(11, 18, 32, .74);
@@ -387,39 +386,38 @@ const conceptStyles = `
 .sv-home-concept .icon {
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
-  margin-bottom: 16px;
+  width: 32px;
+  height: 32px;
+  margin-bottom: 12px;
   border-radius: 8px;
   color: #06131a;
   background: linear-gradient(135deg, var(--green), var(--blue));
   font-weight: 900;
+  font-size: 14px;
 }
 
-.sv-home-concept .info h3 { margin: 0; font-size: 17px; }
+.sv-home-concept .info h3 { margin: 0; font-size: clamp(14px, 1.2vw, 16px); }
 
 .sv-home-concept .info p {
-  margin: 10px 0 0;
+  margin: 8px 0 0;
   color: var(--muted);
-  font-size: 14px;
+  font-size: clamp(12px, 1vw, 14px);
   line-height: 1.55;
 }
 
-@media (max-width: 1050px) {
-  .sv-home-concept .hero {
-    grid-template-columns: 1fr;
-    min-height: auto;
-  }
-  .sv-home-concept .visual { min-height: 560px; }
-  .sv-home-concept .cards { grid-template-columns: repeat(2, 1fr); }
+@media (max-width: 1100px) {
+  .sv-home-concept .hero { grid-template-columns: 1fr; }
+  .sv-home-concept .visual { max-width: 720px; }
   .sv-home-concept .navlinks { display: none; }
 }
 
-@media (max-width: 640px) {
-  .sv-home-concept .hero { padding-top: 28px; }
+@media (max-width: 720px) {
+  .sv-home-concept .caption-card { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 560px) {
   .sv-home-concept .visual { display: none; }
-  .sv-home-concept .cards { grid-template-columns: 1fr; }
-  .sv-home-concept h1 { font-size: 44px; }
+  .sv-home-concept .hero { padding-top: 20px; }
 }
 `;
 
