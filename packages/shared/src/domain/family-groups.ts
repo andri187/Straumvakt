@@ -6,6 +6,7 @@
 export interface FamilyGroupSummary {
   id: string;
   orgId: string;
+  orgDisplayName: string;
   displayName: string;
   primaryUserId: string;
   primaryUserDisplayName: string | null;

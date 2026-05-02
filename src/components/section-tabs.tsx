@@ -58,6 +58,7 @@ export const TENANTS_TABS: SectionTab[] = [
   { href: "/tenants", label: "All", exact: true },
   { href: "/tenants/organizations", label: "Organizations" },
   { href: "/tenants/properties", label: "Properties" },
+  { href: "/tenants/groups", label: "Groups" },
   { href: "/people/users", label: "Users" },
 ];
 

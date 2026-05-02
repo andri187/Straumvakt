@@ -22,6 +22,7 @@ import {
   Network,
   Briefcase,
   UserCog,
+  Users,
   PlusCircle,
   Wallet,
   Receipt,
@@ -114,6 +115,12 @@ const nav: NavItem[] = [
         href: "/tenants/properties",
         label: { is: "Properties", en: "Properties" },
         icon: Building2,
+      },
+      {
+        kind: "leaf",
+        href: "/tenants/groups",
+        label: { is: "Groups", en: "Groups" },
+        icon: Users,
       },
       {
         kind: "leaf",

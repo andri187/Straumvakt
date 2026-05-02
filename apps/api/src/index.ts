@@ -26,6 +26,7 @@ import {
   adminVendorCredentialsAll,
   adminVendorCredentialsByOrg,
 } from "./routes/admin/vendor-credentials";
+import { adminGroups } from "./routes/admin/groups";
 import { internalOcppAuth } from "./routes/internal/ocpp-auth";
 import { internalPendingDiscovery } from "./routes/internal/pending-discovery";
 import { makePrisma } from "./lib/prisma";
@@ -85,6 +86,7 @@ app.route("/api/admin/zaptec", adminZaptec);
 app.route("/api/admin/pending-discoveries", adminPendingDiscoveries);
 app.route("/api/admin/vendor-credentials", adminVendorCredentialsAll);
 app.route("/api/admin/orgs/:orgId/vendor-credentials", adminVendorCredentialsByOrg);
+app.route("/api/admin/groups", adminGroups);
 
 // Internal — gateway → API auth lookup. Gated by OCPP_INGEST_SECRET
 // header (ADR 0004), not the admin session middleware.

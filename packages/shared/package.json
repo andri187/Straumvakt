@@ -31,7 +31,8 @@
     "./domain/charger-technical-read": "./src/domain/charger-technical-read.ts",
     "./domain/credential-management": "./src/domain/credential-management.ts",
     "./domain/contracts": "./src/domain/contracts.ts",
-    "./domain/family-groups": "./src/domain/family-groups.ts"
+    "./domain/family-groups": "./src/domain/family-groups.ts",
+    "./domain/vendor-user-groups": "./src/domain/vendor-user-groups.ts"
   },
   "dependencies": {
     "zod": "^4.3.6"
