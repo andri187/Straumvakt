@@ -116,12 +116,19 @@ export function CreateUserForm() {
       }
       const body = (await res.json()) as {
         user: UserSummary;
-        primaryToken: IdTokenSummary;
+        primaryToken?: IdTokenSummary;
       };
-      setCreated(body);
-      // Refresh upstream lists so the new user appears, but stay on
-      // this page so the operator can read/copy the primary RFID UID.
-      router.refresh();
+      // primaryToken is added by the Sprint 3 closure-item-1 deploy. If
+      // an older API deploy returns just { user }, fall back to the
+      // pre-closure behaviour (redirect to list) so the form doesn't
+      // crash trying to render a missing token.
+      if (body.primaryToken) {
+        setCreated({ user: body.user, primaryToken: body.primaryToken });
+        router.refresh();
+      } else {
+        router.push("/people/users");
+        router.refresh();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {

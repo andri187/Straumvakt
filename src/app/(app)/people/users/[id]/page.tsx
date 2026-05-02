@@ -52,11 +52,15 @@ export default async function UserDetailPage({
   const detailRes = await apiFetchServer(`/api/admin/users/${id}`);
   if (detailRes.status === 404) notFound();
   if (!detailRes.ok) throw new Error(`HTTP ${detailRes.status}`);
-  const { user, memberships, idTokens } = (await detailRes.json()) as {
+  // idTokens was added in Sprint 3 closure item 1; default to [] so an
+  // older API deploy that doesn't include the field still renders.
+  const detail = (await detailRes.json()) as {
     user: UserSummary;
     memberships: UserMembershipSummary[];
-    idTokens: IdTokenSummary[];
+    idTokens?: IdTokenSummary[];
   };
+  const { user, memberships } = detail;
+  const idTokens = detail.idTokens ?? [];
   const { orgs } = await apiFetchServerJson<{ orgs: OrgSummary[] }>(
     "/api/admin/orgs",
   );

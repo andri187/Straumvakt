@@ -44,10 +44,23 @@ adminUsers.post("/", async (c) => {
 
 adminUsers.get("/:id", async (c) => {
   const db = makePrisma(c.env);
+  // The id_tokens table is part of the 2026-05-02 user-profile-enrichment
+  // migration. If staging Neon hasn't had `prisma migrate deploy` run for
+  // that migration, listIdTokensForUser fails with "relation does not
+  // exist" — and Promise.all would 500 the entire user-detail GET, which
+  // would break the user-detail page even though the user / memberships
+  // data is fine. Degrade to idTokens=[] on failure and log loudly so the
+  // operator notices and runs migrate deploy.
   const [user, memberships, idTokens] = await Promise.all([
     getUserById(db, c.req.param("id")),
     listUserMemberships(db, c.req.param("id")),
-    listIdTokensForUser(db, c.req.param("id")),
+    listIdTokensForUser(db, c.req.param("id")).catch((err) => {
+      console.error("[admin/users] listIdTokensForUser failed; degrading to []", {
+        userId: c.req.param("id"),
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return [];
+    }),
   ]);
   if (!user) return c.json({ error: "not_found" }, 404);
   return c.json({ user, memberships, idTokens });
