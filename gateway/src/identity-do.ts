@@ -32,6 +32,30 @@ import { parseFrame, serializeCallResult, serializeCall } from "./ocpp-frame";
 import { postEvent, type IngestEvent } from "./ingest-client";
 import type { GatewayEnv } from "./auth";
 
+/**
+ * Verdict shape returned by /api/internal/ocpp-authorize. Mirrors
+ * `AuthorizeResult` in apps/api but kept loose here — the gateway only
+ * logs the verdict; the reply to the charger is always Accepted in
+ * Sprint 3's shadow-mode posture (closure item 3 of the Sprint 3 retro).
+ */
+interface AuthorizeVerdict {
+  verdict: "Accepted" | "Blocked" | "Expired" | "Invalid";
+  reason: string;
+  userId?: string;
+  idTokenId?: string;
+}
+
+/**
+ * Read a string-valued field from an OCPP payload. Returns undefined
+ * for missing or non-string values — keeps the call-site free of
+ * unknown-cast churn.
+ */
+function stringField(obj: unknown, key: string): string | undefined {
+  if (!obj || typeof obj !== "object") return undefined;
+  const v = (obj as Record<string, unknown>)[key];
+  return typeof v === "string" ? v : undefined;
+}
+
 interface SessionMeta {
   identityId: string;
   orgId: string;
@@ -203,9 +227,79 @@ export class IdentityDurableObject {
       console.error("[ocpp-gw] ingest rejected", outcome.status, outcome.error);
     }
 
-    // Reply with a dev-stub CallResult. Sprint 2 threads real responses
-    // (Authorize through the token resolver, etc.).
+    // Sprint 3 closure item 3 — Authorize handler "shadow mode."
+    // For Authorize.req and StartTransaction.req the charger carries an
+    // idTag. Resolve it through the API's IdToken lookup, log the
+    // verdict, but **always reply Accepted to the charger** until
+    // per-installation enforcement lands (Sprint 4). Lets us start
+    // logging real RFID activity at Dalvegur without breaking customer
+    // charging while the IdToken table is still being populated.
+    if (frame.action === "Authorize" || frame.action === "StartTransaction") {
+      const idTag = stringField(frame.payload, "idTag");
+      if (idTag && this.meta) {
+        const verdict = await this.requestAuthorizeVerdict(idTag, frame.action);
+        // Single-line shape so Cloudflare tail / Logpush stays grep-able.
+        console.log("[ocpp-gw] authorize.shadow", {
+          identityString: this.meta.identityString,
+          action: frame.action,
+          idTag,
+          verdict: verdict?.verdict ?? "upstream_error",
+          reason: verdict?.reason ?? "upstream_error",
+          userId: verdict?.userId,
+          idTokenId: verdict?.idTokenId,
+        });
+      }
+    }
+
+    // Reply with a stub CallResult. Authorize/StartTransaction are
+    // hardcoded Accepted (shadow mode) — when Sprint 4 wires the
+    // per-installation enforce flag, this branch consults the verdict
+    // returned by requestAuthorizeVerdict above.
     ws.send(serializeCallResult(frame.uniqueId, this.stubResponseFor(frame.action)));
+  }
+
+  /**
+   * Sidecar call to `/api/internal/ocpp-authorize`. Failure is silent
+   * — we never block the charger response on this lookup because the
+   * gateway's whole point is sub-second Authorize.req turn-around. If
+   * the API errors, we return null and the caller logs it as
+   * `upstream_error`. Sprint 4 wires this to actually gate the reply.
+   */
+  private async requestAuthorizeVerdict(
+    idTag: string,
+    action: string,
+  ): Promise<AuthorizeVerdict | null> {
+    if (!this.meta) return null;
+    try {
+      const resp = await this.env.MAIN_APP.fetch(
+        new Request("https://main.internal/api/internal/ocpp-authorize", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-straumvakt-ingest": this.env.OCPP_INGEST_SECRET,
+          },
+          body: JSON.stringify({
+            idTag,
+            identityId: this.meta.identityId,
+            orgId: this.meta.orgId,
+          }),
+        }),
+      );
+      if (!resp.ok) {
+        console.warn("[ocpp-gw] authorize upstream non-200", {
+          status: resp.status,
+          action,
+        });
+        return null;
+      }
+      return (await resp.json()) as AuthorizeVerdict;
+    } catch (err) {
+      console.error("[ocpp-gw] authorize upstream threw", {
+        action,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return null;
+    }
   }
 
   private stubResponseFor(action: string): Record<string, unknown> {

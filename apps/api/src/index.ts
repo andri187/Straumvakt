@@ -28,6 +28,7 @@ import {
 } from "./routes/admin/vendor-credentials";
 import { adminGroups } from "./routes/admin/groups";
 import { internalOcppAuth } from "./routes/internal/ocpp-auth";
+import { internalOcppAuthorize } from "./routes/internal/ocpp-authorize";
 import { internalPendingDiscovery } from "./routes/internal/pending-discovery";
 import { makePrisma } from "./lib/prisma";
 import { buildRegistry } from "./lib/dispatch-targets";
@@ -91,6 +92,7 @@ app.route("/api/admin/groups", adminGroups);
 // Internal — gateway → API auth lookup. Gated by OCPP_INGEST_SECRET
 // header (ADR 0004), not the admin session middleware.
 app.route("/api/internal/ocpp-auth", internalOcppAuth);
+app.route("/api/internal/ocpp-authorize", internalOcppAuthorize);
 app.route("/api/internal/pending-discovery", internalPendingDiscovery);
 
 app.notFound((c) => c.json({ error: "not_found", path: c.req.path }, 404));
