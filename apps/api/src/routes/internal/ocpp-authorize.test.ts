@@ -102,39 +102,21 @@ describe("resolveAuthorize", () => {
     });
   });
 
-  it("returns Invalid/conflict for a duplicated-token-claim row", async () => {
+  it("returns Blocked/suspended for a temporarily-suspended token", async () => {
     const db = makeDb({
       token: {
         id: "token-4",
         userId: "user-1",
-        status: "conflict",
+        status: "suspended",
         expiresAt: null,
         scopeInstallationId: null,
       },
     });
     const result = await resolveAuthorize(db, INPUT);
     expect(result).toEqual({
-      verdict: "Invalid",
-      reason: "conflict",
+      verdict: "Blocked",
+      reason: "suspended",
       idTokenId: "token-4",
-    });
-  });
-
-  it("returns Invalid/pending for a not-yet-claimed row", async () => {
-    const db = makeDb({
-      token: {
-        id: "token-5",
-        userId: "user-1",
-        status: "pending",
-        expiresAt: null,
-        scopeInstallationId: null,
-      },
-    });
-    const result = await resolveAuthorize(db, INPUT);
-    expect(result).toEqual({
-      verdict: "Invalid",
-      reason: "pending",
-      idTokenId: "token-5",
     });
   });
 

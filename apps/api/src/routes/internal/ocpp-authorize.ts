@@ -42,10 +42,9 @@ export type AuthorizeReason =
   | "ok"
   | "unknown_id_tag"
   | "revoked"
+  | "suspended"
   | "expired_status"
   | "expiry_passed"
-  | "conflict"
-  | "pending"
   | "scope_mismatch"
   | "unknown_status";
 
@@ -126,17 +125,16 @@ export async function resolveAuthorize(
   switch (token.status) {
     case "revoked":
       return { verdict: "Blocked", reason: "revoked", idTokenId: token.id };
+    case "suspended":
+      return { verdict: "Blocked", reason: "suspended", idTokenId: token.id };
     case "expired":
       return { verdict: "Expired", reason: "expired_status", idTokenId: token.id };
-    case "conflict":
-      return { verdict: "Invalid", reason: "conflict", idTokenId: token.id };
-    case "pending":
-      return { verdict: "Invalid", reason: "pending", idTokenId: token.id };
     case "active":
       break;
     default:
-      // Defensive — the IdTokenStatus enum is closed but Prisma may add
-      // values without us noticing. Don't accept on unknown status.
+      // Defensive — the IdTokenStatus enum is closed today (active |
+      // suspended | revoked | expired) but Prisma may add values
+      // without us noticing. Don't accept on unknown status.
       return { verdict: "Invalid", reason: "unknown_status", idTokenId: token.id };
   }
 
