@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
 import { adminSessionConfig, verifyAdminSession } from "@/lib/admin-session";
+import { BackfillRfidButton } from "./backfill-rfid-button";
 
 export const metadata = { title: "Dashboard" };
 
@@ -146,23 +147,34 @@ export default async function DashboardPage() {
             </p>
             <ol className="mt-3 space-y-3 text-sm text-ink-200">
               <li className="flex gap-2">
-                <span className="mt-0.5 text-amber-300">1.</span>
-                <div>
+                <span className="mt-0.5 text-emerald-300">1.</span>
+                <div className="flex-1">
                   <p className="font-medium text-ink-50">
-                    Orphan-table write paths
+                    Orphan-table write paths{" "}
+                    <span className="text-emerald-300">· shipped</span>
                   </p>
                   <p className="text-xs text-ink-300">
-                    <code className="font-mono text-ink-400">IdToken</code>,{" "}
-                    <code className="font-mono text-ink-400">UserVendorRef</code>,{" "}
+                    <code className="font-mono text-ink-400">IdToken</code>{" "}
+                    full write path + UI; primary RFID auto-mints on user
+                    create.{" "}
+                    <code className="font-mono text-ink-400">UserVendorRef</code>{" "}
+                    +{" "}
                     <code className="font-mono text-ink-400">Vehicle</code>{" "}
-                    each get one repo write path. Admin form at{" "}
-                    <code className="font-mono text-ink-400">/people/users/[id]</code>{" "}
-                    attaches RFID + vehicle inline. VendorUserGroup deferred
-                    to Sprint 4.
+                    repo stubs land; first real callers Sprint 4+.
+                    VendorUserGroup deferred to Sprint 4.
                   </p>
-                  <p className="mt-1 text-[11px] italic text-ink-500">
-                    ~half a day. Hand-tested round trip.
-                  </p>
+                  <div className="mt-2">
+                    <p className="text-[10px] uppercase tracking-brand text-ink-400">
+                      Backfill existing users
+                    </p>
+                    <p className="text-[11px] text-ink-400">
+                      Pre-existing user rows have zero tokens. Run this once
+                      to mint a primary RFID for each. Idempotent.
+                    </p>
+                    <div className="mt-1.5">
+                      <BackfillRfidButton />
+                    </div>
+                  </div>
                 </div>
               </li>
               <li className="flex gap-2">
