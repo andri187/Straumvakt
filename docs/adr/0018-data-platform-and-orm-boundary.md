@@ -40,7 +40,35 @@ Sprint 9's load test has a target to measure against.
 
 ## Decision 1 — Telemetry data platform
 
-**Decision: Neon-with-partitioning. Default per ADR 0017 confirmed.**
+### Options
+
+| Option | Pros | Cons |
+|---|---|---|
+| **A. Neon-with-partitioning** *(recommended)* | • One database, one bill, one IAM, one backup posture<br>• Hyperdrive already configured + caching connections<br>• Postgres declarative partitioning is well-understood, no vendor magic<br>• Zero migration cost (we're already on Neon)<br>• Sprint 7 implements with the `pg` driver we already depend on | • Manual partition lifecycle (cron creates tomorrow's partition, detaches old). One more thing to monitor<br>• Continuous aggregates have to be hand-rolled (cron job vs Timescale's built-in)<br>• Postgres autovacuum on partitioned tables has gotchas (each partition vacuums independently — fine, but operators have to know)<br>• Compression is row-level (TOAST) not column-level. Storage 2-3× worse than Timescale at scale |
+| **B. Timescale Cloud** | • Hypertables = same query interface as regular tables, partition-aware planner does the right thing automatically<br>• Continuous aggregates land for free (`CREATE MATERIALIZED VIEW ... WITH (timescaledb.continuous)`)<br>• Compression 5-10× via columnstore — drops Postgres-side storage cost meaningfully past 50k chargers<br>• Purpose-built for this workload | • Second control plane (separate billing, IAM, backup, monitoring)<br>• Cloudflare Hyperdrive support unproven at our scale — we'd be among the first<br>• ~30% more expensive at 4k scale<br>• `@neondatabase/serverless` driver doesn't apply; `pg` works but loses Neon's WebSocket fast path<br>• Migration day is real work — schema differences, lifecycle rule rewrite, observability re-wire |
+| **C. Stay on per-row Prisma writes (no platform decision)** | • Zero code change<br>• Sprint 5 already works | • Caps out around ~1500-2000 chargers (extrapolated from current p95 latency × consumer concurrency). 4k = "barely works" at best, "doesn't" likely. The whole reason for this ADR. |
+
+### Decision: A. Neon-with-partitioning.
+
+The deciding factor isn't performance at 4k — both A and B work
+at 4k. It's **operational surface**. We're a small team. Adding a
+second control plane (Timescale) means a second deploy story, a
+second incident playbook, a second "where's the data" diagram. We
+don't have the bandwidth.
+
+**The honest case for B** is that we punt complexity to Sprint 9's
+load test. If 4k testing surfaces issues we couldn't see at
+20-charger pilot, we migrate. The fallback plan exists for exactly
+this. Two-to-three days of engineering vs a multi-month-long
+Timescale operator-training tax — the math favours keeping things
+simple now and migrating later if forced.
+
+**Inverted view to be honest about:** if we KNEW we'd hit 50k
+chargers within 18 months, B would be the right call now
+(Timescale's compression saves so much storage past 30k that the
+ops cost amortises). For 4k pre-pilot specifically, A wins.
+
+### Implementation specifics (Sprint 7)
 
 Sprint 7 partitions the two HOT-VOLUME tables daily by their
 write timestamp:
@@ -112,12 +140,50 @@ in Decision 2.
 
 ## Decision 2 — ORM boundary
 
-**Decision:** Prisma stays the source of truth for migrations and
-for everything in the **control-plane / current-state row /
-billing-grade row** categories. Raw SQL via `pg` direct (postgres-
-js considered, rejected — see below) for **time-series writes**,
-**hot-path upserts on drift columns**, **outbox dispatch**, and
-**aggregate writes**.
+### Options
+
+| Option | Pros | Cons |
+|---|---|---|
+| **A. Hybrid: Prisma for control plane + raw SQL for hot paths** *(recommended)* | • 80% of routes stay productive (Prisma's schema introspection, type generation, relation queries)<br>• 20% of code (the hot paths) gets the perf it needs without ORM overhead<br>• Migrations stay Prisma-centralised — one source of truth<br>• Drift-column problem (heartbeat-hot fields on otherwise-control-plane tables) gets solved at column level, no schema reshape | • Two write paths to maintain<br>• Raw SQL paths reference column names as strings — schema rename can break them silently at runtime<br>• Operators reading code have to know "for this column, look in lib/db/raw.ts; for that column, look in repos/" |
+| **B. Pure Prisma everywhere** | • One mental model, one set of patterns<br>• Type-safe everywhere<br>• Migration coordination is trivial | • Per-row INSERTs at 400/sec peak become the bottleneck (we measured this in Sprint 5 — already showing 1500ms p95 lag with one charger)<br>• ORM read-modify-write cycle on drift columns is wasted overhead<br>• ON CONFLICT DO NOTHING (idempotency primitive) is awkward through Prisma<br>• We'd hit the wall at 4k |
+| **C. Pure raw SQL everywhere** | • Maximum performance, maximum control<br>• Schema is just SQL — no two-source-of-truth issue<br>• Smaller bundle | • Loses Prisma's relation queries, which the operator console depends on (50+ admin routes)<br>• Loses migration tooling — we'd hand-write every ALTER<br>• Type safety becomes manual<br>• ~2-3 weeks of refactor work before any new feature lands |
+
+### Decision: A. Hybrid.
+
+The hybrid boundary maps to the actual workload split. Control-
+plane tables get touched by humans through admin pages; relations
+matter, type safety matters, write volume doesn't. Time-series
+tables get touched by the queue consumer; relations don't matter,
+write volume is everything. Putting them under different write
+paths reflects the reality.
+
+**The drift-column trick** (Prisma owns the row, raw SQL owns
+specific columns' UPDATE writes) is what makes this approach
+viable. Without it, we'd have to choose between splitting tables
+in half (huge schema reshape) or accepting per-row Prisma writes
+on heartbeat-hot fields (the bottleneck). The trick costs us
+discipline — every operator editing the schema has to update the
+`SCHEMA_COLUMNS` constant — but buys us the right separation
+without a structural change.
+
+**Why not B (Pure Prisma):** measured. We've watched the
+consumer's `batch_summary` lines show 1500ms p95 lag with one
+charger. At 4000 chargers contending for the same connection
+pool, that scales superlinearly. Prisma's per-row pattern doesn't
+survive.
+
+**Why not C (Pure raw SQL):** sunk cost. We have 60+ Prisma-using
+admin routes shipped through Sprint 4. Rewriting them in raw SQL
+is 2-3 weeks of work that produces no operator-visible improvement.
+The hot path is where the money is.
+
+### Implementation specifics (Sprint 7)
+
+Prisma stays the source of truth for migrations and for everything
+in the **control-plane / billing-grade row** categories. Raw SQL
+via `pg` direct (postgres.js considered, rejected — see driver
+section below) for **time-series writes**, **hot-path upserts on
+drift columns**, **outbox dispatch**, and **aggregate writes**.
 
 ### What stays Prisma
 
@@ -241,9 +307,67 @@ matches what they expect.
 
 ## Decision 3 — Raw OCPP archive layout (R2)
 
-**Decision:** One R2 bucket per environment, hierarchical key
-scheme keyed by tenant, written from a dedicated archive consumer
-on a separate queue.
+This decision has four sub-decisions. Each gets its own
+options/recommendation.
+
+### 3a. Bucket scope
+
+| Option | Pros | Cons |
+|---|---|---|
+| **A. One bucket per env** *(recommended)* | • Simple operator model<br>• R2's bucket count limits don't apply<br>• Cross-tenant deletion (e.g. GDPR) handled via prefix listing | • Single blast radius — bucket misconfig affects all tenants<br>• Lifecycle rules apply bucket-wide (acceptable: rules are date-based + retention-class-based, not tenant-based) |
+| **B. One bucket per tenant** | • Tenant isolation in case of bucket-level breach<br>• Per-tenant lifecycle rules possible<br>• Easier per-tenant cost attribution | • Bucket creation on every new org — adds an onboarding step<br>• R2 bucket count limits apply at ~100k buckets<br>• Cross-tenant operations require iterating buckets |
+| **C. Single global bucket, no per-env split** | • Simplest possible | • Can't test lifecycle rules on staging without polluting prod<br>• Staging bug deletes prod data |
+
+**Decision: A.** Tenant isolation matters less than instinct
+suggests — R2's IAM gives us org-prefix scoping at the access-key
+level if we need it. The bucket-per-env split is non-negotiable
+(testing). Per-tenant buckets are over-engineered for 4k tenants.
+
+### 3b. Key scheme
+
+| Option | Pros | Cons |
+|---|---|---|
+| **A. `<orgId>/<yyyy>/<mm>/<dd>/<chargingStationId>/<eventId>.json.gz`** *(recommended)* | • Per-tenant prefix supports GDPR scope<br>• Date prefix supports lifecycle rules + chronological browsing<br>• Charger prefix supports per-charger forensics<br>• Stable, predictable, debuggable | • Long key (~80-100 bytes typical)<br>• Date placement above charger means cross-charger queries scan a single day's prefix |
+| **B. `<orgId>/<chargingStationId>/<yyyy>/<mm>/<dd>/<eventId>.json.gz`** | • Per-charger queries are a single prefix scan, no date enumeration | • Lifecycle rules can't expire-by-date at bucket level — every charger's date subtree gets hit independently<br>• Cross-charger date queries scan the whole org |
+| **C. `<orgId>/<eventId>.json.gz`** (flat) | • Simplest writes | • Can't list per-charger or per-day without LIST scanning the entire org<br>• No lifecycle support<br>• Useless for forensics |
+
+**Decision: A.** Lifecycle rules being prefix-by-date is the
+deciding factor. Operationally, R2 lifecycle rules are how we
+keep storage cost bounded — we delete prefixes older than the
+retention window without writing a cleanup worker. B breaks this.
+C breaks more.
+
+### 3c. Retention policy
+
+| Class | Recommended | Why |
+|---|---|---|
+| Billing-touched | **7 years** | Iceland VAT / accounting law; non-negotiable |
+| Operational | **90 days** | Long enough to investigate any operator-reported incident |
+| Heartbeat | **7 days** | Pure noise after the first day; only useful for "was the charger online during X" within a recent window |
+| Diagnostics | **30 days** | Vendor-side firmware-update tracing; rarely useful past a month |
+
+**Alternative considered:** "everything 7 years, archive cost be
+damned." At R2's $0.015/GB/mo and ~150B/event, ~28B objects over
+7 years costs ~$80/mo total — genuinely cheap. Could simplify the
+policy and skip lifecycle rules entirely.
+
+**Decision: tiered.** 28B objects in one bucket means LIST
+operations get slow. Tiered retention isn't just about cost; it's
+about keeping LIST queries snappy in the operator console.
+
+### 3d. Write topology
+
+| Option | Pros | Cons |
+|---|---|---|
+| **A. Separate consumer on separate queue** *(recommended)* | • Postgres ack and R2 write fail independently<br>• Different retry policies for different failure modes<br>• Operator can pause R2 writes during R2 incidents without blocking Postgres ingest | • Two queues to manage<br>• Inbound consumer has to fan out (Postgres ack + archive queue publish)<br>• ~2× queue cost |
+| **B. Same consumer writes both** | • One queue, one consumer, simple topology | • R2 latency on the Postgres-ack path<br>• An R2 outage blocks ingest entirely — backpressure on the charger side<br>• Two failure modes can't have different retry policies |
+
+**Decision: A.** The whole point of Sprint 5's queue cutover was
+to decouple charger-perceived latency from downstream slowness.
+R2 write blocking ingest would re-couple. Worth the small extra
+queue cost.
+
+### Implementation specifics (Sprint 7)
 
 ### Bucket layout
 
@@ -346,6 +470,17 @@ Six named products:
 Each gets its own table-or-bucket schema in Sprint 7's milestone
 breakdown. Sprint 8's tariff engine writes into `billing.session_ledger`;
 Sprint 8's billing dashboard reads from `billing.period_summary`.
+
+## Summary of recommendations
+
+| Decision | Pick | Why |
+|---|---|---|
+| **1. Data platform** | Neon-with-partitioning | One control plane fits the team size; works for 4k; fallback to Timescale is documented |
+| **2. ORM boundary** | Hybrid (Prisma + raw SQL by category) | Reflects actual workload split; drift-column trick avoids schema reshape; sunk-cost on existing Prisma routes is real |
+| **3a. Bucket** | One bucket per env | Per-tenant is over-engineered; per-env is non-negotiable for safe testing |
+| **3b. Key scheme** | `<orgId>/<yyyy>/<mm>/<dd>/<chargingStationId>/<eventId>.json.gz` | Lifecycle-rule-friendly; supports the three operational queries (per-tenant, per-day, per-charger) |
+| **3c. Retention** | Tiered (7y / 90d / 7d / 30d) | LIST query cost matters more than storage cost |
+| **3d. Write topology** | Separate consumer on separate queue | Doesn't re-couple R2 latency to charger-perceived latency |
 
 ## Consequences
 
