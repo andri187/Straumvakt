@@ -33,7 +33,7 @@ generator nodeClient {
 
 datasource db {
   provider   = "postgresql"
-  schemas    = ["identity", "tenancy", "hosts", "properties", "assets", "hardware", "ocpp", "charging", "billing", "issues", "events", "audit", "entitlements", "people", "vendors", "roaming", "energy", "webhooks"]
+  schemas    = ["identity", "tenancy", "hosts", "properties", "assets", "hardware", "ocpp", "charging", "billing", "issues", "events", "audit", "entitlements", "people", "vendors", "roaming", "energy", "webhooks", "reports"]
   extensions = [citext]
 }
 
@@ -526,6 +526,13 @@ model Organization {
   driverContracts     DriverContract[]
   billingLines        BillingLine[]
   configurationKeys   OcppConfigurationKey[]
+
+  // ── Sprint 7.5 — reports schema back-relations ──────────────────
+  billingPeriodSummaries BillingPeriodSummary[]
+  sessionLedgers      SessionLedger[]
+  siteEnergyDaily     SiteEnergyDaily[]
+  chargerUptimeDaily  ChargerUptimeDaily[]
+  commandHistory      CommandHistory[]
 
   @@map("organizations")
   @@schema("tenancy")
@@ -2589,4 +2596,129 @@ model BillingLine {
   @@index([costCenterId, createdAt(sort: Desc)])
   @@map("billing_lines")
   @@schema("billing")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// reports — pre-computed read-ready aggregates (Sprint 7.5 / ADR 0018
+// Decision 5). Sprint 8's tariff engine writes the billing-grade rows
+// (period_summary, session_ledger). Daily aggregate jobs (Sprint 7
+// scaffolding lands later) fill the per-site / per-charger / command
+// history tables. Operator console reads ONLY from these tables —
+// never directly from event_log or meter_values.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Per orgId × month: total kWh, total ISK, session count.
+// Updated by the period-close job (end-of-month). Operator's
+// billing dashboard reads from here.
+model BillingPeriodSummary {
+  orgId            String       @map("org_id") @db.Uuid
+  year             Int
+  month            Int          // 1..12
+  sessionCount     Int          @map("session_count") @default(0)
+  totalKwh         Decimal      @map("total_kwh") @db.Decimal(14, 3) @default(0)
+  totalIskMinor    BigInt       @map("total_isk_minor") @default(0)
+  computedAt       DateTime     @default(now()) @map("computed_at") @db.Timestamptz(6)
+  organization     Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@id([orgId, year, month])
+  @@index([year, month])
+  @@map("billing_period_summary")
+  @@schema("reports")
+}
+
+// Per session: every billable charging session gets one row here.
+// Written by the session.stopped projection in Sprint 8. Mirrors
+// charging.charge_sessions but flattens for read performance:
+// driver/charger/cost are denormalised so the billing dashboard
+// doesn't need joins.
+model SessionLedger {
+  sessionId         String       @id @map("session_id") @db.Uuid
+  orgId             String       @map("org_id") @db.Uuid
+  siteId            String?      @map("site_id") @db.Uuid
+  chargingStationId String?      @map("charging_station_id") @db.Uuid
+  driverUserId      String?      @map("driver_user_id") @db.Uuid
+  driverIdTag       String?      @map("driver_id_tag")
+  startedAt         DateTime     @map("started_at") @db.Timestamptz(6)
+  stoppedAt         DateTime?    @map("stopped_at") @db.Timestamptz(6)
+  durationSec       Int?         @map("duration_sec")
+  energyKwh         Decimal      @map("energy_kwh") @db.Decimal(10, 3) @default(0)
+  costIskMinor      BigInt?      @map("cost_isk_minor")
+  tariffDefinitionId String?     @map("tariff_definition_id") @db.Uuid
+  computedAt        DateTime     @default(now()) @map("computed_at") @db.Timestamptz(6)
+
+  organization      Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, startedAt(sort: Desc)])
+  @@index([driverUserId, startedAt(sort: Desc)])
+  @@index([chargingStationId, startedAt(sort: Desc)])
+  @@map("session_ledger")
+  @@schema("reports")
+}
+
+// Per site × day: daily energy report. Filled by a daily aggregate
+// job (cron triggered) that scans yesterday's meter_values + sessions.
+// Read by operator console + customer portal.
+model SiteEnergyDaily {
+  siteId            String   @map("site_id") @db.Uuid
+  orgId             String   @map("org_id") @db.Uuid
+  date              DateTime @db.Date
+  sessionCount      Int      @map("session_count") @default(0)
+  totalKwh          Decimal  @map("total_kwh") @db.Decimal(12, 3) @default(0)
+  peakPowerW        Int?     @map("peak_power_w")
+  uptimePct         Decimal? @map("uptime_pct") @db.Decimal(5, 2)
+  computedAt        DateTime @default(now()) @map("computed_at") @db.Timestamptz(6)
+
+  organization      Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@id([siteId, date])
+  @@index([orgId, date(sort: Desc)])
+  @@map("site_energy_daily")
+  @@schema("reports")
+}
+
+// Per charger × day: uptime + transitions + offline minutes. Filled
+// by the same daily aggregate job. Backs the SLA reports.
+model ChargerUptimeDaily {
+  chargingStationId String   @map("charging_station_id") @db.Uuid
+  orgId             String   @map("org_id") @db.Uuid
+  date              DateTime @db.Date
+  heartbeatsReceived Int     @map("heartbeats_received") @default(0)
+  statusTransitions Int      @map("status_transitions") @default(0)
+  offlineMinutes    Int      @map("offline_minutes") @default(0)
+  computedAt        DateTime @default(now()) @map("computed_at") @db.Timestamptz(6)
+
+  organization      Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@id([chargingStationId, date])
+  @@index([orgId, date(sort: Desc)])
+  @@map("charger_uptime_daily")
+  @@schema("reports")
+}
+
+// Per outbound command: write-through projection of
+// ocpp.outbound_commands, denormalised for the operator console's
+// command-history view. Live commands (status='pending' or
+// 'dispatched') stay in ocpp.outbound_commands; once final, the
+// row gets a CommandHistory entry. Lets us drop old outbound_commands
+// rows aggressively without losing the operator's audit trail.
+model CommandHistory {
+  commandId         String   @id @map("command_id") @db.Uuid
+  orgId             String   @map("org_id") @db.Uuid
+  identityId        String   @map("identity_id") @db.Uuid
+  controlDomain     String   @map("control_domain")
+  routedTo          String   @map("routed_to")
+  dispatchedAt      DateTime? @map("dispatched_at") @db.Timestamptz(6)
+  finalStatus       String   @map("final_status")
+  resultJson        Json?    @map("result_json") @db.JsonB
+  latencyMs         Int?     @map("latency_ms")
+  attempts          Int      @default(0)
+  requestedByUserId String?  @map("requested_by_user_id") @db.Uuid
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization      Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, createdAt(sort: Desc)])
+  @@index([identityId, createdAt(sort: Desc)])
+  @@map("command_history")
+  @@schema("reports")
 }
