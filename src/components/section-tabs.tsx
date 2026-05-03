@@ -52,6 +52,7 @@ export const OPERATIONS_TABS: SectionTab[] = [
   { href: "/installations", label: "Installations" },
   { href: "/circuits", label: "Circuits" },
   { href: "/chargers", label: "Chargers" },
+  { href: "/charge-log", label: "Charge log" },
 ];
 
 export const ACCOUNTS_TABS: SectionTab[] = [
@@ -77,6 +78,9 @@ export const REFERENCE_TABS: SectionTab[] = [
   { href: "/reference/zaptec-api", label: "Zaptec API" },
   { href: "/reference/easee-api", label: "Easee API" },
   { href: "/reference/alfen-api", label: "Alfen API" },
+  { href: "/reference/chargeamps-api", label: "Charge Amps API" },
+  { href: "/reference/nexblue-api", label: "NexBlue API" },
+  { href: "/reference/autel-api", label: "Autel API" },
   { href: "/reference/teltonika-rut", label: "Teltonika RUT" },
 ];
 

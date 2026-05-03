@@ -29,6 +29,7 @@ import {
 import { adminGroups } from "./routes/admin/groups";
 import { adminIdTokens } from "./routes/admin/id-tokens";
 import { adminOrgInvites } from "./routes/admin/org-invites";
+import { adminBilling } from "./routes/admin/billing";
 import { publicInvites } from "./routes/public/invites";
 import { internalOcppAuth } from "./routes/internal/ocpp-auth";
 import { internalOcppAuthorize } from "./routes/internal/ocpp-authorize";
@@ -110,6 +111,13 @@ app.route("/api/admin/tokens", adminIdTokens);
 // Sprint 5.7 — agent invite flow (admin side). Mounts under
 // /api/admin/orgs/:orgId/invites — see org-invites.ts.
 app.route("/api/admin/orgs", adminOrgInvites);
+
+// Sprint 8.4 — billing dashboard read surface.
+//   GET /api/admin/billing/sessions[?orgId|siteId|chargingStationId|driverUserId][&startedAfter&startedBefore&limit&offset]
+// Scope-tagged read with totals tile + paginated session list.
+// Operator console reads from here; per-entity tabs (org / site /
+// charger / driver detail pages) pass the right query param.
+app.route("/api/admin/billing", adminBilling);
 
 // Sprint 5.8 — agent invite flow (recipient side). Public routes
 // gated by the token itself, NOT by the admin session cookie.
