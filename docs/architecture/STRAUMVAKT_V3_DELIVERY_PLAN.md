@@ -711,26 +711,79 @@ and only seeded RFIDs charge.
 
 ---
 
-## 8. Sprint 5 — Commercial Model (ISK only for pilot)
+## 8. Sprint 5 — Invite Flow + Driver Self-Registration (ADR 0014 build order)
 
-> **Pilot scope (per [ADR 0005](../adr/0005-pilot-scope-tightening-2026-04-25.md), tag C):**
-> Tariff engine, `CustomerPlan`, and `ChargerServicePlan` ship in
-> **ISK only** for pilot. **Multi-currency (EUR + per-locale variants)
-> is deferred to post-pilot.** Schema already supports a `currency`
-> column; turning EUR on post-pilot is additive. The Issue Engine
-> sprint that previously sat in this slot moved entirely to
-> post-pilot per [ADR 0006](../adr/0006-pilot-scope-rev2-2026-04-25.md)
-> (tag D).
+> **Scope shift recorded in [ADR 0016](../adr/0016-sprint-5-scope-call-invite-over-tariff.md):**
+> Sprint 4's permissions infrastructure needs real multi-user sessions
+> to be load-bearing. Sprint 5 lands those — agent invite flow, driver
+> self-registration, impersonation. The previous occupant of this
+> slot — **Commercial Model (ISK only for pilot)** — slips to
+> **Sprint 6**. Subsequent sprints cascade by one slot; **Pilot
+> Go-Live moves from Sprint 10 to Sprint 11.** ADR 0016 documents the
+> reasoning (Sprint 4's runway needs landing on; tariff engine slips
+> cleanly as a pure-function deliverable; multi-user shakedown wants
+> as many sprints as possible before pilot).
 
-**Goal.** The money math is correct and the two-contract model works
-end to end for the pilot Host, in ISK.
+**Goal.** Customer admins can invite their team. Drivers can sign up
+for the mobile app. Straumvakt staff can impersonate for support.
+`requirePermission` flips from bootstrap god-mode to real per-user
+checks, and the ~30 sub-resource routes from Sprint 4.4 get inline
+`assertPermission` retrofits.
 
-**Entry.** Sprint 4 exit met (retention machinery green).
+**Entry.** Sprint 4 closure list checked (every milestone shipped;
+retro committed; ADR 0016 authored).
 
-**Exit.** Given a session, the tariff engine produces a correct ISK
-cost breakdown. `CustomerPlan` and `ChargerServicePlan` both active;
-plan selection logic picks the right `CustomerPlan` for a given
-user/site. Revenue share from `ChargerServicePlan` computes correctly.
+**Exit.** All eight milestones in
+[docs/sprints/SPRINT_05_TASKS.md](../sprints/SPRINT_05_TASKS.md) green.
+Specifically:
+1. Bootstrap admin has a real User row; SessionPayload carries userId.
+2. UserCredential is polymorphic (`password | magic_link | otp` for
+   pilot; passkey / oauth_* / api_key defer).
+3. Agent invite flow works end-to-end on staging.
+4. Driver self-registration flow works end-to-end on staging.
+5. Sub-resource route retrofits complete.
+6. Impersonation flow logs actor + acting_as for every privileged
+   write during the impersonating session.
+7. Sprint 4.5 production-cutover dead code deleted.
+
+**Milestones.** See [SPRINT_05_TASKS.md](../sprints/SPRINT_05_TASKS.md)
+for detail; summary:
+
+- **5.1** Bootstrap admin → real User row + SessionPayload.userId.
+- **5.2** UserCredential polymorphic schema (Rule 4 — additive).
+- **5.3** Agent invite flow — admin side (POST invitations).
+- **5.4** Agent invite flow — recipient side (accept-invite landing).
+- **5.5** Driver self-registration flow (signup + OTP verify).
+- **5.6** Sub-resource route `assertPermission` retrofits (~30 routes).
+- **5.7** Impersonation flow with audit logging.
+- **5.8** Production cutover follow-up cleanup (delete UI-Worker dead code).
+
+**Risks.**
+- **5.1 spike must land before 5.6.** Real userIds are the
+  prerequisite for `assertPermission` to actually check membership.
+- **5.2 schema migration is non-additive in spirit** — existing
+  `UserCredential.passwordHash` rows reshuffle into typed
+  `kind='password'` rows. Run against scratch Neon branch first;
+  verify row counts before/after.
+- **Token security in 5.3 / 5.4.** Bearer tokens treated like
+  passwords: hashed before storage, constant-time compare. Sprint 9
+  will harden further (rotation, revocation hooks).
+- **OTP delivery channel for 5.5.** Cloudflare-friendly SMS provider
+  (Twilio? something else). Plan a fallback for staging.
+- **Impersonation audit drift in 5.7.** Every privileged write under
+  impersonation must log both `actor_user_id` (the support agent)
+  and `acting_as_user_id` (the impersonated user). Drift = security
+  incident.
+
+**Out of scope (Sprint 6+).**
+- Commercial Model (tariff engine, CustomerPlan, ChargerServicePlan) → **Sprint 6**.
+- Billing Dashboard → Sprint 7 (slipped from previous Sprint 6).
+- Data Storage Lifecycle → Sprint 7 (slipped from previous Sprint 6).
+- OAuth credentials (`oauth_google`, `oauth_microsoft`) → Sprint 9.
+- Passkey credentials → Sprint 9.
+- API-key credentials (service principals) → Sprint 11.
+- MFA enforcement on PlatformGrant → Sprint 9.
+- Postgres RLS → Sprint 9.
 
 **Milestones.**
 
