@@ -128,7 +128,11 @@ adminInstallations.post(
   requirePermission("site.write"),
   async (c) => {
     const db = makePrisma(c.env);
-    const result = await rotateInstallationOcppPassword(db, c.req.param("id"), null);
+    const result = await rotateInstallationOcppPassword(
+      db,
+      c.req.param("id"),
+      c.var.session.userId ?? null,
+    );
     if (!result) return c.json({ error: "not_found" }, 404);
     return c.json({ result });
   },
@@ -153,7 +157,7 @@ adminInstallations.patch(
         db,
         c.req.param("id"),
         plaintext,
-        null,
+        c.var.session.userId ?? null,
       );
       if (!result) return c.json({ error: "not_found" }, 404);
       return c.json({ result });
@@ -178,7 +182,11 @@ adminInstallations.post(
   requirePermission("site.write"),
   async (c) => {
     const db = makePrisma(c.env);
-    const result = await disableInstallationOcppAuth(db, c.req.param("id"), null);
+    const result = await disableInstallationOcppAuth(
+      db,
+      c.req.param("id"),
+      c.var.session.userId ?? null,
+    );
     if (!result) return c.json({ error: "not_found" }, 404);
     return c.json({ result });
   },

@@ -6,6 +6,8 @@ import {
   createAdminSession,
   timingSafeEqualText,
 } from "../../lib/admin-session";
+import { makePrisma } from "../../lib/prisma";
+import { bootstrapAdminUser } from "../../repositories/admin-bootstrap";
 import type { Env } from "../../bindings";
 
 export const adminAuth = new Hono<{ Bindings: Env }>();
@@ -33,7 +35,25 @@ adminAuth.post("/login", async (c) => {
     return c.json({ error: "invalid_credentials" }, 401);
   }
 
-  const token = await createAdminSession(c.env.AUTH_SECRET, email, "admin");
+  // Sprint 5.5 — resolve (or create on first login) the User row +
+  // PlatformGrant backing this admin session, so audit / invite /
+  // ownership columns can reference a real userId instead of null.
+  // Idempotent: subsequent logins find the existing rows.
+  const db = makePrisma(c.env);
+  const bootstrap = await bootstrapAdminUser(db, email);
+  if (bootstrap.createdUser || bootstrap.createdGrant) {
+    console.log("[admin-bootstrap]", {
+      email: bootstrap.email,
+      userId: bootstrap.userId,
+      createdUser: bootstrap.createdUser,
+      createdGrant: bootstrap.createdGrant,
+    });
+  }
+
+  const token = await createAdminSession(c.env.AUTH_SECRET, email, {
+    role: "admin",
+    userId: bootstrap.userId,
+  });
   // Cookie scoped to the parent host so both the UI subdomain and the
   // API subdomain see it. On localhost we let the browser default to
   // host-only since cross-port (3000 → API) doesn't share by domain.

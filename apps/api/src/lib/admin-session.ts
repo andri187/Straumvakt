@@ -12,6 +12,12 @@ export type SessionPayload = {
   role: SessionRole;
   email: string;
   exp: number;
+  // Sprint 5.5 — resolved User.id of the bootstrap admin row.
+  // Optional in the type for backward compatibility with cookies
+  // minted by the pre-5.5 login route (those still validate; their
+  // userId stays undefined and audit-log rows fall back to null).
+  // The login route ALWAYS sets userId on freshly-minted cookies.
+  userId?: string;
 };
 
 const encoder = new TextEncoder();
@@ -55,13 +61,14 @@ async function signPayload(payloadPart: string, secret: string): Promise<Uint8Ar
 export async function createAdminSession(
   secret: string,
   email: string,
-  role: SessionRole = "admin",
+  options: { role?: SessionRole; userId?: string } = {},
 ): Promise<string> {
   const payload: SessionPayload = {
     sub: "admin",
-    role,
+    role: options.role ?? "admin",
     email,
     exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS,
+    userId: options.userId,
   };
   const payloadPart = b64UrlEncode(encoder.encode(JSON.stringify(payload)));
   const signature = await signPayload(payloadPart, secret);
