@@ -13,7 +13,10 @@
  *   • Accept the WebSocket after auth already happened in the fetch
  *     entry (the DO trusts the bindings).
  *   • Parse each inbound frame as OCPP 1.6J.
- *   • Translate Call frames → domain events → POST to main app.
+ *   • Translate Call frames → domain events → enqueue onto
+ *     OCPP_EVENTS_QUEUE (Sprint 5 / ADR 0017). The DO awaits queue
+ *     accept (~1ms), not Postgres write — charger CALLRESULT replies
+ *     stop being gated on database latency.
  *   • Reply to Call frames with OCPP CallResult per dev-stub policy
  *     (Sprint 2 replaces with real token resolver for Authorize).
  *   • Handle outbound commands injected via `/dispatch` (main app →
@@ -21,15 +24,15 @@
  *     CallResult by uniqueId to resolve the dispatch.
  *
  * Crash-resilience:
- *   • Inflight ingest attempts live in DO storage as `inflight:<eventId>`.
- *     On webSocketMessage, if ingest fails retriably we persist the event
- *     to storage and let the alarm fire to retry. (Sprint 1.4 ships the
- *     alarm loop wiring; Sprint 1.5 proves it end-to-end.)
- *   • Inflight outbound commands similarly: `cmd:<commandId>`.
+ *   • Inbound: Cloudflare Queues handles redelivery (max_retries=3 →
+ *     DLQ, configured in apps/api wrangler.jsonc). The legacy
+ *     `inflight:<eventId>` DO-storage path was removed in Sprint 5.2
+ *     because queue retries replace it.
+ *   • Inflight outbound commands still: `cmd:<commandId>`.
  */
 import type { DurableObjectState } from "@cloudflare/workers-types";
 import { parseFrame, serializeCallResult, serializeCall } from "./ocpp-frame";
-import { postEvent, type IngestEvent } from "./ingest-client";
+import { enqueueOrPost, type IngestEvent } from "./ingest-client";
 import type { GatewayEnv } from "./auth";
 
 /**
@@ -219,15 +222,25 @@ export class IdentityDurableObject {
       payload: { action: frame.action, request: frame.payload },
     };
 
-    const outcome = await postEvent(this.env, event);
+    // Sprint 5 / ADR 0017 — primary path is queue.send (sub-ms
+    // accept). Falls back to postEvent on local dev (queue binding
+    // undefined) or transient queue.send failure. Retries on the
+    // service-binding fallback are now Cloudflare-Queues' job
+    // (max_retries=3 → DLQ on the consumer side); the inflight:
+    // DO-storage path is gone.
+    const outcome = await enqueueOrPost(this.env, event);
     if (outcome.kind === "retriable") {
-      await this.state.storage.put(`inflight:${event.eventId}`, event);
-      // Alarm-driven retry is Sprint 1.5's job — for now, log and reply
-      // to the charger anyway so it doesn't sit waiting.
-      console.warn("[ocpp-gw] ingest retriable", outcome.error);
+      console.warn("[ocpp-gw] ingest retriable", {
+        eventId: event.eventId,
+        error: outcome.error,
+      });
     }
     if (outcome.kind === "rejected") {
-      console.error("[ocpp-gw] ingest rejected", outcome.status, outcome.error);
+      console.error("[ocpp-gw] ingest rejected", {
+        eventId: event.eventId,
+        status: outcome.status,
+        error: outcome.error,
+      });
     }
 
     // Sprint 3 closure item 3 + Sprint 4 milestone 4.6 — Authorize
@@ -477,9 +490,13 @@ export class IdentityDurableObject {
         latencyMs: Date.now() - pending.enqueuedAt,
       },
     };
-    const shipped = await postEvent(this.env, event);
+    const shipped = await enqueueOrPost(this.env, event);
     if (shipped.kind !== "accepted") {
-      console.warn("[ocpp-gw] command_result ingest failed", shipped);
+      console.warn("[ocpp-gw] command_result ingest failed", {
+        eventId: event.eventId,
+        kind: shipped.kind,
+        error: "error" in shipped ? shipped.error : undefined,
+      });
     }
   }
 

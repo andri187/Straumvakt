@@ -25,6 +25,13 @@ export type AuthResult = AuthOk | AuthFail;
 export interface GatewayEnv {
   MAIN_APP: { fetch: (req: Request) => Promise<Response> };
   OCPP_INGEST_SECRET: string;
+  // Sprint 5 / ADR 0017 — inbound OCPP events queue. Optional because
+  // local-dev (`wrangler dev --local`) doesn't bind queues; the
+  // ingest-client falls back to a direct service-binding postEvent
+  // call when this is undefined so the simulator dev loop works.
+  OCPP_EVENTS_QUEUE?: {
+    send: (body: unknown) => Promise<void>;
+  };
 }
 
 /**
