@@ -6,8 +6,18 @@ import type { InstallationSummary } from "@straumvakt/shared/domain/installation
 import { DeleteButton } from "@/components/delete-button";
 import { EditInstallationPanel } from "./edit-panel";
 import { EnforceAuthorizeToggle } from "./enforce-authorize-toggle";
+import { InstallationOcppPasswordPanel } from "./ocpp-password-panel";
 
 export const dynamic = "force-dynamic";
+
+type AuthMode = "basic" | "none" | "mixed" | "empty";
+
+type OcppSummary = {
+  installationId: string;
+  identityCount: number;
+  lastRotatedAt: string | null;
+  authMode: AuthMode;
+};
 
 export default async function InstallationDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -19,6 +29,14 @@ export default async function InstallationDetailPage({ params }: { params: Promi
   const { vendors } = await apiFetchServerJson<{
     vendors: { id: string; slug: string; displayName: string }[];
   }>("/api/admin/installations");
+  // OCPP password summary — null if api Worker hasn't deployed the new
+  // route yet, so the panel renders with placeholder counts.
+  const ocppSummaryRes = await apiFetchServer(
+    `/api/admin/installations/${id}/ocpp-password`,
+  );
+  const ocppSummary = ocppSummaryRes.ok
+    ? ((await ocppSummaryRes.json()) as { summary: OcppSummary }).summary
+    : null;
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-8">
@@ -58,6 +76,11 @@ export default async function InstallationDetailPage({ params }: { params: Promi
         // pre-Sprint-4.6 InstallationSummary without enforceAuthorize.
         // Defaults to shadow mode (false) — safe.
         initialEnforce={installation.enforceAuthorize ?? false}
+      />
+
+      <InstallationOcppPasswordPanel
+        installationId={installation.id}
+        initialSummary={ocppSummary}
       />
 
       {installation.metadata != null &&

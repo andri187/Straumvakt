@@ -36,11 +36,39 @@ function makeEnv(resp: Response): GatewayEnv {
 }
 
 describe("authenticate", () => {
-  it("401 when no auth header", async () => {
-    const env = makeEnv(new Response());
+  it("403 when no auth header AND API rejects (auth required)", async () => {
+    // Gateway now forwards identity-only to the API even when no
+    // Basic Auth is present. API decides based on stored hash. In
+    // the auth-required case the API returns 403.
+    const env = makeEnv(
+      new Response(JSON.stringify({ ok: false, error: "auth_required" }), { status: 403 }),
+    );
     const r = await authenticate(env, "CP001", null);
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.status).toBe(401);
+    if (!r.ok) expect(r.status).toBe(403);
+    if (!r.ok) expect(r.reason).toBe("bad_credentials");
+  });
+
+  it("200 when no auth header AND API accepts (no-auth installation)", async () => {
+    // Gateway forwards identity-only; API has the row with NULL
+    // hash and returns 200 with authMode='none'.
+    const env = makeEnv(
+      new Response(
+        JSON.stringify({
+          ok: true,
+          identityId: "11111111-1111-1111-1111-111111111111",
+          orgId: "22222222-2222-2222-2222-222222222222",
+          authMode: "none",
+        }),
+        { status: 200 },
+      ),
+    );
+    const r = await authenticate(env, "CP001", null);
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.identityId).toBe("11111111-1111-1111-1111-111111111111");
+      expect(r.orgId).toBe("22222222-2222-2222-2222-222222222222");
+    }
   });
 
   it("401 when URL identity doesn't match Basic-Auth username", async () => {

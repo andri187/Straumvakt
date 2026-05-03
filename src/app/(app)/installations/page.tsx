@@ -3,14 +3,91 @@ import { SectionTabs, OPERATIONS_TABS } from "@/components/section-tabs";
 import { ActionBar } from "@/components/action-bar";
 import { apiFetchServerJson } from "@/lib/api-client-server";
 import type { InstallationSummary } from "@straumvakt/shared/domain/installations";
+import { PasswordRowAction } from "./password-row-action";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Installations" };
 
+type AuthMode = "basic" | "none" | "mixed" | "empty";
+
+type OcppRowSummary = {
+  installationId: string;
+  identityCount: number;
+  lastRotatedAt: string | null;
+  authMode: AuthMode;
+};
+
+function formatRotatedAt(iso: string | null): string {
+  if (!iso) return "never";
+  const d = new Date(iso);
+  if (!Number.isFinite(d.getTime())) return "never";
+  return d.toLocaleString();
+}
+
+function AuthEmblem({
+  authMode,
+  identityCount,
+  lastChangedAt,
+  formatRotatedAt: format,
+}: {
+  authMode: AuthMode;
+  identityCount: number;
+  lastChangedAt: string | null;
+  formatRotatedAt: (iso: string | null) => string;
+}) {
+  const chargerLabel = `${identityCount} ${identityCount === 1 ? "charger" : "chargers"}`;
+  const changedSuffix = lastChangedAt ? ` · changed ${format(lastChangedAt)}` : "";
+
+  switch (authMode) {
+    case "basic":
+      return (
+        <span
+          className="shrink-0 rounded border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 font-mono text-[10px] text-emerald-300"
+          title={`Basic Auth required for ${chargerLabel}${changedSuffix}`}
+        >
+          password set · {chargerLabel}
+        </span>
+      );
+    case "none":
+      return (
+        <span
+          className="shrink-0 rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 font-mono text-[10px] text-amber-300"
+          title={`No-auth installation — chargers connect without Basic Auth${changedSuffix}`}
+        >
+          NO PASSWORD · {chargerLabel}
+        </span>
+      );
+    case "mixed":
+      return (
+        <span
+          className="shrink-0 rounded border border-rose-500/40 bg-rose-500/10 px-1.5 py-0.5 font-mono text-[10px] text-rose-300"
+          title={`Hash drift — some of the ${chargerLabel} have a hash, some don't${changedSuffix}`}
+        >
+          DRIFT · {chargerLabel}
+        </span>
+      );
+    case "empty":
+    default:
+      return (
+        <span
+          className="shrink-0 rounded bg-bg-base/60 px-1.5 py-0.5 font-mono text-[10px] text-ink-500"
+          title="No chargers in this installation yet"
+        >
+          empty
+        </span>
+      );
+  }
+}
+
 export default async function InstallationsPage() {
-  const { installations } = await apiFetchServerJson<{
+  const { installations, ocppSummaries } = await apiFetchServerJson<{
     installations: InstallationSummary[];
+    // ocppSummaries is missing on pre-fix api Worker deploys; defensively
+    // optional so the UI keeps rendering during the deploy window.
+    ocppSummaries?: OcppRowSummary[];
   }>("/api/admin/installations");
+  const ocppByInstallation = new Map<string, OcppRowSummary>();
+  for (const s of ocppSummaries ?? []) ocppByInstallation.set(s.installationId, s);
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-8">
@@ -28,40 +105,55 @@ export default async function InstallationsPage() {
         <div className="rounded border border-dashed border-bg-border p-6 text-center text-sm text-ink-500">No installations yet.</div>
       ) : (
         <ul className="divide-y divide-bg-border/60 rounded-md border border-bg-border bg-bg-base/30">
-          {installations.map((i) => (
-            <li
-              key={i.id}
-              className="flex items-center gap-3 px-3 py-1.5 text-xs hover:bg-bg-base/20"
-            >
-              <Link
-                href={`/installations/${i.id}`}
-                className="shrink-0 text-sm font-medium text-ink-50 hover:text-sv-sky"
+          {installations.map((i) => {
+            const ocpp = ocppByInstallation.get(i.id);
+            const identityCount = ocpp?.identityCount ?? 0;
+            return (
+              <li
+                key={i.id}
+                className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5 text-xs hover:bg-bg-base/20"
               >
-                {i.displayName}
-              </Link>
-              {i.vendorSlug && (
-                <span className="shrink-0 rounded bg-sv-sky/10 px-1.5 py-0.5 font-mono text-[10px] text-sv-sky">
-                  {i.vendorSlug}
-                </span>
-              )}
-              <span className="min-w-0 flex-1 truncate text-ink-500">
-                <Link className="text-sv-sky hover:underline" href={`/accounts/organizations/${i.orgId}` as Parameters<typeof Link>[0]["href"]}>
-                  {i.orgDisplayName}
+                <Link
+                  href={`/installations/${i.id}`}
+                  className="shrink-0 text-sm font-medium text-ink-50 hover:text-sv-sky"
+                >
+                  {i.displayName}
                 </Link>
-                {" · "}
-                {i.siteDisplayName}
-                {i.vendorInstallationRef && (
-                  <>
-                    {" · "}
-                    <span className="font-mono">{i.vendorInstallationRef}</span>
-                  </>
+                {i.vendorSlug && (
+                  <span className="shrink-0 rounded bg-sv-sky/10 px-1.5 py-0.5 font-mono text-[10px] text-sv-sky">
+                    {i.vendorSlug}
+                  </span>
                 )}
-              </span>
-              <span className="shrink-0 font-mono text-[10px] text-ink-500">
-                {i.onboardingStatus}
-              </span>
-            </li>
-          ))}
+                <span className="min-w-0 flex-1 truncate text-ink-500">
+                  <Link className="text-sv-sky hover:underline" href={`/accounts/organizations/${i.orgId}` as Parameters<typeof Link>[0]["href"]}>
+                    {i.orgDisplayName}
+                  </Link>
+                  {" · "}
+                  {i.siteDisplayName}
+                  {i.vendorInstallationRef && (
+                    <>
+                      {" · "}
+                      <span className="font-mono">{i.vendorInstallationRef}</span>
+                    </>
+                  )}
+                </span>
+                <AuthEmblem
+                  authMode={ocpp?.authMode ?? "empty"}
+                  identityCount={identityCount}
+                  lastChangedAt={ocpp?.lastRotatedAt ?? null}
+                  formatRotatedAt={formatRotatedAt}
+                />
+                <PasswordRowAction
+                  installationId={i.id}
+                  identityCount={identityCount}
+                  authMode={ocpp?.authMode ?? "empty"}
+                />
+                <span className="shrink-0 font-mono text-[10px] text-ink-500">
+                  {i.onboardingStatus}
+                </span>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>

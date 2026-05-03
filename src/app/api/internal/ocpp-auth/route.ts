@@ -74,6 +74,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 403 });
   }
 
+  // Legacy UI-Worker dual-mount (Sprint 4.5 cutover): apps/api is the
+  // gateway's actual auth target now, so this branch is dead code in
+  // production. Keep null-handling defensive in case anything still
+  // routes here during a deploy-window blip.
+  if (identity.authSecretHash === null) {
+    return NextResponse.json(
+      { ok: true, identityId: identity.id, orgId: identity.orgId },
+      { status: 200 },
+    );
+  }
   const providedHash = await sha256Hex(password);
   if (!hexEquals(providedHash, identity.authSecretHash.toLowerCase())) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 403 });

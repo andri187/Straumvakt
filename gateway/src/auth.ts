@@ -72,15 +72,25 @@ export async function authenticate(
   authHeader: string | null,
 ): Promise<AuthResult> {
   const basic = parseBasicAuth(authHeader);
-  if (!basic) {
-    await logPendingDiscovery(env, urlIdentityString);
-    return { ok: false, status: 401, reason: "missing_basic_auth" };
-  }
-  if (basic.username !== urlIdentityString) {
+
+  // Identity-string from the URL path takes precedence as the
+  // resolution key. Only block immediately on hard mismatch (creds
+  // present but for a different identity — no legitimate flow does
+  // this). The "no Basic Auth at all" case is no longer a fail-fast:
+  // the API route decides whether this identity is on the no-auth
+  // path.
+  if (basic && basic.username !== urlIdentityString) {
     await logPendingDiscovery(env, urlIdentityString);
     return { ok: false, status: 401, reason: "identity_mismatch" };
   }
 
+  // Always call the API so it can decide based on the stored
+  // auth_secret_hash. `password` is now optional — when the charger
+  // sent no Basic Auth, we forward identity-only and let the API
+  // accept (no-auth installation) or reject (auth required, missing).
+  // This shifts one decision into the API, costs the no-auth path
+  // exactly the same one service-binding hop as the Basic-Auth
+  // path, and removes the duplicate "missing creds → 401" log.
   const resp = await env.MAIN_APP.fetch(
     new Request("https://main.internal/api/internal/ocpp-auth", {
       method: "POST",
@@ -89,19 +99,25 @@ export async function authenticate(
         "x-straumvakt-ingest": env.OCPP_INGEST_SECRET,
       },
       body: JSON.stringify({
-        identityString: basic.username,
-        password: basic.password,
+        identityString: urlIdentityString,
+        password: basic?.password,
       }),
     }),
   );
 
   if (resp.status === 200) {
-    const body = (await resp.json()) as { identityId: string; orgId: string };
+    const body = (await resp.json()) as {
+      identityId: string;
+      orgId: string;
+      authMode?: "basic" | "none";
+    };
     return { ok: true, identityId: body.identityId, orgId: body.orgId };
   }
   if (resp.status === 403) {
-    // ocpp-auth route already upserts pending_discoveries on 403 —
-    // no double-log needed here.
+    // ocpp-auth already upserts pending_discoveries on 403; no
+    // double-log here. The 403 reason is overloaded (identity
+    // unknown vs auth required but missing vs bad credentials) —
+    // the surface to the charger is the same: 401, retry.
     return { ok: false, status: 403, reason: "bad_credentials" };
   }
   return { ok: false, status: 401, reason: "auth_upstream_failed" };

@@ -362,7 +362,15 @@ export async function applyCredentialSelection(
   //        a sibling charger) — without one we can't provision because
   //        we have no way to know what password Zaptec is sending.
   const stationVendorByZaptecId = new Map<string, { authSecretHash: string }>();
-  // Collect siblings per installation in one query.
+  // Collect siblings per installation in one query. Sibling hash may
+  // be NULL on no-auth installations — those installations don't
+  // need a hash to provision new chargers (the new charger inherits
+  // the no-auth posture), so skip null siblings here. The fallback
+  // for "no installation has a populated sibling hash AND the
+  // installation is auth-enforced" is handled below: we only
+  // populate hashByOurInstallationId for installations that have a
+  // real sibling hash, and the discovery path checks presence
+  // before consuming.
   const siblings = await db.ocppIdentity.findMany({
     where: { vendor: "Zaptec", orgId: auth.ownerOrgId },
     select: {
@@ -373,7 +381,11 @@ export async function applyCredentialSelection(
   const hashByOurInstallationId = new Map<string, string>();
   for (const s of siblings) {
     const instId = s.chargingStation?.installationId;
-    if (instId && !hashByOurInstallationId.has(instId)) {
+    if (
+      instId &&
+      s.authSecretHash !== null &&
+      !hashByOurInstallationId.has(instId)
+    ) {
       hashByOurInstallationId.set(instId, s.authSecretHash);
     }
   }

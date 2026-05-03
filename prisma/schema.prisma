@@ -1127,7 +1127,12 @@ model OcppIdentity {
   orgId                String         @map("org_id") @db.Uuid
   chargingStationId    String         @map("charging_station_id") @db.Uuid
   identityString       String         @map("identity_string")
-  authSecretHash       String         @map("auth_secret_hash")
+  // Nullable since the no-auth installation feature: NULL means "this
+  // identity accepts WebSocket upgrades without Basic Auth." Operator
+  // opts in per installation by submitting an empty plaintext through
+  // the password manager. Default for newly-onboarded chargers stays
+  // populated; only the explicit empty-set path nulls this column.
+  authSecretHash       String?        @map("auth_secret_hash")
   ocppVersion          OcppVersion    @map("ocpp_version")
   assetClass           AssetClass     @map("asset_class") @default(ac)
   vendor               String?

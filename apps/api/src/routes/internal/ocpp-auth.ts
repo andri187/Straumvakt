@@ -2,10 +2,11 @@
 //
 // POST /api/internal/ocpp-auth — called by the OCPP gateway on every
 // WebSocket upgrade to verify the charger's Basic-Auth credentials
-// and resolve the OcppIdentity UUID the gateway routes its Durable
-// Object by. Invocation is via Cloudflare Service Binding (no public
-// hop) plus the OCPP_INGEST_SECRET shared-secret header (ADR 0004) as
-// belt-and-braces.
+// (or absence of them, on no-auth installations) and resolve the
+// OcppIdentity UUID the gateway routes its Durable Object by.
+// Invocation is via Cloudflare Service Binding (no public hop) plus
+// the OCPP_INGEST_SECRET shared-secret header (ADR 0004) as belt-
+// and-braces.
 //
 // Identity-string match is **case-insensitive** — modern Zaptec
 // firmware sends the deviceId lowercase, but the import pipeline
@@ -16,10 +17,26 @@
 // multiple cases.
 //
 // Request body:
-//   { identityString: string, password: string }
-// 200: { ok: true, identityId: UUID, orgId: UUID }
-// 401: missing/bad ingest secret
-// 403: identity unknown OR password mismatch (with pending upsert)
+//   { identityString: string, password?: string }
+//
+// `password` is now optional — when an installation is on the no-auth
+// path (every OcppIdentity row has a NULL auth_secret_hash), the
+// gateway invokes this endpoint without credentials and we accept on
+// identity match alone. When `password` IS provided AND the stored
+// hash is non-null, we verify normally.
+//
+// Decision matrix:
+//   identity not found              → 403 + pending_discovery upsert
+//   stored hash NULL, no password   → 200 (no-auth flow)
+//   stored hash NULL, password sent → 200 (presented but not required)
+//   stored hash set, password sent  → 200 if match, 403 if mismatch
+//   stored hash set, no password    → 403 (auth required, missing)
+//
+// Status codes:
+//   200: { ok: true, identityId: UUID, orgId: UUID, authMode: "basic" | "none" }
+//   400: malformed body
+//   401: missing/bad ingest secret
+//   403: identity unknown OR password mismatch OR password missing-but-required
 
 import { Hono } from "hono";
 import { makePrisma } from "../../lib/prisma";
@@ -50,23 +67,24 @@ internalOcppAuth.post("/", async (c) => {
   if (typeof identityString !== "string" || identityString.length === 0) {
     return c.json({ ok: false, error: "identityString required" }, 400);
   }
-  if (typeof password !== "string" || password.length === 0) {
-    return c.json({ ok: false, error: "password required" }, 400);
-  }
+  // password is now optional — null/undefined means "gateway received
+  // no Basic Auth header." Empty string is also treated as not-provided.
+  const providedPassword =
+    typeof password === "string" && password.length > 0 ? password : null;
 
   const db = makePrisma(c.env);
 
-  // Case-insensitive lookup — matches whatever the operator typed in
-  // /chargers/new or whatever case the Zaptec import landed.
   const identity = await db.ocppIdentity.findFirst({
     where: { identityString: { equals: identityString, mode: "insensitive" } },
     select: { id: true, orgId: true, authSecretHash: true, status: true },
   });
 
   if (!identity) {
-    // Hash even on miss — equalises CPU cost to defeat timing
-    // discrimination of "user exists" vs "wrong password."
-    await sha256Hex(password);
+    // Equalise CPU cost — hash even on miss so "user exists" vs
+    // "wrong password" can't be distinguished by timing. Hashes the
+    // empty string when the gateway sent no creds; still a constant-
+    // cost no-op compared to the find.
+    await sha256Hex(providedPassword ?? "");
     try {
       await upsertPendingDiscovery(db, {
         identityString,
@@ -86,13 +104,27 @@ internalOcppAuth.post("/", async (c) => {
     return c.json({ ok: false, error: "unauthorized" }, 403);
   }
 
-  const providedHash = await sha256Hex(password);
+  // No-auth installation — accept on identity match alone.
+  if (identity.authSecretHash === null) {
+    return c.json(
+      { ok: true, identityId: identity.id, orgId: identity.orgId, authMode: "none" },
+      200,
+    );
+  }
+
+  // Auth required but the gateway sent nothing — reject. The gateway
+  // 401's the charger and logs pending_discovery on its side.
+  if (providedPassword === null) {
+    return c.json({ ok: false, error: "auth_required" }, 403);
+  }
+
+  const providedHash = await sha256Hex(providedPassword);
   if (!hexEquals(providedHash, identity.authSecretHash.toLowerCase())) {
     return c.json({ ok: false, error: "unauthorized" }, 403);
   }
 
   return c.json(
-    { ok: true, identityId: identity.id, orgId: identity.orgId },
+    { ok: true, identityId: identity.id, orgId: identity.orgId, authMode: "basic" },
     200,
   );
 });
