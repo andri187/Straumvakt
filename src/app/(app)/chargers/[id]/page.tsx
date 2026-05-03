@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { SectionTabs, OPERATIONS_TABS, CHARGERS_TABS } from "@/components/section-tabs";
+import { SectionTabs, OPERATIONS_TABS } from "@/components/section-tabs";
 import { apiFetchServer, apiFetchServerJson } from "@/lib/api-client-server";
 import type { ChargerDetail } from "@straumvakt/shared/domain/chargers";
 import type { ChargerTechnicalRead } from "@straumvakt/shared/domain/charger-technical-read";
@@ -43,7 +43,6 @@ export default async function ChargerDetailPage({ params }: { params: Promise<{ 
   return (
     <div className="mx-auto max-w-4xl px-6 py-8">
       <SectionTabs tabs={OPERATIONS_TABS} />
-      <SectionTabs tabs={CHARGERS_TABS} />
       <Link href="/chargers" className="mb-4 inline-block text-xs text-ink-400 hover:text-sv-sky">
         ← Back to chargers
       </Link>
