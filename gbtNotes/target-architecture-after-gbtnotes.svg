@@ -1,0 +1,158 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1120" viewBox="0 0 1600 1120" role="img" aria-labelledby="title desc">
+  <title id="title">Straumvakt Target Architecture After GBT Notes</title>
+  <desc id="desc">Human-readable diagram of the target architecture after implementing the scale-to-4000-chargers GBT notes.</desc>
+  <defs>
+    <style>
+      .bg{fill:#07101d}.lane{fill:#0b1524;stroke:#26384f;stroke-width:1.2}.box{stroke-width:1.7;rx:10}.ui{fill:#0f1b2d;stroke:#4d79a8}.api{fill:#10251f;stroke:#4aa678}.gw{fill:#241a33;stroke:#8b5cc1}.db{fill:#182235;stroke:#7798d1}.q{fill:#2b2414;stroke:#d0a03c}.obj{fill:#1e2634;stroke:#9aa7bd}.analytics{fill:#14272d;stroke:#57b6c2}.title{fill:#fff;font:800 34px Inter,Segoe UI,Arial}.subtitle{fill:#aebbd0;font:14px Inter,Segoe UI,Arial}.label{fill:#fff;font:800 18px Inter,Segoe UI,Arial}.small{fill:#c5d0e2;font:13px Inter,Segoe UI,Arial}.tiny{fill:#91a0b8;font:12px Inter,Segoe UI,Arial}.good{fill:#b7f7c9;font:13px Inter,Segoe UI,Arial}.arrow{stroke:#7dd3fc;stroke-width:2.3;fill:none;marker-end:url(#arrBlue)}.green{stroke:#86efac;stroke-width:2.3;fill:none;marker-end:url(#arrGreen)}.yellow{stroke:#fbbf24;stroke-width:2.3;fill:none;marker-end:url(#arrYellow)}.violet{stroke:#c084fc;stroke-width:2.3;fill:none;marker-end:url(#arrViolet)}.gray{stroke:#94a3b8;stroke-width:2.1;fill:none;marker-end:url(#arrGray);stroke-dasharray:6 5}
+    </style>
+    <marker id="arrBlue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 10 5 0 10z" fill="#7dd3fc"/></marker>
+    <marker id="arrGreen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 10 5 0 10z" fill="#86efac"/></marker>
+    <marker id="arrYellow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 10 5 0 10z" fill="#fbbf24"/></marker>
+    <marker id="arrViolet" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 10 5 0 10z" fill="#c084fc"/></marker>
+    <marker id="arrGray" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 10 5 0 10z" fill="#94a3b8"/></marker>
+  </defs>
+
+  <rect class="bg" width="1600" height="1120"/>
+  <text class="title" x="54" y="58">Target Architecture - After GBT Notes Are Implemented</text>
+  <text class="subtitle" x="54" y="86">Queue-first OCPP ingest, raw SQL batch persistence, report-ready datasets, async exports, object-storage artifacts, and explicit observability.</text>
+
+  <rect class="lane" x="45" y="120" width="1510" height="155" rx="12"/>
+  <text class="tiny" x="70" y="146">User-facing surfaces</text>
+  <rect class="lane" x="45" y="310" width="1510" height="250" rx="12"/>
+  <text class="tiny" x="70" y="336">API, gateway, and queues</text>
+  <rect class="lane" x="45" y="595" width="1510" height="250" rx="12"/>
+  <text class="tiny" x="70" y="621">Persistence, reports, and archives</text>
+  <rect class="lane" x="45" y="880" width="1510" height="160" rx="12"/>
+  <text class="tiny" x="70" y="906">Operations and guarantees</text>
+
+  <rect class="box ui" x="85" y="165" width="230" height="78"/>
+  <text class="label" x="110" y="197">Browsers</text>
+  <text class="small" x="110" y="222">Admins, operators, users</text>
+
+  <rect class="box ui" x="395" y="155" width="280" height="98"/>
+  <text class="label" x="420" y="188">UI Worker / Pages</text>
+  <text class="small" x="420" y="212">No direct DB access</text>
+  <text class="tiny" x="420" y="235">Calls API and polls export jobs</text>
+
+  <rect class="box api" x="760" y="155" width="300" height="98"/>
+  <text class="label" x="785" y="188">API Worker</text>
+  <text class="small" x="785" y="212">Auth, admin routes, export API</text>
+  <text class="tiny" x="785" y="235">Prisma for control-plane CRUD</text>
+
+  <rect class="box gw" x="1180" y="165" width="275" height="78"/>
+  <text class="label" x="1205" y="197">Chargers</text>
+  <text class="small" x="1205" y="222">OCPP 1.6J WebSockets</text>
+
+  <rect class="box gw" x="90" y="365" width="290" height="105"/>
+  <text class="label" x="115" y="398">OCPP Gateway Worker</text>
+  <text class="small" x="115" y="422">Terminates charger WebSockets</text>
+  <text class="tiny" x="115" y="445">Auth lookup through API Worker</text>
+
+  <rect class="box gw" x="460" y="365" width="285" height="105"/>
+  <text class="label" x="485" y="398">Identity Durable Object</text>
+  <text class="small" x="485" y="422">One per OCPP identity</text>
+  <text class="tiny" x="485" y="445">Fast parse, enqueue, reply</text>
+
+  <rect class="box q" x="820" y="335" width="260" height="92"/>
+  <text class="label" x="845" y="368">Inbound Event Queue</text>
+  <text class="small" x="845" y="392">OCPP events to persist</text>
+  <text class="tiny" x="845" y="413">DLQ and replay plan</text>
+
+  <rect class="box q" x="820" y="455" width="260" height="92"/>
+  <text class="label" x="845" y="488">Outbound Command Queue</text>
+  <text class="small" x="845" y="512">Remote start/stop/reset</text>
+  <text class="tiny" x="845" y="533">Outbox row is source of truth</text>
+
+  <rect class="box q" x="1160" y="335" width="265" height="92"/>
+  <text class="label" x="1185" y="368">Export Queue</text>
+  <text class="small" x="1185" y="392">CSV/XLSX/PDF jobs</text>
+  <text class="tiny" x="1185" y="413">Rate-limited per org</text>
+
+  <rect class="box api" x="1160" y="455" width="265" height="92"/>
+  <text class="label" x="1185" y="488">API Queue Consumers</text>
+  <text class="small" x="1185" y="512">Ingest, commands, exports</text>
+  <text class="tiny" x="1185" y="533">Raw SQL for hot paths</text>
+
+  <rect class="box db" x="95" y="655" width="290" height="118"/>
+  <text class="label" x="120" y="688">Operational Postgres</text>
+  <text class="small" x="120" y="712">Orgs, users, sites, chargers</text>
+  <text class="tiny" x="120" y="735">Commands, sessions, billing facts</text>
+  <text class="tiny" x="120" y="757">Prisma OK for control plane</text>
+
+  <rect class="box analytics" x="460" y="655" width="310" height="118"/>
+  <text class="label" x="485" y="688">Timescale / Partitioned PG</text>
+  <text class="small" x="485" y="712">MeterValues and event facts</text>
+  <text class="tiny" x="485" y="735">Raw SQL batch inserts</text>
+  <text class="tiny" x="485" y="757">Retention and aggregates</text>
+
+  <rect class="box db" x="845" y="655" width="300" height="118"/>
+  <text class="label" x="870" y="688">Report-Ready Data</text>
+  <text class="small" x="870" y="712">Ledgers, summaries, views</text>
+  <text class="tiny" x="870" y="735">Billing, uptime, energy, cost centers</text>
+  <text class="tiny" x="870" y="757">Exports avoid raw scans</text>
+
+  <rect class="box obj" x="1220" y="655" width="270" height="118"/>
+  <text class="label" x="1245" y="688">Object Storage</text>
+  <text class="small" x="1245" y="712">Raw OCPP archive</text>
+  <text class="small" x="1245" y="735">Report artifacts</text>
+  <text class="tiny" x="1245" y="757">Signed URLs and expiry</text>
+
+  <rect class="box api" x="95" y="930" width="300" height="78"/>
+  <text class="label" x="120" y="962">Observability</text>
+  <text class="small" x="120" y="987">Queue age, lag, failures, DB latency</text>
+
+  <rect class="box api" x="465" y="930" width="300" height="78"/>
+  <text class="label" x="490" y="962">Security and Audit</text>
+  <text class="small" x="490" y="987">Tenant checks, export downloads, secrets</text>
+
+  <rect class="box q" x="835" y="930" width="300" height="78"/>
+  <text class="label" x="860" y="962">Load Testing</text>
+  <text class="small" x="860" y="987">4,000 chargers plus concurrent exports</text>
+
+  <rect class="box obj" x="1205" y="930" width="285" height="78"/>
+  <text class="label" x="1230" y="962">Retention and Cleanup</text>
+  <text class="small" x="1230" y="987">Raw archive TTL, artifact expiry</text>
+
+  <path class="arrow" d="M315 204 L395 204"/>
+  <text class="tiny" x="335" y="193">HTTPS</text>
+  <path class="arrow" d="M675 204 L760 204"/>
+  <text class="tiny" x="700" y="193">API calls</text>
+  <path class="green" d="M1180 204 C845 245 500 295 350 365"/>
+  <text class="tiny" x="850" y="275">WebSocket OCPP</text>
+  <path class="green" d="M380 418 L460 418"/>
+  <text class="tiny" x="400" y="407">route to DO</text>
+  <path class="yellow" d="M745 405 L820 381"/>
+  <text class="tiny" x="760" y="375">enqueue events</text>
+  <path class="yellow" d="M1080 381 L1160 501"/>
+  <text class="tiny" x="1095" y="442">consume</text>
+  <path class="green" d="M1160 501 C1005 565 790 612 615 655"/>
+  <text class="tiny" x="910" y="600">raw SQL batch writes</text>
+  <path class="green" d="M1160 501 C1000 550 615 582 240 655"/>
+  <text class="tiny" x="525" y="572">sessions and operational facts</text>
+  <path class="arrow" d="M910 253 L910 655"/>
+  <text class="tiny" x="925" y="590">admin reads and writes</text>
+  <path class="yellow" d="M910 253 C880 325 870 395 820 501"/>
+  <text class="tiny" x="875" y="329">create command row</text>
+  <path class="yellow" d="M820 501 C700 510 610 500 575 470"/>
+  <text class="tiny" x="630" y="530">dispatch command</text>
+  <path class="green" d="M575 365 C760 275 880 255 760 225"/>
+  <text class="tiny" x="610" y="300">auth lookup</text>
+  <path class="violet" d="M1060 204 C1140 245 1240 285 1290 335"/>
+  <text class="tiny" x="1138" y="278">request export</text>
+  <path class="violet" d="M1290 427 L1290 455"/>
+  <text class="tiny" x="1305" y="445">consume</text>
+  <path class="violet" d="M1160 501 C1085 565 1040 610 1000 655"/>
+  <text class="tiny" x="1055" y="600">read summaries</text>
+  <path class="violet" d="M1425 501 C1450 560 1435 615 1390 655"/>
+  <text class="tiny" x="1435" y="600">write artifact</text>
+  <path class="gray" d="M770 714 L845 714"/>
+  <text class="tiny" x="782" y="700">aggregates</text>
+  <path class="gray" d="M770 748 C930 805 1120 805 1305 773"/>
+  <text class="tiny" x="930" y="820">optional raw archive batches</text>
+  <path class="gray" d="M240 773 C240 840 245 890 245 930"/>
+  <path class="gray" d="M615 773 C615 840 615 890 615 930"/>
+  <path class="gray" d="M1000 773 C1000 840 985 890 985 930"/>
+  <path class="gray" d="M1355 773 C1355 840 1348 890 1348 930"/>
+
+  <text class="good" x="54" y="1075">Result: charger protocol stays fast, persistence is buffered and measurable, exports are async artifacts, and Prisma is reserved for the control plane rather than hot telemetry ingest.</text>
+</svg>

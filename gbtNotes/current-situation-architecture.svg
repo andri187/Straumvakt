@@ -1,0 +1,107 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="980" viewBox="0 0 1500 980" role="img" aria-labelledby="title desc">
+  <title id="title">Straumvakt Current Architecture Situation</title>
+  <desc id="desc">Human-readable diagram of the current Straumvakt runtime split and known OCPP ingest gap.</desc>
+  <defs>
+    <style>
+      .bg{fill:#08111f}.lane{fill:#0b1524;stroke:#26384f;stroke-width:1.2}.box{stroke-width:1.7;rx:10}.ui{fill:#0f1b2d;stroke:#4d79a8}.api{fill:#10251f;stroke:#4aa678}.gw{fill:#241a33;stroke:#8b5cc1}.db{fill:#182235;stroke:#7798d1}.q{fill:#2b2414;stroke:#d0a03c}.warn{fill:#331c1f;stroke:#ef6f6c}.ghost{fill:#1a2230;stroke:#59657a;stroke-dasharray:7 5}.title{fill:#fff;font:800 34px Inter,Segoe UI,Arial}.subtitle{fill:#aebbd0;font:14px Inter,Segoe UI,Arial}.label{fill:#fff;font:800 19px Inter,Segoe UI,Arial}.small{fill:#c5d0e2;font:13px Inter,Segoe UI,Arial}.tiny{fill:#91a0b8;font:12px Inter,Segoe UI,Arial}.note{fill:#ffd6a0;font:13px Inter,Segoe UI,Arial}.arrow{stroke:#7dd3fc;stroke-width:2.4;fill:none;marker-end:url(#arrBlue)}.green{stroke:#86efac;stroke-width:2.4;fill:none;marker-end:url(#arrGreen)}.yellow{stroke:#fbbf24;stroke-width:2.4;fill:none;marker-end:url(#arrYellow)}.red{stroke:#fb7185;stroke-width:2.6;fill:none;marker-end:url(#arrRed);stroke-dasharray:8 6}.muted{stroke:#718096;stroke-width:2;fill:none;marker-end:url(#arrMuted);stroke-dasharray:5 5}
+    </style>
+    <marker id="arrBlue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 10 5 0 10z" fill="#7dd3fc"/></marker>
+    <marker id="arrGreen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 10 5 0 10z" fill="#86efac"/></marker>
+    <marker id="arrYellow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 10 5 0 10z" fill="#fbbf24"/></marker>
+    <marker id="arrRed" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 10 5 0 10z" fill="#fb7185"/></marker>
+    <marker id="arrMuted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 10 5 0 10z" fill="#718096"/></marker>
+  </defs>
+
+  <rect class="bg" width="1500" height="980"/>
+  <text class="title" x="54" y="58">Current Situation - Straumvakt Runtime Split</text>
+  <text class="subtitle" x="54" y="86">What is deployed in code today: Next/OpenNext UI, Hono API Worker, OCPP gateway Durable Objects, Cloudflare Queues, Neon/Postgres. The red path shows the known OCPP ingest mismatch.</text>
+
+  <rect class="lane" x="45" y="125" width="1410" height="165" rx="12"/>
+  <text class="tiny" x="70" y="151">Users and UI</text>
+  <rect class="lane" x="45" y="325" width="1410" height="255" rx="12"/>
+  <text class="tiny" x="70" y="351">Cloudflare Workers and Durable Objects</text>
+  <rect class="lane" x="45" y="615" width="1410" height="215" rx="12"/>
+  <text class="tiny" x="70" y="641">Persistence and async</text>
+  <rect class="lane" x="45" y="865" width="1410" height="70" rx="12"/>
+  <text class="tiny" x="70" y="891">Current gaps</text>
+
+  <rect class="box ui" x="90" y="175" width="210" height="78"/>
+  <text class="label" x="115" y="207">Admin/User Browser</text>
+  <text class="small" x="115" y="232">Operator console traffic</text>
+
+  <rect class="box ui" x="380" y="165" width="265" height="96"/>
+  <text class="label" x="405" y="198">Next/OpenNext UI Worker</text>
+  <text class="small" x="405" y="222">hlada / hlada-staging</text>
+  <text class="tiny" x="405" y="244">Renders app, login page, admin UI</text>
+
+  <rect class="box api" x="735" y="165" width="265" height="96"/>
+  <text class="label" x="760" y="198">API Worker</text>
+  <text class="small" x="760" y="222">hlada-api / hlada-api-staging</text>
+  <text class="tiny" x="760" y="244">Hono admin routes, auth, repos</text>
+
+  <rect class="box gw" x="1090" y="175" width="260" height="78"/>
+  <text class="label" x="1115" y="207">Chargers</text>
+  <text class="small" x="1115" y="232">OCPP 1.6J WebSocket devices</text>
+
+  <rect class="box gw" x="650" y="382" width="300" height="118"/>
+  <text class="label" x="675" y="416">OCPP Gateway Worker</text>
+  <text class="small" x="675" y="441">straumvakt-ocpp-staging</text>
+  <text class="tiny" x="675" y="464">Authenticates chargers via API Worker</text>
+  <text class="tiny" x="675" y="486">Routes each identity to a Durable Object</text>
+
+  <rect class="box gw" x="1025" y="390" width="275" height="100"/>
+  <text class="label" x="1050" y="423">Identity Durable Object</text>
+  <text class="small" x="1050" y="448">One per OCPP identity UUID</text>
+  <text class="tiny" x="1050" y="470">Owns WebSocket session state</text>
+
+  <rect class="box api" x="145" y="380" width="305" height="124"/>
+  <text class="label" x="170" y="414">API Routes In apps/api</text>
+  <text class="small" x="170" y="439">/api/admin/*</text>
+  <text class="small" x="170" y="461">/api/internal/ocpp-auth</text>
+  <text class="small" x="170" y="483">/api/internal/pending-discovery</text>
+
+  <rect class="box ghost" x="145" y="525" width="305" height="72"/>
+  <text class="label" x="170" y="555">Legacy Next API Route</text>
+  <text class="small" x="170" y="579">/api/ocpp/events exists here</text>
+
+  <rect class="box db" x="130" y="680" width="310" height="92"/>
+  <text class="label" x="155" y="714">Neon/Postgres</text>
+  <text class="small" x="155" y="738">System of record today</text>
+  <text class="tiny" x="155" y="760">Prisma paths still mixed by runtime</text>
+
+  <rect class="box q" x="570" y="680" width="300" height="92"/>
+  <text class="label" x="595" y="714">Outbound Command Queue</text>
+  <text class="small" x="595" y="738">Remote start/stop/config</text>
+  <text class="tiny" x="595" y="760">API Worker consumes and dispatches</text>
+
+  <rect class="box warn" x="990" y="680" width="330" height="92"/>
+  <text class="label" x="1015" y="714">No Export Pipeline Yet</text>
+  <text class="small" x="1015" y="738">Reports would risk sync API work</text>
+  <text class="tiny" x="1015" y="760">No export_jobs, artifacts, signed URLs</text>
+
+  <rect class="box warn" x="90" y="885" width="1320" height="34"/>
+  <text class="note" x="115" y="907">Known gap: gateway staging MAIN_APP points at hlada-api-staging, but inbound OCPP event ingest route /api/ocpp/events is still in the Next app, not mounted in apps/api.</text>
+
+  <path class="arrow" d="M300 214 L380 214"/>
+  <text class="tiny" x="318" y="203">HTTPS UI</text>
+  <path class="arrow" d="M645 214 L735 214"/>
+  <text class="tiny" x="665" y="203">apiFetch</text>
+  <path class="green" d="M1090 214 C1015 260 955 322 895 382"/>
+  <text class="tiny" x="995" y="295">WebSocket /ocpp/:identity</text>
+  <path class="green" d="M950 440 L1025 440"/>
+  <text class="tiny" x="965" y="426">DO stub</text>
+  <path class="arrow" d="M735 242 C620 296 505 350 450 412"/>
+  <text class="tiny" x="540" y="330">admin API calls</text>
+  <path class="yellow" d="M735 242 C735 370 720 545 720 680"/>
+  <text class="tiny" x="733" y="560">enqueue commands</text>
+  <path class="yellow" d="M870 726 C965 690 1030 570 1065 490"/>
+  <text class="tiny" x="945" y="623">dispatch to gateway</text>
+  <path class="green" d="M650 440 C575 418 515 418 450 430"/>
+  <text class="tiny" x="500" y="410">auth lookup</text>
+  <path class="arrow" d="M297 504 C295 590 292 635 285 680"/>
+  <text class="tiny" x="305" y="630">Prisma / Postgres</text>
+  <path class="arrow" d="M297 597 C297 635 293 655 285 680"/>
+  <text class="tiny" x="315" y="626">legacy ingest writes</text>
+  <path class="red" d="M1025 470 C830 585 640 560 450 562"/>
+  <text class="note" x="575" y="548">event ingest tries /api/ocpp/events, but API Worker does not mount it</text>
+</svg>

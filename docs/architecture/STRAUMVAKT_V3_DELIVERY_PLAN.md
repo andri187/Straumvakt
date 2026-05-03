@@ -189,16 +189,17 @@ consecutive days:
 | 0 | Foundation Schema | V3 schema live; concrete drying | All V3 schemas created (incl. `hardware` + `properties.installations`), catalog seeded (Zaptec + Zaptec Pro minimum), tsc clean, build clean, money as BIGINT minor units. No CPMS backfill (ADR 0003). |
 | 1 | OCPP Foundation | One simulator charger, full loop | Simulator boots, starts session, ends session; events in log; commands dispatchable via outbox |
 | 2 | **Admin Onboarding + Vendor/API/Overlay Readiness + Cost-Center Splitting + Foundation Profile Rev** *(NEW per ADR 0006; expanded per ADRs 0008 + 0009 + 0010 + 0011)* | Admin can stand up the entity hierarchy, onboard a Zaptec/Easee-style vendor installation or external-control asset, configure cost-center splitting, and operate against fully-enriched Org + User profiles | Admin CRUD live for Org/CPO, Property, Site, Installation, Circuit (per ADR 0007), physical charger/connector records, optional OCPPIdentity/control endpoint, vendor/external references, and capability/routing metadata — **ChargerHost tier dropped per ADR 0009.** Org + User profiles enriched with kennitala, contacts, addresses, branding, multi-role array per ADR 0010. iceland-energy-parties seeded as real Org rows. Charger onboarding wizard wires Zaptec OAuth + API enrichment and leaves room for Easee/API-control and external CPMS overlay modes per ADR 0011. Beta operator console shell. **Plus ADR 0008 milestones 2.10–2.13:** runtime cost-factor catalog (8 factors seeded), per-tier inherited contracts with factor assignments, driver-contracts with factor-level overrides, calendar-month period accumulators backing kWh-cap allocation rules. **Plus ADR 0010 milestone 2.14:** OCPP configuration-key registry (`ocpp.configuration_keys`) populated by GetConfiguration/ChangeConfiguration round-trips. |
-| 3 | OCPI Foundation (CPO-only) | CPO surface exists; eMSP deferred (A) | OCPI 2.2.1 **CPO** endpoints respond correctly to contract tests; external property/site shadow records work; basic RFID authorize. *eMSP endpoints + token push deferred per ADR 0005.* |
-| 4 | **Data Storage Lifecycle** *(NEW per ADR 0006)* | Charge-log retention machinery enforces V3 §8 classes | Nightly aggregation of `raw_protocol` → `aggregate`. `raw_protocol` ageing-out at 30–90 days. Financial + operational events kept hot indefinitely. Cold-archive scaffolding for `issue_history`. First concrete implementation of V3 §8 retention classes; Sprint 4 exit verified by retention-class job logs and synthetic age-out test. |
-| 5 | Commercial Model | The money math works (ISK only) | Tariff engine resolves contracts + driver-contracts + accumulators, evaluates compute_rule DSL, emits `billing_lines` per cost center for ~18 synthetic scenarios in **ISK** (including the four worked scenarios from [ADR 0008](../adr/0008-cost-center-splitting.md)). Every factor allocates fully or session-stop fails. *Multi-currency (EUR) deferred per ADR 0005 (C).* |
-| 6 | Billing **Dashboard** | Billing data is reviewable, split by cost center | Billing dashboard shows per-cost-center, per-driver, per-Host accumulating amounts in ISK both ex-VAT and inc-VAT, rolled up by period, read-only. Cost-center beneficiary surfaced (e.g. "Krónan owes 300 ISK to N1 for hardware rental this period") — display only, no inter-org settlement. *Invoice generation, transactions, statements, employer reimbursement, PDF invoices deferred per ADR 0005 (E). Inter-org settlement deferred per ADR 0005 (F).* The Issue Engine that previously sat in this sprint slot moved entirely to post-pilot per ADR 0006 (D). |
-| 7 | Push API + Observability | External systems can consume; we can see inside | Push API delivers canonical events to test subscribers with retries; OTel traces end to end |
-| 8 | Hardening | Pilot-grade reliability | Restore drill clean; OCPP gateway load test documented. *Payment provider, dunning, EU residency verification ceremony deferred per ADR 0005 (F). EU runtime posture (CF Data Localization, Neon EU) stays in place.* |
-| 9 | Multi-Tenant + White-Label | Platform is a platform | Second org onboards cleanly via the admin flows from Sprint 2 (re-skinned for branding); RLS audit; scoped API keys. *OCPP 2.0.1 adapter deferred per ADR 0005 (A).* |
-| 10 | Pilot Go-Live (admin-only) | Demonstrable platform, admin-functionality only | Pilot site live; real charger sessions visible through native OCPP, OEM API/control, external CPMS overlay, or read-only import path; admin runs the site via operator console; billing dashboard reviewable; charge-log retention verified for 30+ days; backup restore drill completed; retrospective captured. *No money movement during pilot. No driver onboarding during pilot.* |
+| 3 | **Identity Foundation** *(per ADR 0015 — was OCPI Foundation; OCPI defers to Sprint 15+)* | Polymorphic IdToken, audience-tagged users, S1 events-ingest fix | Path A1 schema (audience enum, IdToken polymorphism), S1 events-ingest port to apps/api, OCPP Authorize handler wired to identity model. |
+| 4 | **Membership + Permissions Foundation** *(per ADR 0014 build order)* | Real RBAC layer behind a still-bootstrap session | Membership lifecycle + PlatformGrant; permission catalogue (40 verbs, 13 bundles) + `effectivePermissions()`; `requirePermission` middleware migrated across ~60 admin routes; `Installation.enforceAuthorize` flag wired through gateway. |
+| 5 | **Queue-Backed Inbound OCPP + Invite Flow MVP** *(per ADR 0017)* | Charger WebSocket responses stay sub-second under DB load; agents can be invited | Cloudflare Queue + DLQ in front of all inbound OCPP events; idempotent consumer keyed by `eventId`. **Parallel track:** invite-flow MVP + bootstrap-admin User row. |
+| 6 | **Data Platform + ORM Decision** *(per ADR 0017 — ADR 0018 deliverable)* | The persistence model that survives 4k chargers is decided in writing | ADR 0018 committed: data-product taxonomy (operational / current-state / outbox / billing-grade / time-series / raw archive / aggregate / report-ready / API-metadata), Neon-with-partitioning vs Timescale decision, ORM boundary (Prisma control plane vs raw SQL hot path), R2 layout. **No code; the deliverable is the decision.** |
+| 7 | **Hot Ingest + Retention + R2 Archive** *(per ADR 0017)* | Postgres stays bounded at 4k-charger volume; raw OCPP payloads survive for billing-dispute evidence | Queue consumer rewritten to raw-SQL batches per ADR 0018; 7-day retention on `raw_protocol`; per-day R2 partition archive; aggregate + report-ready tables populated. |
+| 8 | **Tariff Engine + Billing Dashboard** *(was Sprint 5; per ADR 0017)* | The money math works (ISK only); operator can review accumulating amounts | Pure-function tariff engine; CustomerPlan + ChargerServicePlan; plan-priority resolver; billing dashboard reads from Sprint 7 report-ready tables. **Parallel track:** driver self-registration + impersonation flow (deferred from Sprint 5); export pipeline MVP. |
+| 9 | **Outbound Command Hardening + Load Test Harness** *(per ADR 0017)* | THE sprint that proves the architecture | Outbox state machine with retry semantics; gateway command-result event ingest; load-test simulator at 100 → 500 → 1000 → 4000 chargers — staging survives 4000-charger sim at 30s MeterValues for 1 hour without DLQ growth. |
+| 10 | **Observability + Security/Tenancy** *(was scattered across "Hardening + Multi-Tenant"; per ADR 0017)* | 4k chargers cannot be operated by tail-watching — dashboards, alerts, RLS land here | Production dashboards (charger counts, queue depth, command latency, R2 archive growth); structured logs with correlation IDs; alert thresholds; runbooks for the 14 named failure modes; Postgres RLS as defense-in-depth; AuditAction append-only DB enforcement; MFA mandatory on PlatformGrant. |
+| 11 | **Production Cutover + Pilot Go-Live** *(per ADR 0017 — was Sprint 10)* | First batch on scale-validated infrastructure | Production resources provisioned (CF prod Workers, Neon prod plan, R2 buckets, Hyperdrive, Queues + DLQs); migration dry-run; final 4k-staging load test against production-like config; rollback paths for UI / API / gateway / DB; go/no-go checklist signed; pilot ramp begins (target ~50 chargers, scaled by who's contracted). |
 
-Total: 20 weeks / 5 months at full-time solo pace.
+Total: 22 weeks / 5.5 months at full-time solo pace (post ADR 0015 + ADR 0016 + ADR 0017 cascade).
 
 ---
 
@@ -711,456 +712,565 @@ and only seeded RFIDs charge.
 
 ---
 
-## 8. Sprint 5 — Invite Flow + Driver Self-Registration (ADR 0014 build order)
+## 8. Sprint 5 — Queue-Backed Inbound OCPP + Invite Flow MVP
 
-> **Scope shift recorded in [ADR 0016](../adr/0016-sprint-5-scope-call-invite-over-tariff.md):**
-> Sprint 4's permissions infrastructure needs real multi-user sessions
-> to be load-bearing. Sprint 5 lands those — agent invite flow, driver
-> self-registration, impersonation. The previous occupant of this
-> slot — **Commercial Model (ISK only for pilot)** — slips to
-> **Sprint 6**. Subsequent sprints cascade by one slot; **Pilot
-> Go-Live moves from Sprint 10 to Sprint 11.** ADR 0016 documents the
-> reasoning (Sprint 4's runway needs landing on; tariff engine slips
-> cleanly as a pure-function deliverable; multi-user shakedown wants
-> as many sprints as possible before pilot).
+> **Rescoped per [ADR 0017](../adr/0017-prepilot-rescope-for-4k-charger-target.md):**
+> The 4k-charger target makes queue-backed inbound OCPP a pre-pilot
+> must-have, not post-pilot polish. ADR 0017 absorbs gbtNotes Sprint
+> S2 as the headline of Sprint 5. Invite flow MVP rides as a parallel
+> track (it's mostly UI + one schema, low scale-path interaction).
+> Driver self-registration + impersonation slip to Sprint 8 (parallel
+> track there). The previous Sprint 5 framing (Invite Flow + Driver
+> Self-Registration + Impersonation per ADR 0016) is partially
+> absorbed; the rest reschedules per ADR 0017's table.
 
-**Goal.** Customer admins can invite their team. Drivers can sign up
-for the mobile app. Straumvakt staff can impersonate for support.
-`requirePermission` flips from bootstrap god-mode to real per-user
-checks, and the ~30 sub-resource routes from Sprint 4.4 get inline
-`assertPermission` retrofits.
+**Goal.** Inbound OCPP events stop blocking on synchronous DB writes —
+gateway DO enqueues to Cloudflare Queues, replies fast to charger,
+API Worker consumer drains asynchronously. Charger WebSocket
+turn-around stays sub-second when the database is slow. Plus: invite
+flow MVP — agent invitation endpoint + accept-invite landing + the
+bootstrap-admin-→-User-row spike that unblocks Sprint 4 carry-forward
+work.
 
-**Entry.** Sprint 4 closure list checked (every milestone shipped;
-retro committed; ADR 0016 authored).
+**Entry.** Sprint 4 closed (all six milestones shipped, retro
+committed). ADR 0017 authored.
 
-**Exit.** All eight milestones in
-[docs/sprints/SPRINT_05_TASKS.md](../sprints/SPRINT_05_TASKS.md) green.
-Specifically:
-1. Bootstrap admin has a real User row; SessionPayload carries userId.
-2. UserCredential is polymorphic (`password | magic_link | otp` for
-   pilot; passkey / oauth_* / api_key defer).
-3. Agent invite flow works end-to-end on staging.
-4. Driver self-registration flow works end-to-end on staging.
-5. Sub-resource route retrofits complete.
-6. Impersonation flow logs actor + acting_as for every privileged
-   write during the impersonating session.
-7. Sprint 4.5 production-cutover dead code deleted.
+**Exit.** Both tracks green:
+1. **Track A (queue-backed ingest):** A charger continues to receive
+   timely OCPP responses while the database is slow or briefly
+   unavailable. Inbound event lag is measurable. No valid event is
+   lost during normal Worker/API retry paths. DLQ has a replay path.
+2. **Track B (invite MVP):** Bootstrap admin has a real `User` row +
+   `PlatformGrant`; `SessionPayload` carries `userId`. Agent invite
+   token + accept-invite landing flow works end-to-end on staging
+   (operator-curated email send for now). `UserCredential` polymorphic
+   for `kind='password'` + `kind='magic_link'`.
 
 **Milestones.** See [SPRINT_05_TASKS.md](../sprints/SPRINT_05_TASKS.md)
 for detail; summary:
 
-- **5.1** Bootstrap admin → real User row + SessionPayload.userId.
-- **5.2** UserCredential polymorphic schema (Rule 4 — additive).
-- **5.3** Agent invite flow — admin side (POST invitations).
-- **5.4** Agent invite flow — recipient side (accept-invite landing).
-- **5.5** Driver self-registration flow (signup + OTP verify).
-- **5.6** Sub-resource route `assertPermission` retrofits (~30 routes).
-- **5.7** Impersonation flow with audit logging.
-- **5.8** Production cutover follow-up cleanup (delete UI-Worker dead code).
+- **5.1** (Track A) Inbound queue + DLQ binding (gateway producer +
+  apps/api consumer).
+- **5.2** (Track A) Gateway DO enqueues; replies to charger
+  immediately; legacy service-binding path stays as fallback for
+  local dev.
+- **5.3** (Track A) Idempotent consumer keyed by `eventId`. Validation
+  failure permanent (DLQ). DB/transient retried. Tests for replay.
+- **5.4** (Track A) Observability — queue depth, ingest lag, DLQ
+  count (read-only via wrangler tail; full dashboards Sprint 10).
+- **5.5** (Track B) Bootstrap admin → real `User` row spike. Option C
+  (login-path upsert) per ADR 0017 open-decision resolution.
+  `SessionPayload` extends with `userId`.
+- **5.6** (Track B) Agent invite flow — `Invitation` model + admin
+  POST + accept-invite GET/POST + `UserCredential.kind='password' |
+  'magic_link'`.
 
 **Risks.**
-- **5.1 spike must land before 5.6.** Real userIds are the
-  prerequisite for `assertPermission` to actually check membership.
-- **5.2 schema migration is non-additive in spirit** — existing
-  `UserCredential.passwordHash` rows reshuffle into typed
-  `kind='password'` rows. Run against scratch Neon branch first;
-  verify row counts before/after.
-- **Token security in 5.3 / 5.4.** Bearer tokens treated like
-  passwords: hashed before storage, constant-time compare. Sprint 9
-  will harden further (rotation, revocation hooks).
-- **OTP delivery channel for 5.5.** Cloudflare-friendly SMS provider
-  (Twilio? something else). Plan a fallback for staging.
-- **Impersonation audit drift in 5.7.** Every privileged write under
-  impersonation must log both `actor_user_id` (the support agent)
-  and `acting_as_user_id` (the impersonated user). Drift = security
-  incident.
+- **5.1 + 5.2 atomicity** — gateway and api Worker must deploy in
+  order (api consumer first, then gateway producer). DLQ behavior
+  during the deploy window: messages produced before the consumer
+  is live land in the DLQ; manual replay after consumer goes green.
+- **5.3 idempotency parity** with the existing `ingestEventInTx`
+  shape (Sprint S1 port). Same idempotency-key derivation + dedupe
+  TTL. Test "same eventId twice → no double row" against the new
+  consumer path.
+- **5.5 race condition** — concurrent logins to the bootstrap admin
+  hit `INSERT ... ON CONFLICT` cleanly; verify with a test.
+- **5.6 token security** — invitation tokens are bearers, treated
+  like passwords. Hash before storage; constant-time compare. Sprint
+  10 hardens further.
 
-**Out of scope (Sprint 6+).**
-- Commercial Model (tariff engine, CustomerPlan, ChargerServicePlan) → **Sprint 6**.
-- Billing Dashboard → Sprint 7 (slipped from previous Sprint 6).
-- Data Storage Lifecycle → Sprint 7 (slipped from previous Sprint 6).
-- OAuth credentials (`oauth_google`, `oauth_microsoft`) → Sprint 9.
-- Passkey credentials → Sprint 9.
-- API-key credentials (service principals) → Sprint 11.
-- MFA enforcement on PlatformGrant → Sprint 9.
-- Postgres RLS → Sprint 9.
-
-**Milestones.**
-
-- **5.1** `CustomerPlan` schema in full richness: products
-  (setup/subscription/RFID/usage credit), tariffs (ToU + per-connector +
-  per-speed), displays with locales, country/currency variants, balance
-  type, category, termination behavior.
-  - *Exit:* Create a plan via `/v1/customer-plans`, attach products and
-    tariffs, retrieve it; all fields round-trip.
-
-- **5.2** `ChargerServicePlan` schema. Revenue share rule, electricity
-  reimbursement rule, maintenance responsibility, platform fee model,
-  default tariff, term.
-  - *Exit:* Create a service plan for the pilot Host; attach chargers;
-    verify that cost calculation uses the Host-defined default tariff
-    when no user plan overrides.
-
-- **5.3** Tariff engine. Pure function: given a session + applicable
-  tariff chain, produce cost breakdown (energy cost, time cost,
-  overtime penalty, total, taxes). No side effects; fully
-  unit-testable.
-  - *Exit:* Ten synthetic session scenarios produce expected cost
-    breakdowns matching hand-computed results.
-
-- **5.4** Plan selection logic. Given a user + site + charger, pick
-  the applicable `CustomerPlan` by priority (user override > site >
-  Host default > org default).
-  - *Exit:* Priority tests pass for four combinations.
-
-- **5.5** Locale + currency posture for pilot — **ISK only**.
-  Icelandic + English display variants ship; the schema's `currency`
-  column accepts EUR but no EUR plans are created during pilot.
-  **Multi-currency (EUR variants, per-locale rendering) deferred per
-  ADR 0005 (tag C).**
-  - *Exit:* A plan renders correctly in `is-IS` and `en-GB` locales
-    with the ISK variant.
-
-**Risks.** This is where silent bugs are most expensive. Follow
-Rule 5 from CLAUDE.md strictly — any change to billing math requires
-explicit approval of the change summary before coding.
+**Out of scope (defer per ADR 0017).**
+- Driver self-registration (OTP) → Sprint 8 parallel track.
+- Impersonation flow → Sprint 8 parallel track.
+- Sub-resource route `assertPermission` retrofits → Sprint 8 (rides
+  with tariff once invite-issued userIds are in sessions).
+- Sprint 4.5 production-cutover dead-code cleanup → Sprint 10
+  (after observability + security pass).
+- OAuth / passkey / api_key credentials → Sprint 10.
+- MFA on PlatformGrant → Sprint 10.
+- Postgres RLS → Sprint 10.
 
 ---
 
-## 9. Sprint 6 — Billing Dashboard (read-only for pilot)
+## 9. Sprint 6 — Data Platform + ORM Decision
 
-> **Pilot scope (per [ADR 0005](../adr/0005-pilot-scope-tightening-2026-04-25.md) tag E
-> + [ADR 0006](../adr/0006-pilot-scope-rev2-2026-04-25.md) tag D):**
-> Sprint 6 ships a **read-only billing dashboard** — the operator can
-> see what *would* be invoiced, but no money moves and no driver-facing
-> surface exists during pilot. **Real invoice generation, billing
-> transactions as ledger entries, statements, employer reimbursement
-> workflow, and PDF invoices are deferred to post-pilot** (tag E).
-> **Driver-side billing views ship together with the rest of the
-> Driver Experience post-pilot** (tag B). Schema for all of these
-> already exists (Sprint 0); turning them on post-pilot is additive.
+> **Rescoped per [ADR 0017](../adr/0017-prepilot-rescope-for-4k-charger-target.md):**
+> Sprint 6 absorbs gbtNotes Sprint S3 — a decision sprint, not a
+> code sprint. Lands as ADR 0018. Without an explicit
+> Neon-with-partitioning vs Timescale Cloud decision and a clear
+> ORM boundary (Prisma for control plane, raw SQL for queue
+> consumers + MeterValues), Sprint 7's hot-ingest implementation
+> has no foundation.
 
-**Goal.** Billing data is reviewable in the operator console.
-Per-driver / per-Host accumulating amounts roll up by period. No
-invoice generation, no payment processing, no PDFs, no driver-facing
-"My charges" page during pilot — those land post-pilot.
+**Goal.** Three decisions written down as ADR 0018, with named data
+products that Sprint 7 + 8 consume:
 
-**Entry.** Sprint 5 exit met.
+1. **Telemetry data platform.** Neon-with-partitioning (default per
+   ADR 0017) or Timescale Cloud, with rationale.
+2. **ORM boundary.** Prisma scoped to admin CRUD + business
+   workflows. Raw SQL / driver-level for queue consumers, event
+   projection, batch insert, current-state upserts, MeterValues.
+3. **Raw OCPP archive layout.** R2 bucket + key scheme + retention
+   policy. The CDR-archive question for billing-dispute evidence.
 
-**Exit.** Operator console "Billing" page renders, for each
-driver / Host, the sum of session-derived charges in the current
-period and prior periods. Numbers match what the tariff engine
-(Sprint 5) computes for each session.
+**Entry.** Sprint 5 exit met (queue-backed ingest live on staging).
 
-**Milestones.**
+**Exit.** ADR 0018 committed with the three decisions and the named
+data products. No production code changes; this is a decision sprint
+with a written deliverable.
 
-- **6.1** Tariff-engine session cost projection. For each completed
-  session, the tariff engine output is persisted in
-  `charging.sessions.cost_minor` (already in schema) and rolled up
-  per period.
-  - *Exit:* For 10 simulator-generated sessions, `cost_minor` matches
-    the tariff engine's pure-function output exactly.
+**Milestones.** See [SPRINT_06_TASKS.md](../sprints/SPRINT_06_TASKS.md)
+for detail; summary:
 
-- **6.2** Billing dashboard — operator view. Per-driver totals,
-  per-Host totals, per-period rollups, drillable to individual
-  sessions. Read-only; no actions.
-  - *Exit:* Console "Billing" page renders for the pilot tenant with
-    real session data.
+- **6.1** Classify tables into the eight categories from gbtNotes
+  S3 (control-plane / current-state / outbox / billing-grade /
+  time-series / raw-archive / aggregate / report-ready / API-metadata).
+- **6.2** Decision: Neon-with-partitioning vs Timescale Cloud.
+  Includes plan sizing, write IOPS forecast, storage growth at 4k
+  chargers, backup/PITR posture.
+- **6.3** Decision: ORM boundary specifics. Which Postgres driver
+  for hot paths (`pg` direct vs `postgres.js` vs other CF-compatible).
+  Migration ownership stays Prisma-centralised.
+- **6.4** Decision: raw OCPP archive layout. R2 bucket, key scheme
+  (recommend `<orgId>/<yyyy>/<mm>/<dd>/<eventId>.json.gz` for evidence
+  bundles), retention policy (recommend 7-year hot per VAT records,
+  shorter for non-billing).
+- **6.5** Named data products defined for Sprint 7 + 8 to implement:
+  billing-period summaries, per-driver/session ledger, per-site
+  energy report, charger uptime, command history, raw evidence
+  bundle.
+- **6.6** ADR 0018 written, reviewed, committed.
 
-- **6.3** ~~Billing dashboard — driver view~~ — **deferred per
-  ADR 0006 (tag B).** Ships with the rest of the Driver Experience
-  post-pilot. Pilot drivers exist as inert records only; no PWA, no
-  "My charges" page.
+**Risks.**
+- **Decision sprint feels like "no shippable feature."** Mitigation:
+  ADR 0018 is the deliverable; Sprint 7's velocity depends on it.
+  No pre-pilot calendar slip if Sprint 6 lands in 1 week.
+- **Wrong decision compounds.** If we pick Neon-with-partitioning
+  and Sprint 9 load test surfaces a Postgres ceiling, we re-pick at
+  Sprint 7+ cost. Mitigation: Sprint 6 explicitly captures the
+  fallback plan ("if Sprint 9 surfaces X, switch to Timescale via
+  this migration path").
 
-- **6.4** ~~Invoice generation, billing transactions, statements,
-  employer reimbursement, PDF invoices~~ — **deferred per ADR 0005
-  (tag E).** Post-pilot work, on top of the schema and the dashboard
-  data already in place.
-
-**Risks.** Rule 5 still applies — the dashboard renders billing
-numbers. If the rendered total differs from what the tariff engine
-computed, the operator loses trust before pilot exits. Validate
-against tariff-engine output in unit tests, not just visual review.
-
----
-
-## 10. Sprint 7 — Push API + Observability
-
-> **Pilot scope:** Push API + OTel are in pilot. Issue-related event
-> types (`issue.opened`, `issue.resolved`) and issue-count dashboard
-> tiles defer with the rest of the Issue Engine per
-> [ADR 0006](../adr/0006-pilot-scope-rev2-2026-04-25.md) (tag D).
-> Driver-initiated event types defer with the Driver Experience
-> (tag B). The push-API and observability *plumbing* ships, the
-> issue-and-driver *vocabulary* fills in post-pilot.
-
-**Goal.** External systems can subscribe to platform events; internal
-teams (i.e., the operator) can see what's happening inside the platform.
-
-**Entry.** Sprint 6 exit met.
-
-**Exit.** Push API delivers canonical events to subscribers with
-durable retry. OpenTelemetry traces every request across both workers.
-A per-tenant dashboard shows uptime and session success rate.
-Issue-engine and driver-engagement metrics on the dashboard ship
-post-pilot when those engines exist.
-
-**Milestones.**
-
-- **7.1** Push API subscriber registry. `webhooks.subscriptions` per
-  tenant with scopes (which events), endpoint URL, signing secret,
-  status.
-  - *Exit:* Operator can register a subscriber via console; event types
-    listed; test-send works.
-
-- **7.2** Canonical event vocabulary emitted (pilot subset):
-  `transaction.started`, `transaction.updated`, `transaction.stopped`,
-  `charger.added`, `connector.status_updated`,
-  `card.authorize_request`. Schemas documented.
-  *(`transaction.billed` ships when invoice generation does — tag E.
-  `issue.opened` / `issue.resolved` ship with the Issue Engine post-pilot
-  — tag D.)*
-  - *Exit:* Each in-scope event type emitted by the platform is
-    documented and validated against its schema at emission.
-
-- **7.3** Durable retry with exponential backoff. Dead-letter queue for
-  subscribers that have failed >N times. Subscriber health score.
-  - *Exit:* A misbehaving test subscriber eventually lands in DLQ; a
-    recovering subscriber resumes.
-
-- **7.4** OpenTelemetry across both workers. Traces propagate across
-  the signed webhook boundary via `traceparent` headers. Correlation ID
-  from the OCPP message flows all the way to the billing-dashboard row.
-  - *Exit:* Given an OCPP message ID, the trace viewer shows the
-    full path: WebSocket → DO → webhook → event log → projection →
-    API response.
-
-- **7.5** Per-tenant dashboard in the operator console. Uptime,
-  session success rate, charge-log retention job status. Reads from
-  aggregates (Sprint 4), not raw event log. Issue-related and MRR
-  tiles ship post-pilot.
-  - *Exit:* Dashboard renders for the pilot tenant with live data.
-
-**Risks.** OTel on Cloudflare Workers requires specific libraries;
-verify early that the chosen path works. Dashboard queries can become
-expensive — use aggregate tables, not raw events.
+**Out of scope (defer).**
+- Implementation of any of the above → Sprint 7.
+- Tariff engine, billing dashboard → Sprint 8.
+- Driver UX, OCPI → post-pilot.
 
 ---
 
-## 11. Sprint 8 — Hardening
+## 10. Sprint 7 — Hot Ingest + Retention + R2 Archive
 
-> **Pilot scope (per [ADR 0005](../adr/0005-pilot-scope-tightening-2026-04-25.md), tag F):**
-> Backup restore drill + OCPP gateway load test ship for pilot.
-> **Payment provider integration, dunning workflow, and the EU
-> residency *verification ceremony* are deferred to post-pilot.**
-> The EU runtime *posture* (Cloudflare Data Localization, Neon EU
-> region, R2 EU jurisdiction, DO `locationHint=weur`) is configured
-> from Sprint 0–1 onward and stays in place; what's deferred is the
-> documented audit-trail ceremony.
+> **Rescoped per [ADR 0017](../adr/0017-prepilot-rescope-for-4k-charger-target.md):**
+> Sprint 7 implements gbtNotes Sprint S4. Replaces per-event Prisma
+> writes in the queue consumer (Sprint 5) with raw SQL batched
+> writes per ADR 0018 (Sprint 6). Retention enforcement, partition /
+> hypertable strategy, aggregate tables, and the R2 raw archive
+> all land here. **The CDR-archive work specifically — raw OCPP
+> payload bytes archived to R2 for billing-dispute evidence —
+> lives in this sprint.**
 
-**Goal.** Pilot-grade reliability. Backups verified by restore drill;
-OCPP gateway ceiling measured.
+**Goal.** Postgres stays bounded under 4k-charger load. Raw OCPP
+payloads archive to R2 with a known key scheme. Aggregate tables
+power Sprint 8's billing dashboard. Report-ready datasets exist for
+Sprint 8's exports + future enterprise APIs.
 
-**Entry.** Sprint 7 exit met.
+**Entry.** Sprint 6 exit met (ADR 0018 committed).
 
-**Exit.** Restore from backup produces a clean working system. Load
-test establishes the single-process ceiling.
+**Exit.** A 7-day-aged `raw_protocol` event-log row archives to R2 +
+gets purged from Postgres in the nightly retention job. Aggregate
+tables (per-charger-per-hour message count, energy delta, fault
+count) populate as projections. Synthetic 4-million-row test
+demonstrates the queue consumer batches writes at expected throughput.
 
-**Milestones.**
+**Milestones.** See [SPRINT_07_TASKS.md](../sprints/SPRINT_07_TASKS.md)
+for detail; summary:
 
-- **8.1** ~~Payment provider integration~~ — **deferred per ADR 0005
-  (tag F).** Post-pilot. Provider decision (Stripe / Adyen / Netgíró)
-  punted to the post-pilot kick-off so it gets dedicated focus.
+- **7.1** Replace queue consumer's per-event Prisma writes with raw
+  SQL batched writes per ADR 0018. Same idempotency invariant.
+  Same projection dispatch, but projection writes go via the new
+  hot-path client.
+- **7.2** Partition / hypertable strategy applied to `event_log`,
+  `meter_values`, `charge_sessions`. Native Postgres if Neon
+  decision; Timescale chunks if Timescale decision. Migration with
+  forward-only, no rollback note.
+- **7.3** Retention enforcement — daily cron deletes `raw_protocol`
+  rows older than 7 days where the corresponding R2 archive write
+  succeeded. `financial` and `operational` retention indefinite.
+- **7.4** R2 raw archive — daily cron streams aged-out
+  `raw_protocol` rows to R2 with the key scheme from ADR 0018
+  (`<orgId>/<yyyy>/<mm>/<dd>/<eventId>.json.gz`). Per-day partition
+  files. **CDR-evidence bundle work hangs off this** — Sprint 8's
+  billing dashboard reads from these for dispute evidence.
+- **7.5** Aggregate tables (per-charger-per-hour) + nightly
+  aggregation job. Reads from raw rows BEFORE retention runs.
+- **7.6** Report-ready datasets per ADR 0018 §"Named data products"
+  — billing-period summaries, per-driver session ledger, charger
+  uptime, command history.
+- **7.7** Synthetic load: 4M synthetic events through the queue
+  consumer in <1h on staging. Postgres write latency stays within
+  budget.
 
-- **8.2** ~~Dunning workflow~~ — **deferred per ADR 0005 (tag F).**
-  Lives on top of the payment provider; ships in the same post-pilot
-  package as 8.1.
+**Risks.**
+- **R2 write reliability under burst.** If R2 write fails AND
+  Postgres retention cron has run, the raw evidence is gone. Mitigate:
+  retention cron checks "R2 archive marker exists" before deleting;
+  failed archive writes alert + retry, never delete.
+- **Partition/hypertable maintenance.** New partitions need to exist
+  before the date they cover; cron job. Forgotten = inserts fail.
+  Mitigate: 7-day-ahead partition creation.
+- **Aggregate consistency.** Aggregate row vs raw rows must reconcile.
+  Sum/count assertions in spot-checks daily.
+- **Rule 5 territory.** Hot-path SQL changes the canonical write
+  path for billing-grade data. Stop-and-summarize before each
+  milestone's code lands.
 
-- **8.3** Backup verification by restore drill. Nightly Neon PITR
-  backups; once this sprint, actually restore to a scratch branch and
-  run the app against it.
-  - *Exit:* Restore drill runbook exists; executed successfully once.
-
-- **8.4** ~~EU residency *verification ceremony*~~ — **deferred per
-  ADR 0005 (tag F).** Runtime posture (CF Data Localization, Neon EU
-  region, R2 EU jurisdiction, DO `locationHint=weur`) is in place from
-  earlier sprints and stays in place. The deferred work is the
-  audit-trail ceremony: documented residency runbook, per-quarter
-  re-verification, sign-off paperwork. Communicate the *posture stays /
-  ceremony defers* split clearly to any privacy-conscious pilot
-  customer.
-
-- **8.5** Load test OCPP gateway. Spin up N simulator chargers (100,
-  1000, 10000 target), measure CPU/memory/latency of the DO fleet.
-  Document the ceiling.
-  - *Exit:* Load test results document exists; ceiling is above
-    3× pilot scale.
-
-**Risks.** Restore drill will find problems; allocate a day for
-unexpected fixes.
+**Out of scope (defer).**
+- Tariff engine + billing dashboard → Sprint 8 (consumes 7.5 + 7.6
+  output).
+- Push API + webhook delivery → Sprint 12+ post-pilot. Pilot ships
+  without a webhook surface; operators read the dashboard.
+- OpenTelemetry instrumentation across both workers → Sprint 10.
 
 ---
 
-## 12. Sprint 9 — Multi-Tenant + White-Label
+## 11. Sprint 8 — Tariff Engine + Billing Dashboard
 
-> **Pilot scope (per [ADR 0005](../adr/0005-pilot-scope-tightening-2026-04-25.md), tag A):**
-> Multi-tenant onboarding, per-Host branding, RLS, and scoped API
-> keys ship for pilot. **OCPP 2.0.1 adapter is deferred to post-pilot**
-> (groups under tag A, Roaming, since 2.0.1 unlocks 2.0.1-only roaming
-> partners). Pilot stays on OCPP 1.6J. The Sprint 2 admin onboarding
-> shell is the same shell this sprint re-skins for second-tenant
-> branding — no rebuild per [ADR 0006](../adr/0006-pilot-scope-rev2-2026-04-25.md).
+> **Rescoped per [ADR 0017](../adr/0017-prepilot-rescope-for-4k-charger-target.md):**
+> Sprint 8 picks up the original Sprint 5 (Commercial Model) +
+> original Sprint 6 (Billing Dashboard) content, since both fit
+> naturally on top of Sprint 7's report-ready datasets. Plus parallel
+> tracks for driver self-registration + impersonation flow (slipped
+> from Sprint 5 per ADR 0017) + sub-resource route `assertPermission`
+> retrofits (carry-forward from Sprint 4 — needs invite-issued userIds
+> from Sprint 5).
 
-**Goal.** Prove the platform is a platform, not a single-customer
-app. Second org onboards cleanly via the Sprint 2 admin flows;
-branding scopes work; multi-tenant isolation is enforceable.
+**Goal.** Pure-function tariff engine produces correct ISK cost
+breakdowns. Operator console "Billing" page renders per-driver +
+per-Host totals from the tariff-engine projection. Drivers can sign
+up for the mobile app via OTP. Straumvakt staff can impersonate for
+support.
+
+**Entry.** Sprint 7 exit met (hot ingest + R2 archive live).
+
+**Exit.** Given a session, the tariff engine produces a correct ISK
+cost breakdown. `CustomerPlan` and `ChargerServicePlan` both active.
+Plan-selection priority resolver picks the right `CustomerPlan` per
+user/site. Console Billing page renders for the pilot tenant with
+real session data. Driver signup + OTP verify works on staging. ~30
+sub-resource admin routes use `assertPermission` instead of bare
+`requirePermission(verb)`.
+
+**Milestones.** See [SPRINT_08_TASKS.md](../sprints/SPRINT_08_TASKS.md)
+for detail; summary:
+
+- **8.1** (Tariff) `CustomerPlan` + `ChargerServicePlan` schema.
+  Products, tariffs, displays, country/currency, balance type.
+  Rule 4 territory — additive.
+- **8.2** (Tariff) Pure-function tariff engine
+  `computeSessionCost(session, tariffChain): CostBreakdown`. Energy
+  cost + time cost + overtime + total + tax. No I/O. 10 hand-computed
+  scenarios pass.
+- **8.3** (Tariff) Plan-selection priority resolver — user override >
+  site > Host default > org default. 4 priority test scenarios.
+- **8.4** (Billing UI) Operator-side dashboard reads from Sprint 7
+  aggregate + report-ready tables. Per-driver totals, per-Host
+  totals, per-period rollups, drillable to individual sessions.
+  Read-only.
+- **8.5** (Billing UI) Tariff-engine session cost projection lands
+  in `charging.sessions.cost_minor` at session-stop. Test: 10
+  sessions, `cost_minor` matches pure-function output exactly.
+- **8.6** (Identity parallel) Driver self-registration. `POST
+  /api/public/signup` + `POST /api/public/verify-otp`. OTP via
+  staging stub provider; production SMS provider decision in Sprint 10.
+- **8.7** (Identity parallel) Impersonation flow.
+  `ImpersonationGrant` model. `POST /api/admin/platform/impersonate`.
+  Audit-logged (`actor_user_id` + `acting_as_user_id` on every
+  privileged write). 4-hour max duration.
+- **8.8** (Carry-forward) Sub-resource route `assertPermission`
+  retrofits (~30 routes from Sprint 4.4 carry-forward). Each route
+  fetches the resource by id, gets orgId, calls `assertPermission`.
+
+**Risks.**
+- **Rule 5 territory.** Tariff math is the highest-stakes
+  correctness surface in the platform. Stop-and-summarize before
+  each tariff milestone. Synthetic-scenario tests are the only way
+  to validate.
+- **Sprint 7 dependency.** 8.4 (billing dashboard) reads from Sprint
+  7 report-ready tables. If 7.6 slips, 8.4 slips with it.
+- **OTP provider for 8.6.** Staging stub is fine for testing; pick
+  a Cloudflare-friendly SMS provider in Sprint 10 before pilot.
+- **Audit drift in 8.7.** Every privileged write under impersonation
+  must log both actor and acting_as. Drift = security incident.
+
+**Out of scope (defer).**
+- ~~Multi-currency (EUR + per-locale variants)~~ → post-pilot per
+  ADR 0005 (tag C). Schema accepts EUR; no plans created.
+- ~~Invoice generation, billing transactions, statements,
+  employer reimbursement, PDF invoices~~ → post-pilot per ADR 0005
+  (tag E).
+- ~~Driver-side billing view~~ → post-pilot per ADR 0006 (tag B).
+- ~~Payment provider integration~~ → post-pilot per ADR 0005 (tag F).
+- Push API + webhook delivery → Sprint 12+.
+- OAuth / passkey credentials → Sprint 10.
+
+---
+
+## 12. Sprint 9 — Outbound Command Hardening + Load Test Harness
+
+> **Rescoped per [ADR 0017](../adr/0017-prepilot-rescope-for-4k-charger-target.md):**
+> Sprint 9 absorbs gbtNotes Sprint S6 + S7. Outbound commands
+> (remote start / stop / config / restart) get state-machine
+> semantics, timeouts, and result-event correlation. The load test
+> harness simulates 100 → 4000 chargers and proves the architecture
+> from Sprint 5 (queue ingest), 7 (hot ingest + R2), and 8 (billing)
+> survives at scale. **This is THE sprint that proves we can ramp to
+> 4k.**
+
+**Goal.** Operators can tell whether a command is pending, sent,
+accepted, rejected, or timed out. A disconnected charger doesn't
+cause data corruption or invisible command loss. Staging survives
+4000-charger simulation at 30s MeterValues for 1 hour without DLQ
+growth or unacceptable lag.
 
 **Entry.** Sprint 8 exit met.
 
-**Exit.** A second (staged) org onboards end to end through the
-Sprint 2 admin flows. Per-Host branding applies to operator-facing
-surfaces (driver-facing surfaces ship post-pilot per ADR 0006 tag B).
-API keys + scopes work for partner integrations.
+**Exit.** Outbound command state machine + UI visibility. 4000-charger
+sim runs cleanly on staging. A/B persistence test results captured if
+Timescale was the Sprint 6 fork (otherwise Neon-with-partitioning
+results captured).
 
-**Milestones.**
+**Milestones.** See [SPRINT_09_TASKS.md](../sprints/SPRINT_09_TASKS.md)
+for detail; summary:
 
-- **9.1** Second-tenant onboarding via the Sprint 2 admin flows.
-  Re-run the Sprint 2 admin sequence (Org → Host → Property → Site
-  → Installation → Circuit → Charger → OCPPIdentity → Connector +
-  members) for a fresh tenant; attach a CustomerPlan + a
-  ChargerServicePlan. No new wizard — this milestone validates that
-  the Sprint 2 flows work for a second tenant cleanly.
-  - *Exit:* Fresh tenant onboarded in <30 min using only the
-    Sprint 2 admin pages; no schema or code changes required.
+- **9.1** Outbound command state machine — pending / dispatched /
+  sent / accepted / rejected / timed_out / failed. Timeout
+  semantics. Retry limits. Per-state transition audit.
+- **9.2** Gateway command-result event ingest. Result events flow
+  back through the inbound queue (Sprint 5). Idempotent. Same
+  ORM-boundary rules as Sprint 7 (raw SQL for hot-volume; Prisma
+  for command metadata).
+- **9.3** Operator UI — command history per charger. Filter by
+  state, by time. Drill into result payload.
+- **9.4** Load test simulator. OCPP 1.6J charger sim, scriptable.
+  Builds out runbook entries for: 100, 500, 1000, 4000 chargers,
+  4000+reconnect storm, 4000+API-Worker-unavailable, 4000+
+  Postgres-latency-spike.
+- **9.5** Run the load tests. Capture metrics: queue depth, ingest
+  lag, DLQ count, DB write latency, batch flush latency, command
+  round-trip latency, partition growth, R2 archive throughput.
+- **9.6** A/B persistence test (only if Sprint 6 chose Timescale —
+  re-run against Neon-with-partitioning to validate the fork was
+  correct). Otherwise: document Neon results as the reference.
+- **9.7** Run report-export load tests concurrent with OCPP ingest
+  (10 monthly session CSVs + 10 billing XLSX + 5 charger uptime
+  reports + 1 raw evidence export). Confirm ingest lag stays
+  acceptable.
 
-- **9.2** Per-Host branding. Logo, colors, sender email domain.
-  Stored in `hosts.branding` JSONB. Applied to operator console
-  chrome (sidebar / topbar) for the operator's tenant; reserved for
-  the post-pilot driver PWA.
-  - *Exit:* Operator from Host A sees Host A's brand in console;
-    operator from Host B sees Host B's brand. Driver-PWA branding
-    deferred with the rest of the Driver Experience.
+**Risks.**
+- **Surprises in the 4k sim.** This is the highest-variance sprint.
+  Findings might require Sprint 10 + 11 to absorb fixes.
+  Mitigation: budget Sprint 10 + 11 with float; if 9 slips, pilot
+  Go-Live slips by the same amount.
+- **Simulator framework choice.** Build vs adopt. Decision in
+  9.4 design summary.
+- **R2 archive backpressure under load.** If R2 throughput is the
+  ceiling at 4k chargers, Sprint 7's per-day partition strategy
+  needs revision (per-hour? per-org-per-day?).
+- **Rule 5 territory.** Outbound command semantics changes
+  alter access-grant resolution implicitly (charger.remote_start +
+  member.write interaction). Stop-and-summarize per milestone.
 
-- **9.3** Postgres Row-Level Security where it makes sense. Turn on
-  for the most mixed-role tables (sessions, users in operator
-  console queries; the issues table is post-pilot but RLS policy
-  scaffolding ships now since the table exists).
-  - *Exit:* RLS policies audited; an operator from org A cannot see
-    org B's sessions even with a raw query.
-
-- **9.4** API key + scopes subsystem. Per-tenant API keys with
-  scopes (`sessions.read`, `chargers.write`, etc.), rotation, audit
-  log of uses.
-  - *Exit:* A scoped API key can call permitted endpoints and is
-    rejected on others.
-
-- **9.5** ~~OCPP 2.0.1 adapter~~ — **deferred per ADR 0005 (tag A).**
-  Post-pilot. Pilot stays on OCPP 1.6J. The gateway / translator
-  module boundary (`gateway/src/translator.ts`) was deliberately
-  designed to admit a second protocol version as a sibling module
-  without rework — adding 2.0.1 post-pilot is additive.
-
-**Risks.** RLS can slow down queries; measure before enabling in hot
-paths.
-
----
-
-## 13. Sprint 10 — Pilot Go-Live (admin-only, demonstrable)
-
-> **Pilot scope (per [ADR 0005](../adr/0005-pilot-scope-tightening-2026-04-25.md)
-> + [ADR 0006](../adr/0006-pilot-scope-rev2-2026-04-25.md)):**
-> The pilot is an **admin-functionality demonstrable platform**, not
-> a commercial release. Real chargers, real session activity, real
-> charge-log retention — but **no driver-facing surface, no money
-> movement, no Issue Engine** during the pilot window. Drivers exist
-> as inert admin-created records linked to RFID idTags only.
-> Commercial readiness and driver experience live in the post-pilot
-> backlog (tags A–F).
-
-**Goal.** Real charger activity visible and operable in Straumvakt,
-whether the control path is native OCPP 1.6J, OEM API/webhook,
-external CPMS overlay, or read-only import. RFID idTags or imported
-driver/session references resolve to admin-created driver records when
-available. Operator runs the site from the console. Billing dashboard
-shows what *would* be invoiced. Charge-log
-retention machinery has run cleanly for ≥30 days. Pilot retrospective
-captured.
-
-**Entry.** Sprint 9 exit met.
-
-**Exit.** Pilot site is live on Straumvakt. Real charger sessions
-complete end-to-end. Billing dashboard reflects the period's
-activity. Charge-log retention has fired ≥30 nights cleanly. Backup
-restore drill executed at least once. Pilot retrospective written
-and post-pilot plan outlined.
-
-**Milestones.**
-
-- **10.1** Real chargers onboarded. Whichever hardware/control path the
-  pilot uses (Zaptec API/webhook/OCPP, Easee API control, generic OCPP
-  1.6J via the gateway, or external CPMS overlay) — provisioned,
-  connected/importing, status showing healthy.
-  - *Exit:* Pilot chargers visible in operator console with live
-    `Available` status; Zaptec-managed chargers show their pulled
-    `vendor_circuit_ref` and `vendor_installation_ref`.
-
-- **10.2** Pilot driver records (admin-created, inert). The admin
-  creates pilot driver rows in `identity.users` + `tenancy.memberships`
-  with `role=driver`; assigns RFID cards; links to a Host. **No
-  driver signup, no driver login, no driver PWA, no email invites
-  during pilot per ADR 0006 (tag B).** Drivers exist so OCPP idTag
-  lookups resolve to a person.
-  - *Exit:* Pilot driver records exist; each has ≥1 RFID card row
-    that maps to an OCPP idTag the chargers will present.
-
-- **10.3** Pilot session lifecycle. Native OCPP path: RFID idTag
-  presented at a pilot charger triggers `Authorize` →
-  `StartTransaction` → meter values → `StopTransaction`. OEM/API or
-  overlay path: vendor/external system emits or exposes equivalent
-  session start, meter/energy, and stop records that normalize into
-  the same operator session view. **No driver-facing history surface
-  during pilot per ADR 0006 (tag B).**
-  - *Exit:* At least 10 real sessions completed during pilot window
-    with no operator intervention.
-
-- **10.4** Billing dashboard reviewed against pilot activity.
-  Per-driver and per-Host accumulated amounts (ISK) match what the
-  tariff engine computed for each session. Operator reviews the
-  dashboard at least weekly during pilot.
-  - *Exit:* Dashboard totals reconcile to tariff-engine output for
-    every pilot session. **No invoices issued during pilot per ADR
-    0005 (tag E)** — operator-side manual invoicing is post-pilot,
-    not a Straumvakt pilot deliverable.
-
-- **10.5** Charge-log retention verified for ≥30 nights. Sprint 4's
-  aggregator runs nightly across the pilot window; `raw_protocol`
-  rows past TTL purge correctly; financial / operational rows
-  preserved.
-  - *Exit:* Retention-job log shows ≥30 successful runs; spot-check
-    confirms TTL behaviour on real pilot rows.
-
-- **10.6** Runbooks finalized. Incident response, backup restore,
-  OCPP reconnect troubleshooting, retention-job monitoring, common
-  operator tasks. Living doc in `/docs/runbooks/`.
-  - *Exit:* Runbook index exists; each top-5 scenario documented.
-
-- **10.7** Pilot retrospective. What went right, what broke, what
-  the data says, what the operator says. Post-pilot plan drafted,
-  listing the order in which tags A–F (per ADR 0005 + 0006) are
-  picked up. **Driver Experience (tag B) and Issue Engine (tag D)
-  are explicitly named in the post-pilot kick-off** since both were
-  removed from pilot scope late in planning.
-  - *Exit:* Retrospective doc written; post-pilot plan outlined
-    (typically tag F first to unlock money movement, B + D shortly
-    after to put drivers and ops in front of real users).
-
-**Risks.** Real hardware always surprises. Budget time for diagnosing
-one or two unexpected OCPP quirks at the pilot site. Don't ship a
-hotfix to master — follow Rule 1 even under launch pressure.
+**Out of scope.**
+- Multi-tenant white-label re-skin (was Sprint 9 originally) →
+  post-pilot per ADR 0017.
+- OCPP 2.0.1 adapter → Sprint 14 with OCPI Foundation.
+- Issue Engine → post-pilot per ADR 0006 (tag D).
 
 ---
 
-## 14. Open questions / missing decisions
+## 13. Sprint 10 — Observability + Security/Tenancy
+
+> **Rescoped per [ADR 0017](../adr/0017-prepilot-rescope-for-4k-charger-target.md):**
+> Sprint 10 absorbs gbtNotes Sprint S8 (Observability) + S9
+> (Security, Tenant Isolation, Secrets). Production dashboards,
+> structured logs, alert thresholds, and runbooks make a 4k-charger
+> fleet operable by humans. Postgres RLS as defense-in-depth on
+> per-tenant tables. AuditAction append-only enforcement at the DB
+> layer. MFA mandatory on PlatformGrant. SMS provider for OTP
+> (deferred from Sprint 8). UI Worker dead-code cleanup
+> (Sprint 4.5 carry-forward).
+
+**Goal.** A non-author operator can diagnose common failure modes
+without reading source. Production incidents have named alerts and
+runbooks. Tenant boundaries are tested, not assumed. Secret rotation
+has a written procedure. Operator actions affecting chargers are
+auditable. Multi-currency posture (EUR plans schema-allowed but not
+created) confirmed pre-pilot.
+
+**Entry.** Sprint 9 exit met (4k sim runs cleanly on staging).
+
+**Exit.** All ~14 named failure modes from gbtNotes S8 have
+runbooks. Production dashboards live in Cloudflare/Grafana with
+alert thresholds wired. RLS policies cover the mixed-role tables
+(sessions, users, memberships). MFA enforced for every PlatformGrant
+holder. Pre-pilot security audit checklist signed.
+
+**Milestones.** See [SPRINT_10_TASKS.md](../sprints/SPRINT_10_TASKS.md)
+for detail; summary:
+
+- **10.1** Production dashboards — charger counts, queue depths,
+  ingest lag, DLQ count, command round-trip, DB write latency,
+  R2 archive growth, partition health, public API rate (when
+  Sprint 12+).
+- **10.2** Structured logs with correlation IDs (OCPP identity / org /
+  station / event / command / unique). Cloudflare Logpush
+  destination configured.
+- **10.3** Alert thresholds — queue age, DLQ non-empty, auth failure
+  spike, charger drop, DB latency spike, storage growth above
+  forecast, command timeout spike. Wired to operator's preferred
+  channel (PagerDuty, email, Slack — TBD).
+- **10.4** Runbooks for the 14 named scenarios from gbtNotes S8 in
+  `/docs/runbooks/`. Includes the new pilot-relevant ones: charger
+  cannot connect, vendor import mismatch, queue backlog, DLQ replay,
+  Postgres slow, partition maintenance, R2 archive replay, gateway
+  deploy rollback, API Worker deploy rollback.
+- **10.5** Postgres RLS on per-tenant tables — sessions, users,
+  memberships, sites, chargers, billing data. Application role
+  drops in/out via session variable; RLS enforces orgId scope.
+  Performance impact measured pre-flip.
+- **10.6** AuditAction append-only DB enforcement — revoke
+  UPDATE/DELETE on `audit.audit_actions` from the application
+  Postgres role. Tenant admins see "who from Straumvakt accessed
+  our data" via `audit.read`-gated query.
+- **10.7** MFA mandatory for PlatformGrant holders. Passkey
+  primary; TOTP fallback. Required at first login after this lands;
+  no grandfathering.
+- **10.8** SMS provider for OTP — final pick (Twilio /
+  CF-friendly alternative). Replace Sprint 8 staging stub.
+  Cost forecast at 4k driver-onboarding pace.
+- **10.9** Tenant-isolation tests — per-tenant data, per-tenant
+  R2 prefix isolation, per-tenant API key scope. Run the test
+  suite as cross-tenant; expect 0 leaked rows.
+- **10.10** Secret rotation procedures written — `OCPP_INGEST_SECRET`,
+  `OCPP_CRED_KEK`, `AUTH_SECRET`, Neon connection string, R2 bucket
+  credentials. Each has a documented rotation steps + rollback.
+- **10.11** UI-Worker dead-code cleanup (Sprint 4.5 carry-forward) —
+  delete `src/app/api/ocpp/events/`, `src/app/api/internal/ocpp-auth/`,
+  `src/lib/ocpp/{event-envelope,projections,bootstrap,ingest-auth,
+  internal-auth}.ts`, `src/lib/repositories/events.ts`. Drop the
+  legacy `/api/ocpp/events` mount on apps/api.
+
+**Risks.**
+- **RLS performance.** Measure before enabling in hot paths. If RLS
+  costs >5% on the dashboard query path, take a different
+  enforcement layer (in-app `requirePermission` only).
+- **MFA enrollment friction.** Operator + Straumvakt staff need to
+  enrol passkeys before the flip. Plan a 1-week parallel period.
+- **Secret rotation downtime.** Some rotations need a brief
+  reconnection (Neon connection string). Schedule outside peak.
+- **AuditAction enforcement is irreversible** at the Postgres role
+  level. Test against scratch branch first.
+
+**Out of scope.**
+- Push API + webhook delivery → Sprint 12+ post-pilot.
+- Multi-tenant white-label re-skin → Sprint 12+ post-pilot.
+- OCPP 2.0.1 adapter → Sprint 14 with OCPI Foundation.
+
+---
+
+## 14. Sprint 11 — Production Cutover Readiness + Pilot Go-Live
+
+> **Rescoped per [ADR 0017](../adr/0017-prepilot-rescope-for-4k-charger-target.md):**
+> Sprint 11 absorbs gbtNotes Sprint S10. **Pilot opens here.**
+> Pilot scope tightens from "20 chargers, demonstrable" (ADR 0006)
+> to "first batch on scale-validated infrastructure." Production
+> resources, migration dry-run, final 4k staging load test against
+> production-like config, rollback paths, go/no-go checklist.
+> First-batch ramp begins.
+
+**Goal.** Production has matching resources and secrets. Rollback
+is written and tested. Final 4k load test against prod-like config
+passes. First batch of customer chargers (~50, scaled by who's
+contracted) lands cleanly. Pilot retrospective captured at end of
+the 30-day window.
+
+**Entry.** Sprint 10 exit met (observability + RLS + MFA live;
+runbooks complete).
+
+**Exit.** Pilot site is live on Straumvakt. First-batch chargers
+visible in operator console with live status. At least 50 real
+sessions completed during the pilot window. Billing dashboard
+reflects period activity. Retention + R2 archive have run cleanly
+for ≥30 nights. Pilot retrospective + post-pilot plan written.
+
+**Milestones.** See [SPRINT_11_TASKS.md](../sprints/SPRINT_11_TASKS.md)
+for detail; summary:
+
+- **11.1** Final domain layout — UI domain, API domain, OCPP
+  gateway domain, future enterprise API domain.
+- **11.2** Production Cloudflare resources — API Worker (`hlada-api`),
+  gateway Worker (`straumvakt-ocpp`), DO namespace, inbound + outbound
+  + export queues, DLQs, Hyperdrive prod binding.
+- **11.3** Production DB resources — Neon prod plan (or Timescale
+  prod service per ADR 0018), R2 prod bucket for raw archive, R2 prod
+  bucket for export artifacts. Confirm plan sizing, write IOPS
+  forecast at 4k, backup, PITR.
+- **11.4** Production migration dry-run. Apply all
+  `prisma/migrations/*` against a fresh prod-shape Neon branch,
+  confirm clean apply, run integration smoke against it.
+- **11.5** Final 4k-staging load test against production-like config.
+  Catches any prod-only environmental issues (Hyperdrive
+  configuration, R2 region pinning, secrets distribution).
+- **11.6** Rollback paths. UI rollback to previous Pages deployment.
+  API Worker rollback via wrangler-versioned deploy. Gateway rollback
+  similarly. DB migration: forward-only, with documented hot-fix
+  forward migration paths for each post-Sprint-4 migration.
+- **11.7** Go/no-go checklist signed. Includes: backup restore drill
+  passes; 4k load test passes; runbooks reviewed; secret rotations
+  rehearsed; on-call rotation set; communication plan to pilot
+  customer documented.
+- **11.8** Pilot first-batch onboarding. ~50 chargers from
+  contracted customer(s). Through Sprint 2's admin onboarding flow,
+  not a special pilot wizard. RFID seeding via Sprint 5 invite flow
+  + Sprint 8 driver signup.
+- **11.9** Pilot operation. 30-day window. Operator runs the site
+  from console. Retention + R2 archive + aggregate jobs run nightly.
+  Billing dashboard reviewed weekly. **No money moves during pilot
+  per ADR 0005 (tag E)** — invoice generation post-pilot.
+- **11.10** Pilot retrospective. What went right, what broke, what
+  the data says, what the operator says. Post-pilot plan listing the
+  order in which deferred items (tags A–F + multi-tenant white-label
+  + push API + Issue Engine + driver UX + payment provider + OCPI)
+  ramp up.
+
+**Risks.**
+- **First-batch surprises.** First real customer chargers will surface
+  edge cases the simulator missed. Allocate Sprint 11.5 (post-pilot
+  hotfix) before any post-pilot scale work begins.
+- **Production secret distribution.** Don't echo any secret to chat
+  during cutover. Per Rule 2.
+- **Atomic deploy ordering.** API Worker + gateway must redeploy in
+  the order documented in Sprint 4.5's commit message. Sprint 11.2
+  rehearses this.
+- **Customer expectation management.** Pilot is operational, not
+  commercial. No money moves; driver app deferred; explicit in the
+  pilot kickoff letter.
+
+**Out of scope (post-pilot).**
+- Driver-facing UX (PWA, mobile app) → Sprint 12+ per ADR 0006 (tag B).
+- Issue Engine → Sprint 12+ per ADR 0006 (tag D).
+- Push API + webhook delivery → Sprint 12+.
+- Payment provider integration + dunning → Sprint 12+ per ADR 0005
+  (tag F).
+- Multi-tenant white-label / second-tenant branding → Sprint 12+.
+- Enterprise API + OpenAPI surface → Sprint 13+ (was gbtNotes S11).
+- OCPI Foundation → Sprint 15+ (was Sprint 14 per ADR 0015, slipped
+  by ADR 0017's cascade).
+
+---
+
+## 15. Open questions / missing decisions
 
 These block or materially shape the sprint plan. Lock them as early as
 possible; each has a suggested default if you need to move.
@@ -1256,7 +1366,7 @@ possible; each has a suggested default if you need to move.
 
 ---
 
-## 15. Risks and mitigations
+## 16. Risks and mitigations
 
 | Risk | Probability | Impact | Mitigation |
 |---|---|---|---|
@@ -1274,7 +1384,7 @@ possible; each has a suggested default if you need to move.
 
 ---
 
-## 16. Working conventions
+## 17. Working conventions
 
 These keep the plan executable when no one else is watching.
 
@@ -1320,7 +1430,7 @@ are not.
 
 ---
 
-## 17. What's explicitly NOT in this plan
+## 18. What's explicitly NOT in this plan
 
 So the scope holds:
 
@@ -1338,7 +1448,7 @@ So the scope holds:
 
 ---
 
-## 18. Next step
+## 19. Next step
 
 Read this plan. Mark up anything that's wrong. Lock the §14 open
 questions one at a time. Then start Sprint 0.
