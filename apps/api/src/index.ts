@@ -28,6 +28,7 @@ import {
 } from "./routes/admin/vendor-credentials";
 import { adminGroups } from "./routes/admin/groups";
 import { adminIdTokens } from "./routes/admin/id-tokens";
+import { adminOrgInvites } from "./routes/admin/org-invites";
 import { internalOcppAuth } from "./routes/internal/ocpp-auth";
 import { internalOcppAuthorize } from "./routes/internal/ocpp-authorize";
 import { internalOcppEvents } from "./routes/internal/ocpp-events";
@@ -102,6 +103,9 @@ app.route("/api/admin/vendor-credentials", adminVendorCredentialsAll);
 app.route("/api/admin/orgs/:orgId/vendor-credentials", adminVendorCredentialsByOrg);
 app.route("/api/admin/groups", adminGroups);
 app.route("/api/admin/tokens", adminIdTokens);
+// Sprint 5.7 — agent invite flow (admin side). Mounts under
+// /api/admin/orgs/:orgId/invites — see org-invites.ts.
+app.route("/api/admin/orgs", adminOrgInvites);
 
 // Internal — gateway → API auth lookup. Gated by OCPP_INGEST_SECRET
 // header (ADR 0004), not the admin session middleware.

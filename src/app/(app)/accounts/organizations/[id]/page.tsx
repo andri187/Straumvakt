@@ -3,8 +3,19 @@ import { apiFetchServer } from "@/lib/api-client-server";
 import type { OrgSummary } from "@straumvakt/shared/domain/orgs";
 import type { OrgMembershipSummary } from "@straumvakt/shared/domain/users";
 import { OrgEditPanel, type MemberOption } from "./edit-panel";
+import { OrgInvitesPanel } from "./invites-panel";
 
 export const metadata = { title: "Organization · Profile" };
+
+type InviteListItem = {
+  tokenId: string;
+  userId: string;
+  email: string;
+  role: "manager" | "technician" | "finance" | "support" | "viewer";
+  expiresAt: string;
+  createdAt: string;
+  invitedById: string | null;
+};
 
 export default async function OrganizationProfilePage({
   params,
@@ -12,9 +23,10 @@ export default async function OrganizationProfilePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [orgRes, memRes] = await Promise.all([
+  const [orgRes, memRes, invitesRes] = await Promise.all([
     apiFetchServer(`/api/admin/orgs/${id}`),
     apiFetchServer(`/api/admin/orgs/${id}/memberships`),
+    apiFetchServer(`/api/admin/orgs/${id}/invites`),
   ]);
   if (orgRes.status === 404) notFound();
   if (!orgRes.ok) throw new Error(`HTTP ${orgRes.status}`);
@@ -22,6 +34,9 @@ export default async function OrganizationProfilePage({
   const { memberships } = memRes.ok
     ? ((await memRes.json()) as { memberships: OrgMembershipSummary[] })
     : { memberships: [] };
+  const initialInvites = invitesRes.ok
+    ? ((await invitesRes.json()) as { invites: InviteListItem[] }).invites
+    : [];
 
   const memberOptions: MemberOption[] = memberships.map((m) => ({
     userId: m.userId,
@@ -141,6 +156,8 @@ export default async function OrganizationProfilePage({
           />
         </div>
       </div>
+
+      <OrgInvitesPanel orgId={id} initialInvites={initialInvites} />
     </>
   );
 }
