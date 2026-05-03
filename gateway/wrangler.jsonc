@@ -64,7 +64,21 @@
           "binding": "MAIN_APP",
           "service": "hlada-api-staging"
         }
-      ]
+      ],
+      // Sprint 5 / ADR 0017 — inbound OCPP events queue. The DO
+      // enqueues raw envelopes here instead of awaiting a synchronous
+      // service-binding write to apps/api. apps/api is the consumer
+      // (config in apps/api/wrangler.jsonc). Local-dev `wrangler dev
+      // --local` may run without this binding — the DO falls back to
+      // direct service binding so the simulator dev loop is unchanged.
+      "queues": {
+        "producers": [
+          {
+            "binding": "OCPP_EVENTS_QUEUE",
+            "queue": "straumvakt-ocpp-events-staging"
+          }
+        ]
+      }
     }
   }
 }

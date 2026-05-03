@@ -2,6 +2,7 @@
 // lib accepts `env`. Mirrors what wrangler.jsonc declares.
 
 import type { Hyperdrive, Service, Queue } from "@cloudflare/workers-types";
+import type { IngestEvent } from "./lib/ocpp/event-envelope";
 
 /**
  * Outbound-command queue message. Tiny on purpose — the row in
@@ -11,6 +12,15 @@ import type { Hyperdrive, Service, Queue } from "@cloudflare/workers-types";
 export interface OutboundCommandMessage {
   commandId: string;
 }
+
+/**
+ * Inbound OCPP event envelope (Sprint 5 / ADR 0017). Produced by the
+ * gateway DO on every translated OCPP message; consumed by this Worker.
+ * Shape is the canonical `IngestEvent` so the existing
+ * `parseIngestEvent` validator + `ingestEvent` repository call work
+ * unchanged across the queue boundary.
+ */
+export type OcppEventMessage = IngestEvent;
 
 export interface Env {
   // Hyperdrive — pooled Postgres to Neon. Bound on the staging env in
@@ -36,3 +46,10 @@ export interface Env {
   // of this secret → AES-256 key. Set via wrangler secret put.
   OCPP_CRED_KEK: string;
 }
+
+/**
+ * Discriminated union of all queue message types this Worker may
+ * consume. The `queue()` handler dispatches by `batch.queue` (queue
+ * name) — see src/index.ts.
+ */
+export type QueueMessage = OutboundCommandMessage | OcppEventMessage;

@@ -35,13 +35,24 @@ import { internalPendingDiscovery } from "./routes/internal/pending-discovery";
 import { makePrisma } from "./lib/prisma";
 import { buildRegistry } from "./lib/dispatch-targets";
 import { processCommand, sweepStuckPending } from "./lib/dispatcher";
-import type { Env, OutboundCommandMessage } from "./bindings";
+import { handleOcppEventsBatch } from "./queues/ocpp-events";
+import type {
+  Env,
+  OutboundCommandMessage,
+  OcppEventMessage,
+} from "./bindings";
 import type {
   ExportedHandler,
   MessageBatch,
   ScheduledController,
   ExecutionContext,
 } from "@cloudflare/workers-types";
+
+// Discriminated union of every queue body this Worker may consume.
+// The `queue()` handler dispatches by `batch.queue` (the queue name
+// from wrangler.jsonc), so each branch can narrow its message type
+// before calling the per-queue handler.
+type AnyQueueMessage = OutboundCommandMessage | OcppEventMessage;
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -120,40 +131,66 @@ app.onError((err, c) => {
 // ── ExportedHandler — fetch + queue + scheduled ──────────────────────────
 //
 // fetch:     Hono router (admin HTTP surface, plus /health).
-// queue:     consumer side of OUTBOUND_QUEUE. Per message, atomically
-//            claims the outbox row, dispatches via OCPP_GATEWAY service
-//            binding, and updates the row. Retriable errors throw to let
-//            CF Queue redeliver per its configured backoff.
+// queue:     consumer side of every queue this Worker is subscribed to
+//            in wrangler.jsonc. Dispatches by `batch.queue` (queue
+//            name) — see Sprint 5 / ADR 0017 for the inbound OCPP
+//            events queue addition.
 // scheduled: cron sweeper. Re-publishes any stuck pending row whose
 //            not_before is older than the staleness threshold — covers
 //            the "row written but queue.send failed" race and any rows
 //            that landed in the DLQ.
 
-const handler: ExportedHandler<Env, OutboundCommandMessage> = {
+async function handleOutboundCommandBatch(
+  batch: MessageBatch<OutboundCommandMessage>,
+  env: Env,
+): Promise<void> {
+  const db = makePrisma(env);
+  const registry = buildRegistry(env);
+  for (const message of batch.messages) {
+    try {
+      const outcome = await processCommand(db, registry, message.body.commandId);
+      if (outcome.kind === "retry") {
+        // Throw so CF Queue redelivers per max_retries / retry_delay.
+        // The row stays 'pending' and the result column doesn't get
+        // overwritten — observability via the row's last_attempt_at +
+        // attempts counter, and via the message-retry log.
+        throw new Error(`retriable: ${outcome.error}`);
+      }
+      message.ack();
+    } catch (err) {
+      console.error("queue handler error", {
+        commandId: message.body.commandId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      message.retry();
+    }
+  }
+}
+
+const handler: ExportedHandler<Env, AnyQueueMessage> = {
   fetch: app.fetch as ExportedHandler<Env>["fetch"],
 
-  async queue(batch: MessageBatch<OutboundCommandMessage>, env: Env) {
-    const db = makePrisma(env);
-    const registry = buildRegistry(env);
-    for (const message of batch.messages) {
-      try {
-        const outcome = await processCommand(db, registry, message.body.commandId);
-        if (outcome.kind === "retry") {
-          // Throw so CF Queue redelivers per max_retries / retry_delay.
-          // The row stays 'pending' and the result column doesn't get
-          // overwritten — observability via the row's last_attempt_at +
-          // attempts counter, and via the message-retry log.
-          throw new Error(`retriable: ${outcome.error}`);
-        }
-        message.ack();
-      } catch (err) {
-        console.error("queue handler error", {
-          commandId: message.body.commandId,
-          error: err instanceof Error ? err.message : String(err),
-        });
-        message.retry();
-      }
+  async queue(batch: MessageBatch<AnyQueueMessage>, env: Env) {
+    // Dispatch by queue name. New queues land here.
+    if (batch.queue === "straumvakt-outbound-staging") {
+      await handleOutboundCommandBatch(
+        batch as MessageBatch<OutboundCommandMessage>,
+        env,
+      );
+      return;
     }
+    if (batch.queue === "straumvakt-ocpp-events-staging") {
+      await handleOcppEventsBatch(
+        batch as MessageBatch<OcppEventMessage>,
+        env,
+      );
+      return;
+    }
+    // Unknown queue — log + ack so the message doesn't loop. In
+    // practice this means a wrangler.jsonc consumer was added without
+    // a code branch.
+    console.error("queue handler: unknown queue", { queue: batch.queue });
+    for (const message of batch.messages) message.ack();
   },
 
   async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext) {

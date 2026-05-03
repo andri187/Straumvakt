@@ -36,11 +36,19 @@
           "localConnectionString": "postgresql://placeholder:placeholder@localhost:5432/placeholder"
         }
       ],
-      // Outbound-command pipeline. Producer side is the admin enqueue
-      // routes; consumer side is this same Worker (queue handler in
-      // src/index.ts). Failed messages after max_retries flow into the
-      // DLQ for visibility — a follow-up DLQ consumer can mark the
-      // outbox row 'failed' with reason. See ADR 0013 phase notes.
+      // Queue pipelines:
+      //
+      // 1. OUTBOUND_QUEUE — admin-side command dispatch (start / stop /
+      //    reset). Producer side is the admin enqueue routes; consumer
+      //    side is this Worker (queue handler in src/index.ts). DLQ
+      //    catches commands that fail after max_retries.
+      //
+      // 2. straumvakt-ocpp-events-staging — inbound OCPP events from
+      //    the gateway DO (Sprint 5 / ADR 0017). The gateway is the
+      //    producer; this Worker is the consumer. Consumer drains
+      //    asynchronously so charger WebSocket replies stay sub-second
+      //    even when Postgres is slow. DLQ catches poison messages
+      //    after max_retries.
       "queues": {
         "producers": [
           {
@@ -55,6 +63,13 @@
             "max_batch_timeout": 2,
             "max_retries": 5,
             "dead_letter_queue": "straumvakt-outbound-dlq-staging"
+          },
+          {
+            "queue": "straumvakt-ocpp-events-staging",
+            "max_batch_size": 100,
+            "max_batch_timeout": 1,
+            "max_retries": 3,
+            "dead_letter_queue": "straumvakt-ocpp-events-dlq-staging"
           }
         ]
       },
