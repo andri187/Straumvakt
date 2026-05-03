@@ -85,6 +85,23 @@ export async function handleOcppEventsBatch(
         : null;
       if (lagMs !== null) lagSamples.push(lagMs);
       const result = await ingestEvent(db, parsed.event);
+
+      // Sprint 7.4 / ADR 0018 Decision 3 — fan out to archive queue.
+      // Only fans out FRESH events (not replays) since replays
+      // already produced an archive object on the original ingest.
+      // Failure here is logged but does NOT throw — Postgres ack is
+      // independent of archive ack per the architectural decision.
+      if (result.recorded && env.ARCHIVE_QUEUE) {
+        try {
+          await env.ARCHIVE_QUEUE.send(parsed.event);
+        } catch (err) {
+          console.error("[ocpp-q] archive_fanout_failed", {
+            eventId: parsed.event.eventId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+
       console.log("[ocpp-q] consumed", {
         eventId: parsed.event.eventId,
         eventType: parsed.event.eventType,

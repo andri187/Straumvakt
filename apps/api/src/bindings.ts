@@ -1,7 +1,12 @@
 // Worker env bindings — defined here once, imported wherever a route or
 // lib accepts `env`. Mirrors what wrangler.jsonc declares.
 
-import type { Hyperdrive, Service, Queue } from "@cloudflare/workers-types";
+import type {
+  Hyperdrive,
+  R2Bucket,
+  Service,
+  Queue,
+} from "@cloudflare/workers-types";
 import type { IngestEvent } from "./lib/ocpp/event-envelope";
 
 /**
@@ -35,6 +40,14 @@ export interface Env {
   // consumer side is the same Worker (queue handler in src/index.ts).
   // Messages are { commandId } pointers into ocpp.outbound_commands.
   OUTBOUND_QUEUE: Queue<OutboundCommandMessage>;
+
+  // Sprint 7.4 / ADR 0018 Decision 3 — archive queue + R2 bucket.
+  // The inbound OCPP events consumer fans out each accepted envelope
+  // to ARCHIVE_QUEUE; a separate consumer drains it to EVIDENCE_BUCKET
+  // per the documented key scheme. Two queues so an R2 outage cannot
+  // block Postgres ack on the inbound side.
+  ARCHIVE_QUEUE: Queue<OcppEventMessage>;
+  EVIDENCE_BUCKET: R2Bucket;
 
   // Secrets — set via `wrangler secret put` on the deployed worker.
   // None of these are persisted in wrangler.jsonc.

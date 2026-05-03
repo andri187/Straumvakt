@@ -36,6 +36,17 @@
           "localConnectionString": "postgresql://placeholder:placeholder@localhost:5432/placeholder"
         }
       ],
+      // R2 bucket — raw OCPP envelope archive (Sprint 7.4 / ADR 0018
+      // Decision 3). Written by the archive consumer per the key
+      // scheme `<orgId>/<yyyy>/<mm>/<dd>/<chargingStationId>/
+      // <eventId>.json.gz`. Lifecycle rules (7y / 90d / 7d / 30d
+      // tiers) configured separately via wrangler r2 bucket lifecycle.
+      "r2_buckets": [
+        {
+          "binding": "EVIDENCE_BUCKET",
+          "bucket_name": "straumvakt-evidence-staging"
+        }
+      ],
       // Queue pipelines:
       //
       // 1. OUTBOUND_QUEUE — admin-side command dispatch (start / stop /
@@ -49,11 +60,22 @@
       //    asynchronously so charger WebSocket replies stay sub-second
       //    even when Postgres is slow. DLQ catches poison messages
       //    after max_retries.
+      //
+      // 3. straumvakt-archive-events-staging — Sprint 7.4 / ADR 0018
+      //    Decision 3. The inbound consumer fans out each accepted
+      //    envelope to this queue; a separate consumer drains it to
+      //    R2. Two queues so an R2 outage cannot block Postgres ack.
+      //    Higher max_retries than the inbound queue because R2 hiccups
+      //    are slower to resolve than Postgres ones.
       "queues": {
         "producers": [
           {
             "binding": "OUTBOUND_QUEUE",
             "queue": "straumvakt-outbound-staging"
+          },
+          {
+            "binding": "ARCHIVE_QUEUE",
+            "queue": "straumvakt-archive-events-staging"
           }
         ],
         "consumers": [
@@ -70,6 +92,13 @@
             "max_batch_timeout": 1,
             "max_retries": 3,
             "dead_letter_queue": "straumvakt-ocpp-events-dlq-staging"
+          },
+          {
+            "queue": "straumvakt-archive-events-staging",
+            "max_batch_size": 50,
+            "max_batch_timeout": 5,
+            "max_retries": 5,
+            "dead_letter_queue": "straumvakt-archive-events-dlq-staging"
           }
         ]
       },

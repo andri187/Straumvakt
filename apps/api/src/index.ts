@@ -38,6 +38,7 @@ import { makePrisma } from "./lib/prisma";
 import { buildRegistry } from "./lib/dispatch-targets";
 import { processCommand, sweepStuckPending } from "./lib/dispatcher";
 import { handleOcppEventsBatch } from "./queues/ocpp-events";
+import { handleArchiveEventsBatch } from "./queues/archive-events";
 import { ensureForwardPartitions } from "./lib/db/partition-cron";
 import { makePool } from "./lib/db/raw";
 import type {
@@ -194,6 +195,13 @@ const handler: ExportedHandler<Env, AnyQueueMessage> = {
     }
     if (batch.queue === "straumvakt-ocpp-events-staging") {
       await handleOcppEventsBatch(
+        batch as MessageBatch<OcppEventMessage>,
+        env,
+      );
+      return;
+    }
+    if (batch.queue === "straumvakt-archive-events-staging") {
+      await handleArchiveEventsBatch(
         batch as MessageBatch<OcppEventMessage>,
         env,
       );
