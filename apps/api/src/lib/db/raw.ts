@@ -208,3 +208,178 @@ export async function findExistingIdempotencyKeys(
   const result = await client.query<{ key: string }>(sql, [scope, ...keys]);
   return new Set(result.rows.map((r) => r.key));
 }
+
+export interface IdempotencyKeyInsert {
+  scope: string;
+  key: string;
+  result: unknown;
+  /** TTL in milliseconds. expiresAt = now + ttl. */
+  ttlMs: number;
+}
+
+/**
+ * Batch INSERT into events.idempotency_keys. Uses ON CONFLICT
+ * DO NOTHING so a concurrent consumer that snuck a write between
+ * our findExistingIdempotencyKeys call and this insert doesn't
+ * crash us — the second writer's insert is just discarded.
+ */
+export async function batchInsertIdempotencyKeys(
+  client: PoolClient,
+  inserts: IdempotencyKeyInsert[],
+): Promise<{ rowCount: number }> {
+  if (inserts.length === 0) return { rowCount: 0 };
+  const tuples: string[] = [];
+  const values: unknown[] = [];
+  let p = 1;
+  for (const ins of inserts) {
+    tuples.push(`($${p}, $${p + 1}, $${p + 2}::jsonb, $${p + 3}, $${p + 4})`);
+    values.push(
+      ins.scope,
+      ins.key,
+      JSON.stringify(ins.result),
+      new Date(),
+      new Date(Date.now() + ins.ttlMs),
+    );
+    p += 5;
+  }
+  const sql = `
+    INSERT INTO "events"."idempotency_keys"
+      (${IDEMPOTENCY_KEY_COLUMNS.scope},
+       ${IDEMPOTENCY_KEY_COLUMNS.key},
+       ${IDEMPOTENCY_KEY_COLUMNS.result},
+       ${IDEMPOTENCY_KEY_COLUMNS.createdAt},
+       ${IDEMPOTENCY_KEY_COLUMNS.expiresAt})
+    VALUES ${tuples.join(",")}
+    ON CONFLICT (${IDEMPOTENCY_KEY_COLUMNS.scope}, ${IDEMPOTENCY_KEY_COLUMNS.key}) DO NOTHING
+  `;
+  const result = await client.query(sql, values);
+  return { rowCount: result.rowCount ?? 0 };
+}
+
+/**
+ * Heartbeat-only fast-path batch ingest (Sprint 7 atomic-batch
+ * milestone). Invariant: ALL events in `heartbeats` have
+ * eventType='ocpp.raw.Heartbeat' (or 'charger.heartbeat'). Caller
+ * partitions the batch.
+ *
+ * One pg transaction wraps:
+ *   1. Batch lookup of existing idempotency_keys → partition into
+ *      [fresh, replay].
+ *   2. Batch INSERT event_log for fresh events.
+ *   3. Batch UPDATE ocpp_identities last_seen_at = NOW() for the
+ *      identities those fresh events came from.
+ *   4. Batch INSERT idempotency_keys for fresh events.
+ *
+ * Atomicity preserved: rollback on any error rolls back all 4.
+ *
+ * Why heartbeats specifically: at 4k chargers × 30s heartbeat,
+ * heartbeats are ~80% of all events. Their projection is trivially
+ * batchable (single UPDATE statement on ocpp_identities). Other
+ * event types (status, session.*, command_result) have multi-table
+ * projections that would need substantially more work to convert
+ * to raw SQL — out of scope for this milestone, stays Prisma.
+ */
+export interface HeartbeatBatchResult {
+  fresh: number;
+  replays: number;
+  identitiesTouched: number;
+}
+
+export async function batchIngestHeartbeats(
+  client: PoolClient,
+  heartbeats: Array<{
+    eventId: string;
+    orgId: string;
+    aggregateType: string;
+    aggregateId: string;
+    eventType: string;
+    correlationId: string;
+    retentionClass: EventLogInsert["retentionClass"];
+    payload: Record<string, unknown>;
+    occurredAt: string;
+    schemaVersion?: number;
+  }>,
+): Promise<HeartbeatBatchResult> {
+  if (heartbeats.length === 0) {
+    return { fresh: 0, replays: 0, identitiesTouched: 0 };
+  }
+  const IDEMPOTENCY_SCOPE = "ocpp";
+  const IDEMPOTENCY_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+  await client.query("BEGIN");
+  try {
+    // 1. Existing idempotency keys → partition
+    const eventIds = heartbeats.map((h) => h.eventId);
+    const existing = await findExistingIdempotencyKeys(
+      client,
+      IDEMPOTENCY_SCOPE,
+      eventIds,
+    );
+    const fresh = heartbeats.filter((h) => !existing.has(h.eventId));
+
+    if (fresh.length === 0) {
+      await client.query("COMMIT");
+      return {
+        fresh: 0,
+        replays: heartbeats.length,
+        identitiesTouched: 0,
+      };
+    }
+
+    // 2. Batch INSERT event_log
+    const insertResult = await batchInsertEventLog(
+      client,
+      fresh.map((h) => ({
+        orgId: h.orgId,
+        aggregateType: h.aggregateType,
+        aggregateId: h.aggregateId,
+        eventType: h.eventType,
+        schemaVersion: h.schemaVersion,
+        payload: h.payload,
+        metadata: { correlationId: h.correlationId },
+        retentionClass: h.retentionClass,
+        occurredAt: h.occurredAt,
+      })),
+    );
+
+    // 3. Batch UPDATE ocpp_identities last_seen_at. The aggregateId
+    //    on heartbeat events is the OcppIdentity UUID. Distinct
+    //    identity IDs only — multiple heartbeats from the same
+    //    charger in one batch resolve to one UPDATE.
+    const distinctIdentityIds = Array.from(
+      new Set(fresh.map((h) => h.aggregateId)),
+    );
+    const updateResult = await client.query(
+      `UPDATE "ocpp"."ocpp_identities"
+          SET "last_seen_at" = NOW()
+        WHERE "id" = ANY($1::uuid[])`,
+      [distinctIdentityIds],
+    );
+
+    // 4. Batch INSERT idempotency_keys
+    await batchInsertIdempotencyKeys(
+      client,
+      fresh.map((h, i) => ({
+        scope: IDEMPOTENCY_SCOPE,
+        key: h.eventId,
+        result: {
+          accepted: true,
+          eventId: h.eventId,
+          recorded: true,
+          logEntryId: insertResult.inserted[i]?.logEntryId ?? null,
+        },
+        ttlMs: IDEMPOTENCY_TTL_MS,
+      })),
+    );
+
+    await client.query("COMMIT");
+    return {
+      fresh: fresh.length,
+      replays: heartbeats.length - fresh.length,
+      identitiesTouched: updateResult.rowCount ?? 0,
+    };
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  }
+}

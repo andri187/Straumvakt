@@ -66,12 +66,17 @@ import { handleOcppEventsBatch } from "./ocpp-events";
 import type { OcppEventMessage, Env } from "../bindings";
 import type { Message, MessageBatch } from "@cloudflare/workers-types";
 
+// Sprint 7 atomic-batch fast path treats charger.heartbeat /
+// ocpp.raw.Heartbeat specially. To keep these slow-path tests
+// exercising the Prisma per-event branch, default eventType is
+// 'charger.status_updated' (a non-heartbeat). Fast-path tests
+// further down explicitly use heartbeat with a mocked pg pool.
 const VALID: OcppEventMessage = {
   eventId: "22222222-2222-2222-2222-222222222222",
   orgId: "11111111-1111-1111-1111-111111111111",
   aggregateType: "ocpp_identity",
   aggregateId: "33333333-3333-3333-3333-333333333333",
-  eventType: "charger.heartbeat",
+  eventType: "charger.status_updated",
   occurredAt: "2026-05-02T10:00:00.000Z",
   correlationId: "44444444-4444-4444-4444-444444444444",
   retentionClass: "operational",
