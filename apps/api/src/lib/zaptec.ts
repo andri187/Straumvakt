@@ -274,3 +274,71 @@ export async function getInstallationSummary(
     | null;
   return { ok: true, value: json };
 }
+
+// ─── Sprint 8.x — API-fallback probe: Zaptec session history ─────────
+//
+// GET /api/chargehistory — Zaptec returns a paginated list of charge
+// sessions for an installation. Used by the admin "Probe sessions"
+// surface to diff Zaptec's view against our reports.session_ledger
+// (and earlier, charging.sessions). Read-only: this function does
+// not write anything to our DB.
+
+/**
+ * Subset of Zaptec's ChargeHistory record fields we consume. The
+ * Zaptec response has many more fields (UserName, UserPhone, etc.);
+ * we keep the shape narrow to what the diff surface needs.
+ */
+export interface ZaptecChargeHistoryEntry {
+  Id?: string;                   // Zaptec's session UUID
+  ChargerId?: string;            // Zaptec deviceId of the charger
+  StartDateTime?: string | null; // ISO
+  EndDateTime?: string | null;   // ISO; null for in-progress
+  Energy?: number | null;        // kWh, decimal
+  UserId?: string | null;        // Zaptec user GUID
+  UserUserName?: string | null;
+  UserEmail?: string | null;
+  // Zaptec sometimes returns ExternallyEnded, ChargerName, etc.
+  // Surface them via raw field for forensic inspection.
+  ChargerName?: string | null;
+}
+
+export interface ZaptecChargeHistoryParams {
+  installationId?: string;
+  chargerId?: string;
+  /** ISO-8601; defaults to 30 days ago */
+  from?: string;
+  /** ISO-8601; defaults to now */
+  to?: string;
+  /** Page size; Zaptec caps somewhere around 1000 */
+  pageSize?: number;
+}
+
+/**
+ * Fetches Zaptec charge history. Read-only probe — does NOT write
+ * to our DB. Caller diffs the result against reports.session_ledger
+ * to surface gaps (sessions Zaptec saw but our OCPP path didn't
+ * record, or vice versa).
+ */
+export async function listZaptecChargeHistory(
+  accessToken: string,
+  params: ZaptecChargeHistoryParams = {},
+): Promise<ZaptecResult<ZaptecChargeHistoryEntry[]>> {
+  const qs = new URLSearchParams();
+  if (params.installationId) qs.set("InstallationId", params.installationId);
+  if (params.chargerId) qs.set("ChargerId", params.chargerId);
+  if (params.from) qs.set("From", params.from);
+  if (params.to) qs.set("To", params.to);
+  if (params.pageSize) qs.set("PageSize", String(params.pageSize));
+  const url = `${ZAPTEC_BASE}/api/chargehistory/?${qs.toString()}`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  }).catch(() => null);
+  if (!res) return { ok: false, error: { kind: "unreachable" } };
+  if (!res.ok) return { ok: false, error: { kind: "list", status: res.status } };
+  const json = (await res.json().catch(() => null)) as
+    | { Data?: ZaptecChargeHistoryEntry[] }
+    | ZaptecChargeHistoryEntry[]
+    | null;
+  if (Array.isArray(json)) return { ok: true, value: json };
+  return { ok: true, value: json?.Data ?? [] };
+}

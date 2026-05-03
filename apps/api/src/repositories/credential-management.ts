@@ -46,7 +46,7 @@ interface UnsealedCredential {
   accessToken: string;
 }
 
-async function unsealAndAuth(
+export async function unsealAndAuth(
   db: PrismaClient,
   kek: string,
   credentialId: string,

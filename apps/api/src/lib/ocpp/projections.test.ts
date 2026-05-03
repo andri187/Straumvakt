@@ -69,7 +69,7 @@ function makeTx() {
       // tests don't trigger ledger-write side effects (the
       // projection logs a warn and skips). The session_ledger test
       // below overrides per-call.
-      update: vi.fn(async () => ({
+      update: vi.fn(async (_args: unknown): Promise<unknown> => ({
         id: SESSION,
         orgId: ORG,
         siteId: null,
@@ -86,24 +86,26 @@ function makeTx() {
     },
     // Sprint 8.5 — tariff resolver + ledger writer plumbing. All
     // default to "missing" so existing non-stopped tests don't hit
-    // them; session.stopped tests override per-case.
+    // them; session.stopped tests override per-case. The `unknown`
+    // return type widens the mock so per-test overrides can return
+    // richer shapes without TS variance complaints.
     site: {
-      findUnique: vi.fn(async () => null),
+      findUnique: vi.fn(async (_args: unknown): Promise<unknown> => null),
     },
     chargingStation: {
-      findUnique: vi.fn(async () => null),
+      findUnique: vi.fn(async (_args: unknown): Promise<unknown> => null),
     },
     installation: {
-      findUnique: vi.fn(async () => null),
+      findUnique: vi.fn(async (_args: unknown): Promise<unknown> => null),
     },
     tariffDefinition: {
-      findUnique: vi.fn(async () => null),
+      findUnique: vi.fn(async (_args: unknown): Promise<unknown> => null),
     },
     sessionLedger: {
       upsert: vi.fn(async (args: unknown) => args),
     },
     idToken: {
-      findFirst: vi.fn(async () => null),
+      findFirst: vi.fn(async (_args: unknown): Promise<unknown> => null),
     },
   };
 }
@@ -303,7 +305,8 @@ describe("projections — per-event handlers", () => {
       id: "inst-1",
       retailerTariffId: "tariff-n1",
     }));
-    tx.tariffDefinition.findUnique = vi.fn(async ({ where }) => {
+    tx.tariffDefinition.findUnique = vi.fn(async (args: unknown): Promise<unknown> => {
+      const { where } = args as { where: { id: string } };
       if (where.id === "tariff-veitur-ad1") {
         return {
           id: "tariff-veitur-ad1",
@@ -390,7 +393,8 @@ describe("projections — per-event handlers", () => {
       id: "inst-1",
       retailerTariffId: "tariff-n1",
     }));
-    tx.tariffDefinition.findUnique = vi.fn(async ({ where }) => {
+    tx.tariffDefinition.findUnique = vi.fn(async (args: unknown): Promise<unknown> => {
+      const { where } = args as { where: { id: string } };
       const base = {
         computeRule: { kind: "flat", pricePerKwhMinor: 864 },
         vatRatePct: 24,
@@ -409,7 +413,7 @@ describe("projections — per-event handlers", () => {
       return null;
     });
     // IdToken hit: this idTag belongs to DRIVER_ID.
-    tx.idToken.findFirst = vi.fn(async () => ({ userId: DRIVER_ID }));
+    tx.idToken.findFirst = vi.fn(async (): Promise<unknown> => ({ userId: DRIVER_ID }));
 
     await run(
       tx,

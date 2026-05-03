@@ -25,7 +25,9 @@ import { z } from "zod";
 import {
   applyCredentialSelection,
   getCredentialManagementTree,
+  unsealAndAuth,
 } from "../../repositories/credential-management";
+import { probeZaptecSessions } from "../../repositories/zaptec-session-probe";
 import type { Env } from "../../bindings";
 
 // Platform-wide list — every org's credentials. Operator UI uses this
@@ -76,6 +78,57 @@ adminVendorCredentialsAll.patch(
     if (msg.includes("Record to update not found")) return c.json({ error: "not_found" }, 404);
     throw err;
   }
+  },
+);
+
+// Sprint 8.x — API-fallback probe. Reads Zaptec's charge history
+// for the time window + (optional) installationId/chargerId filter,
+// diffs against our charge_sessions + session_ledger, returns the
+// gap. Read-only; doesn't write to our DB. Operator decides what
+// to do with the diff.
+//
+// Query params:
+//   ?installationId=...   restrict to one Zaptec installation
+//   ?chargerId=...        restrict to one Zaptec charger (deviceId)
+//   ?from=ISO             default 30 days ago
+//   ?to=ISO               default now
+adminVendorCredentialsAll.get(
+  "/:id/probe-sessions",
+  requirePermission("platform.tenant.read"),
+  async (c) => {
+    const db = makePrisma(c.env);
+    try {
+      const auth = await unsealAndAuth(db, c.env.OCPP_CRED_KEK!, c.req.param("id"));
+      const result = await probeZaptecSessions(db, {
+        accessToken: auth.accessToken,
+        installationId: c.req.query("installationId"),
+        chargerId: c.req.query("chargerId"),
+        from: c.req.query("from"),
+        to: c.req.query("to"),
+      });
+      return c.json({
+        zaptecCount: result.zaptecCount,
+        ourCount: result.ourCount,
+        bothInOurs: result.bothInOurs,
+        onlyInZaptec: result.onlyInZaptec,
+        onlyInOurs: result.onlyInOurs.map((s) => ({
+          ...s,
+          startedAt: s.startedAt.toISOString(),
+          endedAt: s.endedAt?.toISOString() ?? null,
+        })),
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg === "credential_not_found") return c.json({ error: msg }, 404);
+      if (msg === "credential_not_zaptec") return c.json({ error: msg }, 400);
+      if (msg === "credential_password_missing") return c.json({ error: msg }, 400);
+      if (msg === "zaptec_auth_failed") return c.json({ error: msg }, 502);
+      if (msg === "kek_unavailable") return c.json({ error: msg }, 500);
+      if (msg.startsWith("zaptec_chargehistory_fetch_failed")) {
+        return c.json({ error: "zaptec_chargehistory_fetch_failed", detail: msg }, 502);
+      }
+      throw err;
+    }
   },
 );
 
