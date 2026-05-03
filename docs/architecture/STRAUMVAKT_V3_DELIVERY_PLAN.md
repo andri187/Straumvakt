@@ -793,15 +793,14 @@ for detail; summary:
 
 ---
 
-## 9. Sprint 6 — Data Platform + ORM Decision
+## 9. Sprint 6 — Data Platform + ORM Decision *(delivered: ADR 0018)*
 
 > **Rescoped per [ADR 0017](../adr/0017-prepilot-rescope-for-4k-charger-target.md):**
 > Sprint 6 absorbs gbtNotes Sprint S3 — a decision sprint, not a
-> code sprint. Lands as ADR 0018. Without an explicit
-> Neon-with-partitioning vs Timescale Cloud decision and a clear
-> ORM boundary (Prisma for control plane, raw SQL for queue
-> consumers + MeterValues), Sprint 7's hot-ingest implementation
-> has no foundation.
+> code sprint. **Landed as [ADR 0018](../adr/0018-data-platform-and-orm-boundary.md)
+> (2026-05-03)** with the three decisions and the named-data-product
+> taxonomy that Sprints 7 + 8 consume. Table-by-table classification
+> in [DATA_PRODUCTS.md](./DATA_PRODUCTS.md).
 
 **Goal.** Three decisions written down as ADR 0018, with named data
 products that Sprint 7 + 8 consume:
