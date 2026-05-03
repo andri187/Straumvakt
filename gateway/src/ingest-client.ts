@@ -110,8 +110,14 @@ export async function enqueueOrPost(
   event: IngestEvent,
 ): Promise<IngestOutcome> {
   if (env.OCPP_EVENTS_QUEUE) {
+    const startedAt = Date.now();
     try {
       await env.OCPP_EVENTS_QUEUE.send(event);
+      console.log("[ocpp-gw] enqueued", {
+        eventId: event.eventId,
+        eventType: event.eventType,
+        sendMs: Date.now() - startedAt,
+      });
       return { kind: "accepted", eventId: event.eventId, recorded: false };
     } catch (err) {
       // Queue accept failed — log and fall through to the service-
@@ -119,9 +125,16 @@ export async function enqueueOrPost(
       // sustained queue-accept failures as a deploy/binding issue.
       console.warn("[ocpp-gw] queue.send failed, falling back to postEvent", {
         eventId: event.eventId,
+        sendMs: Date.now() - startedAt,
         error: err instanceof Error ? err.message : String(err),
       });
     }
   }
-  return postEvent(env, event);
+  const outcome = await postEvent(env, event);
+  console.log("[ocpp-gw] posted_fallback", {
+    eventId: event.eventId,
+    eventType: event.eventType,
+    kind: outcome.kind,
+  });
+  return outcome;
 }

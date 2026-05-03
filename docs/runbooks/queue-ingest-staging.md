@@ -38,11 +38,48 @@ operator can't see ingest progress until the api Worker catches up.
 # Live consumer logs (apps/api)
 cd apps/api
 npx wrangler tail --env staging --format pretty
+```
 
-# Look for:
-#   [ocpp-q] consumed { eventId, eventType, recorded, lagMs }
-#   [ocpp-q] validation_failed { error, eventId }
-#   [ocpp-q] transient_failure { eventId, error }
+### Grep-able log lines (Sprint 5.4)
+
+All queue-related lines use a fixed `[ocpp-q]` (consumer side) or
+`[ocpp-gw]` (gateway producer side) prefix so a single pipe slices
+the firehose down to operationally-relevant events.
+
+**Producer (`straumvakt-ocpp-staging`)**
+
+| Pattern | Meaning | Useful keys |
+|---|---|---|
+| `[ocpp-gw] enqueued` | Queue.send succeeded | `eventId`, `eventType`, `sendMs` (should be ≤ 5ms p95) |
+| `[ocpp-gw] queue.send failed, falling back to postEvent` | Queue accept threw — falling back to service binding | `eventId`, `sendMs`, `error` |
+| `[ocpp-gw] posted_fallback` | Service-binding fallback completed | `eventId`, `kind` (accepted/rejected/retriable) |
+| `[ocpp-gw] authorize.evaluated` | Authorize/StartTransaction verdict resolved | `verdict`, `mode` (enforced/shadow), `idTag`, `userId`, `idTokenId` |
+| `[ocpp-gw] command_result ingest failed` | Outbound-command result envelope failed to ingest | `eventId`, `kind`, `error` |
+
+**Consumer (`hlada-api-staging`)**
+
+| Pattern | Meaning | Useful keys |
+|---|---|---|
+| `[ocpp-q] batch_start` | New batch arriving | `queue`, `count` |
+| `[ocpp-q] batch_summary` | End-of-batch summary | `acked`, `retried`, `dropped`, `recorded`, `replays`, `p50LagMs`, `p95LagMs`, `durationMs` |
+| `[ocpp-q] consumed` | Single envelope ingested | `eventId`, `eventType`, `recorded`, `lagMs` |
+| `[ocpp-q] validation_failed` | Poison drop (bad envelope shape) | `error`, `eventId` |
+| `[ocpp-q] transient_failure` | Transient DB error → retried | `eventId`, `error` |
+
+### Common queries
+
+```powershell
+# Producer-side — confirm enqueue latency is sub-5ms p95
+npx wrangler tail straumvakt-ocpp-staging --format json | grep enqueued
+
+# Consumer-side — batch-level summary stream (one line per batch)
+npx wrangler tail hlada-api-staging --format json | grep batch_summary
+
+# Hunting for poison messages
+npx wrangler tail hlada-api-staging --format json | grep validation_failed
+
+# Hunting for hyperdrive blips
+npx wrangler tail hlada-api-staging --format json | grep transient_failure
 ```
 
 DLQ depth via `wrangler queues list` (Sprint 10 wires Grafana).
