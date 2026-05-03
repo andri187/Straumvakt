@@ -90,7 +90,7 @@ async function loadInstallationContext(
 async function bulkSetHash(
   tx: Prisma.TransactionClient,
   installationId: string,
-  hash: string,
+  hash: string | null,
 ): Promise<number> {
   const result = await tx.ocppIdentity.updateMany({
     where: { chargingStation: { installationId } },
@@ -139,6 +139,14 @@ export async function rotateInstallationOcppPassword(
  * Hash the operator-supplied plaintext and stamp it across every
  * OcppIdentity in the installation. Plaintext never persists — only
  * the hash.
+ *
+ * Length rules:
+ *   • 8–128 chars: normal Basic-Auth credential.
+ *   • Any other non-empty length: rejected.
+ *   • Empty: rejected by this entrypoint — use
+ *     disableInstallationOcppAuth() instead so the no-auth flip is
+ *     a deliberate, named operation rather than a silent
+ *     consequence of submitting blank plaintext.
  */
 export async function setInstallationOcppPassword(
   db: PrismaClient,
@@ -173,17 +181,80 @@ export async function setInstallationOcppPassword(
 }
 
 /**
- * Read-only summary for the UI: how many OcppIdentity rows live in
- * this installation, and when this module last rotated/set the
- * password. "Last rotated" reads from the audit log
- * (`installation.ocpp_password.{rotate,set}`) — using OcppIdentity.
- * updated_at would falsely bump on unrelated changes (lastSeenAt,
- * status, etc.) and report stale rotation times.
+ * NULL out the auth_secret_hash for every OcppIdentity in this
+ * installation, putting the chargers on the **no-auth** path: our
+ * gateway will accept their WebSocket upgrade without Basic Auth.
+ *
+ * This is an opt-in security relaxation. Anyone who knows the
+ * identity-string (which is not secret — it's printed on the
+ * charger label and written into the vendor portal in plaintext)
+ * can connect as that charger and inject events. Use only when:
+ *   • The charger firmware genuinely cannot send Basic Auth, AND
+ *   • The operational consequence (someone forging events) is
+ *     bounded for this fleet.
+ *
+ * Audit log records who flipped the flag and on which installation.
  */
+export async function disableInstallationOcppAuth(
+  db: PrismaClient,
+  installationId: string,
+  actorUserId: string | null,
+): Promise<SetResult | null> {
+  const ctx = await loadInstallationContext(db, installationId);
+  if (!ctx) return null;
+
+  const identityCount = await db.$transaction(async (tx) => {
+    const count = await bulkSetHash(tx, installationId, null);
+    await recordAuditAction(tx, {
+      orgId: ctx.orgId,
+      actorUserId,
+      actorKind: "user",
+      action: "installation.ocpp_password.disable",
+      targetType: "installation",
+      targetId: installationId,
+      metadata: { identityCount: count },
+    });
+    return count;
+  });
+
+  return { installationId, identityCount };
+}
+
+/**
+ * Read-only summary for the UI: how many OcppIdentity rows live in
+ * this installation, when this module last rotated/set/disabled the
+ * password, and whether the installation is currently on the
+ * no-auth path. "authMode" reflects what the rows actually store:
+ *   • "basic"  — every identity has a hash. Charger must send Basic
+ *                Auth.
+ *   • "none"   — every identity has NULL hash. Charger may connect
+ *                without Basic Auth.
+ *   • "mixed"  — some have a hash, some don't. Should not happen in
+ *                normal operation (rotate/set/disable updates all);
+ *                surfaced explicitly so the UI flags the drift.
+ *   • "empty"  — no identities yet (installation has no chargers).
+ *
+ * "Last rotated" reads from the audit log
+ * (`installation.ocpp_password.{rotate,set,disable}`) — using
+ * OcppIdentity.updated_at would falsely bump on unrelated changes
+ * (lastSeenAt, status, etc.).
+ */
+export type InstallationAuthMode = "basic" | "none" | "mixed" | "empty";
+
 export interface InstallationOcppSummary {
   installationId: string;
   identityCount: number;
   lastRotatedAt: Date | null;
+  authMode: InstallationAuthMode;
+}
+
+function deriveAuthMode(rows: { authSecretHash: string | null }[]): InstallationAuthMode {
+  if (rows.length === 0) return "empty";
+  const withHash = rows.filter((r) => r.authSecretHash !== null).length;
+  const withoutHash = rows.length - withHash;
+  if (withHash === 0) return "none";
+  if (withoutHash === 0) return "basic";
+  return "mixed";
 }
 
 export async function getInstallationOcppSummary(
@@ -193,15 +264,22 @@ export async function getInstallationOcppSummary(
   const ctx = await loadInstallationContext(db, installationId);
   if (!ctx) return null;
 
-  const identityCount = await db.ocppIdentity.count({
+  const rows = await db.ocppIdentity.findMany({
     where: { chargingStation: { installationId } },
+    select: { authSecretHash: true },
   });
 
   const lastAudit = await db.auditAction.findFirst({
     where: {
       targetType: "installation",
       targetId: installationId,
-      action: { in: ["installation.ocpp_password.rotate", "installation.ocpp_password.set"] },
+      action: {
+        in: [
+          "installation.ocpp_password.rotate",
+          "installation.ocpp_password.set",
+          "installation.ocpp_password.disable",
+        ],
+      },
     },
     orderBy: { occurredAt: "desc" },
     select: { occurredAt: true },
@@ -209,8 +287,9 @@ export async function getInstallationOcppSummary(
 
   return {
     installationId,
-    identityCount,
+    identityCount: rows.length,
     lastRotatedAt: lastAudit?.occurredAt ?? null,
+    authMode: deriveAuthMode(rows),
   };
 }
 
@@ -227,27 +306,37 @@ export async function getInstallationOcppSummary(
 export async function listInstallationOcppSummaries(
   db: PrismaClient,
 ): Promise<Map<string, InstallationOcppSummary>> {
-  // Identity counts per installation. groupBy walks the OcppIdentity
-  // → ChargingStation relation, so we hop through chargingStation in
-  // a where filter for installationId presence.
+  // Pull all identities + their hash state, partitioned by
+  // installation id via the ChargingStation join.
   const identityRows = await db.ocppIdentity.findMany({
     where: { chargingStation: { installationId: { not: null } } },
-    select: { chargingStation: { select: { installationId: true } } },
+    select: {
+      authSecretHash: true,
+      chargingStation: { select: { installationId: true } },
+    },
   });
-  const identityCount = new Map<string, number>();
+  const byInstallation = new Map<string, { authSecretHash: string | null }[]>();
   for (const row of identityRows) {
     const instId = row.chargingStation.installationId;
     if (!instId) continue;
-    identityCount.set(instId, (identityCount.get(instId) ?? 0) + 1);
+    const list = byInstallation.get(instId) ?? [];
+    list.push({ authSecretHash: row.authSecretHash });
+    byInstallation.set(instId, list);
   }
 
-  // Latest rotation/set audit per installation. We pull every
+  // Latest rotation/set/disable audit per installation. We pull every
   // matching audit row ordered desc, then keep only the first per
-  // targetId — small volume (one row per rotation), bounded.
+  // targetId — small volume (one row per change), bounded.
   const audits = await db.auditAction.findMany({
     where: {
       targetType: "installation",
-      action: { in: ["installation.ocpp_password.rotate", "installation.ocpp_password.set"] },
+      action: {
+        in: [
+          "installation.ocpp_password.rotate",
+          "installation.ocpp_password.set",
+          "installation.ocpp_password.disable",
+        ],
+      },
     },
     orderBy: { occurredAt: "desc" },
     select: { targetId: true, occurredAt: true },
@@ -258,13 +347,15 @@ export async function listInstallationOcppSummaries(
     if (!lastRotatedAt.has(a.targetId)) lastRotatedAt.set(a.targetId, a.occurredAt);
   }
 
-  const all = new Set<string>([...identityCount.keys(), ...lastRotatedAt.keys()]);
+  const all = new Set<string>([...byInstallation.keys(), ...lastRotatedAt.keys()]);
   const result = new Map<string, InstallationOcppSummary>();
   for (const installationId of all) {
+    const rows = byInstallation.get(installationId) ?? [];
     result.set(installationId, {
       installationId,
-      identityCount: identityCount.get(installationId) ?? 0,
+      identityCount: rows.length,
       lastRotatedAt: lastRotatedAt.get(installationId) ?? null,
+      authMode: deriveAuthMode(rows),
     });
   }
   return result;

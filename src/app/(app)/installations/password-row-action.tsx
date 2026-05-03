@@ -17,9 +17,11 @@ import { apiFetch } from "@/lib/api-client";
 export function PasswordRowAction({
   installationId,
   identityCount,
+  authMode,
 }: {
   installationId: string;
   identityCount: number;
+  authMode: "basic" | "none" | "mixed" | "empty";
 }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -50,6 +52,35 @@ export function PasswordRowAction({
         result: { plaintext: string; identityCount: number };
       };
       setRevealed(body.result.plaintext);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDisable() {
+    if (busy) return;
+    const first = confirm(
+      `DISABLE OCPP Basic Auth for ${identityCount} chargers in this installation?\n\nAfter this, anyone who knows a charger's identity-string can connect to our gateway as that charger and inject fake events. Identity-strings are NOT secret.\n\nUse only when the charger firmware genuinely cannot send Basic Auth.`,
+    );
+    if (!first) return;
+    const second = confirm(
+      "Last chance — confirm again. The audit log will record this action.",
+    );
+    if (!second) return;
+    setBusy(true);
+    setError(null);
+    setRevealed(null);
+    try {
+      const res = await apiFetch(
+        `/api/admin/installations/${installationId}/ocpp-password/disable`,
+        { method: "POST" },
+      );
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error ?? `HTTP ${res.status}`);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -175,6 +206,17 @@ export function PasswordRowAction({
         >
           {setMode ? "Cancel set" : "Set explicit"}
         </button>
+        {authMode !== "none" && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={handleDisable}
+            className="rounded border border-rose-500/40 bg-rose-500/5 px-2 py-1 text-rose-300 hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+            title="Two confirms required"
+          >
+            Disable auth
+          </button>
+        )}
       </div>
 
       {setMode && (

@@ -10,10 +10,13 @@ import { InstallationOcppPasswordPanel } from "./ocpp-password-panel";
 
 export const dynamic = "force-dynamic";
 
+type AuthMode = "basic" | "none" | "mixed" | "empty";
+
 type OcppSummary = {
   installationId: string;
   identityCount: number;
   lastRotatedAt: string | null;
+  authMode: AuthMode;
 };
 
 export default async function InstallationDetailPage({ params }: { params: Promise<{ id: string }> }) {

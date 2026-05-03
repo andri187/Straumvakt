@@ -8,10 +8,13 @@ import { PasswordRowAction } from "./password-row-action";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Installations" };
 
+type AuthMode = "basic" | "none" | "mixed" | "empty";
+
 type OcppRowSummary = {
   installationId: string;
   identityCount: number;
   lastRotatedAt: string | null;
+  authMode: AuthMode;
 };
 
 function formatRotatedAt(iso: string | null): string {
@@ -83,8 +86,8 @@ export default async function InstallationsPage() {
                   className="shrink-0 text-[10px] text-ink-500"
                   title={
                     ocpp?.lastRotatedAt
-                      ? `Last rotated ${formatRotatedAt(ocpp.lastRotatedAt)}`
-                      : "Never rotated since import"
+                      ? `Last changed ${formatRotatedAt(ocpp.lastRotatedAt)}`
+                      : "Never changed since import"
                   }
                 >
                   pwd · {identityCount}{" "}
@@ -98,9 +101,26 @@ export default async function InstallationsPage() {
                     </>
                   )}
                 </span>
+                {ocpp?.authMode === "none" && (
+                  <span
+                    className="shrink-0 rounded bg-amber-500/10 px-1.5 py-0.5 font-mono text-[10px] text-amber-300"
+                    title="No-auth installation — chargers connect without Basic Auth"
+                  >
+                    no-auth
+                  </span>
+                )}
+                {ocpp?.authMode === "mixed" && (
+                  <span
+                    className="shrink-0 rounded bg-rose-500/10 px-1.5 py-0.5 font-mono text-[10px] text-rose-300"
+                    title="Hash drift — some chargers in this installation have a hash, some don't"
+                  >
+                    drift
+                  </span>
+                )}
                 <PasswordRowAction
                   installationId={i.id}
                   identityCount={identityCount}
+                  authMode={ocpp?.authMode ?? "empty"}
                 />
                 <span className="shrink-0 font-mono text-[10px] text-ink-500">
                   {i.onboardingStatus}

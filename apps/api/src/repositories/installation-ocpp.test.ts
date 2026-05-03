@@ -11,6 +11,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 import {
+  disableInstallationOcppAuth,
   rotateInstallationOcppPassword,
   setInstallationOcppPassword,
   getInstallationOcppSummary,
@@ -20,7 +21,7 @@ import type { PrismaClient } from "../generated/prisma/client";
 interface IdentityRow {
   id: string;
   installationId: string; // resolved via chargingStation
-  authSecretHash: string;
+  authSecretHash: string | null;
 }
 
 interface AuditRow {
@@ -201,6 +202,7 @@ describe("installation-ocpp", () => {
       installationId: "inst-1",
       identityCount: 2,
       lastRotatedAt: null,
+      authMode: "basic",
     });
 
     await rotateInstallationOcppPassword(f.db, "inst-1", null);
@@ -213,5 +215,56 @@ describe("installation-ocpp", () => {
   it("summary: missing installation → null", async () => {
     const f = makeFake([]);
     expect(await getInstallationOcppSummary(f.db, "inst-MISSING")).toBeNull();
+  });
+
+  it("disable: nulls every hash + writes audit + sets authMode='none'", async () => {
+    const f = makeFake([{ id: "inst-1", orgId: "org-1" }]);
+    f.identities.push(
+      { id: "id-a", installationId: "inst-1", authSecretHash: "hash-a" },
+      { id: "id-b", installationId: "inst-1", authSecretHash: "hash-b" },
+    );
+
+    const result = await disableInstallationOcppAuth(f.db, "inst-1", null);
+    expect(result).not.toBeNull();
+    expect(result!.identityCount).toBe(2);
+
+    expect(f.identities[0].authSecretHash).toBeNull();
+    expect(f.identities[1].authSecretHash).toBeNull();
+
+    expect(f.audits).toHaveLength(1);
+    expect(f.audits[0].action).toBe("installation.ocpp_password.disable");
+
+    const summary = await getInstallationOcppSummary(f.db, "inst-1");
+    expect(summary?.authMode).toBe("none");
+  });
+
+  it("disable then rotate: returns to authMode='basic'", async () => {
+    const f = makeFake([{ id: "inst-1", orgId: "org-1" }]);
+    f.identities.push(
+      { id: "id-a", installationId: "inst-1", authSecretHash: "hash-a" },
+    );
+    await disableInstallationOcppAuth(f.db, "inst-1", null);
+    expect((await getInstallationOcppSummary(f.db, "inst-1"))?.authMode).toBe("none");
+
+    await rotateInstallationOcppPassword(f.db, "inst-1", null);
+    expect((await getInstallationOcppSummary(f.db, "inst-1"))?.authMode).toBe("basic");
+  });
+
+  it("summary: drift detection — one hash null, one populated → 'mixed'", async () => {
+    const f = makeFake([{ id: "inst-1", orgId: "org-1" }]);
+    f.identities.push(
+      { id: "id-a", installationId: "inst-1", authSecretHash: "hash-a" },
+      { id: "id-b", installationId: "inst-1", authSecretHash: null },
+    );
+    expect((await getInstallationOcppSummary(f.db, "inst-1"))?.authMode).toBe(
+      "mixed",
+    );
+  });
+
+  it("disable: missing installation → null", async () => {
+    const f = makeFake([]);
+    const result = await disableInstallationOcppAuth(f.db, "inst-MISSING", null);
+    expect(result).toBeNull();
+    expect(f.audits).toHaveLength(0);
   });
 });

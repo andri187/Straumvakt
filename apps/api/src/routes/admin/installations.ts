@@ -12,6 +12,7 @@ import {
   updateInstallation,
 } from "../../repositories/installations";
 import {
+  disableInstallationOcppAuth,
   getInstallationOcppSummary,
   listInstallationOcppSummaries,
   rotateInstallationOcppPassword,
@@ -165,5 +166,20 @@ adminInstallations.patch(
       }
       throw err;
     }
+  },
+);
+
+// Flip the entire installation onto the no-auth path. Distinct from
+// PATCH (set explicit) so the security relaxation can never be a
+// silent consequence of submitting blank plaintext — the operator
+// has to call this verb deliberately. UI gates with double-confirm.
+adminInstallations.post(
+  "/:id/ocpp-password/disable",
+  requirePermission("site.write"),
+  async (c) => {
+    const db = makePrisma(c.env);
+    const result = await disableInstallationOcppAuth(db, c.req.param("id"), null);
+    if (!result) return c.json({ error: "not_found" }, 404);
+    return c.json({ result });
   },
 );

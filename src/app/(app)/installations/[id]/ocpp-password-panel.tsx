@@ -22,10 +22,13 @@ import { apiFetch } from "@/lib/api-client";
  * via the encrypted vendor credential.
  */
 
+type AuthMode = "basic" | "none" | "mixed" | "empty";
+
 type Summary = {
   installationId: string;
   identityCount: number;
   lastRotatedAt: string | null;
+  authMode: AuthMode;
 };
 
 type RotateResult = {
@@ -72,6 +75,7 @@ export function InstallationOcppPasswordPanel({
         installationId: body.result.installationId,
         identityCount: body.result.identityCount,
         lastRotatedAt: new Date().toISOString(),
+        authMode: "basic",
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -112,9 +116,46 @@ export function InstallationOcppPasswordPanel({
         installationId,
         identityCount: body.result.identityCount,
         lastRotatedAt: new Date().toISOString(),
+        authMode: "basic",
       });
       setSetInput("");
       setSetMode(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDisable() {
+    if (busy) return;
+    const first = confirm(
+      `DISABLE OCPP Basic Auth for ${summary?.identityCount ?? "?"} chargers in this installation?\n\nAfter this, ANYONE who knows a charger's identity-string can connect to our gateway as that charger and inject fake StatusNotification, MeterValues, and StartTransaction events. Identity-strings are NOT secret — they're written into the vendor portal in plaintext and sometimes printed on charger labels.\n\nUse only when:\n  • The charger firmware genuinely cannot send Basic Auth, AND\n  • The fraud / pollution risk is acceptable for this fleet.`,
+    );
+    if (!first) return;
+    const second = confirm(
+      "Last chance — confirm again that you want to put this installation on the no-auth path. The audit log will record this action.",
+    );
+    if (!second) return;
+    setBusy(true);
+    setError(null);
+    setRevealed(null);
+    try {
+      const res = await apiFetch(
+        `/api/admin/installations/${installationId}/ocpp-password/disable`,
+        { method: "POST" },
+      );
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error ?? `HTTP ${res.status}`);
+      }
+      const body = (await res.json()) as { result: { identityCount: number } };
+      setSummary({
+        installationId,
+        identityCount: body.result.identityCount,
+        lastRotatedAt: new Date().toISOString(),
+        authMode: "none",
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -126,6 +167,8 @@ export function InstallationOcppPasswordPanel({
     if (!revealed) return;
     void navigator.clipboard.writeText(revealed);
   }
+
+  const authMode = summary?.authMode ?? "empty";
 
   return (
     <section className="mt-8 rounded-lg border border-bg-border bg-bg-base/30 p-4">
@@ -141,13 +184,36 @@ export function InstallationOcppPasswordPanel({
 
       <dl className="mb-3 flex flex-wrap gap-x-6 gap-y-1 text-xs">
         <div>
+          <dt className="inline text-ink-500">Auth mode: </dt>
+          <dd className="inline">
+            {authMode === "basic" && (
+              <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 font-mono text-[10px] text-emerald-300">
+                Basic Auth required
+              </span>
+            )}
+            {authMode === "none" && (
+              <span className="rounded bg-amber-500/10 px-1.5 py-0.5 font-mono text-[10px] text-amber-300">
+                No auth — chargers connect without password
+              </span>
+            )}
+            {authMode === "mixed" && (
+              <span className="rounded bg-rose-500/10 px-1.5 py-0.5 font-mono text-[10px] text-rose-300">
+                MIXED — some chargers have hash, some don't (drift)
+              </span>
+            )}
+            {authMode === "empty" && (
+              <span className="text-ink-400">no chargers yet</span>
+            )}
+          </dd>
+        </div>
+        <div>
           <dt className="inline text-ink-500">Chargers covered: </dt>
           <dd className="inline text-ink-100">
             {summary?.identityCount ?? "—"}
           </dd>
         </div>
         <div>
-          <dt className="inline text-ink-500">Last rotated: </dt>
+          <dt className="inline text-ink-500">Last changed: </dt>
           <dd className="inline text-ink-100">
             {summary?.lastRotatedAt
               ? new Date(summary.lastRotatedAt).toLocaleString()
@@ -211,6 +277,17 @@ export function InstallationOcppPasswordPanel({
         >
           {setMode ? "Cancel" : "Set explicit password"}
         </button>
+        {authMode !== "none" && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={handleDisable}
+            className="rounded-md border border-rose-500/40 bg-rose-500/5 px-3 py-1.5 text-xs text-rose-300 hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+            title="Put the entire installation on the no-auth path. Two confirms required."
+          >
+            Disable Basic Auth
+          </button>
+        )}
       </div>
 
       {setMode && (
