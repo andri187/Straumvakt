@@ -3,6 +3,17 @@ import { adminSessionConfig, verifyAdminSession } from "@/lib/admin-session";
 
 const PUBLIC_PATHS = new Set(["/api/admin/login"]);
 
+// Sprint 5.8 — invite-flow public surfaces. The recipient page at
+// /invite/<token> renders for unauthenticated users (the token IS
+// the auth). The /api/public/invites/* endpoints are token-gated
+// and bypass the admin-session check.
+function isPublicInvitePath(pathname: string): boolean {
+  return (
+    pathname.startsWith("/invite/") ||
+    pathname.startsWith("/api/public/invites/")
+  );
+}
+
 // Trusted internal header — stripped from all incoming requests so clients
 // cannot spoof it, then re-set by middleware after successful verification.
 const ADMIN_HEADER = "x-straumvakt-admin-verified";
@@ -19,6 +30,9 @@ export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   if (isPublicAsset(pathname)) {
+    return NextResponse.next();
+  }
+  if (isPublicInvitePath(pathname)) {
     return NextResponse.next();
   }
 

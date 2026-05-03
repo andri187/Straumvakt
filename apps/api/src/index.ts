@@ -29,6 +29,7 @@ import {
 import { adminGroups } from "./routes/admin/groups";
 import { adminIdTokens } from "./routes/admin/id-tokens";
 import { adminOrgInvites } from "./routes/admin/org-invites";
+import { publicInvites } from "./routes/public/invites";
 import { internalOcppAuth } from "./routes/internal/ocpp-auth";
 import { internalOcppAuthorize } from "./routes/internal/ocpp-authorize";
 import { internalOcppEvents } from "./routes/internal/ocpp-events";
@@ -106,6 +107,12 @@ app.route("/api/admin/tokens", adminIdTokens);
 // Sprint 5.7 — agent invite flow (admin side). Mounts under
 // /api/admin/orgs/:orgId/invites — see org-invites.ts.
 app.route("/api/admin/orgs", adminOrgInvites);
+
+// Sprint 5.8 — agent invite flow (recipient side). Public routes
+// gated by the token itself, NOT by the admin session cookie.
+//   GET  /api/public/invites/peek?token=<plaintext>
+//   POST /api/public/invites/consume
+app.route("/api/public/invites", publicInvites);
 
 // Internal — gateway → API auth lookup. Gated by OCPP_INGEST_SECRET
 // header (ADR 0004), not the admin session middleware.
