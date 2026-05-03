@@ -48,17 +48,27 @@ export interface SetResult {
   identityCount: number;
 }
 
+// 32-char alphabet (a-z minus l/o + 2-9): exactly 32 chars so each
+// random byte's low 5 bits map to one output char without modulo
+// bias. Excludes l and o because operators copy passwords by hand
+// from our reveal panel into the vendor portal — 1/l and 0/o are
+// the most common transcription errors.
+const PASSWORD_ALPHABET = "abcdefghijkmnpqrstuvwxyz23456789";
+
 /**
- * 32 bytes of CSPRNG → 64-char lowercase hex. Matches the format
- * generatePassword() uses elsewhere (chargers.ts, onboarding-chains.ts)
- * so chargers onboarded by either path show the same plaintext shape.
+ * 20-character lowercase alphanumeric, ~100 bits of entropy. Short
+ * enough to fit charger firmware password fields (Zaptec,
+ * ChargeAmps, Easee tend to cap around 20–32 chars; the old 64-char
+ * hex output overflowed silently on some models).
  */
 function generatePassword(): string {
-  const bytes = new Uint8Array(32);
+  const bytes = new Uint8Array(20);
   crypto.getRandomValues(bytes);
-  let hex = "";
-  for (let i = 0; i < bytes.length; i++) hex += bytes[i].toString(16).padStart(2, "0");
-  return hex;
+  let out = "";
+  for (let i = 0; i < bytes.length; i++) {
+    out += PASSWORD_ALPHABET[bytes[i] & 0x1f];
+  }
+  return out;
 }
 
 async function loadInstallationContext(

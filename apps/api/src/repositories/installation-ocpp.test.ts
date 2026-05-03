@@ -121,7 +121,9 @@ describe("installation-ocpp", () => {
     expect(result).not.toBeNull();
     expect(result!.installationId).toBe("inst-1");
     expect(result!.identityCount).toBe(2);
-    expect(result!.plaintext).toMatch(/^[0-9a-f]{64}$/);
+    // 20 chars from the alphabet [a-km-np-z2-9] — short enough for
+    // real charger firmware, ~100 bits entropy.
+    expect(result!.plaintext).toMatch(/^[a-km-np-z2-9]{20}$/);
 
     // Both inst-1 identities updated to the same fresh hash.
     expect(f.identities[0].authSecretHash).toBe(f.identities[1].authSecretHash);
