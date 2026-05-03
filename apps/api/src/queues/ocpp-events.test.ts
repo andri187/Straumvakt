@@ -165,4 +165,96 @@ describe("handleOcppEventsBatch", () => {
     expect(valid2.ack).toHaveBeenCalledTimes(1);
     expect(fakePrisma.eventLogEntry.create).toHaveBeenCalledTimes(2);
   });
+
+  // ────────────────────────────────────────────────────────────────
+  // Sprint 5.3 — additional edge cases not covered by the 5.1 set.
+  // ────────────────────────────────────────────────────────────────
+
+  it("triple-replay (3 deliveries of same eventId) → still only one event_log row", async () => {
+    // CF Queues at-least-once can redeliver the same envelope more
+    // than twice in a row (network blip → retry → blip → retry → blip
+    // → retry → finally succeeds). The idempotency contract has to
+    // hold across N deliveries, not just 2.
+    const m1 = makeMsg(VALID);
+    const m2 = makeMsg(VALID);
+    const m3 = makeMsg(VALID);
+    await handleOcppEventsBatch(makeBatch([m1]), ENV);
+    await handleOcppEventsBatch(makeBatch([m2]), ENV);
+    await handleOcppEventsBatch(makeBatch([m3]), ENV);
+    expect(m1.ack).toHaveBeenCalledTimes(1);
+    expect(m2.ack).toHaveBeenCalledTimes(1);
+    expect(m3.ack).toHaveBeenCalledTimes(1);
+    // Only one real write — second + third hit the idempotency cache.
+    expect(fakePrisma.eventLogEntry.create).toHaveBeenCalledTimes(1);
+  });
+
+  it("partial-batch failure: one transient error in the middle does not poison neighbours", async () => {
+    // The consumer must isolate failures per message. A transient DB
+    // error on message #2 must not prevent #1 and #3 from acking.
+    // Without this property, a single bad row would block the whole
+    // batch and force redelivery of the whole batch — multiplying
+    // retries N-fold.
+    const m1 = makeMsg(VALID);
+    const m2 = makeMsg({
+      ...VALID,
+      eventId: "66666666-6666-6666-6666-666666666666",
+    });
+    const m3 = makeMsg({
+      ...VALID,
+      eventId: "77777777-7777-7777-7777-777777777777",
+    });
+
+    // Stage the failure: eventLogEntry.create throws on the SECOND
+    // invocation (the middle message), then succeeds for the third.
+    let calls = 0;
+    fakePrisma.eventLogEntry.create.mockImplementation(async () => {
+      calls++;
+      if (calls === 2) throw new Error("hyperdrive blip");
+      return { id: `log-${nextLogId++}` };
+    });
+
+    await handleOcppEventsBatch(makeBatch([m1, m2, m3]), ENV);
+
+    expect(m1.ack).toHaveBeenCalledTimes(1);
+    expect(m1.retry).not.toHaveBeenCalled();
+
+    expect(m2.retry).toHaveBeenCalledTimes(1);
+    expect(m2.ack).not.toHaveBeenCalled();
+
+    expect(m3.ack).toHaveBeenCalledTimes(1);
+    expect(m3.retry).not.toHaveBeenCalled();
+  });
+
+  it("empty batch: no errors, no calls into prisma or projections", async () => {
+    await handleOcppEventsBatch(makeBatch([]), ENV);
+    expect(fakePrisma.eventLogEntry.create).not.toHaveBeenCalled();
+    expect(fakePrisma.idempotencyKey.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("DLQ replay: a message that originally succeeded becomes a no-op on replay", async () => {
+    // Operator runs apps/api/scripts/replay-dlq.ts which pulls from
+    // the DLQ and re-publishes onto the main queue. When the original
+    // copy DID make it to Postgres before being DLQ'd (a partial-
+    // success edge case — the consumer crashed AFTER the DB tx
+    // committed but BEFORE the ack reached CF Queues), the replayed
+    // copy must be a silent no-op, not a double-write.
+    //
+    // Step 1: original processes successfully.
+    const original = makeMsg(VALID);
+    await handleOcppEventsBatch(makeBatch([original]), ENV);
+    expect(original.ack).toHaveBeenCalledTimes(1);
+    expect(fakePrisma.eventLogEntry.create).toHaveBeenCalledTimes(1);
+
+    // Step 2: operator pulled from DLQ and re-published. The replayed
+    // message body is byte-for-byte identical (the replay script
+    // doesn't touch it).
+    const replayed = makeMsg(VALID);
+    await handleOcppEventsBatch(makeBatch([replayed]), ENV);
+
+    // Step 3: ack on the replay too. eventLogEntry.create still 1 —
+    // idempotency held, no double-projection, no double-billing-row.
+    expect(replayed.ack).toHaveBeenCalledTimes(1);
+    expect(replayed.retry).not.toHaveBeenCalled();
+    expect(fakePrisma.eventLogEntry.create).toHaveBeenCalledTimes(1);
+  });
 });
