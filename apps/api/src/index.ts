@@ -38,6 +38,8 @@ import { makePrisma } from "./lib/prisma";
 import { buildRegistry } from "./lib/dispatch-targets";
 import { processCommand, sweepStuckPending } from "./lib/dispatcher";
 import { handleOcppEventsBatch } from "./queues/ocpp-events";
+import { ensureForwardPartitions } from "./lib/db/partition-cron";
+import { makePool } from "./lib/db/raw";
 import type {
   Env,
   OutboundCommandMessage,
@@ -211,6 +213,40 @@ const handler: ExportedHandler<Env, AnyQueueMessage> = {
       sweepStuckPending(db, async (commandId) => {
         await queue.send({ commandId });
       }),
+    );
+
+    // Sprint 7.2 — keep next 7 days of event_log + meter_values
+    // partitions populated. Idempotent CREATE TABLE IF NOT EXISTS;
+    // cheap when we're already covered. Uses a fresh pg pool (not
+    // Prisma) because partition DDL isn't a Prisma migration —
+    // they're routine maintenance the cron owns. Logs once per
+    // run so the operator can grep tail for cadence + counts.
+    ctx.waitUntil(
+      (async () => {
+        const pool = makePool(env);
+        try {
+          const client = await pool.connect();
+          try {
+            const result = await ensureForwardPartitions(client);
+            if (result.failed.length > 0 || result.succeeded > 0) {
+              console.log("[partition-cron]", {
+                attempted: result.attempted,
+                succeeded: result.succeeded,
+                failed: result.failed.length,
+                failures: result.failed.slice(0, 5),
+              });
+            }
+          } finally {
+            client.release();
+          }
+        } catch (err) {
+          console.error("[partition-cron] failed", {
+            error: err instanceof Error ? err.message : String(err),
+          });
+        } finally {
+          await pool.end().catch(() => undefined);
+        }
+      })(),
     );
   },
 };

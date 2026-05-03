@@ -1176,8 +1176,11 @@ enum SessionStatus {
   @@schema("charging")
 }
 
+// Sprint 7.2 / ADR 0018 Decision 1 — charging.meter_values is now
+// PARTITIONED (RANGE on measured_at, daily). PK is composite
+// (id, measured_at). PARTITION BY declaration is in the migration.
 model MeterValue {
-  id          String        @id @default(uuid()) @db.Uuid
+  id          String        @default(uuid()) @db.Uuid
   orgId       String        @map("org_id") @db.Uuid
   sessionId   String        @map("session_id") @db.Uuid
   measuredAt  DateTime      @map("measured_at") @db.Timestamptz(6)
@@ -1190,6 +1193,7 @@ model MeterValue {
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
   session     ChargeSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
+  @@id([id, measuredAt])
   @@index([sessionId, measuredAt])
   @@map("meter_values")
   @@schema("charging")
@@ -1550,8 +1554,11 @@ model DetectionRule {
 // events — append-only event log (source of truth) + idempotency
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Sprint 7.2 / ADR 0018 Decision 1 — events.event_log is PARTITIONED
+// (RANGE on recorded_at, daily). PK is composite (id, recorded_at).
+// PARTITION BY declaration is in the migration.
 model EventLogEntry {
-  id              String          @id @default(uuid()) @db.Uuid // UUIDv7 when driver lands it
+  id              String          @default(uuid()) @db.Uuid // UUIDv7 when driver lands it
   orgId           String          @map("org_id") @db.Uuid
   aggregateType   String          @map("aggregate_type")
   aggregateId    String           @map("aggregate_id") @db.Uuid
@@ -1565,6 +1572,7 @@ model EventLogEntry {
 
   organization    Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
+  @@id([id, recordedAt])
   @@index([orgId, occurredAt(sort: Desc)])
   @@index([aggregateType, aggregateId, occurredAt])
   @@index([eventType, occurredAt(sort: Desc)])
