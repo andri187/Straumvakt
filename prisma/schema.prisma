@@ -104,6 +104,12 @@ model User {
 
   // ── Existing relations ───────────────────────────────────────────
   credentials    UserCredential?
+  // Sprint 5.6 — one-shot tokens (invite, magic-link, password-reset).
+  // Many-to-one because a user can have multiple kinds active at once
+  // (e.g. an invite they haven't consumed AND a password-reset they
+  // requested). UserToken's own (userId, kind, expiresAt) index keeps
+  // lookups cheap.
+  tokens         UserToken[]
   memberships    Membership[]
   primaryFamily  FamilyGroup[]    @relation("FamilyGroupPrimary")
   familyMember   FamilyMembership[]
@@ -354,6 +360,54 @@ model UserCredential {
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   @@map("user_credentials")
+  @@schema("identity")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// identity — UserToken (Sprint 5.6 / ADR 0017)
+// One-shot, time-boxed authentication artefacts: invite links, magic
+// links, future password-reset links. Different lifecycle from
+// UserCredential (which holds long-lived password / TOTP), so it
+// lives in its own table — Rule 4 additive change.
+//
+// We never store plaintext tokens. The plaintext is generated at
+// create time, returned to the caller ONCE for them to embed in a
+// link, then only the SHA-256 hash is persisted. consume() looks
+// up by hash, verifies not expired, not used, marks used,
+// returns the user + metadata.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model UserToken {
+  id            String         @id @default(uuid()) @db.Uuid
+  userId        String         @map("user_id") @db.Uuid
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind          UserTokenKind
+  // SHA-256 hex of the plaintext token. Plaintext is returned once
+  // at create-time; never persisted.
+  tokenHash     String         @unique @map("token_hash")
+  expiresAt     DateTime       @map("expires_at") @db.Timestamptz(6)
+  // Set once on consume. Re-consume attempts find the row but the
+  // non-null usedAt rejects them.
+  usedAt        DateTime?      @map("used_at") @db.Timestamptz(6)
+  // Optional inviter / actor for audit trail. Nullable for system-
+  // initiated tokens (password reset triggered by self-service).
+  createdById   String?        @map("created_by_id") @db.Uuid
+  // Kind-specific bits: e.g. invite tokens carry orgId + role +
+  // installationId scope. Freeform JSONB so adding a new kind
+  // doesn't require a migration.
+  metadata      Json           @default("{}") @db.JsonB
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([userId, kind, expiresAt])
+  @@map("user_tokens")
+  @@schema("identity")
+}
+
+enum UserTokenKind {
+  invite
+  magic_link
+  password_reset
+
   @@schema("identity")
 }
 

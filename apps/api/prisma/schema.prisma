@@ -77,6 +77,8 @@ model User {
 
   // ── Existing relations ───────────────────────────────────────────
   credentials    UserCredential?
+  // Sprint 5.6 — one-shot tokens (invite, magic-link, password-reset).
+  tokens         UserToken[]
   memberships    Membership[]
   primaryFamily  FamilyGroup[]    @relation("FamilyGroupPrimary")
   familyMember   FamilyMembership[]
@@ -275,6 +277,38 @@ model UserCredential {
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   @@map("user_credentials")
+  @@schema("identity")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// identity — UserToken (Sprint 5.6 / ADR 0017)
+// One-shot, time-boxed authentication artefacts: invite links, magic
+// links, future password-reset links. See root schema for full
+// commentary; mirrored here for the apps/api Prisma client.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model UserToken {
+  id            String         @id @default(uuid()) @db.Uuid
+  userId        String         @map("user_id") @db.Uuid
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind          UserTokenKind
+  tokenHash     String         @unique @map("token_hash")
+  expiresAt     DateTime       @map("expires_at") @db.Timestamptz(6)
+  usedAt        DateTime?      @map("used_at") @db.Timestamptz(6)
+  createdById   String?        @map("created_by_id") @db.Uuid
+  metadata      Json           @default("{}") @db.JsonB
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([userId, kind, expiresAt])
+  @@map("user_tokens")
+  @@schema("identity")
+}
+
+enum UserTokenKind {
+  invite
+  magic_link
+  password_reset
+
   @@schema("identity")
 }
 
