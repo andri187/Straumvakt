@@ -17,6 +17,7 @@ export function OrgSectionTabs({ orgId }: { orgId: string }) {
     { href: `${base}/installations`, label: "Installations" },
     { href: `${base}/driver-groups`, label: "Driver groups" },
     { href: `${base}/contracts`, label: "Contracts" },
+    { href: `${base}/agents`, label: "Agents" },
   ];
 
   const matched = tabs
