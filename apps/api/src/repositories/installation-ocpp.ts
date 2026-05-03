@@ -203,3 +203,59 @@ export async function getInstallationOcppSummary(
     lastRotatedAt: lastAudit?.occurredAt ?? null,
   };
 }
+
+/**
+ * Bulk version of getInstallationOcppSummary — one row per
+ * installation that has at least one OcppIdentity. Used by the
+ * /installations list page to enrich each row without N+1 round
+ * trips.
+ *
+ * Returns a Map keyed by installation_id so callers can `.get(id)
+ * ?? defaultSummary(id)` without allocating placeholders for
+ * installations that don't have any chargers yet.
+ */
+export async function listInstallationOcppSummaries(
+  db: PrismaClient,
+): Promise<Map<string, InstallationOcppSummary>> {
+  // Identity counts per installation. groupBy walks the OcppIdentity
+  // → ChargingStation relation, so we hop through chargingStation in
+  // a where filter for installationId presence.
+  const identityRows = await db.ocppIdentity.findMany({
+    where: { chargingStation: { installationId: { not: null } } },
+    select: { chargingStation: { select: { installationId: true } } },
+  });
+  const identityCount = new Map<string, number>();
+  for (const row of identityRows) {
+    const instId = row.chargingStation.installationId;
+    if (!instId) continue;
+    identityCount.set(instId, (identityCount.get(instId) ?? 0) + 1);
+  }
+
+  // Latest rotation/set audit per installation. We pull every
+  // matching audit row ordered desc, then keep only the first per
+  // targetId — small volume (one row per rotation), bounded.
+  const audits = await db.auditAction.findMany({
+    where: {
+      targetType: "installation",
+      action: { in: ["installation.ocpp_password.rotate", "installation.ocpp_password.set"] },
+    },
+    orderBy: { occurredAt: "desc" },
+    select: { targetId: true, occurredAt: true },
+  });
+  const lastRotatedAt = new Map<string, Date>();
+  for (const a of audits) {
+    if (!a.targetId) continue;
+    if (!lastRotatedAt.has(a.targetId)) lastRotatedAt.set(a.targetId, a.occurredAt);
+  }
+
+  const all = new Set<string>([...identityCount.keys(), ...lastRotatedAt.keys()]);
+  const result = new Map<string, InstallationOcppSummary>();
+  for (const installationId of all) {
+    result.set(installationId, {
+      installationId,
+      identityCount: identityCount.get(installationId) ?? 0,
+      lastRotatedAt: lastRotatedAt.get(installationId) ?? null,
+    });
+  }
+  return result;
+}

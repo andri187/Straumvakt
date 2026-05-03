@@ -13,6 +13,7 @@ import {
 } from "../../repositories/installations";
 import {
   getInstallationOcppSummary,
+  listInstallationOcppSummaries,
   rotateInstallationOcppPassword,
   setInstallationOcppPassword,
 } from "../../repositories/installation-ocpp";
@@ -29,11 +30,26 @@ adminInstallations.get(
   requirePermission("platform.tenant.read"),
   async (c) => {
     const db = makePrisma(c.env);
-    const [installations, vendors] = await Promise.all([
+    const [installations, vendors, ocppMap] = await Promise.all([
       listAllInstallations(db),
       listVendors(db),
+      listInstallationOcppSummaries(db),
     ]);
-    return c.json({ installations, vendors });
+    // Project Map<id, summary> into a serialisable array so the UI
+    // can index by id without a Map<>JSON.stringify dance. ISO the
+    // Date so `JSON.parse` round-trips cleanly. Installations with
+    // zero chargers and no rotation history return identityCount:0,
+    // lastRotatedAt:null — explicit so the UI doesn't need a
+    // missing-row branch.
+    const ocppSummaries = installations.map((i) => {
+      const s = ocppMap.get(i.id);
+      return {
+        installationId: i.id,
+        identityCount: s?.identityCount ?? 0,
+        lastRotatedAt: s?.lastRotatedAt?.toISOString() ?? null,
+      };
+    });
+    return c.json({ installations, vendors, ocppSummaries });
   },
 );
 
