@@ -24,6 +24,61 @@ function formatRotatedAt(iso: string | null): string {
   return d.toLocaleString();
 }
 
+function AuthEmblem({
+  authMode,
+  identityCount,
+  lastChangedAt,
+  formatRotatedAt: format,
+}: {
+  authMode: AuthMode;
+  identityCount: number;
+  lastChangedAt: string | null;
+  formatRotatedAt: (iso: string | null) => string;
+}) {
+  const chargerLabel = `${identityCount} ${identityCount === 1 ? "charger" : "chargers"}`;
+  const changedSuffix = lastChangedAt ? ` · changed ${format(lastChangedAt)}` : "";
+
+  switch (authMode) {
+    case "basic":
+      return (
+        <span
+          className="shrink-0 rounded border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 font-mono text-[10px] text-emerald-300"
+          title={`Basic Auth required for ${chargerLabel}${changedSuffix}`}
+        >
+          password set · {chargerLabel}
+        </span>
+      );
+    case "none":
+      return (
+        <span
+          className="shrink-0 rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 font-mono text-[10px] text-amber-300"
+          title={`No-auth installation — chargers connect without Basic Auth${changedSuffix}`}
+        >
+          NO PASSWORD · {chargerLabel}
+        </span>
+      );
+    case "mixed":
+      return (
+        <span
+          className="shrink-0 rounded border border-rose-500/40 bg-rose-500/10 px-1.5 py-0.5 font-mono text-[10px] text-rose-300"
+          title={`Hash drift — some of the ${chargerLabel} have a hash, some don't${changedSuffix}`}
+        >
+          DRIFT · {chargerLabel}
+        </span>
+      );
+    case "empty":
+    default:
+      return (
+        <span
+          className="shrink-0 rounded bg-bg-base/60 px-1.5 py-0.5 font-mono text-[10px] text-ink-500"
+          title="No chargers in this installation yet"
+        >
+          empty
+        </span>
+      );
+  }
+}
+
 export default async function InstallationsPage() {
   const { installations, ocppSummaries } = await apiFetchServerJson<{
     installations: InstallationSummary[];
@@ -82,41 +137,12 @@ export default async function InstallationsPage() {
                     </>
                   )}
                 </span>
-                <span
-                  className="shrink-0 text-[10px] text-ink-500"
-                  title={
-                    ocpp?.lastRotatedAt
-                      ? `Last changed ${formatRotatedAt(ocpp.lastRotatedAt)}`
-                      : "Never changed since import"
-                  }
-                >
-                  pwd · {identityCount}{" "}
-                  {identityCount === 1 ? "charger" : "chargers"}
-                  {ocpp?.lastRotatedAt && (
-                    <>
-                      {" · "}
-                      <span className="text-ink-300">
-                        {formatRotatedAt(ocpp.lastRotatedAt)}
-                      </span>
-                    </>
-                  )}
-                </span>
-                {ocpp?.authMode === "none" && (
-                  <span
-                    className="shrink-0 rounded bg-amber-500/10 px-1.5 py-0.5 font-mono text-[10px] text-amber-300"
-                    title="No-auth installation — chargers connect without Basic Auth"
-                  >
-                    no-auth
-                  </span>
-                )}
-                {ocpp?.authMode === "mixed" && (
-                  <span
-                    className="shrink-0 rounded bg-rose-500/10 px-1.5 py-0.5 font-mono text-[10px] text-rose-300"
-                    title="Hash drift — some chargers in this installation have a hash, some don't"
-                  >
-                    drift
-                  </span>
-                )}
+                <AuthEmblem
+                  authMode={ocpp?.authMode ?? "empty"}
+                  identityCount={identityCount}
+                  lastChangedAt={ocpp?.lastRotatedAt ?? null}
+                  formatRotatedAt={formatRotatedAt}
+                />
                 <PasswordRowAction
                   installationId={i.id}
                   identityCount={identityCount}
