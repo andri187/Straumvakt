@@ -61,10 +61,49 @@ function makeTx() {
     },
     chargeSession: {
       create: vi.fn(async (args: unknown) => args),
-      update: vi.fn(async (args: unknown) => args),
+      // session.stopped (Sprint 8.5) reads back fields it just
+      // updated via `select:`. Return a fixture matching the
+      // selected shape so the resolver-then-engine path in the
+      // projection has real values to work with. The fixture leaves
+      // siteId / chargingStationId UNSET so by default the existing
+      // tests don't trigger ledger-write side effects (the
+      // projection logs a warn and skips). The session_ledger test
+      // below overrides per-call.
+      update: vi.fn(async () => ({
+        id: SESSION,
+        orgId: ORG,
+        siteId: null,
+        chargingStationId: null,
+        ocppIdentityId: IDENTITY,
+        idTag: null,
+        startedAt: new Date("2026-05-04T08:00:00Z"),
+        endedAt: new Date("2026-05-04T09:00:00Z"),
+        energyWh: 10500n,
+      })),
     },
     meterValue: {
       create: vi.fn(async (args: unknown) => args),
+    },
+    // Sprint 8.5 — tariff resolver + ledger writer plumbing. All
+    // default to "missing" so existing non-stopped tests don't hit
+    // them; session.stopped tests override per-case.
+    site: {
+      findUnique: vi.fn(async () => null),
+    },
+    chargingStation: {
+      findUnique: vi.fn(async () => null),
+    },
+    installation: {
+      findUnique: vi.fn(async () => null),
+    },
+    tariffDefinition: {
+      findUnique: vi.fn(async () => null),
+    },
+    sessionLedger: {
+      upsert: vi.fn(async (args: unknown) => args),
+    },
+    idToken: {
+      findFirst: vi.fn(async () => null),
     },
   };
 }
@@ -233,6 +272,222 @@ describe("projections — per-event handlers", () => {
     expect(call.data.status).toBe("completed");
     expect(call.data.stopReason).toBe("Local");
     expect(call.data.energyWh).toBe(10500n);
+  });
+
+  // ─── Sprint 8.5 — session.stopped also writes reports.session_ledger ───
+  it("session.stopped writes a ledger row when site+installation tariffs are configured", async () => {
+    const tx = makeTx();
+    // Stub chargeSession.update to return a row WITH siteId +
+    // chargingStationId so the ledger path runs.
+    tx.chargeSession.update = vi.fn(async () => ({
+      id: SESSION,
+      orgId: ORG,
+      siteId: SITE,
+      chargingStationId: CHARGER,
+      ocppIdentityId: IDENTITY,
+      idTag: "ABC123",
+      startedAt: new Date("2026-05-04T08:00:00Z"),
+      endedAt: new Date("2026-05-04T09:00:00Z"),
+      energyWh: 30_000n, // 30 kWh
+    }));
+    // Tariff plumbing for the canonical Veitur AD1 + N1 case.
+    tx.site.findUnique = vi.fn(async () => ({
+      id: SITE,
+      dsoTariffId: "tariff-veitur-ad1",
+    }));
+    tx.chargingStation.findUnique = vi.fn(async () => ({
+      siteAssetId: CHARGER,
+      installationId: "inst-1",
+    }));
+    tx.installation.findUnique = vi.fn(async () => ({
+      id: "inst-1",
+      retailerTariffId: "tariff-n1",
+    }));
+    tx.tariffDefinition.findUnique = vi.fn(async ({ where }) => {
+      if (where.id === "tariff-veitur-ad1") {
+        return {
+          id: "tariff-veitur-ad1",
+          displayName: "Veitur AD1",
+          computeRule: { kind: "flat", pricePerKwhMinor: 864 },
+          vatRatePct: 24,
+          currency: "ISK",
+          status: "active",
+        };
+      }
+      if (where.id === "tariff-n1") {
+        return {
+          id: "tariff-n1",
+          displayName: "N1 N1_RAFMAGN-REPF-01",
+          computeRule: { kind: "flat", pricePerKwhMinor: 883 },
+          vatRatePct: 24,
+          currency: "ISK",
+          status: "active",
+        };
+      }
+      return null;
+    });
+
+    await run(
+      tx,
+      event({
+        eventType: "session.stopped",
+        aggregateType: "charge_session",
+        aggregateId: SESSION,
+        retentionClass: "financial",
+        payload: { meterStopWh: 30_000, stopReason: "Local" },
+      }),
+    );
+
+    // Ledger row written with the canonical 30 kWh × (Veitur + N1)
+    // computation: 64988 minor (= 649.88 kr.) inc-VAT.
+    expect(tx.sessionLedger.upsert).toHaveBeenCalledOnce();
+    const upsertCall = tx.sessionLedger.upsert.mock.calls[0][0] as {
+      where: { sessionId: string };
+      create: {
+        sessionId: string;
+        orgId: string;
+        siteId: string;
+        chargingStationId: string;
+        driverIdTag: string | null;
+        energyKwh: string;
+        durationSec: number;
+        costIskMinor: bigint;
+      };
+    };
+    expect(upsertCall.where.sessionId).toBe(SESSION);
+    expect(upsertCall.create.orgId).toBe(ORG);
+    expect(upsertCall.create.siteId).toBe(SITE);
+    expect(upsertCall.create.chargingStationId).toBe(CHARGER);
+    expect(upsertCall.create.driverIdTag).toBe("ABC123");
+    expect(upsertCall.create.energyKwh).toBe("30.000");
+    expect(upsertCall.create.durationSec).toBe(3600);
+    expect(upsertCall.create.costIskMinor).toBe(64988n);
+  });
+
+  it("session.stopped resolves driverUserId via idTag → IdToken when present", async () => {
+    const tx = makeTx();
+    const DRIVER_ID = "88888888-8888-8888-8888-888888888888";
+    tx.chargeSession.update = vi.fn(async () => ({
+      id: SESSION,
+      orgId: ORG,
+      siteId: SITE,
+      chargingStationId: CHARGER,
+      ocppIdentityId: IDENTITY,
+      idTag: "RFID-DRIVER-001",
+      startedAt: new Date("2026-05-04T08:00:00Z"),
+      endedAt: new Date("2026-05-04T09:00:00Z"),
+      energyWh: 30_000n,
+    }));
+    tx.site.findUnique = vi.fn(async () => ({
+      id: SITE,
+      dsoTariffId: "tariff-veitur-ad1",
+    }));
+    tx.chargingStation.findUnique = vi.fn(async () => ({
+      siteAssetId: CHARGER,
+      installationId: "inst-1",
+    }));
+    tx.installation.findUnique = vi.fn(async () => ({
+      id: "inst-1",
+      retailerTariffId: "tariff-n1",
+    }));
+    tx.tariffDefinition.findUnique = vi.fn(async ({ where }) => {
+      const base = {
+        computeRule: { kind: "flat", pricePerKwhMinor: 864 },
+        vatRatePct: 24,
+        currency: "ISK",
+        status: "active",
+      };
+      if (where.id === "tariff-veitur-ad1")
+        return { ...base, id: where.id, displayName: "Veitur AD1" };
+      if (where.id === "tariff-n1")
+        return {
+          ...base,
+          id: where.id,
+          displayName: "N1",
+          computeRule: { kind: "flat", pricePerKwhMinor: 883 },
+        };
+      return null;
+    });
+    // IdToken hit: this idTag belongs to DRIVER_ID.
+    tx.idToken.findFirst = vi.fn(async () => ({ userId: DRIVER_ID }));
+
+    await run(
+      tx,
+      event({
+        eventType: "session.stopped",
+        aggregateType: "charge_session",
+        aggregateId: SESSION,
+        retentionClass: "financial",
+        payload: { meterStopWh: 30_000, stopReason: "Local" },
+      }),
+    );
+
+    expect(tx.idToken.findFirst).toHaveBeenCalledOnce();
+    const idTokenCall = tx.idToken.findFirst.mock.calls[0][0] as {
+      where: { value: string; status: string };
+    };
+    expect(idTokenCall.where.value).toBe("RFID-DRIVER-001");
+    expect(idTokenCall.where.status).toBe("active");
+
+    const upsertCall = tx.sessionLedger.upsert.mock.calls[0][0] as {
+      create: { driverUserId: string | null; driverIdTag: string | null };
+    };
+    expect(upsertCall.create.driverUserId).toBe(DRIVER_ID);
+    expect(upsertCall.create.driverIdTag).toBe("RFID-DRIVER-001");
+  });
+
+  it("session.stopped without siteId logs warn + skips ledger write (no throw)", async () => {
+    const tx = makeTx();
+    // Default chargeSession.update from makeTx returns null siteId.
+    await expect(
+      run(
+        tx,
+        event({
+          eventType: "session.stopped",
+          aggregateType: "charge_session",
+          aggregateId: SESSION,
+          retentionClass: "financial",
+          payload: { meterStopWh: 30_000, stopReason: "Local" },
+        }),
+      ),
+    ).resolves.toBeDefined();
+    expect(tx.sessionLedger.upsert).not.toHaveBeenCalled();
+  });
+
+  it("session.stopped throws when DSO tariff is unconfigured (drives queue retry)", async () => {
+    const tx = makeTx();
+    tx.chargeSession.update = vi.fn(async () => ({
+      id: SESSION,
+      orgId: ORG,
+      siteId: SITE,
+      chargingStationId: CHARGER,
+      ocppIdentityId: IDENTITY,
+      idTag: null,
+      startedAt: new Date("2026-05-04T08:00:00Z"),
+      endedAt: new Date("2026-05-04T09:00:00Z"),
+      energyWh: 30_000n,
+    }));
+    // Site exists but has NO dsoTariffId → resolver throws.
+    tx.site.findUnique = vi.fn(async () => ({
+      id: SITE,
+      dsoTariffId: null,
+    }));
+    await expect(
+      run(
+        tx,
+        event({
+          eventType: "session.stopped",
+          aggregateType: "charge_session",
+          aggregateId: SESSION,
+          retentionClass: "financial",
+          payload: { meterStopWh: 30_000, stopReason: "Local" },
+        }),
+      ),
+    ).rejects.toMatchObject({ code: "dso_tariff_unconfigured" });
+    // Ledger upsert MUST NOT have been called — the throw rolled
+    // back the whole projection (including the chargeSession.update
+    // in the same tx).
+    expect(tx.sessionLedger.upsert).not.toHaveBeenCalled();
   });
 
   it("card.authorize_requested has no projection (logged only)", async () => {

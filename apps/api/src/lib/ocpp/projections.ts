@@ -27,6 +27,11 @@ import {
   type IngestResult as _IngestResult,
 } from "./events-repository";
 import type { IngestEvent } from "./event-envelope";
+import { computeSessionCost } from "../tariff/compute-session-cost";
+import {
+  resolveTariffChainForSession,
+  TariffResolutionError,
+} from "../tariff/resolve-tariff-chain";
 
 // Re-export the handler type so other modules can declare their own
 // without depending on the internals of the events repository.
@@ -297,13 +302,30 @@ const onCommandResult: ProjectionHandler = async (tx, event) => {
 
 /**
  * session.stopped — closes out the ChargeSession row with stop reason
- * and final energy.
+ * and final energy. Sprint 8.5: ALSO computes the session's cost via
+ * the pure-function tariff engine and writes a row to
+ * reports.session_ledger so the operator-side billing dashboard
+ * has data to render.
+ *
+ * Atomicity: the ledger write rides the same Prisma transaction as
+ * the ChargeSession update. Tariff-resolution failures throw the
+ * whole projection — the session.stopped event_log row rolls back
+ * too, and the queue consumer retries via CF Queues. Operator-side
+ * fix is to populate Site.dsoTariffId / Installation.retailerTariffId
+ * via the operator console; the DLQ replay then catches up.
+ *
+ * Cost is COMPUTED ONCE on stop. The ledger row is immutable by
+ * cost_isk_minor — operator-side disputes (e.g. wrong tariff applied
+ * because the operator misconfigured) are resolved via a separate
+ * credit-memo / refund workflow, not by editing the ledger row in
+ * place. That workflow lands post-pilot per ADR 0005.
  */
 const onSessionStopped: ProjectionHandler = async (tx, event) => {
   const meterStopWh = numberField(event.payload, "meterStopWh");
   const stopReason = stringField(event.payload, "stopReason");
 
-  await tx.chargeSession.update({
+  // Step 1: close the ChargeSession (existing behaviour, unchanged).
+  const updated = await tx.chargeSession.update({
     where: { id: event.aggregateId },
     data: {
       endedAt: new Date(event.occurredAt),
@@ -311,8 +333,123 @@ const onSessionStopped: ProjectionHandler = async (tx, event) => {
       status: "completed",
       energyWh: meterStopWh !== undefined ? BigInt(meterStopWh) : undefined,
     },
+    select: {
+      id: true,
+      orgId: true,
+      siteId: true,
+      chargingStationId: true,
+      ocppIdentityId: true,
+      idTag: true,
+      startedAt: true,
+      endedAt: true,
+      energyWh: true,
+    },
+  });
+
+  // Step 2: resolve the TariffChain that applies to this session's
+  // location. Throws if Site.dsoTariffId or Installation.retailerTariffId
+  // is unconfigured — see resolve-tariff-chain.ts for the full
+  // matrix of TariffResolutionError codes. The throw rolls back the
+  // tx; CF Queues redelivers; operator fixes the misconfig.
+  if (!updated.siteId || !updated.chargingStationId) {
+    // Defensive — session.started should have populated both. Skip
+    // ledger write rather than throw on legacy rows missing them.
+    console.warn("[projections] session.stopped: missing siteId/chargingStationId, skipping ledger", {
+      sessionId: updated.id,
+      siteId: updated.siteId,
+      chargingStationId: updated.chargingStationId,
+    });
+    return;
+  }
+  const chain = await resolveTariffChainForSession(tx, {
+    siteId: updated.siteId,
+    chargingStationId: updated.chargingStationId,
+  });
+
+  // Step 3: compute the cost.
+  const energyKwh =
+    updated.energyWh !== null ? Number(updated.energyWh) / 1000 : 0;
+  const stoppedAt = updated.endedAt ?? new Date(event.occurredAt);
+  const startedAt = updated.startedAt;
+  const durationSec = Math.max(
+    0,
+    Math.round((stoppedAt.getTime() - startedAt.getTime()) / 1000),
+  );
+
+  const breakdown = computeSessionCost(
+    {
+      startedAt,
+      stoppedAt,
+      energyKwh,
+    },
+    chain,
+  );
+
+  // Resolve driver via idTag → IdToken → userId. Drivers see their
+  // own ledger entries via this column (Sprint 8.4 read scope).
+  // Best-effort: a missing IdToken row leaves driver_user_id NULL,
+  // and the session is still recorded — operator can backfill or
+  // the ledger row stays driver-anonymous (e.g. roaming sessions).
+  let driverUserId: string | null = null;
+  if (updated.idTag) {
+    const idTokenRow = await tx.idToken.findFirst({
+      where: {
+        value: updated.idTag,
+        status: "active",
+      },
+      select: { userId: true },
+    });
+    driverUserId = idTokenRow?.userId ?? null;
+  }
+
+  // Step 4: upsert the ledger row. Upsert (not insert) so a session
+  // that gets a duplicate session.stopped event (replay through
+  // idempotency cache miss → projection rerun) doesn't crash on PK
+  // collision. The idempotency_keys cache normally catches replays
+  // upstream of projections; this is belt-and-braces.
+  await tx.sessionLedger.upsert({
+    where: { sessionId: updated.id },
+    create: {
+      sessionId: updated.id,
+      orgId: updated.orgId,
+      siteId: updated.siteId,
+      chargingStationId: updated.chargingStationId,
+      driverUserId,
+      driverIdTag: updated.idTag ?? null,
+      startedAt: updated.startedAt,
+      stoppedAt,
+      durationSec,
+      energyKwh: energyKwh.toFixed(3),
+      costIskMinor: breakdown.totalIncVatMinor,
+      tariffDefinitionId: null, // chain has 2 tariffs; can't pick one. Future schema change to add JSONB breakdown.
+    },
+    update: {
+      // No-op on conflict — once the row exists with its computed
+      // cost, we trust the original write. Replays at the projection
+      // level are unexpected (idempotency catches upstream); if we
+      // do see one, prefer not to overwrite a settled cost.
+      stoppedAt: stoppedAt,
+    },
+  });
+
+  console.log("[ledger] session_cost_recorded", {
+    sessionId: updated.id,
+    orgId: updated.orgId,
+    siteId: updated.siteId,
+    energyKwh,
+    durationSec,
+    subtotalExVatMinor: String(breakdown.subtotalExVatMinor),
+    vatMinor: String(breakdown.vatMinor),
+    totalIncVatMinor: String(breakdown.totalIncVatMinor),
+    components: breakdown.lineItems
+      .filter((l) => l.kind !== "vat")
+      .map((l) => ({ kind: l.kind, code: l.code, amountMinor: String(l.amountMinor) })),
   });
 };
+
+// Re-export so callers can catch the resolver's typed errors at
+// the queue-consumer boundary if they want.
+export { TariffResolutionError };
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Registration
