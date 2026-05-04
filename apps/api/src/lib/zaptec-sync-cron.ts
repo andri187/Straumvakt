@@ -17,6 +17,7 @@
 import type { PrismaClient } from "../generated/prisma/client";
 import { unsealAndAuth } from "../repositories/credential-management";
 import { syncZaptecSessions } from "../repositories/zaptec-session-sync";
+import { syncZaptecChargerStatus } from "../repositories/zaptec-charger-status-sync";
 
 const ROLLING_WINDOW_MS = 26 * 60 * 60 * 1000; // 26h — see header.
 
@@ -41,6 +42,21 @@ export interface CronSyncReport {
   windowToIso: string;
   credentials: number;
   outcomes: CredentialSyncOutcome[];
+  failures: CredentialSyncFailure[];
+}
+
+export interface ChargerStatusOutcome {
+  credentialId: string;
+  zaptecCount: number;
+  updatedCount: number;
+  skippedCount: number;
+  durationMs: number;
+}
+
+export interface ChargerStatusCronReport {
+  ranAt: string;
+  credentials: number;
+  outcomes: ChargerStatusOutcome[];
   failures: CredentialSyncFailure[];
 }
 
@@ -100,6 +116,60 @@ export async function runZaptecCronSync(
     ranAt: ranAt.toISOString(),
     windowFromIso: fromIso,
     windowToIso: toIso,
+    credentials: credentials.length,
+    outcomes,
+    failures,
+  };
+}
+
+/**
+ * Sprint 8.8 — charger-status companion cron. Walks every active
+ * Zaptec credential, lists the chargers behind it, and stamps
+ * OcppIdentity.status + lastSeenAt from the bulk listing's
+ * OperatingMode + IsOnline fields. One REST call per credential —
+ * no per-charger /state round trips needed for the status pill.
+ */
+export async function runZaptecChargerStatusCron(
+  db: PrismaClient,
+  kek: string,
+): Promise<ChargerStatusCronReport> {
+  const ranAt = new Date();
+
+  const credentials = await db.vendorCredential.findMany({
+    where: {
+      status: "active",
+      vendor: { slug: "zaptec" },
+    },
+    select: { id: true },
+  });
+
+  const outcomes: ChargerStatusOutcome[] = [];
+  const failures: CredentialSyncFailure[] = [];
+
+  for (const cred of credentials) {
+    const startedAt = Date.now();
+    try {
+      const auth = await unsealAndAuth(db, kek, cred.id);
+      const result = await syncZaptecChargerStatus(db, {
+        accessToken: auth.accessToken,
+      });
+      outcomes.push({
+        credentialId: cred.id,
+        zaptecCount: result.zaptecCount,
+        updatedCount: result.updated.length,
+        skippedCount: result.skipped.length,
+        durationMs: Date.now() - startedAt,
+      });
+    } catch (err) {
+      failures.push({
+        credentialId: cred.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  return {
+    ranAt: ranAt.toISOString(),
     credentials: credentials.length,
     outcomes,
     failures,

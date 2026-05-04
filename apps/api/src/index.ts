@@ -42,7 +42,10 @@ import { handleOcppEventsBatch } from "./queues/ocpp-events";
 import { handleArchiveEventsBatch } from "./queues/archive-events";
 import { ensureForwardPartitions } from "./lib/db/partition-cron";
 import { makePool } from "./lib/db/raw";
-import { runZaptecCronSync } from "./lib/zaptec-sync-cron";
+import {
+  runZaptecCronSync,
+  runZaptecChargerStatusCron,
+} from "./lib/zaptec-sync-cron";
 import type {
   Env,
   OutboundCommandMessage,
@@ -300,6 +303,38 @@ const handler: ExportedHandler<Env, AnyQueueMessage> = {
             }
           } catch (err) {
             console.error("[zaptec-sync-cron] failed", {
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
+        })(),
+      );
+
+      // Sprint 8.8 — charger-status companion. Stamps OcppIdentity
+      // status + lastSeenAt from the bulk /api/chargers response so
+      // operators see online/offline/charging without OCPP traffic.
+      ctx.waitUntil(
+        (async () => {
+          try {
+            const result = await runZaptecChargerStatusCron(db, kek);
+            if (
+              result.outcomes.length > 0 ||
+              result.failures.length > 0
+            ) {
+              console.log("[zaptec-status-cron]", {
+                credentials: result.credentials,
+                updated: result.outcomes.reduce(
+                  (n, o) => n + o.updatedCount,
+                  0,
+                ),
+                skipped: result.outcomes.reduce(
+                  (n, o) => n + o.skippedCount,
+                  0,
+                ),
+                failedCredentials: result.failures.length,
+              });
+            }
+          } catch (err) {
+            console.error("[zaptec-status-cron] failed", {
               error: err instanceof Error ? err.message : String(err),
             });
           }
