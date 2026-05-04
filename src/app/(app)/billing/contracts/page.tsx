@@ -47,7 +47,8 @@ export default async function ContractsPage() {
               <tr>
                 <th className="px-3 py-2 text-left font-mono">UID</th>
                 <th className="px-3 py-2 text-left">Contract</th>
-                <th className="px-3 py-2 text-left">Owner org</th>
+                <th className="px-3 py-2 text-left">Owner</th>
+                <th className="px-3 py-2 text-left">Counterparty</th>
                 <th className="px-3 py-2 text-left">Scope</th>
                 <th className="px-3 py-2 text-left">Valid from</th>
                 <th className="px-3 py-2 text-left">Expires</th>
@@ -73,6 +74,20 @@ export default async function ContractsPage() {
                     >
                       {c.orgDisplayName}
                     </Link>
+                  </td>
+                  <td className="px-3 py-1.5 text-ink-300">
+                    {c.counterpartyOrgId && c.counterpartyOrgDisplayName ? (
+                      <Link
+                        href={
+                          `/accounts/organizations/${c.counterpartyOrgId}` as Parameters<typeof Link>[0]["href"]
+                        }
+                        className="hover:text-sv-sky"
+                      >
+                        {c.counterpartyOrgDisplayName}
+                      </Link>
+                    ) : (
+                      <span className="text-ink-500">—</span>
+                    )}
                   </td>
                   <td className="px-3 py-1.5 text-ink-300">
                     <span className="font-mono text-[10px] text-ink-500">

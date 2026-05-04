@@ -20,8 +20,14 @@ export type ContractScopeType =
 
 export interface ContractSummary {
   id: string;
+  /** Primary owner — typically the customer / asset owner. */
   orgId: string;
   orgDisplayName: string;
+  /** The other side of the bilateral arrangement — typically the
+   *  operator (Straumvakt). null when the contract is single-sided
+   *  or pre-dates the counterparty column. */
+  counterpartyOrgId: string | null;
+  counterpartyOrgDisplayName: string | null;
   displayName: string;
   status: ContractStatus;
   scopeType: ContractScopeType;
@@ -35,6 +41,28 @@ export interface ContractSummary {
   validUntil: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/** Tariff bindings resolved through the contract's scope.
+ *  - DSO: anchored on the parent Site of the scope (always one).
+ *  - Retailers: per Installation under the scope (one or many). */
+export interface ContractTariffSummary {
+  dso: {
+    siteId: string;
+    siteDisplayName: string;
+    tariffId: string;
+    tariffDisplayName: string;
+    pricePerKwhMinor: string | null;
+    vatRatePct: number | null;
+  } | null;
+  retailers: Array<{
+    installationId: string;
+    installationDisplayName: string;
+    tariffId: string | null;
+    tariffDisplayName: string | null;
+    pricePerKwhMinor: string | null;
+    vatRatePct: number | null;
+  }>;
 }
 
 export interface ContractUpdateInput {

@@ -152,25 +152,33 @@ async function buildApiActiveMap(
   });
   if (credentials.length === 0) return out;
 
-  // Build map: orgId → list of (vendorResourceId → chargingStationId).
-  // Used after the Zaptec call to translate vendor UUIDs back to our
-  // SiteAsset ids.
-  const orgIdentities = await db.ocppIdentity.findMany({
+  // Build a single cross-org map: vendorResourceId → chargingStationId.
+  // Why cross-org and not per-org: credentials can manage chargers
+  // owned by a different org than the credential itself (e.g. after a
+  // site-move where the OcppIdentity rows move to the new org but the
+  // credential stays with the source org). What the credential can
+  // see in Zaptec is whatever it can see; our DB ownership doesn't
+  // narrow that. Filtering by cred.ownerOrgId would silently drop
+  // every cross-org charger from the live-state map and gray every
+  // bubble in the site row. Learned the hard way 2026-05-04.
+  const allIdentities = await db.ocppIdentity.findMany({
     where: { vendor: "Zaptec", vendorResourceId: { not: null } },
-    select: { orgId: true, chargingStationId: true, vendorResourceId: true },
+    select: { chargingStationId: true, vendorResourceId: true },
   });
-  const orgVendorMap = new Map<string, Map<string, string>>();
-  for (const id of orgIdentities) {
+  const vendorResourceMap = new Map<string, string>();
+  for (const id of allIdentities) {
     if (!id.vendorResourceId) continue;
-    const inner = orgVendorMap.get(id.orgId) ?? new Map<string, string>();
-    inner.set(id.vendorResourceId, id.chargingStationId);
-    orgVendorMap.set(id.orgId, inner);
+    vendorResourceMap.set(id.vendorResourceId, id.chargingStationId);
   }
+
+  // Cross-credential observation accumulator (see post-pass below).
+  const seenAcrossAllCredentials = new Set<string>();
+  let attemptedAtLeastOneCredential = false;
 
   await Promise.all(
     credentials.map(async (cred) => {
-      const map = orgVendorMap.get(cred.ownerOrgId);
-      if (!map || !cred.passwordCipher || !cred.passwordIv) return;
+      const map = vendorResourceMap;
+      if (!cred.passwordCipher || !cred.passwordIv) return;
       try {
         const password = await openPassword(kek, {
           cipher: cred.passwordCipher,
@@ -302,36 +310,17 @@ async function buildApiActiveMap(
           await Promise.all(writeThroughs);
         }
 
-        // Decommissioned-by-omission detection. Zaptec's bulk
-        // /api/chargers excludes Active=false rows, so any imported
-        // charger whose vendor_resource_id we *expected* but didn't
-        // see in the response has been retired (or removed) on the
-        // vendor side. Mark these explicitly so the /sites toggle
-        // can hide them and the badge can render. apiActive=false
-        // because the credential reaches Zaptec but the API no
-        // longer surfaces this charger.
-        //
-        // Note this only fires when listResult.ok was true — if auth
-        // failed or the bulk call errored we already returned early
-        // without touching `out`, leaving rows null (= unknown).
-        const seenZaptecIds = new Set<string>();
+        // Sprint 8.14 — record what THIS credential observed so the
+        // post-pass can compute decommissioned-by-omission across
+        // all credentials. Per-credential omission would false-
+        // positive when a charger sits in a different credential's
+        // installation (e.g. after a site-move with cross-org
+        // credentials), so detection has to happen after every
+        // listChargers finishes.
         for (const ch of listResult.value) {
-          if (typeof ch.Id === "string") seenZaptecIds.add(ch.Id);
+          if (typeof ch.Id === "string") seenAcrossAllCredentials.add(ch.Id);
         }
-        for (const [vendorResourceId, stationId] of map.entries()) {
-          if (seenZaptecIds.has(vendorResourceId)) continue;
-          if (out.has(stationId)) continue;
-          out.set(stationId, {
-            apiActive: false,
-            ocppConfigured: false,
-            authRequired: false,
-            vendorOnline: false,
-            onlineSince: null,
-            lifetimeEnergyKWh: null,
-            decommissioned: true,
-            vendorConnectorStatus: null,
-          });
-        }
+        attemptedAtLeastOneCredential = true;
       } catch (err) {
         console.error("[site-tree] zaptec API-active fetch failed", {
           orgId: cred.ownerOrgId,
@@ -340,6 +329,29 @@ async function buildApiActiveMap(
       }
     }),
   );
+
+  // Sprint 8.14 — post-pass decommissioned detection. Only mark a
+  // charger decommissioned-by-omission if we successfully reached
+  // Zaptec (at least one credential listChargers'd) AND no credential
+  // saw the vendor_resource_id. Skips the whole pass when no
+  // credentials succeeded — leaves rows null (unknown), preventing
+  // false offline rendering during Zaptec outages.
+  if (attemptedAtLeastOneCredential) {
+    for (const [vendorResourceId, stationId] of vendorResourceMap.entries()) {
+      if (seenAcrossAllCredentials.has(vendorResourceId)) continue;
+      if (out.has(stationId)) continue;
+      out.set(stationId, {
+        apiActive: false,
+        ocppConfigured: false,
+        authRequired: false,
+        vendorOnline: false,
+        onlineSince: null,
+        lifetimeEnergyKWh: null,
+        decommissioned: true,
+        vendorConnectorStatus: null,
+      });
+    }
+  }
 
   return out;
 }

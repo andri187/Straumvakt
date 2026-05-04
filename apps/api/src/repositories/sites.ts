@@ -172,6 +172,9 @@ export interface MoveSiteResult {
     siteTariffs: boolean;
     installationCredentials: number;
     installationRetailerTariffs: number;
+    /** True when the source-org Property had no remaining sites and
+     *  was auto-deleted as part of the move (Sprint 8.14). */
+    sourcePropertyDeleted: boolean;
   };
 }
 
@@ -413,6 +416,22 @@ export async function moveSiteToOrg(
         },
       });
 
+      // Sprint 8.14 — auto-cleanup orphan property in the source org.
+      // The moved site was the only site under its old property →
+      // that property is now empty in the source org and would just
+      // sit there as duplicate metadata of the new property in the
+      // target org. Delete it. If the source property still has
+      // OTHER sites, leave it alone.
+      const sourcePropertyId = site.propertyId;
+      const remainingSitesOnSourceProperty = await tx.site.count({
+        where: { propertyId: sourcePropertyId },
+      });
+      let sourcePropertyDeleted = false;
+      if (remainingSitesOnSourceProperty === 0) {
+        await tx.property.delete({ where: { id: sourcePropertyId } });
+        sourcePropertyDeleted = true;
+      }
+
       const result: MoveSiteResult = {
         siteId,
         fromOrgId,
@@ -438,6 +457,7 @@ export async function moveSiteToOrg(
           siteTariffs: !!siteHadTariffs,
           installationCredentials: installationCredentialsCount,
           installationRetailerTariffs: installationRetailerTariffsCount,
+          sourcePropertyDeleted,
         },
       };
 

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { apiFetchServer } from "@/lib/api-client-server";
 import type { ContractSummary } from "@straumvakt/shared/domain/contracts";
 
+export const dynamic = "force-dynamic";
 export const metadata = { title: "Organization · Contracts" };
 
 /**
@@ -38,8 +39,9 @@ export default async function OrgContractsPage({
       </div>
 
       <p className="mb-3 text-[11px] text-ink-500">
-        Third-party billing contracts only. The rate that drives session
-        cost is on the{" "}
+        Bilateral billing contracts where this organization is on
+        either side (owner or counterparty). The rate that drives
+        session cost is on the{" "}
         <Link
           href={`/accounts/organizations/${id}/tariff-chain` as Parameters<typeof Link>[0]["href"]}
           className="text-sv-sky hover:underline"
@@ -67,6 +69,7 @@ export default async function OrgContractsPage({
               <tr>
                 <th className="px-3 py-2 text-left font-mono">UID</th>
                 <th className="px-3 py-2 text-left">Contract</th>
+                <th className="px-3 py-2 text-left">Counterparty</th>
                 <th className="px-3 py-2 text-left">Scope</th>
                 <th className="px-3 py-2 text-left">Valid from</th>
                 <th className="px-3 py-2 text-left">Expires</th>
@@ -82,6 +85,36 @@ export default async function OrgContractsPage({
                   </td>
                   <td className="px-3 py-1.5 text-sm font-medium text-ink-50">
                     {c.displayName}
+                    {c.orgId !== id && (
+                      <span className="ml-2 rounded bg-sv-sky/10 px-1 py-0.5 text-[9px] uppercase tracking-brand text-sv-sky">
+                        as counterparty
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-3 py-1.5 text-ink-300">
+                    {c.orgId === id ? (
+                      c.counterpartyOrgId ? (
+                        <Link
+                          href={
+                            `/accounts/organizations/${c.counterpartyOrgId}` as Parameters<typeof Link>[0]["href"]
+                          }
+                          className="hover:text-sv-sky"
+                        >
+                          {c.counterpartyOrgDisplayName ?? "—"}
+                        </Link>
+                      ) : (
+                        <span className="text-ink-500">—</span>
+                      )
+                    ) : (
+                      <Link
+                        href={
+                          `/accounts/organizations/${c.orgId}` as Parameters<typeof Link>[0]["href"]
+                        }
+                        className="hover:text-sv-sky"
+                      >
+                        {c.orgDisplayName}
+                      </Link>
+                    )}
                   </td>
                   <td className="px-3 py-1.5 text-ink-300">
                     <span className="font-mono text-[10px] text-ink-500">

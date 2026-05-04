@@ -15,6 +15,7 @@ import { requirePermission } from "../../lib/auth/require-permission";
 import {
   deleteContract,
   getContractById,
+  getContractTariffs,
   listAllContracts,
   updateContract,
 } from "../../repositories/contracts";
@@ -47,6 +48,22 @@ adminContracts.get(
     const contract = await getContractById(db, c.req.param("id"));
     if (!contract) return c.json({ error: "not_found" }, 404);
     return c.json({ contract });
+  },
+);
+
+// Sprint 8.14 — DSO + retailer rates resolved through the contract's
+// scope. Site-scoped → DSO of the site + every installation's
+// retailer. Installation-scoped → site DSO + this installation's
+// retailer. Other scopes → empty (charger / circuit / org_default
+// not on the resolution path today).
+adminContracts.get(
+  "/:id/tariffs",
+  requirePermission("platform.tenant.read"),
+  async (c) => {
+    const db = makePrisma(c.env);
+    const tariffs = await getContractTariffs(db, c.req.param("id"));
+    if (tariffs === null) return c.json({ error: "not_found" }, 404);
+    return c.json({ tariffs });
   },
 );
 

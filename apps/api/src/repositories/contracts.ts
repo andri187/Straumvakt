@@ -1,20 +1,26 @@
 // Org-level Contract repository (billing.contracts).
 // Distinct from DriverContract (people.driver_contracts).
 //
-// Sprint 8.13 adds scope-name resolution + getById/update/delete so
-// the operator console can render and manage individual contracts.
+// Sprint 8.14 — bilateral counterparty model. A single Contract row
+// represents the arrangement between two orgs (orgId = primary owner,
+// counterpartyOrgId = the other side). listContractsByOrg returns
+// rows where the org is on EITHER side, so each side sees the same
+// row from their tab. Per-tariff resolution (getContractTariffs)
+// surfaces the bound DSO + retailer rates for the contract's scope.
 
 import type { PrismaClient } from "../generated/prisma/client";
 import type {
   ContractScopeType,
   ContractStatus,
   ContractSummary,
+  ContractTariffSummary,
   ContractUpdateInput,
 } from "@straumvakt/shared/domain/contracts";
 
 interface RawContractRow {
   id: string;
   orgId: string;
+  counterpartyOrgId: string | null;
   scopeType: string;
   scopeId: string | null;
   parentContractId: string | null;
@@ -25,16 +31,24 @@ interface RawContractRow {
   createdAt: Date;
   updatedAt: Date;
   organization: { displayName: string };
+  counterparty: { displayName: string } | null;
 }
+
+const includeShape = {
+  organization: { select: { displayName: true } },
+  counterparty: { select: { displayName: true } },
+} as const;
 
 export async function listContractsByOrg(
   db: PrismaClient,
   orgId: string,
 ): Promise<ContractSummary[]> {
   const rows = await db.contract.findMany({
-    where: { orgId },
+    where: {
+      OR: [{ orgId }, { counterpartyOrgId: orgId }],
+    },
     orderBy: [{ validFrom: "desc" }],
-    include: { organization: { select: { displayName: true } } },
+    include: includeShape,
   });
   const scopeNames = await resolveScopeNames(db, rows);
   return rows.map((r) => toSummary(r as RawContractRow, scopeNames.get(r.id) ?? null));
@@ -42,14 +56,15 @@ export async function listContractsByOrg(
 
 /**
  * Platform-wide listing — admin-only surface, every contract across
- * every org. Powers the top-level /billing/contracts page.
+ * every org. Powers the top-level /billing/contracts page. Each row
+ * shows once (no duplicate per side) because the row IS one row.
  */
 export async function listAllContracts(
   db: PrismaClient,
 ): Promise<ContractSummary[]> {
   const rows = await db.contract.findMany({
     orderBy: [{ validFrom: "desc" }],
-    include: { organization: { select: { displayName: true } } },
+    include: includeShape,
   });
   const scopeNames = await resolveScopeNames(db, rows);
   return rows.map((r) => toSummary(r as RawContractRow, scopeNames.get(r.id) ?? null));
@@ -61,11 +76,42 @@ export async function getContractById(
 ): Promise<ContractSummary | null> {
   const row = await db.contract.findUnique({
     where: { id: contractId },
-    include: { organization: { select: { displayName: true } } },
+    include: includeShape,
   });
   if (!row) return null;
   const scopeNames = await resolveScopeNames(db, [row]);
   return toSummary(row as RawContractRow, scopeNames.get(row.id) ?? null);
+}
+
+/**
+ * Resolve the DSO + retailer rates that apply to this contract's
+ * scope. Today supports site-scoped and installation-scoped contracts;
+ * other scope types return empty (org_default / charger / circuit).
+ */
+export async function getContractTariffs(
+  db: PrismaClient,
+  contractId: string,
+): Promise<ContractTariffSummary | null> {
+  const contract = await db.contract.findUnique({
+    where: { id: contractId },
+    select: { id: true, scopeType: true, scopeId: true },
+  });
+  if (!contract || !contract.scopeId) return { dso: null, retailers: [] };
+
+  if (contract.scopeType === "site") {
+    return resolveTariffsForSite(db, contract.scopeId);
+  }
+  if (contract.scopeType === "installation") {
+    const inst = await db.installation.findUnique({
+      where: { id: contract.scopeId },
+      select: { id: true, siteId: true, displayName: true, retailerTariffId: true },
+    });
+    if (!inst) return { dso: null, retailers: [] };
+    const dso = await resolveDsoForSite(db, inst.siteId);
+    const retailer = await resolveRetailerForInstallation(db, inst.id);
+    return { dso, retailers: retailer ? [retailer] : [] };
+  }
+  return { dso: null, retailers: [] };
 }
 
 export async function updateContract(
@@ -101,11 +147,120 @@ export async function deleteContract(
   await db.contract.delete({ where: { id: contractId } });
 }
 
-// ─────────────────────────────────────────────────────────────────────
-// Scope-name resolution: collects scopeIds by scopeType and does one
-// lookup per type. Today the production-relevant scopes are site +
-// installation; org_default has no scopeId. Other scopes (charger,
-// circuit, user, …) are not used yet but resolvable when they show up.
+// ─── tariff helpers ──────────────────────────────────────────────────
+
+async function resolveTariffsForSite(
+  db: PrismaClient,
+  siteId: string,
+): Promise<ContractTariffSummary> {
+  const dso = await resolveDsoForSite(db, siteId);
+  const installations = await db.installation.findMany({
+    where: { siteId },
+    select: { id: true },
+    orderBy: { displayName: "asc" },
+  });
+  const retailers: ContractTariffSummary["retailers"] = [];
+  for (const i of installations) {
+    const r = await resolveRetailerForInstallation(db, i.id);
+    if (r) retailers.push(r);
+  }
+  return { dso, retailers };
+}
+
+async function resolveDsoForSite(
+  db: PrismaClient,
+  siteId: string,
+): Promise<ContractTariffSummary["dso"]> {
+  const site = await db.site.findUnique({
+    where: { id: siteId },
+    select: { id: true, displayName: true, dsoTariffId: true },
+  });
+  if (!site || !site.dsoTariffId) return null;
+  const td = await db.tariffDefinition.findUnique({
+    where: { id: site.dsoTariffId },
+    select: {
+      id: true,
+      displayName: true,
+      computeRule: true,
+      vatRatePct: true,
+    },
+  });
+  if (!td) return null;
+  return {
+    siteId: site.id,
+    siteDisplayName: site.displayName,
+    tariffId: td.id,
+    tariffDisplayName: td.displayName,
+    pricePerKwhMinor: extractFlatPrice(td.computeRule),
+    vatRatePct: td.vatRatePct !== null ? Number(td.vatRatePct) : null,
+  };
+}
+
+async function resolveRetailerForInstallation(
+  db: PrismaClient,
+  installationId: string,
+): Promise<ContractTariffSummary["retailers"][number] | null> {
+  const inst = await db.installation.findUnique({
+    where: { id: installationId },
+    select: { id: true, displayName: true, retailerTariffId: true },
+  });
+  if (!inst) return null;
+  if (!inst.retailerTariffId) {
+    return {
+      installationId: inst.id,
+      installationDisplayName: inst.displayName,
+      tariffId: null,
+      tariffDisplayName: null,
+      pricePerKwhMinor: null,
+      vatRatePct: null,
+    };
+  }
+  const td = await db.tariffDefinition.findUnique({
+    where: { id: inst.retailerTariffId },
+    select: {
+      id: true,
+      displayName: true,
+      computeRule: true,
+      vatRatePct: true,
+    },
+  });
+  if (!td) {
+    return {
+      installationId: inst.id,
+      installationDisplayName: inst.displayName,
+      tariffId: null,
+      tariffDisplayName: null,
+      pricePerKwhMinor: null,
+      vatRatePct: null,
+    };
+  }
+  return {
+    installationId: inst.id,
+    installationDisplayName: inst.displayName,
+    tariffId: td.id,
+    tariffDisplayName: td.displayName,
+    pricePerKwhMinor: extractFlatPrice(td.computeRule),
+    vatRatePct: td.vatRatePct !== null ? Number(td.vatRatePct) : null,
+  };
+}
+
+function extractFlatPrice(rule: unknown): string | null {
+  if (!rule || typeof rule !== "object") return null;
+  const obj = rule as Record<string, unknown>;
+  if (obj.kind !== "flat") return null;
+  const v = obj.pricePerKwhMinor;
+  if (typeof v === "number" || typeof v === "string" || typeof v === "bigint") {
+    try {
+      return String(BigInt(v as bigint | number | string));
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+// ─── scope-name resolution ───────────────────────────────────────────
+
 async function resolveScopeNames(
   db: PrismaClient,
   rows: ReadonlyArray<{ id: string; scopeType: string; scopeId: string | null }>,
@@ -165,6 +320,8 @@ function toSummary(
     id: r.id,
     orgId: r.orgId,
     orgDisplayName: r.organization.displayName,
+    counterpartyOrgId: r.counterpartyOrgId,
+    counterpartyOrgDisplayName: r.counterparty?.displayName ?? null,
     displayName: r.displayName,
     status: r.status as ContractStatus,
     scopeType: r.scopeType as ContractScopeType,

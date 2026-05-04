@@ -6,12 +6,23 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { apiFetchServer } from "@/lib/api-client-server";
-import type { ContractSummary } from "@straumvakt/shared/domain/contracts";
+import type {
+  ContractSummary,
+  ContractTariffSummary,
+} from "@straumvakt/shared/domain/contracts";
 import { DeleteButton } from "@/components/delete-button";
 import { ContractEditPanel } from "./edit-panel";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Contract" };
+
+function formatRate(minor: string | null, vat: number | null): string {
+  if (minor === null) return "—";
+  const ex = Number(minor) / 100;
+  if (vat === null) return `${ex.toFixed(2)} kr/kWh ex-VAT`;
+  const inc = ex * (1 + vat / 100);
+  return `${ex.toFixed(2)} ex-VAT  ·  ${inc.toFixed(2)} inc ${vat}% VAT`;
+}
 
 export default async function ContractDetailPage({
   params,
@@ -19,10 +30,16 @@ export default async function ContractDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const res = await apiFetchServer(`/api/admin/contracts/${id}`);
+  const [res, tariffsRes] = await Promise.all([
+    apiFetchServer(`/api/admin/contracts/${id}`),
+    apiFetchServer(`/api/admin/contracts/${id}/tariffs`),
+  ]);
   if (res.status === 404) notFound();
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const { contract } = (await res.json()) as { contract: ContractSummary };
+  const tariffs = tariffsRes.ok
+    ? ((await tariffsRes.json()) as { tariffs: ContractTariffSummary }).tariffs
+    : { dso: null, retailers: [] };
 
   const scopeHref =
     contract.scopeType === "site" && contract.scopeId
@@ -45,7 +62,7 @@ export default async function ContractDetailPage({
           {contract.displayName}
         </h1>
         <p className="mt-1 text-sm text-ink-400">
-          Owned by{" "}
+          Owner{" "}
           <Link
             href={
               `/accounts/organizations/${contract.orgId}` as Parameters<typeof Link>[0]["href"]
@@ -54,6 +71,20 @@ export default async function ContractDetailPage({
           >
             {contract.orgDisplayName}
           </Link>
+          {contract.counterpartyOrgId && contract.counterpartyOrgDisplayName && (
+            <>
+              {" "}
+              ↔ Counterparty{" "}
+              <Link
+                href={
+                  `/accounts/organizations/${contract.counterpartyOrgId}` as Parameters<typeof Link>[0]["href"]
+                }
+                className="text-sv-sky hover:underline"
+              >
+                {contract.counterpartyOrgDisplayName}
+              </Link>
+            </>
+          )}
           {" · "}Scope <span className="font-mono text-ink-300">{contract.scopeType}</span>
           {scopeHref && contract.scopeDisplayName && (
             <>
@@ -82,6 +113,118 @@ export default async function ContractDetailPage({
       />
 
       <section className="mt-8 rounded-lg border border-bg-border bg-bg-base/30 p-4">
+        <h2 className="mb-3 text-sm font-semibold text-ink-50">
+          Rates by contract scope
+        </h2>
+        <p className="mb-3 text-[11px] text-ink-500">
+          DSO is anchored on the parent site. Each installation under
+          the scope carries its own retailer rate (typically the same
+          across an installation set, but can vary).
+        </p>
+
+        <div className="mb-4">
+          <h3 className="mb-2 text-[11px] uppercase tracking-brand text-ink-400">
+            DSO (distribution)
+          </h3>
+          {tariffs.dso ? (
+            <div className="rounded border border-bg-border/60 bg-bg-base/20 px-3 py-2 text-xs">
+              <div className="flex items-baseline gap-2">
+                <span className="font-medium text-ink-100">
+                  {tariffs.dso.tariffDisplayName}
+                </span>
+                <span className="text-[10px] text-ink-500">
+                  Site:{" "}
+                  <Link
+                    href={
+                      `/sites/${tariffs.dso.siteId}` as Parameters<typeof Link>[0]["href"]
+                    }
+                    className="text-sv-sky hover:underline"
+                  >
+                    {tariffs.dso.siteDisplayName}
+                  </Link>
+                </span>
+              </div>
+              <div className="mt-1 font-mono text-[11px] text-ink-300">
+                {formatRate(tariffs.dso.pricePerKwhMinor, tariffs.dso.vatRatePct)}
+              </div>
+            </div>
+          ) : (
+            <p className="rounded border border-dashed border-amber-700/40 bg-amber-950/10 px-3 py-2 text-[11px] text-amber-300">
+              No DSO bound on the contract&apos;s parent site. Will throw
+              <span className="font-mono"> dso_tariff_unconfigured</span> at session-stop.
+            </p>
+          )}
+        </div>
+
+        <div>
+          <h3 className="mb-2 text-[11px] uppercase tracking-brand text-ink-400">
+            Retailer (electricity)
+          </h3>
+          {tariffs.retailers.length === 0 ? (
+            <p className="rounded border border-dashed border-bg-border/60 bg-bg-base/20 px-3 py-2 text-[11px] text-ink-500">
+              No installations under this scope, or scope type doesn&apos;t resolve retailers.
+            </p>
+          ) : (
+            <ul className="space-y-1.5">
+              {tariffs.retailers.map((r) => (
+                <li
+                  key={r.installationId}
+                  className="rounded border border-bg-border/60 bg-bg-base/20 px-3 py-2 text-xs"
+                >
+                  <div className="flex items-baseline gap-2">
+                    <Link
+                      href={
+                        `/installations/${r.installationId}` as Parameters<typeof Link>[0]["href"]
+                      }
+                      className="font-medium text-ink-100 hover:text-sv-sky"
+                    >
+                      {r.installationDisplayName}
+                    </Link>
+                    {r.tariffDisplayName ? (
+                      <span className="text-[10px] text-ink-500">
+                        {r.tariffDisplayName}
+                      </span>
+                    ) : (
+                      <span className="rounded bg-amber-950/30 px-1.5 py-0.5 text-[10px] uppercase text-amber-300">
+                        not bound
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-1 font-mono text-[11px] text-ink-300">
+                    {formatRate(r.pricePerKwhMinor, r.vatRatePct)}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {tariffs.dso && tariffs.retailers.length > 0 && (
+          <p className="mt-3 text-[11px] text-emerald-300">
+            All-in for the canonical installation (DSO + first retailer):{" "}
+            <span className="font-mono">
+              {(() => {
+                const dso = tariffs.dso;
+                const ret = tariffs.retailers[0];
+                if (
+                  !ret.pricePerKwhMinor ||
+                  !dso.pricePerKwhMinor ||
+                  ret.vatRatePct === null ||
+                  dso.vatRatePct === null
+                ) {
+                  return "—";
+                }
+                const sub =
+                  Number(dso.pricePerKwhMinor) + Number(ret.pricePerKwhMinor);
+                const inc = (sub / 100) * (1 + ret.vatRatePct / 100);
+                return `${inc.toFixed(2)} kr/kWh inc-VAT`;
+              })()}
+            </span>
+          </p>
+        )}
+      </section>
+
+      <section className="mt-6 rounded-lg border border-bg-border bg-bg-base/30 p-4">
         <h2 className="mb-3 text-sm font-semibold text-ink-50">
           Read-only metadata
         </h2>

@@ -521,7 +521,12 @@ model Organization {
   costCenters         CostCenter[]         @relation("CostCenterOrg")
   costCentersAsPayer  CostCenter[]         @relation("CostCenterPayer")
   costCentersAsBeneficiary CostCenter[]    @relation("CostCenterBeneficiary")
-  contracts           Contract[]
+  contracts           Contract[]                  @relation("ContractOwnerOrg")
+  // ── Sprint 8.14 — bilateral contract counterparty link ──────────
+  // Added when collapsing the dual-row Dalvegur contracts into a
+  // single row visible to BOTH sides. Operator org (Straumvakt) is
+  // the counterparty for every customer-org contract.
+  contractsAsCounterparty Contract[]              @relation("ContractCounterpartyOrg")
   contractAccumulators ContractPeriodAccumulator[]
   driverContracts     DriverContract[]
   billingLines        BillingLine[]
@@ -2448,6 +2453,13 @@ enum ContractStatus {
 model Contract {
   id                  String                    @id @default(uuid()) @db.Uuid
   orgId               String                    @map("org_id") @db.Uuid
+  // Sprint 8.14 — counterparty (the other side of the bilateral
+  // arrangement). For Straumvakt's operator-pilot model, orgId is
+  // the customer (asset owner) and counterpartyOrgId is the
+  // operator (Straumvakt). Nullable because legacy single-sided
+  // rows pre-date this column. Both orgs see the same row via
+  // listContractsByOrg's OR query.
+  counterpartyOrgId   String?                   @map("counterparty_org_id") @db.Uuid
   scopeType           ContractScopeType         @map("scope_type")
   scopeId             String?                   @map("scope_id") @db.Uuid
   parentContractId    String?                   @map("parent_contract_id") @db.Uuid
@@ -2458,13 +2470,15 @@ model Contract {
   createdAt           DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt           DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  organization        Organization              @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  organization        Organization              @relation("ContractOwnerOrg", fields: [orgId], references: [id], onDelete: Cascade)
+  counterparty        Organization?             @relation("ContractCounterpartyOrg", fields: [counterpartyOrgId], references: [id])
   parent              Contract?                 @relation("ContractInheritance", fields: [parentContractId], references: [id])
   children            Contract[]                @relation("ContractInheritance")
   assignments         ContractFactorAssignment[]
   accumulators        ContractPeriodAccumulator[]
 
   @@index([orgId, scopeType, scopeId])
+  @@index([counterpartyOrgId])
   @@map("contracts")
   @@schema("billing")
 }

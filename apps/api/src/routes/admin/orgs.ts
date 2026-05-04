@@ -13,7 +13,9 @@ import {
 import { listPropertiesByOrg } from "../../repositories/properties";
 import { listSitesByOrg } from "../../repositories/sites";
 import { listInstallationsByOrg } from "../../repositories/installations";
-import { listContractsByOrg } from "../../repositories/contracts";
+import {
+  listContractsByOrg,
+} from "../../repositories/contracts";
 import { getOrgTariffChainSummary } from "../../repositories/org-tariff-chain";
 import { listFamilyGroupsByOrg } from "../../repositories/family-groups";
 import {
