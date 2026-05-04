@@ -75,15 +75,48 @@ zaptecWebhooks.use("*", async (c, next) => {
 
 // ─── /auth ─────────────────────────────────────────────────────────────
 // Per RFID tap. Zaptec asks "is cardId X allowed at chargerId Y?".
-// We match cardId against IdToken.value (active tokens only). Reject
-// by default if no match.
+// We match cardId against IdToken.value (active tokens only).
+//
+// SAFETY MODES:
+//   • diagnostic mode  → fail-OPEN. Return Accept regardless of
+//                        IdToken state, logs cardId for inspection.
+//                        Use while seeding the IdToken table or
+//                        observing what Zaptec actually sends.
+//   • normal mode      → fail-CLOSED. Reject if no matching IdToken.
+//
+// Why fail-open in diagnostic: the AuthType=Webhooks switch hands us
+// the auth gate. An empty IdToken table without fail-open would lock
+// every driver out (stuck on authentication, charger preparing). We
+// learned this the hard way — see retro 2026-05-04. The operator
+// must explicitly leave diagnostic mode (unset ZAPTEC_WEBHOOK_DIAGNOSTIC)
+// before turning fail-closed semantics back on.
 zaptecWebhooks.post("/auth", async (c) => {
+  const diagnostic =
+    c.env.ZAPTEC_WEBHOOK_DIAGNOSTIC === "1" ||
+    c.env.ZAPTEC_WEBHOOK_DIAGNOSTIC === "true";
+
   const raw = await c.req.json().catch(() => null);
-  console.log("[zaptec-webhook] auth", { body: redactRfid(raw) });
+  console.log("[zaptec-webhook] auth", {
+    diagnostic,
+    body: redactRfid(raw),
+  });
+
   if (!raw || typeof raw !== "object") {
+    if (diagnostic) {
+      return c.json({ result: "Accept", note: "diagnostic_invalid_payload" }, 200);
+    }
     return c.json({ result: "Reject", reason: "invalid_payload" }, 400);
   }
   const cardId = pickFirstString(raw, ["cardId", "rfid", "tag", "idTag", "tokenId"]);
+
+  if (diagnostic) {
+    // Fail-open: log + Accept regardless of IdToken state.
+    console.warn("[zaptec-webhook] auth DIAGNOSTIC fail-open Accept", {
+      cardIdSeen: cardId !== undefined,
+    });
+    return c.json({ result: "Accept", note: "diagnostic_fail_open" }, 200);
+  }
+
   if (!cardId) {
     return c.json({ result: "Reject", reason: "no_card_id" }, 200);
   }

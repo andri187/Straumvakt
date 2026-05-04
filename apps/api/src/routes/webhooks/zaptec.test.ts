@@ -208,16 +208,32 @@ describe("zaptec webhooks", () => {
     expect(res.status).toBe(503);
   });
 
-  it("diagnostic mode bypasses auth + accepts unauthenticated calls", async () => {
+  it("diagnostic mode bypasses bearer secret + fail-OPEN on auth", async () => {
+    // Critical: in diagnostic mode the /auth handler must Accept by
+    // default even when no IdToken matches, otherwise flipping
+    // AuthType=Webhooks in the Zaptec portal locks every driver out
+    // until we've seeded the IdToken table. Learned the hard way
+    // 2026-05-04 — see retro.
     const res = await call(
       "/auth",
-      { cardId: "TEST" },
+      { cardId: "UNKNOWN-CARD" },
+      { env: { ZAPTEC_WEBHOOK_DIAGNOSTIC: "1" } },
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { result: string; note?: string };
+    expect(body.result).toBe("Accept");
+    expect(body.note).toBe("diagnostic_fail_open");
+  });
+
+  it("diagnostic mode accepts even when payload is missing/invalid", async () => {
+    const res = await call(
+      "/auth",
+      "not-an-object",
       { env: { ZAPTEC_WEBHOOK_DIAGNOSTIC: "1" } },
     );
     expect(res.status).toBe(200);
     const body = (await res.json()) as { result: string };
-    // No matching IdToken seeded → returns Reject (but route ran).
-    expect(body.result).toBe("Reject");
+    expect(body.result).toBe("Accept");
   });
 
   it("returns 401 when authorization header is missing/wrong", async () => {
