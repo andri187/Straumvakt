@@ -35,6 +35,7 @@ import { internalOcppAuth } from "./routes/internal/ocpp-auth";
 import { internalOcppAuthorize } from "./routes/internal/ocpp-authorize";
 import { internalOcppEvents } from "./routes/internal/ocpp-events";
 import { internalPendingDiscovery } from "./routes/internal/pending-discovery";
+import { zaptecWebhooks } from "./routes/webhooks/zaptec";
 import { makePrisma } from "./lib/prisma";
 import { buildRegistry } from "./lib/dispatch-targets";
 import { processCommand, sweepStuckPending } from "./lib/dispatcher";
@@ -143,6 +144,15 @@ app.route("/api/internal/ocpp-authorize", internalOcppAuthorize);
 app.route("/api/ocpp/events", internalOcppEvents);
 app.route("/api/internal/ocpp-events", internalOcppEvents);
 app.route("/api/internal/pending-discovery", internalPendingDiscovery);
+
+// Sprint 8.9 — Zaptec webhook receivers for AuthenticationType=1
+// (Webhooks). Operator pastes these URLs into the Zaptec portal:
+//   POST /api/webhooks/zaptec/auth          per-RFID Accept/Reject
+//   POST /api/webhooks/zaptec/session-start charge session begins
+//   POST /api/webhooks/zaptec/session-end   charge session ends + cost
+// Bearer secret in Authorization header, value matches
+// env.ZAPTEC_WEBHOOK_SECRET — middleware enforces.
+app.route("/api/webhooks/zaptec", zaptecWebhooks);
 
 app.notFound((c) => c.json({ error: "not_found", path: c.req.path }, 404));
 

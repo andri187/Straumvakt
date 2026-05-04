@@ -58,6 +58,13 @@ export interface Env {
   // KEK for AES-GCM encryption of stored vendor portal passwords. SHA-256
   // of this secret → AES-256 key. Set via wrangler secret put.
   OCPP_CRED_KEK: string;
+  // Sprint 8.9 — shared bearer secret for inbound Zaptec webhooks
+  // (AuthenticationType=1). Operator pastes the same value into the
+  // Zaptec portal's "Auth payload" field (or as Authorization header)
+  // so we can reject spoofed callbacks. Set via wrangler secret put.
+  // Optional today — when unset, every webhook returns 503 so the
+  // route can't be quietly enabled without a secret in place.
+  ZAPTEC_WEBHOOK_SECRET?: string;
 }
 
 /**
