@@ -2,14 +2,16 @@ import Link from "next/link";
 import { apiFetchServer } from "@/lib/api-client-server";
 import type { ContractSummary } from "@straumvakt/shared/domain/contracts";
 
-export const metadata = { title: "Organization · Contracts" };
+export const metadata = { title: "Organization · Cost arrangements" };
 
 /**
- * Contracts tab. Shows org-level Contracts (billing.contracts) — the
- * billing scaffolding for tariff resolution, factor allocation, and
- * cost-center splitting. DriverContracts (per-driver, people schema)
- * surface separately on the Driver groups / Drivers views once the
- * Sprint 5 user-import flow lands.
+ * Cost arrangements tab. Shows third-party billing contracts
+ * (billing.contracts) — the scaffolding for cross-org cost-allocation,
+ * factor splits, and cost-center routing when an organization other
+ * than the operator is responsible for paying. Empty + harmless when
+ * the org operates its own sites directly. The actual rate that
+ * drives session cost lives on Site.dsoTariffId + Installation.retailerTariffId
+ * — surfaced on the Tariff chain tab.
  */
 export default async function OrgContractsPage({
   params,
@@ -26,24 +28,39 @@ export default async function OrgContractsPage({
     <section>
       <div className="mb-3 flex items-baseline justify-between">
         <h2 className="text-sm font-semibold uppercase tracking-brand text-ink-300">
-          Contracts ({contracts.length})
+          Cost arrangements ({contracts.length})
         </h2>
         <Link
           href={"/billing/contracts/new" as Parameters<typeof Link>[0]["href"]}
           className="rounded border border-bg-border px-3 py-1 text-xs text-ink-300 hover:bg-bg-base/40 hover:text-ink-100"
         >
-          + Add contract
+          + Add arrangement
         </Link>
       </div>
 
       <p className="mb-3 text-[11px] text-ink-500">
-        Org-level contracts only (billing.contracts). DriverContracts
-        (per-driver) surface in the Driver groups view.
+        Third-party cost-allocation contracts only. The rate that drives
+        session cost is on the{" "}
+        <Link
+          href={`/accounts/organizations/${id}/tariff-chain` as Parameters<typeof Link>[0]["href"]}
+          className="text-sv-sky hover:underline"
+        >
+          Tariff chain tab
+        </Link>
+        . Driver-level contracts surface in the Driver groups view.
       </p>
 
       {contracts.length === 0 ? (
-        <div className="rounded border border-dashed border-bg-border p-6 text-center text-sm text-ink-500">
-          No contracts for this organization yet.
+        <div className="rounded border border-dashed border-bg-border p-6 text-center text-sm text-ink-400">
+          <p className="mb-2">No third-party cost arrangements for this organization.</p>
+          <p className="text-[11px] text-ink-500">
+            That&apos;s the correct state when this org operates its own
+            sites directly — pricing is driven by the bound DSO + retailer
+            tariffs, not by a contract row. Add an arrangement here only
+            when a separate organization (HOA, property manager, fleet
+            customer) is responsible for paying for sessions at this
+            org&apos;s sites.
+          </p>
         </div>
       ) : (
         <ul className="divide-y divide-bg-border/60 rounded-md border border-bg-border bg-bg-base/30">

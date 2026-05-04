@@ -3,10 +3,12 @@ import { notFound } from "next/navigation";
 import { SectionTabs, OPERATIONS_TABS } from "@/components/section-tabs";
 import { apiFetchServer, apiFetchServerJson } from "@/lib/api-client-server";
 import type { InstallationSummary } from "@straumvakt/shared/domain/installations";
+import type { OrgSummary } from "@straumvakt/shared/domain/orgs";
 import { DeleteButton } from "@/components/delete-button";
 import { EditInstallationPanel } from "./edit-panel";
 import { EnforceAuthorizeToggle } from "./enforce-authorize-toggle";
 import { InstallationOcppPasswordPanel } from "./ocpp-password-panel";
+import { MoveSiteButton } from "@/app/(app)/sites/[id]/move-site-button";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +39,14 @@ export default async function InstallationDetailPage({ params }: { params: Promi
   const ocppSummary = ocppSummaryRes.ok
     ? ((await ocppSummaryRes.json()) as { summary: OcppSummary }).summary
     : null;
+
+  // Sprint 8.11 — pull active orgs for the parent-site move action.
+  // The move button reuses the existing /sites/[id] component so the
+  // cascade semantics + error handling stay in one place.
+  const orgsRes = await apiFetchServer(`/api/admin/orgs`);
+  const orgs = orgsRes.ok
+    ? ((await orgsRes.json()) as { orgs: OrgSummary[] }).orgs
+    : [];
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-8">
@@ -100,6 +110,31 @@ export default async function InstallationDetailPage({ params }: { params: Promi
             </pre>
           </section>
         )}
+
+      <section className="mt-8 space-y-4 rounded-lg border border-amber-700/30 bg-amber-950/10 p-4">
+        <div>
+          <h2 className="text-sm font-semibold text-amber-200">
+            Move parent site to another organization
+          </h2>
+          <p className="mt-1 text-xs text-amber-300/80">
+            Installations don&apos;t move on their own — they follow the
+            parent site <span className="font-mono text-amber-200">{installation.siteDisplayName}</span>.
+            Cascade includes every installation, circuit, charger, EVSE,
+            connector, OCPP identity, and historical session under that
+            site, in one transaction. Tariff anchors and vendor-credential
+            links are cleared and need to be re-bound in the new org.
+            Charger asset ownership (<span className="font-mono">ChargingStation.ownerOrgId</span>)
+            is preserved — operator vs owner are separate tracks.
+          </p>
+        </div>
+        <MoveSiteButton
+          siteId={installation.siteId}
+          siteDisplayName={installation.siteDisplayName}
+          currentOrgId={installation.orgId}
+          currentOrgDisplayName={installation.orgDisplayName}
+          orgs={orgs}
+        />
+      </section>
 
       <section className="mt-8 rounded-lg border border-rose-700/30 bg-rose-950/10 p-4">
         <div className="flex items-baseline justify-between gap-4">
