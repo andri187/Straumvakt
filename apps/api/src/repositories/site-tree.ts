@@ -23,7 +23,11 @@ import {
 } from "../lib/zaptec";
 import { openPassword } from "../lib/credential-crypto";
 
-const ONLINE_WINDOW_MS = 5 * 60 * 1000;
+// 12 min: API status pollers (Sprint 8.8) tick every */5, so a 5-min
+// window races the cron. 12 min gives ~2 ticks of buffer before a row
+// flips to offline. OCPP-driven Heartbeat traffic (when present)
+// still keeps lastSeenAt fresher than this anyway.
+const ONLINE_WINDOW_MS = 12 * 60 * 1000;
 
 // OCPP 1.6 §4.7 ChargePointStatus enum — exhaustive. Used to
 // distinguish a real charger-reported status from our DB default

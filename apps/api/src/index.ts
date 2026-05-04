@@ -30,6 +30,7 @@ import { adminGroups } from "./routes/admin/groups";
 import { adminIdTokens } from "./routes/admin/id-tokens";
 import { adminOrgInvites } from "./routes/admin/org-invites";
 import { adminBilling } from "./routes/admin/billing";
+import { adminContracts } from "./routes/admin/contracts";
 import { publicInvites } from "./routes/public/invites";
 import { internalOcppAuth } from "./routes/internal/ocpp-auth";
 import { internalOcppAuthorize } from "./routes/internal/ocpp-authorize";
@@ -123,6 +124,11 @@ app.route("/api/admin/orgs", adminOrgInvites);
 // Operator console reads from here; per-entity tabs (org / site /
 // charger / driver detail pages) pass the right query param.
 app.route("/api/admin/billing", adminBilling);
+
+// Sprint 8.13 — per-contract management (read/update/delete).
+// Org-scoped list is at /api/admin/orgs/:id/contracts; this is the
+// platform-wide view + individual mutations.
+app.route("/api/admin/contracts", adminContracts);
 
 // Sprint 5.8 — agent invite flow (recipient side). Public routes
 // gated by the token itself, NOT by the admin session cookie.
