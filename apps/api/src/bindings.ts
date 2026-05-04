@@ -65,6 +65,14 @@ export interface Env {
   // Optional today — when unset, every webhook returns 503 so the
   // route can't be quietly enabled without a secret in place.
   ZAPTEC_WEBHOOK_SECRET?: string;
+  // Diagnostic-only fail-open. Set to "1" or "true" while
+  // discovering the exact shape of Zaptec's webhook auth. Bypasses
+  // the bearer check, logs every request header + body, accepts the
+  // call so the operator can see one real callback land. MUST be
+  // unset before going to production — leaving this on lets anyone
+  // spoof Accept/Reject decisions and ledger writes. Set via
+  // wrangler secret put.
+  ZAPTEC_WEBHOOK_DIAGNOSTIC?: string;
 }
 
 /**

@@ -208,6 +208,18 @@ describe("zaptec webhooks", () => {
     expect(res.status).toBe(503);
   });
 
+  it("diagnostic mode bypasses auth + accepts unauthenticated calls", async () => {
+    const res = await call(
+      "/auth",
+      { cardId: "TEST" },
+      { env: { ZAPTEC_WEBHOOK_DIAGNOSTIC: "1" } },
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { result: string };
+    // No matching IdToken seeded → returns Reject (but route ran).
+    expect(body.result).toBe("Reject");
+  });
+
   it("returns 401 when authorization header is missing/wrong", async () => {
     const res = await call("/auth", {});
     expect(res.status).toBe(401);

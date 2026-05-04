@@ -36,6 +36,27 @@ import type { Prisma, PrismaClient } from "../../generated/prisma/client";
 export const zaptecWebhooks = new Hono<{ Bindings: Env }>();
 
 zaptecWebhooks.use("*", async (c, next) => {
+  const diagnostic =
+    c.env.ZAPTEC_WEBHOOK_DIAGNOSTIC === "1" ||
+    c.env.ZAPTEC_WEBHOOK_DIAGNOSTIC === "true";
+
+  if (diagnostic) {
+    // Diagnostic mode — log every header so the operator can see
+    // exactly what Zaptec puts on the wire (Authorization header?
+    // X-Zaptec-Signature? body field?). Fail-open. Lock down by
+    // unsetting ZAPTEC_WEBHOOK_DIAGNOSTIC after one real callback.
+    const headers: Record<string, string> = {};
+    c.req.raw.headers.forEach((v, k) => {
+      headers[k] = v;
+    });
+    console.warn("[zaptec-webhook] DIAGNOSTIC fail-open", {
+      path: c.req.path,
+      headers,
+    });
+    await next();
+    return;
+  }
+
   const expected = c.env.ZAPTEC_WEBHOOK_SECRET;
   if (!expected) {
     return c.json({ error: "webhook_secret_unset" }, 503);
