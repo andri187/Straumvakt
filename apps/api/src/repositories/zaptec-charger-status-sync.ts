@@ -93,22 +93,26 @@ export async function syncZaptecChargerStatus(
   const now = new Date();
 
   for (const charger of resp.value) {
-    const deviceId = charger.DeviceId ?? null;
-    if (!deviceId) {
+    // OcppIdentity.vendorResourceId stores Zaptec's INTERNAL UUID
+    // (charger.Id), not the human-readable DeviceId / serial. The
+    // manage-tree apply path provisions identities keyed on Id.
+    // DeviceId is logged for the report but not used for the join.
+    const zaptecChargerId = charger.Id ?? null;
+    if (!zaptecChargerId) {
       report.skipped.push({
-        zaptecChargerId: charger.Id ?? "(no-id)",
+        zaptecChargerId: charger.DeviceId ?? "(no-id)",
         reason: "no_device_id",
       });
       continue;
     }
 
     const identity = await db.ocppIdentity.findFirst({
-      where: { vendor: "Zaptec", vendorResourceId: deviceId },
+      where: { vendor: "Zaptec", vendorResourceId: zaptecChargerId },
       select: { id: true },
     });
     if (!identity) {
       report.skipped.push({
-        zaptecChargerId: deviceId,
+        zaptecChargerId,
         reason: "no_identity_mapped",
       });
       continue;
@@ -120,7 +124,7 @@ export async function syncZaptecChargerStatus(
       data: { status, lastSeenAt: now },
     });
     report.updated.push({
-      zaptecChargerId: deviceId,
+      zaptecChargerId,
       ocppIdentityId: identity.id,
       status,
       isOnline: charger.IsOnline ?? false,

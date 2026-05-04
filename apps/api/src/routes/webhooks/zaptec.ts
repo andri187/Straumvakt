@@ -398,12 +398,31 @@ type Placement =
 
 async function placeSyntheticSession(
   tx: Prisma.TransactionClient,
-  chargerDeviceId: string,
+  chargerIdentifier: string,
 ): Promise<Placement> {
-  const identity = await tx.ocppIdentity.findFirst({
-    where: { vendor: "Zaptec", vendorResourceId: chargerDeviceId },
+  // Tolerant lookup: Zaptec might send the internal UUID
+  // (matches OcppIdentity.vendorResourceId) OR the device serial
+  // (matches ChargingStation.serialNumber, uppercased on import).
+  // Try UUID first since the OcppIdentity join is the canonical path.
+  let identity = await tx.ocppIdentity.findFirst({
+    where: { vendor: "Zaptec", vendorResourceId: chargerIdentifier },
     select: { id: true, orgId: true, chargingStationId: true },
   });
+  if (!identity) {
+    const station = await tx.chargingStation.findUnique({
+      where: { serialNumber: chargerIdentifier.toUpperCase() },
+      select: {
+        siteAssetId: true,
+        ocppIdentities: {
+          select: { id: true, orgId: true, chargingStationId: true },
+          take: 1,
+        },
+      },
+    });
+    if (station && station.ocppIdentities[0]) {
+      identity = station.ocppIdentities[0];
+    }
+  }
   if (!identity) return { kind: "no_station_mapped" };
   const siteAsset = await tx.siteAsset.findUnique({
     where: { id: identity.chargingStationId },
