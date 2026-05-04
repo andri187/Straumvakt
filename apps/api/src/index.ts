@@ -42,6 +42,7 @@ import { handleOcppEventsBatch } from "./queues/ocpp-events";
 import { handleArchiveEventsBatch } from "./queues/archive-events";
 import { ensureForwardPartitions } from "./lib/db/partition-cron";
 import { makePool } from "./lib/db/raw";
+import { runZaptecCronSync } from "./lib/zaptec-sync-cron";
 import type {
   Env,
   OutboundCommandMessage,
@@ -264,6 +265,47 @@ const handler: ExportedHandler<Env, AnyQueueMessage> = {
         }
       })(),
     );
+
+    // Sprint 8.7 — Zaptec API-only writeback. Pulls ChargeHistory for
+    // every active Zaptec credential over a 26h rolling window and
+    // synthesises ChargeSession + session_ledger rows for sessions
+    // that didn't arrive over OCPP. Idempotent via imported_cdr_refs.
+    // Skipped when KEK is not bound (e.g. local dev without secret).
+    if (env.OCPP_CRED_KEK) {
+      const kek = env.OCPP_CRED_KEK;
+      ctx.waitUntil(
+        (async () => {
+          try {
+            const result = await runZaptecCronSync(db, kek);
+            if (
+              result.outcomes.length > 0 ||
+              result.failures.length > 0
+            ) {
+              console.log("[zaptec-sync-cron]", {
+                credentials: result.credentials,
+                imported: result.outcomes.reduce(
+                  (n, o) => n + o.importedCount,
+                  0,
+                ),
+                skipped: result.outcomes.reduce(
+                  (n, o) => n + o.skippedCount,
+                  0,
+                ),
+                errors: result.outcomes.reduce(
+                  (n, o) => n + o.errorCount,
+                  0,
+                ),
+                failedCredentials: result.failures.length,
+              });
+            }
+          } catch (err) {
+            console.error("[zaptec-sync-cron] failed", {
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
+        })(),
+      );
+    }
   },
 };
 

@@ -28,6 +28,7 @@ import {
   unsealAndAuth,
 } from "../../repositories/credential-management";
 import { probeZaptecSessions } from "../../repositories/zaptec-session-probe";
+import { syncZaptecSessions } from "../../repositories/zaptec-session-sync";
 import type { Env } from "../../bindings";
 
 // Platform-wide list — every org's credentials. Operator UI uses this
@@ -116,6 +117,49 @@ adminVendorCredentialsAll.get(
           startedAt: s.startedAt.toISOString(),
           endedAt: s.endedAt?.toISOString() ?? null,
         })),
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg === "credential_not_found") return c.json({ error: msg }, 404);
+      if (msg === "credential_not_zaptec") return c.json({ error: msg }, 400);
+      if (msg === "credential_password_missing") return c.json({ error: msg }, 400);
+      if (msg === "zaptec_auth_failed") return c.json({ error: msg }, 502);
+      if (msg === "kek_unavailable") return c.json({ error: msg }, 500);
+      if (msg.startsWith("zaptec_chargehistory_fetch_failed")) {
+        return c.json({ error: "zaptec_chargehistory_fetch_failed", detail: msg }, 502);
+      }
+      throw err;
+    }
+  },
+);
+
+// Sprint 8.7 — API-only writeback. The probe is read-only; this route
+// actually writes synthetic ChargeSession + ImportedCdrRef + ledger
+// rows for `onlyInZaptec` sessions. Same body shape as probe-sessions
+// (installationId / chargerId / from / to). Idempotent: re-runs hit
+// the unique (sourceKind, sourceCdrId) index on imported_cdr_refs.
+adminVendorCredentialsAll.post(
+  "/:id/sync-sessions",
+  requirePermission("platform.tenant.write"),
+  async (c) => {
+    const db = makePrisma(c.env);
+    try {
+      const auth = await unsealAndAuth(db, c.env.OCPP_CRED_KEK!, c.req.param("id"));
+      const result = await syncZaptecSessions(db, {
+        accessToken: auth.accessToken,
+        installationId: c.req.query("installationId"),
+        chargerId: c.req.query("chargerId"),
+        from: c.req.query("from"),
+        to: c.req.query("to"),
+      });
+      return c.json({
+        zaptecCount: result.zaptecCount,
+        importedCount: result.imported.length,
+        skippedCount: result.skipped.length,
+        errorCount: result.errors.length,
+        imported: result.imported,
+        skipped: result.skipped,
+        errors: result.errors,
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
