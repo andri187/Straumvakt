@@ -14,6 +14,7 @@ import { listPropertiesByOrg } from "../../repositories/properties";
 import { listSitesByOrg } from "../../repositories/sites";
 import { listInstallationsByOrg } from "../../repositories/installations";
 import { listContractsByOrg } from "../../repositories/contracts";
+import { getOrgTariffChainSummary } from "../../repositories/org-tariff-chain";
 import { listFamilyGroupsByOrg } from "../../repositories/family-groups";
 import {
   addMembership,
@@ -136,6 +137,20 @@ adminOrgs.get(
     const db = makePrisma(c.env);
     const contracts = await listContractsByOrg(db, c.req.param("id"));
     return c.json({ contracts });
+  },
+);
+
+// Sprint 8.10 — per-org Tariff chain summary. Walks every Site +
+// Installation under the org and resolves the bound DSO + retailer
+// tariff for each. Operator-facing answer to "what is each site
+// under this org being charged?".
+adminOrgs.get(
+  "/:id/tariff-chain",
+  requirePermission("contract.read", { orgIdParam: "id" }),
+  async (c) => {
+    const db = makePrisma(c.env);
+    const summary = await getOrgTariffChainSummary(db, c.req.param("id"));
+    return c.json({ summary });
   },
 );
 
