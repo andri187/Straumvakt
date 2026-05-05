@@ -318,18 +318,20 @@ export async function getChargerTechnicalRead(
 
     const d = detail as Record<string, unknown>;
 
-    // Defensive: if Zaptec returned EMPTY (charger offline from cloud
-    // perspective) we'd render em-dashes. Detect "no useful data" by
-    // checking the canary fields the panel actually shows: signal,
-    // network type, voltages, temp. If none are present, fall back
-    // to cache rather than surfacing an empty live read as fresh.
-    const liveCanary =
-      pickStateNumber(state, STATE_IDS.CommunicationSignalStrength) ??
-      pickStateNumber(state, STATE_IDS.NetworkType) ??
-      pickStateNumber(state, STATE_IDS.VoltagePhase1) ??
-      pickStateNumber(state, STATE_IDS.InternalTempA) ??
-      pickStateNumber(state, STATE_IDS.TotalChargePower);
-    if (liveCanary === null && state.length === 0) {
+    // Sprint 8.4.4 — don't discard the detail call's payload just
+    // because /state was empty. /state goes empty when the charger is
+    // offline (Zaptec can't reach it for live observations), but
+    // /api/chargers/{id} (detail) still returns hardware identity,
+    // OCPP config, AuthenticationType, firmware version, and
+    // SignedMeterValueKwh from Zaptec's own DB.
+    //
+    // Render whatever Zaptec gave us. The panel em-dashes individual
+    // null fields, so a partial response is rendered correctly. Only
+    // fall back to the cache when BOTH calls returned nothing — that's
+    // the "vendor truly unreachable" state.
+    const detailHasData = detailRes.ok && Object.keys(d).length > 0;
+    const stateHasData = stateRes.ok && state.length > 0;
+    if (!detailHasData && !stateHasData) {
       return fromCache();
     }
 
