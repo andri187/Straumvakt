@@ -1,3 +1,4 @@
+"use client";
 // Two presentational components that render the
 // /api/admin/chargers/:id/technical-read payload:
 //

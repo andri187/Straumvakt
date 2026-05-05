@@ -7,7 +7,11 @@ import type { ChargerTechnicalRead } from "@straumvakt/shared/domain/charger-tec
 import { DeleteButton } from "@/components/delete-button";
 import { EditChargerPanel } from "./edit-panel";
 import { ChargerCommandsPanel } from "./commands-panel";
-import { TechnicalReadPills, TechnicalReadDetail } from "./technical-read-panel";
+import {
+  TechnicalReadProvider,
+  TechnicalReadPillsLive,
+  TechnicalReadDetailLive,
+} from "./technical-read-live";
 import { LatestSessionChart } from "./latest-session-chart";
 
 export const dynamic = "force-dynamic";
@@ -70,12 +74,16 @@ export default async function ChargerDetailPage({ params }: { params: Promise<{ 
       </header>
 
       {/* Compact technical-read pills — Signal / Comm / OCPP / Firmware
-          / Grid / Temp. Pulled live from Zaptec each page load; renders
-          em-dash placeholders when the vendor side is unreachable. */}
-      <TechnicalReadPills
-        read={technicalRead}
-        firmwareFromBoot={charger.firmwareVersion}
-      />
+          / Grid / Temp. Polls /api/admin/chargers/:id/technical-read
+          every 30s while the tab is visible (Sprint 8.4.5 — option B);
+          em-dashes individual fields when vendor data is unreachable.
+          The Provider wraps both this and the detail panel below so a
+          single fetch refreshes both at once. */}
+      <TechnicalReadProvider
+        chargingStationId={charger.chargingStationId}
+        initial={technicalRead}
+      >
+      <TechnicalReadPillsLive firmwareFromBoot={charger.firmwareVersion} />
 
       {/* Sprint 8.4.2 — latest-session timeline. Same SVG chart the
           /charge-log session-detail modal renders, scoped to the most
@@ -166,8 +174,11 @@ export default async function ChargerDetailPage({ params }: { params: Promise<{ 
       </details>
 
       {/* Extended technical read — live dashboard, hardware identity,
-          environment, etc. Below the edit panel per operator request. */}
-      <TechnicalReadDetail read={technicalRead} />
+          environment, etc. Below the edit panel per operator request.
+          Volatile fields auto-update from the same TechnicalReadProvider
+          poll above (one fetch refreshes both panels). */}
+      <TechnicalReadDetailLive />
+      </TechnicalReadProvider>
 
       {/* Full Technical Read view — the long-form layout with every
           section grouped + sourced. Linked rather than inlined so this
