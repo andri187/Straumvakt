@@ -1,15 +1,26 @@
-// Sprint 8.13.1 — guard against the regression where the */5 status
-// cron stamped lastSeenAt=now even for offline chargers, painting them
-// as "online" in the site tree for 12 min after Zaptec already
-// reported them down (caught at Klettas 3 / ZPR103043).
+// Sprint 8.13.2 — per-charger /state is the source of truth for
+// IsOnline; bulk /api/chargers IsOnline was caught lying (K3 /
+// ZPR042320). These tests pin the new contract:
+//
+//   1. /state succeeds + IsOnline="true"   → status mapped, lastSeenAt = now
+//   2. /state succeeds + IsOnline="false"  → status = "offline", lastSeenAt untouched
+//   3. /state fails                        → no DB write at all
+//   4. /state succeeds, no StateId -2      → no DB write (ambiguous)
+//   5. /state succeeds, garbage value      → no DB write (ambiguous)
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 vi.mock("../lib/zaptec", () => ({
   listChargers: vi.fn(),
+  getChargerState: vi.fn(),
 }));
 
-import { listChargers, type ZaptecChargerLite } from "../lib/zaptec";
+import {
+  listChargers,
+  getChargerState,
+  type ZaptecChargerLite,
+  type ZaptecStateEntry,
+} from "../lib/zaptec";
 import { syncZaptecChargerStatus } from "./zaptec-charger-status-sync";
 import type { PrismaClient } from "../generated/prisma/client";
 
@@ -48,8 +59,8 @@ function makeFakeDb(captured: CapturedUpdate[]): PrismaClient {
 function makeCharger(overrides: Partial<ZaptecChargerLite>): ZaptecChargerLite {
   return {
     Id: ZAPTEC_ID,
-    DeviceId: "ZPR103043",
-    Name: "K1",
+    DeviceId: "ZPR042320",
+    Name: "K3",
     OperatingMode: 1,
     IsOnline: true,
     ...overrides,
@@ -57,21 +68,32 @@ function makeCharger(overrides: Partial<ZaptecChargerLite>): ZaptecChargerLite {
   } as any;
 }
 
-describe("syncZaptecChargerStatus — lastSeenAt invariant", () => {
+function stateOk(observations: ZaptecStateEntry[]) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return { ok: true, value: observations } as any;
+}
+function stateFail() {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return { ok: false, error: { kind: "unreachable" } } as any;
+}
+
+describe("syncZaptecChargerStatus — /state-as-truth contract", () => {
   beforeEach(() => {
     vi.mocked(listChargers).mockReset();
+    vi.mocked(getChargerState).mockReset();
   });
 
-  it("stamps lastSeenAt=now when Zaptec reports IsOnline=true", async () => {
-    vi.mocked(listChargers).mockResolvedValueOnce({
-      ok: true,
-      value: [makeCharger({ IsOnline: true, OperatingMode: 3 })],
+  it("/state succeeds + IsOnline=true → maps status from OperatingMode + stamps lastSeenAt", async () => {
+    vi.mocked(listChargers).mockResolvedValueOnce(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any);
+      { ok: true, value: [makeCharger({ OperatingMode: 3 })] } as any,
+    );
+    vi.mocked(getChargerState).mockResolvedValueOnce(
+      stateOk([{ StateId: -2, ValueAsString: "true" }]),
+    );
 
     const captured: CapturedUpdate[] = [];
     const db = makeFakeDb(captured);
-
     const report = await syncZaptecChargerStatus(db, { accessToken: "x" });
 
     expect(report.updated).toHaveLength(1);
@@ -80,16 +102,17 @@ describe("syncZaptecChargerStatus — lastSeenAt invariant", () => {
     expect(captured[0].data.lastSeenAt).toBeInstanceOf(Date);
   });
 
-  it("does NOT stamp lastSeenAt when Zaptec reports IsOnline=false (the bug)", async () => {
-    vi.mocked(listChargers).mockResolvedValueOnce({
-      ok: true,
-      value: [makeCharger({ IsOnline: false, OperatingMode: 3 })],
+  it("/state succeeds + IsOnline=false → status='offline' + lastSeenAt UNTOUCHED", async () => {
+    vi.mocked(listChargers).mockResolvedValueOnce(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any);
+      { ok: true, value: [makeCharger({ OperatingMode: 3 })] } as any,
+    );
+    vi.mocked(getChargerState).mockResolvedValueOnce(
+      stateOk([{ StateId: -2, ValueAsString: "false" }]),
+    );
 
     const captured: CapturedUpdate[] = [];
     const db = makeFakeDb(captured);
-
     await syncZaptecChargerStatus(db, { accessToken: "x" });
 
     expect(captured).toHaveLength(1);
@@ -97,21 +120,76 @@ describe("syncZaptecChargerStatus — lastSeenAt invariant", () => {
     expect(captured[0].data.lastSeenAt).toBeUndefined();
   });
 
-  it("treats IsOnline=undefined as not-online — no lastSeenAt stamp", async () => {
-    // Defensive: if Zaptec ever returns IsOnline absent from the
-    // payload, we should not assume the charger is reachable.
-    vi.mocked(listChargers).mockResolvedValueOnce({
-      ok: true,
-      value: [makeCharger({ IsOnline: undefined, OperatingMode: 1 })],
+  it("/state fails → no DB write at all (the K3 case)", async () => {
+    // The bulk listing claims online; /state can't reach the charger.
+    // Right semantic: don't write. lastSeenAt naturally ages out past
+    // the 12-min site-tree window and the UI flips offline.
+    vi.mocked(listChargers).mockResolvedValueOnce(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any);
+      { ok: true, value: [makeCharger({ IsOnline: true, OperatingMode: 1 })] } as any,
+    );
+    vi.mocked(getChargerState).mockResolvedValueOnce(stateFail());
 
     const captured: CapturedUpdate[] = [];
     const db = makeFakeDb(captured);
+    const report = await syncZaptecChargerStatus(db, { accessToken: "x" });
 
+    expect(captured).toHaveLength(0);
+    expect(report.skipped).toContainEqual({
+      zaptecChargerId: ZAPTEC_ID,
+      reason: "state_unreachable",
+    });
+  });
+
+  it("/state succeeds but no StateId -2 entry → no DB write", async () => {
+    vi.mocked(listChargers).mockResolvedValueOnce(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      { ok: true, value: [makeCharger({})] } as any,
+    );
+    vi.mocked(getChargerState).mockResolvedValueOnce(
+      stateOk([{ StateId: 710, ValueAsString: "1" }]),
+    );
+
+    const captured: CapturedUpdate[] = [];
+    const db = makeFakeDb(captured);
+    await syncZaptecChargerStatus(db, { accessToken: "x" });
+
+    expect(captured).toHaveLength(0);
+  });
+
+  it("/state succeeds but ValueAsString is not parseable as boolean → no DB write", async () => {
+    vi.mocked(listChargers).mockResolvedValueOnce(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      { ok: true, value: [makeCharger({})] } as any,
+    );
+    vi.mocked(getChargerState).mockResolvedValueOnce(
+      stateOk([{ StateId: -2, ValueAsString: "maybe" }]),
+    );
+
+    const captured: CapturedUpdate[] = [];
+    const db = makeFakeDb(captured);
+    await syncZaptecChargerStatus(db, { accessToken: "x" });
+
+    expect(captured).toHaveLength(0);
+  });
+
+  it("ignores bulk's stale IsOnline=true when /state says false (the lying-bulk case)", async () => {
+    // K3 / ZPR042320 — bulk listing said IsOnline=true but the
+    // charger was actually offline. /state must override.
+    vi.mocked(listChargers).mockResolvedValueOnce(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      { ok: true, value: [makeCharger({ IsOnline: true, OperatingMode: 1 })] } as any,
+    );
+    vi.mocked(getChargerState).mockResolvedValueOnce(
+      stateOk([{ StateId: -2, ValueAsString: "false" }]),
+    );
+
+    const captured: CapturedUpdate[] = [];
+    const db = makeFakeDb(captured);
     await syncZaptecChargerStatus(db, { accessToken: "x" });
 
     expect(captured).toHaveLength(1);
+    expect(captured[0].data.status).toBe("offline");
     expect(captured[0].data.lastSeenAt).toBeUndefined();
   });
 });

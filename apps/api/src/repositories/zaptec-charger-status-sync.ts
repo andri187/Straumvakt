@@ -6,18 +6,30 @@
 // where OCPP is disabled and Heartbeat / StatusNotification frames
 // don't reach us.
 //
-// Walks every charger reachable through a Zaptec credential, maps
-// `OperatingMode` (StateId 710 mirror in the bulk listing) to our
-// OcppIdentity.status enum, and stamps lastSeenAt = now so the
-// operator console's "last seen" indicator stays fresh.
+// Sprint 8.13.2 — bulk /api/chargers `IsOnline` was caught lying
+// (cached "online" stayed sticky for hours after a charger really went
+// offline; portal disagreed). The bulk listing is now used purely to
+// enumerate the chargers visible to a credential. Per-charger
+// /api/chargers/{id}/state is the source of truth for IsOnline:
+//   • /state succeeds + StateId -2 = "true"  → status mapped, lastSeenAt = now
+//   • /state succeeds + StateId -2 = "false" → status = "offline", lastSeenAt untouched
+//   • /state fails (Zaptec can't reach the charger or the call errors)
+//     → no DB write at all; lastSeenAt naturally ages past the
+//       site-tree 12-min window and the UI flips offline within
+//       1–2 ticks. This is the right semantic — if we can't talk to
+//       the charger, claiming "still online" would be a lie.
 //
-// Per docs/reference/integrations/zaptec.md §13.5, OperatingMode in
-// the bulk /api/chargers response carries the last-known value even
-// for offline chargers, which makes this a single REST call per
-// credential — no per-charger /state round trips.
+// Cost: one /state call per charger per credential per */5 tick (was
+// 1 bulk call total). Run sequentially — Zaptec rate-limits bursts on
+// the same OAuth token (caught during session backfill, Sprint 8.14.1).
 
 import type { PrismaClient } from "../generated/prisma/client";
-import { listChargers, type ZaptecChargerLite } from "../lib/zaptec";
+import {
+  getChargerState,
+  listChargers,
+  type ZaptecChargerLite,
+  type ZaptecStateEntry,
+} from "../lib/zaptec";
 
 export interface ChargerStatusSyncOptions {
   accessToken: string;
@@ -34,7 +46,8 @@ export interface ChargerStatusSkip {
   zaptecChargerId: string;
   reason:
     | "no_device_id"
-    | "no_identity_mapped";
+    | "no_identity_mapped"
+    | "state_unreachable";
 }
 
 export interface ChargerStatusReport {
@@ -44,20 +57,18 @@ export interface ChargerStatusReport {
 }
 
 /**
- * OperatingMode → our status string. Values per Zaptec docs §13.5
- * (also mirrored on ZaptecChargerLite.OperatingMode):
+ * OperatingMode → our status string. Values per Zaptec docs §13.5:
  *   0 = Unknown
  *   1 = Disconnected   → "available"
  *   2 = Requesting     → "preparing"
  *   3 = Charging       → "charging"
  *   5 = Finished       → "finishing"
  *   6 = Limited        → "suspended"
- * IsOnline=false short-circuits to "offline" regardless of mode —
- * an offline charger's last reported mode is stale.
+ * Caller has already established isOnline=true via per-charger /state;
+ * if mode is missing/unknown we report a generic "online".
  */
-function mapStatus(charger: ZaptecChargerLite): string {
-  if (charger.IsOnline === false) return "offline";
-  switch (charger.OperatingMode) {
+function mapModeToStatus(operatingMode: number | undefined): string {
+  switch (operatingMode) {
     case 1:
       return "available";
     case 2:
@@ -69,8 +80,25 @@ function mapStatus(charger: ZaptecChargerLite): string {
     case 6:
       return "suspended";
     default:
-      return charger.IsOnline ? "online" : "unknown";
+      return "online";
   }
+}
+
+/**
+ * Parse StateId -2 (synthetic IsOnline observation) out of a /state
+ * response. Returns null when the entry is absent or its value isn't
+ * recognisable as a boolean — caller treats that as "unknown" and
+ * skips the write rather than guessing.
+ */
+function parseIsOnlineFromState(
+  observations: ZaptecStateEntry[],
+): boolean | null {
+  const entry = observations.find((e) => e.StateId === -2);
+  if (!entry) return null;
+  const v = entry.ValueAsString;
+  if (v === "true" || v === "True" || v === "1") return true;
+  if (v === "false" || v === "False" || v === "0") return false;
+  return null;
 }
 
 export async function syncZaptecChargerStatus(
@@ -118,13 +146,25 @@ export async function syncZaptecChargerStatus(
       continue;
     }
 
-    const status = mapStatus(charger);
-    // Only refresh lastSeenAt when Zaptec actually sees the charger.
-    // lastSeenAt is the gateway/vendor heartbeat freshness — site-tree
-    // uses a 12-min window on it to render "online". If we stamp `now`
-    // on every poll regardless of IsOnline, an offline charger looks
-    // online forever (caught at Klettas 3 / ZPR103043, Sprint 8.13.1).
-    const isOnline = charger.IsOnline === true;
+    // Sprint 8.13.2 — bulk listing's IsOnline is stale (caught at K3 /
+    // ZPR042320: bulk said online while /state was unreachable). Use
+    // per-charger /state's StateId -2 as the source of truth. If
+    // /state itself fails, leave the row alone — the 12-min lastSeenAt
+    // window in site-tree will age this charger out naturally.
+    const stateRes = await getChargerState(options.accessToken, zaptecChargerId);
+    if (!stateRes.ok) {
+      report.skipped.push({ zaptecChargerId, reason: "state_unreachable" });
+      continue;
+    }
+    const isOnline = parseIsOnlineFromState(stateRes.value);
+    if (isOnline == null) {
+      // /state succeeded but no usable IsOnline observation — same
+      // semantic as a /state failure: don't write, let the row age.
+      report.skipped.push({ zaptecChargerId, reason: "state_unreachable" });
+      continue;
+    }
+
+    const status = isOnline ? mapModeToStatus(charger.OperatingMode) : "offline";
     await db.ocppIdentity.update({
       where: { id: identity.id },
       data: isOnline ? { status, lastSeenAt: now } : { status },
@@ -167,7 +207,7 @@ export async function syncZaptecChargerStatus(
       zaptecChargerId,
       ocppIdentityId: identity.id,
       status,
-      isOnline: charger.IsOnline ?? false,
+      isOnline,
     });
   }
 
