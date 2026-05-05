@@ -123,6 +123,40 @@ export async function syncZaptecChargerStatus(
       where: { id: identity.id },
       data: { status, lastSeenAt: now },
     });
+
+    // Sprint 8.14.6 — write-through Zaptec's display name to
+    // SiteAsset.displayName so /charge-log shows "K1" / "Festi 8"
+    // instead of UUID slices. Only updates when the asset's current
+    // displayName is empty / a UUID / the bare ChargerId, so
+    // operator-edited names are preserved.
+    if (charger.Name) {
+      const stationId = await db.ocppIdentity
+        .findUnique({
+          where: { id: identity.id },
+          select: { chargingStationId: true },
+        })
+        .then((r) => r?.chargingStationId);
+      if (stationId) {
+        const asset = await db.siteAsset.findUnique({
+          where: { id: stationId },
+          select: { displayName: true },
+        });
+        const shouldUpdate =
+          asset &&
+          (!asset.displayName ||
+            /^[0-9a-f-]{36}$/i.test(asset.displayName) ||
+            asset.displayName === zaptecChargerId);
+        if (shouldUpdate) {
+          await db.siteAsset
+            .update({
+              where: { id: stationId },
+              data: { displayName: charger.Name },
+            })
+            .catch(() => undefined);
+        }
+      }
+    }
+
     report.updated.push({
       zaptecChargerId,
       ocppIdentityId: identity.id,
