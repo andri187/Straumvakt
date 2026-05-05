@@ -36,6 +36,7 @@ import { internalOcppAuth } from "./routes/internal/ocpp-auth";
 import { internalOcppAuthorize } from "./routes/internal/ocpp-authorize";
 import { internalOcppEvents } from "./routes/internal/ocpp-events";
 import { internalPendingDiscovery } from "./routes/internal/pending-discovery";
+import { internalZaptecTriggerSync } from "./routes/internal/zaptec-trigger-sync";
 import { zaptecWebhooks } from "./routes/webhooks/zaptec";
 import { makePrisma } from "./lib/prisma";
 import { buildRegistry } from "./lib/dispatch-targets";
@@ -147,6 +148,11 @@ app.route("/api/internal/ocpp-authorize", internalOcppAuthorize);
 app.route("/api/ocpp/events", internalOcppEvents);
 app.route("/api/internal/ocpp-events", internalOcppEvents);
 app.route("/api/internal/pending-discovery", internalPendingDiscovery);
+
+// Sprint 9 — claim-check trigger from Zaptec consumer (Fly).
+// AMQP arrives → consumer POSTs here → we fetch the authoritative
+// session payload via REST + DetailLevel=1 + write through.
+app.route("/api/internal/zaptec-trigger-sync", internalZaptecTriggerSync);
 
 // Sprint 8.9 — Zaptec webhook receivers for AuthenticationType=1
 // (Webhooks). Operator pastes these URLs into the Zaptec portal:
