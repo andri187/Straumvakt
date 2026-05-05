@@ -284,22 +284,53 @@ export async function getInstallationSummary(
 // not write anything to our DB.
 
 /**
- * Subset of Zaptec's ChargeHistory record fields we consume. The
- * Zaptec response has many more fields (UserName, UserPhone, etc.);
- * we keep the shape narrow to what the diff surface needs.
+ * Zaptec's ChargeHistory record. Fields beyond Id/ChargerId/Start/End
+ * are best-effort: Zaptec doesn't publish a stable schema and varies
+ * presence per firmware. Always check for null/undefined before use.
+ * Sprint 8.14.3 — widened to capture everything we've seen on the
+ * wire so writeback can populate richer rows. Anything not surfaced
+ * directly still lands in ImportedCdrRef.rawPayload as JSONB.
  */
 export interface ZaptecChargeHistoryEntry {
-  Id?: string;                   // Zaptec's session UUID
-  ChargerId?: string;            // Zaptec deviceId of the charger
-  StartDateTime?: string | null; // ISO
-  EndDateTime?: string | null;   // ISO; null for in-progress
-  Energy?: number | null;        // kWh, decimal
-  UserId?: string | null;        // Zaptec user GUID
+  /** Zaptec's session UUID */
+  Id?: string;
+  /** Internal Zaptec charger UUID — matches OcppIdentity.vendorResourceId */
+  ChargerId?: string;
+  /** Human-readable serial like "ZPR042344" */
+  DeviceId?: string | null;
+  /** Display name like "Festi 8", "K1", "N1 - 4" */
+  DeviceName?: string | null;
+  StartDateTime?: string | null;
+  EndDateTime?: string | null;
+  Energy?: number | null;
+  /** Zaptec user GUID */
+  UserId?: string | null;
   UserUserName?: string | null;
   UserEmail?: string | null;
-  // Zaptec sometimes returns ExternallyEnded, ChargerName, etc.
-  // Surface them via raw field for forensic inspection.
+  /** Display name when set (falls back to UserUserName) */
+  UserFullName?: string | null;
+  UserFirstName?: string | null;
+  UserLastName?: string | null;
+  /** Firmware running on the charger at session time */
+  ChargerFirmwareVersion?: string | null;
+  /** OCMF signed-session blob; cryptographic proof of meter values */
+  SignedSession?: string | null;
+  /** Cumulative meter at session end (kWh, OCMF-derived) */
+  SignedMeterValueKwh?: number | null;
+  /** Partner-supplied external id (3rd-party operator integrations) */
+  ExternalId?: string | null;
+  /** True when stopped via API or operator action vs. driver-initiated */
+  ExternallyEnded?: boolean | null;
+  /** OCPP-style stop reason if available */
+  StopReason?: string | null;
+  /** Plug-in / plug-out timestamps if surfaced */
+  ConnectedDateTime?: string | null;
+  DisconnectedDateTime?: string | null;
+  /** Older deployments use this instead of DeviceName */
   ChargerName?: string | null;
+  /** Installation context */
+  InstallationId?: string | null;
+  InstallationName?: string | null;
 }
 
 export interface ZaptecChargeHistoryParams {

@@ -169,10 +169,12 @@ async function importOne(
   });
   if (!evse) return { kind: "skipped", reason: "no_evse_under_station" };
 
-  // Best-effort driver match. Zaptec gives us UserUserName / UserId;
-  // try both against IdToken.value. If neither hits we record an
-  // anonymous ledger row — better unattributed than missed.
-  const candidates = [z.UserUserName, z.UserId].filter(
+  // Best-effort driver match. Try every identifier Zaptec gives us
+  // against IdToken.value. UserId (Zaptec UUID) is most stable;
+  // UserUserName / UserEmail vary if the driver renames themselves.
+  // If none hit we record an anonymous ledger row — better
+  // unattributed than missed.
+  const candidates = [z.UserId, z.UserUserName, z.UserEmail].filter(
     (v): v is string => Boolean(v),
   );
   let driverUserId: string | null = null;
@@ -192,6 +194,27 @@ async function importOne(
     0,
     Math.round((stoppedAt.getTime() - startedAt.getTime()) / 1000),
   );
+
+  // Sprint 8.14.3 — write-through richer driver label for the
+  // operator console. Prefer a real human name when Zaptec gives
+  // one (UserFullName, or first+last), else username, else email.
+  // Email is preserved separately so the operator can dial in.
+  const fullName =
+    z.UserFullName ??
+    ([z.UserFirstName, z.UserLastName].filter(Boolean).join(" ").trim() ||
+      null);
+  const driverLabel = fullName || z.UserUserName || z.UserEmail || null;
+
+  // Sprint 8.14.3 — clearer stopReason. ExternallyEnded means the
+  // session was stopped via API/operator action rather than the
+  // driver unplugging. StopReason from Zaptec when present is
+  // OCPP-style ("Local", "Remote", "EVDisconnected", etc.) — pass
+  // through as-is.
+  const stopReason =
+    z.StopReason ??
+    (z.ExternallyEnded === true
+      ? "ExternallyEnded"
+      : "Completed");
 
   // Tariff chain — same resolver the OCPP-first path uses. Throws
   // typed TariffResolutionError on misconfig; surfaces in the
@@ -217,14 +240,62 @@ async function importOne(
       ocppIdentityId: identity.id,
       connectorId: null,
       userId: driverUserId,
-      idTag: z.UserUserName ?? null,
+      idTag: driverLabel,
       startedAt,
       endedAt: stoppedAt,
       energyWh,
-      stopReason: "synthetic_zaptec_api",
+      stopReason,
       status: "completed",
+      // Sprint 8.14.3 — pre-populate the rolled-up cost columns
+      // so the per-session UI doesn't need to join session_ledger
+      // for the cost summary.
+      costExVatMinor: breakdown.subtotalExVatMinor,
+      costIncVatMinor: breakdown.totalIncVatMinor,
     },
   });
+
+  // Sprint 8.14.3 — write-through enrichment to ChargingStation
+  // when Zaptec gave us fresher profile fields. Best-effort; failures
+  // don't block the import. Updates only when the new value differs
+  // from what's persisted (so re-imports of old sessions don't
+  // overwrite a newer firmware version recorded by a more recent run).
+  const stationUpdates: Record<string, string> = {};
+  if (z.DeviceId) stationUpdates.serialNumber = z.DeviceId.toUpperCase();
+  if (z.ChargerFirmwareVersion)
+    stationUpdates.firmwareVersion = z.ChargerFirmwareVersion;
+  if (Object.keys(stationUpdates).length > 0) {
+    await tx.chargingStation
+      .update({
+        where: { siteAssetId: identity.chargingStationId },
+        data: stationUpdates,
+      })
+      .catch(() => undefined);
+  }
+
+  // Sprint 8.14.3 — write-through human-readable charger name to
+  // SiteAsset.displayName when Zaptec gives us one and the asset
+  // is still using its default UUID-shaped name. Operator-edited
+  // names are preserved (heuristic: skip if already set to a
+  // meaningful label).
+  if (z.DeviceName) {
+    const asset = await tx.siteAsset.findUnique({
+      where: { id: identity.chargingStationId },
+      select: { displayName: true },
+    });
+    const shouldUpdate =
+      asset &&
+      (!asset.displayName ||
+        /^[0-9a-f-]{36}$/i.test(asset.displayName) ||
+        asset.displayName === z.ChargerId);
+    if (shouldUpdate) {
+      await tx.siteAsset
+        .update({
+          where: { id: identity.chargingStationId },
+          data: { displayName: z.DeviceName },
+        })
+        .catch(() => undefined);
+    }
+  }
 
   // Imprint the vendor-id pointer so re-runs are idempotent.
   await tx.importedCdrRef.create({
@@ -238,7 +309,9 @@ async function importOne(
     },
   });
 
-  // Ledger upsert — same shape the OCPP path writes.
+  // Ledger upsert — same shape the OCPP path writes. driverIdTag
+  // gets the human label (name > username > email) so the operator
+  // sees who charged at a glance instead of a UUID.
   await tx.sessionLedger.upsert({
     where: { sessionId },
     create: {
@@ -247,7 +320,7 @@ async function importOne(
       siteId: siteAsset.siteId,
       chargingStationId: identity.chargingStationId,
       driverUserId,
-      driverIdTag: z.UserUserName ?? null,
+      driverIdTag: driverLabel,
       startedAt,
       stoppedAt,
       durationSec,
