@@ -1,9 +1,10 @@
-// Top-level Charge Log page — Sprint 8.4 read surface.
+// Top-level Charge Log page — Sprint 8.4 read surface, enriched in 8.14.4.
 // Reads from /api/admin/billing/sessions (admin scope). Per-entity
 // scoped views (per-org / per-installation / per-charger / per-
 // driver-group / per-driver) ship in 8.4.x by passing the right
 // query parameter.
 
+import Link from "next/link";
 import { SectionTabs, OPERATIONS_TABS } from "@/components/section-tabs";
 import { ActionBar } from "@/components/action-bar";
 import { apiFetchServerJson } from "@/lib/api-client-server";
@@ -14,8 +15,11 @@ export const metadata = { title: "Charge log" };
 interface SessionRow {
   sessionId: string;
   orgId: string;
+  orgDisplayName: string | null;
   siteId: string | null;
+  siteDisplayName: string | null;
   chargingStationId: string | null;
+  chargerDisplayName: string | null;
   driverUserId: string | null;
   driverIdTag: string | null;
   startedAt: string;
@@ -25,6 +29,7 @@ interface SessionRow {
   costIskMinor: string | null;
   costFormatted: string | null;
   tariffDefinitionId: string | null;
+  stopReason: string | null;
 }
 
 interface BillingSessionsResponse {
@@ -107,31 +112,100 @@ export default async function ChargeLogPage() {
                 <th className="px-3 py-2 text-right">Cost</th>
                 <th className="px-3 py-2 text-left">Driver</th>
                 <th className="px-3 py-2 text-left">Charger</th>
+                <th className="px-3 py-2 text-left">Site / Org</th>
+                <th className="px-3 py-2 text-left">Stop reason</th>
                 <th className="px-3 py-2 text-left font-mono">Session</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-bg-border/40">
               {data.sessions.map((s) => (
                 <tr key={s.sessionId} className="hover:bg-bg-base/20">
-                  <td className="px-3 py-1.5 text-ink-200">
+                  <td className="px-3 py-1.5 whitespace-nowrap text-ink-200">
                     {formatTimestamp(s.startedAt)}
                   </td>
-                  <td className="px-3 py-1.5 text-ink-300">
+                  <td className="px-3 py-1.5 whitespace-nowrap text-ink-300">
                     {formatDurationSec(s.durationSec)}
                   </td>
-                  <td className="px-3 py-1.5 text-right text-ink-100">
+                  <td className="px-3 py-1.5 whitespace-nowrap text-right text-ink-100">
                     {Number(s.energyKwh).toFixed(3)} kWh
                   </td>
-                  <td className="px-3 py-1.5 text-right font-mono text-ink-50">
+                  <td className="px-3 py-1.5 whitespace-nowrap text-right font-mono text-ink-50">
                     {s.costFormatted ?? "—"}
                   </td>
                   <td className="px-3 py-1.5 text-ink-300">
                     {s.driverIdTag ?? <span className="text-ink-500">—</span>}
                   </td>
-                  <td className="px-3 py-1.5 font-mono text-[10px] text-ink-500">
-                    {s.chargingStationId
-                      ? s.chargingStationId.slice(0, 8)
-                      : "—"}
+                  <td className="px-3 py-1.5">
+                    {s.chargingStationId ? (
+                      s.chargerDisplayName &&
+                      !/^[0-9a-f-]{36}$/i.test(s.chargerDisplayName) ? (
+                        <Link
+                          href={
+                            `/chargers/${s.chargingStationId}` as Parameters<typeof Link>[0]["href"]
+                          }
+                          className="text-ink-100 hover:text-sv-sky"
+                        >
+                          {s.chargerDisplayName}
+                        </Link>
+                      ) : (
+                        <Link
+                          href={
+                            `/chargers/${s.chargingStationId}` as Parameters<typeof Link>[0]["href"]
+                          }
+                          className="font-mono text-[10px] text-ink-500 hover:text-sv-sky"
+                        >
+                          {s.chargingStationId.slice(0, 8)}…
+                        </Link>
+                      )
+                    ) : (
+                      <span className="text-ink-500">—</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-1.5">
+                    <div className="flex flex-col leading-tight">
+                      {s.siteId && s.siteDisplayName ? (
+                        <Link
+                          href={
+                            `/sites/${s.siteId}` as Parameters<typeof Link>[0]["href"]
+                          }
+                          className="text-ink-200 hover:text-sv-sky"
+                        >
+                          {s.siteDisplayName}
+                        </Link>
+                      ) : (
+                        <span className="text-ink-500">—</span>
+                      )}
+                      {s.orgDisplayName && (
+                        <Link
+                          href={
+                            `/accounts/organizations/${s.orgId}` as Parameters<typeof Link>[0]["href"]
+                          }
+                          className="text-[10px] text-ink-500 hover:text-sv-sky"
+                        >
+                          {s.orgDisplayName}
+                        </Link>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-3 py-1.5">
+                    {s.stopReason ? (
+                      <span
+                        className={
+                          "rounded px-1.5 py-0.5 text-[10px] " +
+                          (s.stopReason === "ExternallyEnded"
+                            ? "bg-amber-950/30 text-amber-300"
+                            : s.stopReason === "Completed" ||
+                                s.stopReason === "Local" ||
+                                s.stopReason === "EVDisconnected"
+                              ? "bg-emerald-950/30 text-emerald-300"
+                              : "bg-bg-base/40 text-ink-300")
+                        }
+                      >
+                        {s.stopReason}
+                      </span>
+                    ) : (
+                      <span className="text-ink-500">—</span>
+                    )}
                   </td>
                   <td className="px-3 py-1.5 font-mono text-[10px] text-ink-500">
                     {s.sessionId.slice(0, 8)}

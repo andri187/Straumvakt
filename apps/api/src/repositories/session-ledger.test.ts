@@ -41,6 +41,22 @@ function makeFake(rows: Record<string, unknown>[]) {
         };
       }),
     },
+    // Sprint 8.14.4 — listSessionLedger now batch-loads enrichment
+    // data (stop reason from charge_sessions, charger/site/org
+    // display names). The fake returns empty arrays so enrichment
+    // resolves to nulls but the calls don't throw.
+    chargeSession: {
+      findMany: vi.fn(async () => [] as Array<{ id: string; stopReason: string | null }>),
+    },
+    siteAsset: {
+      findMany: vi.fn(async () => [] as Array<{ id: string; displayName: string }>),
+    },
+    site: {
+      findMany: vi.fn(async () => [] as Array<{ id: string; displayName: string }>),
+    },
+    organization: {
+      findMany: vi.fn(async () => [] as Array<{ id: string; displayName: string }>),
+    },
   };
   return {
     db: db as unknown as PrismaClient,

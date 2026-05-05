@@ -97,8 +97,11 @@ adminBilling.get(
       sessions: rows.map((r) => ({
         sessionId: r.sessionId,
         orgId: r.orgId,
+        orgDisplayName: r.orgDisplayName,
         siteId: r.siteId,
+        siteDisplayName: r.siteDisplayName,
         chargingStationId: r.chargingStationId,
+        chargerDisplayName: r.chargerDisplayName,
         driverUserId: r.driverUserId,
         driverIdTag: r.driverIdTag,
         startedAt: r.startedAt.toISOString(),
@@ -110,6 +113,7 @@ adminBilling.get(
           ? formatIskMinor(r.costIskMinor)
           : null,
         tariffDefinitionId: r.tariffDefinitionId,
+        stopReason: r.stopReason,
       })),
     });
   },
