@@ -171,12 +171,16 @@ async function importOne(
 
   // Best-effort driver match. Try every identifier Zaptec gives us
   // against IdToken.value. UserId (Zaptec UUID) is most stable;
+  // TokenName (RFID label) is what we'd see in OCPP idTag flows;
   // UserUserName / UserEmail vary if the driver renames themselves.
   // If none hit we record an anonymous ledger row — better
   // unattributed than missed.
-  const candidates = [z.UserId, z.UserUserName, z.UserEmail].filter(
-    (v): v is string => Boolean(v),
-  );
+  const candidates = [
+    z.UserId,
+    z.TokenName,
+    z.UserUserName,
+    z.UserEmail,
+  ].filter((v): v is string => Boolean(v));
   let driverUserId: string | null = null;
   if (candidates.length > 0) {
     const idToken = await tx.idToken.findFirst({
@@ -195,26 +199,28 @@ async function importOne(
     Math.round((stoppedAt.getTime() - startedAt.getTime()) / 1000),
   );
 
-  // Sprint 8.14.3 — write-through richer driver label for the
-  // operator console. Prefer a real human name when Zaptec gives
-  // one (UserFullName, or first+last), else username, else email.
-  // Email is preserved separately so the operator can dial in.
+  // Sprint 8.14.5 — driver label priority. Prefer a real human name
+  // (UserFullName, or first+last), then TokenName (the RFID card
+  // label like "John's black tag"), then username, then email.
+  // Empty for Native-auth installations where Zaptec strips user
+  // data — operator sees a blank Driver column rather than a UUID.
   const fullName =
     z.UserFullName ??
     ([z.UserFirstName, z.UserLastName].filter(Boolean).join(" ").trim() ||
       null);
-  const driverLabel = fullName || z.UserUserName || z.UserEmail || null;
+  const driverLabel =
+    fullName ||
+    z.TokenName ||
+    z.UserUserName ||
+    z.UserEmail ||
+    null;
 
-  // Sprint 8.14.3 — clearer stopReason. ExternallyEnded means the
-  // session was stopped via API/operator action rather than the
-  // driver unplugging. StopReason from Zaptec when present is
-  // OCPP-style ("Local", "Remote", "EVDisconnected", etc.) — pass
-  // through as-is.
+  // Sprint 8.14.5 — stopReason normalisation. ExternallyEnded is the
+  // norm for Native auth (Zaptec App initiates the stop) — DO NOT
+  // surface this as anomalous. Map to "Completed" unless an explicit
+  // OCPP-style StopReason is provided.
   const stopReason =
-    z.StopReason ??
-    (z.ExternallyEnded === true
-      ? "ExternallyEnded"
-      : "Completed");
+    z.StopReason ?? (z.ExternallyEnded === false ? "EVDisconnected" : "Completed");
 
   // Tariff chain — same resolver the OCPP-first path uses. Throws
   // typed TariffResolutionError on misconfig; surfaces in the
@@ -261,8 +267,23 @@ async function importOne(
   // overwrite a newer firmware version recorded by a more recent run).
   const stationUpdates: Record<string, string> = {};
   if (z.DeviceId) stationUpdates.serialNumber = z.DeviceId.toUpperCase();
-  if (z.ChargerFirmwareVersion)
-    stationUpdates.firmwareVersion = z.ChargerFirmwareVersion;
+  // Sprint 8.14.5 — Zaptec returns ChargerFirmwareVersion as a
+  // structured object, not a string (Swagger says string but live
+  // responses we've inspected always return the object). Format as
+  // "Major.Minor.Revision.Build" for the column.
+  if (z.ChargerFirmwareVersion) {
+    if (typeof z.ChargerFirmwareVersion === "string") {
+      stationUpdates.firmwareVersion = z.ChargerFirmwareVersion;
+    } else {
+      const fw = z.ChargerFirmwareVersion;
+      const parts = [fw.Major, fw.Minor, fw.Revision, fw.Build].filter(
+        (n): n is number => typeof n === "number",
+      );
+      if (parts.length > 0) {
+        stationUpdates.firmwareVersion = parts.join(".");
+      }
+    }
+  }
   if (Object.keys(stationUpdates).length > 0) {
     await tx.chargingStation
       .update({

@@ -303,23 +303,51 @@ export interface ZaptecChargeHistoryEntry {
   StartDateTime?: string | null;
   EndDateTime?: string | null;
   Energy?: number | null;
-  /** Zaptec user GUID */
+  /** Zaptec user GUID. Populated only when the credential has scope
+   *  to see driver-level data. Native-auth installations may strip
+   *  these fields server-side. */
   UserId?: string | null;
   UserUserName?: string | null;
   UserEmail?: string | null;
-  /** Display name when set (falls back to UserUserName) */
   UserFullName?: string | null;
   UserFirstName?: string | null;
   UserLastName?: string | null;
-  /** Firmware running on the charger at session time */
-  ChargerFirmwareVersion?: string | null;
-  /** OCMF signed-session blob; cryptographic proof of meter values */
-  SignedSession?: string | null;
-  /** Cumulative meter at session end (kWh, OCMF-derived) */
-  SignedMeterValueKwh?: number | null;
+  /** RFID card / token display label, e.g. "John's black tag".
+   *  Sprint 8.14.5 — added per Zaptec swagger inspection 2026-05-05. */
+  TokenName?: string | null;
   /** Partner-supplied external id (3rd-party operator integrations) */
   ExternalId?: string | null;
-  /** True when stopped via API or operator action vs. driver-initiated */
+  /** Per-tick meter readings populated only when the request passed
+   *  DetailLevel=1. Each entry carries a timestamp + cumulative kWh.
+   *  Replaces the need to parse OCMF SignedSession for charge time
+   *  vs idle time computation. */
+  EnergyDetails?: Array<{ Timestamp: string; Energy: number }> | null;
+  /** Firmware running on the charger at session time. Note: live
+   *  responses observed return this as a structured object
+   *  ({Build, Major, Minor, Revision, MajorRevision, MinorRevision})
+   *  even though Swagger documents it as a string. */
+  ChargerFirmwareVersion?:
+    | string
+    | {
+        Build?: number;
+        Major?: number;
+        Minor?: number;
+        Revision?: number;
+        MajorRevision?: number;
+        MinorRevision?: number;
+      }
+    | null;
+  /** OCMF signed-session blob; cryptographic proof of meter values */
+  SignedSession?: string | null;
+  /** German calibration-law signed variant (Eichrecht). Same role as
+   *  SignedSession but a different signature format. */
+  SignedSessionEichrecht?: string | null;
+  /** Cumulative meter at session end (kWh, OCMF-derived) */
+  SignedMeterValueKwh?: number | null;
+  /** True when stopped via API or operator action vs. driver-initiated.
+   *  Native-auth installations have this true for nearly every session
+   *  (Zaptec App initiates the stop) — should NOT be treated as
+   *  abnormal. */
   ExternallyEnded?: boolean | null;
   /** OCPP-style stop reason if available */
   StopReason?: string | null;
@@ -331,6 +359,13 @@ export interface ZaptecChargeHistoryEntry {
   /** Installation context */
   InstallationId?: string | null;
   InstallationName?: string | null;
+  /** Set when this session was superseded by a later session id (e.g.
+   *  cancellation + re-bill flow). */
+  ReplacedBySessionId?: string | null;
+  /** Internal Zaptec commit metadata (purpose unclear; always 5 in
+   *  observed Dalvegur responses). */
+  CommitMetadata?: number | null;
+  CommitEndDateTime?: string | null;
 }
 
 export interface ZaptecChargeHistoryParams {
@@ -360,6 +395,11 @@ export async function listZaptecChargeHistory(
   if (params.from) qs.set("From", params.from);
   if (params.to) qs.set("To", params.to);
   if (params.pageSize) qs.set("PageSize", String(params.pageSize));
+  // Sprint 8.14.5 — DetailLevel=1 unlocks the EnergyDetails array
+  // (per-tick meter readings) and may also surface user fields per
+  // Zaptec swagger. Default-on is safe: existing fields still come
+  // through; new fields are additive.
+  qs.set("DetailLevel", "1");
   const url = `${ZAPTEC_BASE}/api/chargehistory/?${qs.toString()}`;
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${accessToken}` },
