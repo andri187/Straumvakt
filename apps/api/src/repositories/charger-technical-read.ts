@@ -5,12 +5,14 @@
 // /api/chargers/:id/state in parallel, and maps the raw response
 // into the ChargerTechnicalRead shape.
 //
-// Returns `{ fresh: false, ... }` with all fields null when Zaptec is
-// unreachable, the credential is missing, or this charger isn't a
-// Zaptec asset. Never throws — callers always render the panel,
-// just with placeholder values.
+// Sprint 8.4.3 — caches the last successful read on
+// ChargingStation.lastTelemetryRead + lastTelemetryAt. When a fresh
+// fetch fails (charger offline from Zaptec's cloud / rate limit /
+// transient network), the cached read is returned with `fresh: false`
+// and `cachedAt` set so the panel can render last-known values with
+// a stale-marker badge instead of em-dashes.
 
-import type { PrismaClient } from "../generated/prisma/client";
+import type { Prisma, PrismaClient } from "../generated/prisma/client";
 import type {
   ChargerTechnicalRead,
   ChargerInstallationSnapshot,
@@ -92,10 +94,11 @@ const AUTH_TYPE_LABELS: Record<number, string> = {
   3: "Native OCPP",
 };
 
-function emptyRead(): ChargerTechnicalRead {
+function emptyRead(cachedAt: string | null = null): ChargerTechnicalRead {
   return {
     fresh: false,
     fetchedAt: new Date().toISOString(),
+    cachedAt,
     signalDbm: null,
     communicationMode: null,
     ocppConnected: null,
@@ -182,11 +185,13 @@ export async function getChargerTechnicalRead(
   chargingStationId: string,
   kek: string,
 ): Promise<ChargerTechnicalRead> {
-  // 1) Resolve the Zaptec UUID + orgId via the charger's OcppIdentity.
+  // 1) Resolve the Zaptec UUID + orgId + cache via the charger's OcppIdentity.
   const station = await db.chargingStation.findUnique({
     where: { siteAssetId: chargingStationId },
     select: {
       orgId: true,
+      lastTelemetryRead: true,
+      lastTelemetryAt: true,
       ocppIdentities: {
         take: 1,
         orderBy: { createdAt: "asc" },
@@ -196,9 +201,31 @@ export async function getChargerTechnicalRead(
   });
   if (!station) return emptyRead();
 
+  // Helper: hydrate cached read with fresh=false + cachedAt set.
+  // Used at every failure-return site below. When no cache exists,
+  // returns the all-null empty read with no cachedAt.
+  const fromCache = (): ChargerTechnicalRead => {
+    if (
+      station.lastTelemetryRead &&
+      typeof station.lastTelemetryRead === "object" &&
+      station.lastTelemetryAt
+    ) {
+      const cached = station.lastTelemetryRead as Partial<ChargerTechnicalRead>;
+      return {
+        ...emptyRead(station.lastTelemetryAt.toISOString()),
+        ...cached,
+        // Force these even if the cached object had them set
+        fresh: false,
+        fetchedAt: new Date().toISOString(),
+        cachedAt: station.lastTelemetryAt.toISOString(),
+      };
+    }
+    return emptyRead();
+  };
+
   const identity = station.ocppIdentities[0];
   const vendorResourceId = identity?.vendorResourceId ?? null;
-  if (!vendorResourceId || identity?.vendor !== "Zaptec") return emptyRead();
+  if (!vendorResourceId || identity?.vendor !== "Zaptec") return fromCache();
 
   // 2) Find the org's active Zaptec credential.
   const credential = await db.vendorCredential.findFirst({
@@ -210,7 +237,7 @@ export async function getChargerTechnicalRead(
     select: { username: true, passwordCipher: true, passwordIv: true },
     orderBy: { lastUsedAt: "desc" },
   });
-  if (!credential || !credential.passwordCipher || !credential.passwordIv) return emptyRead();
+  if (!credential || !credential.passwordCipher || !credential.passwordIv) return fromCache();
 
   // 3) Unseal + auth Zaptec. Defensive try/catch — on any failure
   //    we return placeholders rather than 500ing the operator's
@@ -221,7 +248,7 @@ export async function getChargerTechnicalRead(
       iv: credential.passwordIv,
     });
     const tokenResult = await getZaptecAccessToken(credential.username, password);
-    if (!tokenResult.ok) return emptyRead();
+    if (!tokenResult.ok) return fromCache();
 
     // Fetch detail + state first; we need detail.InstallationId to
     // know which installation to fetch. Then in parallel: installation
@@ -291,9 +318,25 @@ export async function getChargerTechnicalRead(
 
     const d = detail as Record<string, unknown>;
 
-    return {
+    // Defensive: if Zaptec returned EMPTY (charger offline from cloud
+    // perspective) we'd render em-dashes. Detect "no useful data" by
+    // checking the canary fields the panel actually shows: signal,
+    // network type, voltages, temp. If none are present, fall back
+    // to cache rather than surfacing an empty live read as fresh.
+    const liveCanary =
+      pickStateNumber(state, STATE_IDS.CommunicationSignalStrength) ??
+      pickStateNumber(state, STATE_IDS.NetworkType) ??
+      pickStateNumber(state, STATE_IDS.VoltagePhase1) ??
+      pickStateNumber(state, STATE_IDS.InternalTempA) ??
+      pickStateNumber(state, STATE_IDS.TotalChargePower);
+    if (liveCanary === null && state.length === 0) {
+      return fromCache();
+    }
+
+    const liveRead: ChargerTechnicalRead = {
       fresh: true,
       fetchedAt: new Date().toISOString(),
+      cachedAt: null,
       signalDbm: pickStateNumber(state, STATE_IDS.CommunicationSignalStrength),
       communicationMode: decodeCommMode(state),
       ocppConnected: pickStateBool(state, STATE_IDS.IsOcppConnected),
@@ -364,12 +407,33 @@ export async function getChargerTechnicalRead(
       installation: installationSnapshot,
       warningsBitmask: warnings ?? notifications,
     };
+
+    // Sprint 8.4.3 — write-through cache. Best-effort; failure is
+    // non-blocking (we still return liveRead). Don't await; the page
+    // is already rendering. We don't store `installation` since
+    // installation-level data is its own thing and varies less.
+    void db.chargingStation
+      .update({
+        where: { siteAssetId: chargingStationId },
+        data: {
+          lastTelemetryRead: liveRead as unknown as Prisma.InputJsonValue,
+          lastTelemetryAt: new Date(),
+        },
+      })
+      .catch((err: unknown) => {
+        console.warn("[charger-technical-read] cache write failed", {
+          chargingStationId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
+
+    return liveRead;
   } catch (err) {
     console.error("[charger-technical-read] zaptec fetch failed", {
       chargingStationId,
       vendorResourceId,
       error: err instanceof Error ? err.message : String(err),
     });
-    return emptyRead();
+    return fromCache();
   }
 }

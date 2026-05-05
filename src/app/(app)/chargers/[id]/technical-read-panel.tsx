@@ -61,11 +61,29 @@ export function TechnicalReadPills({
       <Pill icon={Thermometer} label="Temp" value={fmtNum(read?.internalTemperatureC ?? null, "°C", 1)} />
       {stale && (
         <p className="col-span-full -mt-1 text-[10px] italic text-amber-400/80">
-          Vendor data unreachable — fields above fall back to last-known DB values where possible.
+          {read?.cachedAt
+            ? `Vendor data unreachable — showing cached values from ${formatRelative(read.cachedAt)}.`
+            : "Vendor data unreachable — no cached values yet."}
         </p>
       )}
     </section>
   );
+}
+
+/** "5m ago", "2h ago", "yesterday", or full timestamp for older. */
+function formatRelative(iso: string): string {
+  const t = new Date(iso).getTime();
+  const ageMs = Date.now() - t;
+  if (!Number.isFinite(ageMs) || ageMs < 0) return new Date(iso).toLocaleString();
+  const ageMin = Math.floor(ageMs / 60_000);
+  if (ageMin < 1) return "moments ago";
+  if (ageMin < 60) return `${ageMin}m ago`;
+  const ageHr = Math.floor(ageMin / 60);
+  if (ageHr < 24) return `${ageHr}h ago`;
+  const ageDays = Math.floor(ageHr / 24);
+  if (ageDays === 1) return "yesterday";
+  if (ageDays < 30) return `${ageDays}d ago`;
+  return new Date(iso).toLocaleDateString();
 }
 
 /**

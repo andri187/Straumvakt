@@ -744,6 +744,14 @@ model ChargingStation {
   lifetimeKwhCached      Decimal?  @map("lifetime_kwh_cached") @db.Decimal(12, 3)
   lifetimeKwhObservedAt  DateTime? @map("lifetime_kwh_observed_at") @db.Timestamptz(6)
 
+  // ── Telemetry snapshot cache (Sprint 8.4.3) ───────────────────────
+  // Last-known live read from Zaptec /api/chargers/{id}/state. JSONB
+  // so technical-read panel can fall back to last-known when the live
+  // fetch fails (charger offline / rate limited / cloud blip). Panel
+  // renders stale-marker badge with observed-at timestamp.
+  lastTelemetryRead      Json?     @map("last_telemetry_read") @db.JsonB
+  lastTelemetryAt        DateTime? @map("last_telemetry_at") @db.Timestamptz(6)
+
   // ── Existing relations ───────────────────────────────────────────
   siteAsset        SiteAsset     @relation(fields: [siteAssetId], references: [id], onDelete: Cascade)
   organization     Organization  @relation("StationOperator", fields: [orgId], references: [id])

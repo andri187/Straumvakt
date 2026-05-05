@@ -14,10 +14,17 @@ export interface ChargerLivePhase {
 }
 
 export interface ChargerTechnicalRead {
-  /** True if Zaptec's data was reachable. False = render placeholders + show stale-data indicator. */
+  /** True if Zaptec's data was reachable on THIS request. False = the
+   *  fields below either come from the cache (when cachedAt is set)
+   *  or are placeholders (when both fresh and cachedAt are null/false). */
   fresh: boolean;
-  /** ISO timestamp of when the data was fetched. */
+  /** ISO timestamp of when the data was fetched (regardless of fresh). */
   fetchedAt: string;
+  /** When fresh=false and the panel is rendering from
+   *  ChargingStation.lastTelemetryRead, this is the observed-at
+   *  timestamp of that cached read. Lets the UI render
+   *  "stale, last seen Xm ago" instead of em-dashes. */
+  cachedAt?: string | null;
 
   // Compact pills (rendered above the operator command panel).
   signalDbm: number | null;       // StateId 809 — CommunicationSignalStrength
