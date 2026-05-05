@@ -8,6 +8,7 @@ import { DeleteButton } from "@/components/delete-button";
 import { EditChargerPanel } from "./edit-panel";
 import { ChargerCommandsPanel } from "./commands-panel";
 import { TechnicalReadPills, TechnicalReadDetail } from "./technical-read-panel";
+import { LatestSessionChart } from "./latest-session-chart";
 
 export const dynamic = "force-dynamic";
 
@@ -75,6 +76,12 @@ export default async function ChargerDetailPage({ params }: { params: Promise<{ 
         read={technicalRead}
         firmwareFromBoot={charger.firmwareVersion}
       />
+
+      {/* Sprint 8.4.2 — latest-session timeline. Same SVG chart the
+          /charge-log session-detail modal renders, scoped to the most
+          recent closed session for THIS charger. Server-fetched so
+          it lands on the same render as the rest of the page. */}
+      <LatestSessionChart chargingStationId={charger.chargingStationId} />
 
       {/* Operator command surface — only mount when there's an OcppIdentity
           (without one, /api/admin/chargers/<id>/<command> would 404 since
