@@ -6,11 +6,22 @@
 #   1. Install flyctl, then `flyctl auth login`.
 #   2. From this directory: `flyctl launch --no-deploy --copy-config`.
 #      Pick a unique app name (suggest: straumvakt-zaptec-consumer-staging).
-#   3. `flyctl secrets set ZAPTEC_USERNAME=...` (paste the username)
-#      `flyctl secrets set ZAPTEC_PASSWORD=...` (paste the password)
-#      Optional: `flyctl secrets set INSTALLATION_IDS=<uuid1>,<uuid2>`
+#   3. flyctl secrets set:
+#        ZAPTEC_USERNAME=...        (paste the username)
+#        ZAPTEC_PASSWORD=...        (paste the password)
+#        OCPP_INGEST_SECRET=...     (same secret the API Worker has;
+#                                    enables Phase 2 claim-check trigger)
+#      Optional:
+#        INSTALLATION_IDS=<uuid1>,<uuid2>   (pin to specific installations)
 #   4. `flyctl deploy`
-#   5. `flyctl logs` to verify connection and observe events.
+#   5. `flyctl logs` to verify connection + observe events flowing.
+#
+# Phase 2 (claim-check trigger) is enabled when STRAUMVAKT_API_BASE_URL
+# is set (default below points at staging) AND OCPP_INGEST_SECRET is
+# provisioned. Each AMQP message triggers a sync POST to
+# /api/internal/zaptec-trigger-sync; the API Worker fetches the
+# session via /api/chargehistory + DetailLevel=1 and runs the
+# existing writeback. Per-charger debounce (30s) coalesces bursts.
 #
 # This config does NOT pin an app name on purpose — `flyctl launch`
 # fills it in based on what you choose. Edit afterwards if needed.
@@ -25,6 +36,9 @@ primary_region = "ams"
   PORT = "8080"
   NODE_ENV = "production"
   MAX_INSTALLATIONS = "20"
+  # Phase 2 trigger target. Default = staging. For production,
+  # override via `flyctl secrets set STRAUMVAKT_API_BASE_URL=...`.
+  STRAUMVAKT_API_BASE_URL = "https://hlada-api-staging.straumvakt.workers.dev"
 
 [http_service]
   internal_port = 8080

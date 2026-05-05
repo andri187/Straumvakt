@@ -1,9 +1,17 @@
-// Zaptec consumer — Phase 1.
+// Zaptec consumer — Phase 1 (observability) + Phase 2 (claim-check trigger).
 //
 // Boots, lists every installation visible to the credential, opens
 // one AMQP subscription per installation, logs every message to
 // stdout. Fly captures stdout into its log drain; operator inspects
 // via `fly logs` and the dashboard.
+//
+// Phase 2 (claim-check): if STRAUMVAKT_API_BASE_URL + OCPP_INGEST_SECRET
+// are both set, every received AMQP message also fires an HTTP POST
+// to /api/internal/zaptec-trigger-sync (per-charger debounce 30s).
+// The API Worker fetches the authoritative session payload via
+// /api/chargehistory + DetailLevel=1 and runs the existing writeback.
+// AMQP becomes the "go look now" signal — we don't translate its
+// body to our event shape.
 //
 // Env:
 //   ZAPTEC_USERNAME         (required)
@@ -16,9 +24,13 @@
 //   MAX_INSTALLATIONS       (optional; default 20 — cap to avoid
 //                           accidentally opening hundreds of
 //                           subscriptions on a misconfigured account.)
-//
-// Phase 2 will add an HTTP postback to /api/internal/ocpp-events;
-// for now this is observe-only.
+//   STRAUMVAKT_API_BASE_URL (optional; e.g.
+//                           "https://hlada-api-staging.straumvakt.workers.dev").
+//                           When set together with OCPP_INGEST_SECRET,
+//                           Phase 2 trigger fires on every AMQP message.
+//                           Unset = observe-only (Phase 1 mode).
+//   OCPP_INGEST_SECRET      (required when STRAUMVAKT_API_BASE_URL set;
+//                           same secret the OCPP gateway uses).
 
 import {
   getAccessToken,
@@ -28,6 +40,7 @@ import {
 import { startListener, type ListenerStats } from "./amqp-listener.js";
 import { startHealthServer } from "./health.js";
 import { log } from "./logger.js";
+import type { TriggerSyncOptions } from "./trigger.js";
 
 const ZAPTEC_USERNAME = requireEnv("ZAPTEC_USERNAME");
 const ZAPTEC_PASSWORD = requireEnv("ZAPTEC_PASSWORD");
@@ -37,6 +50,18 @@ const INSTALLATION_IDS_FILTER = (process.env.INSTALLATION_IDS ?? "")
   .map((s) => s.trim())
   .filter(Boolean);
 const MAX_INSTALLATIONS = parseInt(process.env.MAX_INSTALLATIONS ?? "20", 10);
+
+// Phase 2 — claim-check trigger. Only enabled when BOTH env vars are
+// set; halfway state would silently drop triggers.
+const STRAUMVAKT_API_BASE_URL = process.env.STRAUMVAKT_API_BASE_URL;
+const OCPP_INGEST_SECRET = process.env.OCPP_INGEST_SECRET;
+const TRIGGER_OPTIONS: TriggerSyncOptions | undefined =
+  STRAUMVAKT_API_BASE_URL && OCPP_INGEST_SECRET
+    ? {
+        apiBaseUrl: STRAUMVAKT_API_BASE_URL,
+        ingestSecret: OCPP_INGEST_SECRET,
+      }
+    : undefined;
 
 function requireEnv(name: string): string {
   const v = process.env[name];
@@ -53,6 +78,8 @@ async function main(): Promise<void> {
     port: PORT,
     filterCount: INSTALLATION_IDS_FILTER.length,
     maxInstallations: MAX_INSTALLATIONS,
+    triggerEnabled: TRIGGER_OPTIONS !== undefined,
+    apiBaseUrl: STRAUMVAKT_API_BASE_URL ?? "(observe-only)",
   });
 
   const token = await getAccessToken(ZAPTEC_USERNAME, ZAPTEC_PASSWORD);
@@ -86,6 +113,7 @@ async function main(): Promise<void> {
       installationName: inst.Name,
       username: ZAPTEC_USERNAME,
       password: ZAPTEC_PASSWORD,
+      trigger: TRIGGER_OPTIONS,
     }),
   );
 
