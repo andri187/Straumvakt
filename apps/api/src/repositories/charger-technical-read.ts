@@ -227,36 +227,63 @@ export async function getChargerTechnicalRead(
   const vendorResourceId = identity?.vendorResourceId ?? null;
   if (!vendorResourceId || identity?.vendor !== "Zaptec") return fromCache();
 
-  // 2) Find the org's active Zaptec credential.
-  const credential = await db.vendorCredential.findFirst({
-    where: {
-      ownerOrgId: station.orgId,
-      status: "active",
-      vendor: { slug: "zaptec" },
+  // 2) Find an active Zaptec credential that can see this charger.
+  // Cross-org: credentials may manage chargers owned by a different org
+  // than the credential's owning org (e.g. N1 hef chargers managed by
+  // Straumvakt's master credential). Scoping the lookup to
+  // station.orgId silently dropped every cross-org charger from
+  // technical-read — A1/ZPR042645 was the canary (Sprint 8.13.3).
+  // Same pattern site-tree.ts and runZaptecCronSync already follow.
+  // Order: prefer credentials owned by the station's org if present;
+  // otherwise any active Zaptec credential.
+  const credentials = await db.vendorCredential.findMany({
+    where: { status: "active", vendor: { slug: "zaptec" } },
+    select: {
+      ownerOrgId: true,
+      username: true,
+      passwordCipher: true,
+      passwordIv: true,
     },
-    select: { username: true, passwordCipher: true, passwordIv: true },
     orderBy: { lastUsedAt: "desc" },
   });
-  if (!credential || !credential.passwordCipher || !credential.passwordIv) return fromCache();
+  if (credentials.length === 0) return fromCache();
+  credentials.sort((a, b) => {
+    const aOwn = a.ownerOrgId === station.orgId ? 0 : 1;
+    const bOwn = b.ownerOrgId === station.orgId ? 0 : 1;
+    return aOwn - bOwn;
+  });
 
-  // 3) Unseal + auth Zaptec. Defensive try/catch — on any failure
-  //    we return placeholders rather than 500ing the operator's
-  //    detail page.
+  // 3) Try each credential in order. First to authenticate wins; we
+  //    use its token for detail/state/installation. Defensive try/catch
+  //    inside — on any failure we return placeholders rather than
+  //    500ing the operator's detail page.
   try {
-    const password = await openPassword(kek, {
-      cipher: credential.passwordCipher,
-      iv: credential.passwordIv,
-    });
-    const tokenResult = await getZaptecAccessToken(credential.username, password);
-    if (!tokenResult.ok) return fromCache();
+    let accessToken: string | null = null;
+    for (const cred of credentials) {
+      if (!cred.passwordCipher || !cred.passwordIv) continue;
+      try {
+        const password = await openPassword(kek, {
+          cipher: cred.passwordCipher,
+          iv: cred.passwordIv,
+        });
+        const tokenResult = await getZaptecAccessToken(cred.username, password);
+        if (tokenResult.ok) {
+          accessToken = tokenResult.value;
+          break;
+        }
+      } catch {
+        // try next credential
+      }
+    }
+    if (!accessToken) return fromCache();
 
     // Fetch detail + state first; we need detail.InstallationId to
     // know which installation to fetch. Then in parallel: installation
     // detail (for installation-level fields surfaced on the Technical
     // Read page).
     const [detailRes, stateRes] = await Promise.all([
-      getChargerDetail(tokenResult.value, vendorResourceId),
-      getChargerState(tokenResult.value, vendorResourceId),
+      getChargerDetail(accessToken, vendorResourceId),
+      getChargerState(accessToken, vendorResourceId),
     ]);
 
     const detail = detailRes.ok ? detailRes.value ?? {} : {};
@@ -265,7 +292,7 @@ export async function getChargerTechnicalRead(
     let installationSnapshot: ChargerInstallationSnapshot | null = null;
     const installationIdRaw = (detail as Record<string, unknown>).InstallationId;
     if (typeof installationIdRaw === "string" && installationIdRaw.length > 0) {
-      const instRes = await getInstallationSummary(tokenResult.value, installationIdRaw);
+      const instRes = await getInstallationSummary(accessToken, installationIdRaw);
       if (instRes.ok && instRes.value) {
         const i = instRes.value as Record<string, unknown>;
         installationSnapshot = {
