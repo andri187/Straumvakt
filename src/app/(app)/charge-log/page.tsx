@@ -107,6 +107,7 @@ export default async function ChargeLogPage() {
           <table className="w-full text-xs">
             <thead className="bg-bg-base/50 text-ink-400">
               <tr>
+                <th className="px-3 py-2 text-left">Session</th>
                 <th className="px-3 py-2 text-left">Started</th>
                 <th className="px-3 py-2 text-left">Duration</th>
                 <th className="px-3 py-2 text-right">Energy</th>
@@ -115,12 +116,14 @@ export default async function ChargeLogPage() {
                 <th className="px-3 py-2 text-left">Charger</th>
                 <th className="px-3 py-2 text-left">Site / Org</th>
                 <th className="px-3 py-2 text-left">Stop reason</th>
-                <th className="px-3 py-2 text-left font-mono">Session</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-bg-border/40">
               {data.sessions.map((s) => (
                 <tr key={s.sessionId} className="hover:bg-bg-base/20">
+                  <td className="px-3 py-1.5">
+                    <SessionIdButton sessionId={s.sessionId} />
+                  </td>
                   <td className="px-3 py-1.5 whitespace-nowrap text-ink-200">
                     {formatTimestamp(s.startedAt)}
                   </td>
@@ -207,9 +210,6 @@ export default async function ChargeLogPage() {
                     ) : (
                       <span className="text-ink-500">—</span>
                     )}
-                  </td>
-                  <td className="px-3 py-1.5">
-                    <SessionIdButton sessionId={s.sessionId} />
                   </td>
                 </tr>
               ))}
