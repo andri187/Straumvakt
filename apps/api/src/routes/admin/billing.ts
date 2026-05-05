@@ -24,6 +24,7 @@ import {
   totalSessionLedger,
   type LedgerScope,
 } from "../../repositories/session-ledger";
+import { getSessionDetail } from "../../repositories/session-detail";
 import { formatIskMinor } from "../../lib/tariff/compute-session-cost";
 import type { Env } from "../../bindings";
 
@@ -63,6 +64,22 @@ function intOrUndefined(value: string | undefined): number | undefined {
   const n = Number(value);
   return Number.isFinite(n) ? n : undefined;
 }
+
+// Sprint 8.16 — single-session detail (header + time series).
+// Renders the modal that opens when an operator clicks a session
+// UID on /charge-log. Time series comes from EnergyDetails when
+// the row was imported with DetailLevel=1, otherwise from parsing
+// the OCMF SignedSession blob — both yield the same shape.
+adminBilling.get(
+  "/sessions/:id",
+  requirePermission("billing.read"),
+  async (c) => {
+    const db = makePrisma(c.env);
+    const detail = await getSessionDetail(db, c.req.param("id"));
+    if (!detail) return c.json({ error: "not_found" }, 404);
+    return c.json({ session: detail });
+  },
+);
 
 adminBilling.get(
   "/sessions",

@@ -8,6 +8,7 @@ import Link from "next/link";
 import { SectionTabs, OPERATIONS_TABS } from "@/components/section-tabs";
 import { ActionBar } from "@/components/action-bar";
 import { apiFetchServerJson } from "@/lib/api-client-server";
+import { SessionIdButton } from "./session-id-button";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Charge log" };
@@ -207,8 +208,8 @@ export default async function ChargeLogPage() {
                       <span className="text-ink-500">—</span>
                     )}
                   </td>
-                  <td className="px-3 py-1.5 font-mono text-[10px] text-ink-500">
-                    {s.sessionId.slice(0, 8)}
+                  <td className="px-3 py-1.5">
+                    <SessionIdButton sessionId={s.sessionId} />
                   </td>
                 </tr>
               ))}
