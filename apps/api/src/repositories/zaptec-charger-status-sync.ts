@@ -119,9 +119,15 @@ export async function syncZaptecChargerStatus(
     }
 
     const status = mapStatus(charger);
+    // Only refresh lastSeenAt when Zaptec actually sees the charger.
+    // lastSeenAt is the gateway/vendor heartbeat freshness — site-tree
+    // uses a 12-min window on it to render "online". If we stamp `now`
+    // on every poll regardless of IsOnline, an offline charger looks
+    // online forever (caught at Klettas 3 / ZPR103043, Sprint 8.13.1).
+    const isOnline = charger.IsOnline === true;
     await db.ocppIdentity.update({
       where: { id: identity.id },
-      data: { status, lastSeenAt: now },
+      data: isOnline ? { status, lastSeenAt: now } : { status },
     });
 
     // Sprint 8.14.6 — write-through Zaptec's display name to

@@ -494,12 +494,17 @@ export async function listSiteTree(
     //     unreachable but the charger is talking to us
     //   • pending_discoveries — gateway heard a connection attempt
     //     even without auth
-    // Either source within the 5-min window counts as online.
+    // Either source within the 12-min window counts as online,
+    // EXCEPT when identity.status is explicitly "offline" — that wins
+    // outright (defence in depth against a writer that stamps lastSeenAt
+    // when the charger is actually offline; see Sprint 8.13.1).
+    const explicitlyOffline = identity?.status === "offline";
     const online =
-      (liveSnapshot?.vendorOnline === true) ||
-      identity?.status === "online" ||
-      (lastSeen != null && now - new Date(lastSeen).getTime() < ONLINE_WINDOW_MS) ||
-      (pendingSeen != null && now - pendingSeen.getTime() < ONLINE_WINDOW_MS);
+      !explicitlyOffline &&
+      ((liveSnapshot?.vendorOnline === true) ||
+        identity?.status === "online" ||
+        (lastSeen != null && now - new Date(lastSeen).getTime() < ONLINE_WINDOW_MS) ||
+        (pendingSeen != null && now - pendingSeen.getTime() < ONLINE_WINDOW_MS));
     const connectorTypes = c.evses.flatMap((e) => e.connectors.map((k) => k.type));
     const connectorSummary =
       connectorTypes.length === 0
