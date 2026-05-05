@@ -29,6 +29,7 @@ import {
 } from "../../repositories/credential-management";
 import { probeZaptecSessions } from "../../repositories/zaptec-session-probe";
 import { syncZaptecSessions } from "../../repositories/zaptec-session-sync";
+import { listInstallations } from "../../lib/zaptec";
 import type { Env } from "../../bindings";
 
 // Platform-wide list — every org's credentials. Operator UI uses this
@@ -133,11 +134,18 @@ adminVendorCredentialsAll.get(
   },
 );
 
-// Sprint 8.7 — API-only writeback. The probe is read-only; this route
-// actually writes synthetic ChargeSession + ImportedCdrRef + ledger
-// rows for `onlyInZaptec` sessions. Same body shape as probe-sessions
-// (installationId / chargerId / from / to). Idempotent: re-runs hit
+// Sprint 8.7 — API-only writeback. Idempotent backfill: re-runs hit
 // the unique (sourceKind, sourceCdrId) index on imported_cdr_refs.
+//
+// 8.14.1 — when no installationId is provided, fans out per
+// installation (Zaptec's /api/chargehistory returns nothing without
+// an installation filter, confirmed against staging). With
+// installationId set, hits just that one. With chargerId set, scopes
+// to a single charger across the credential's installation set.
+//
+// Use for backfills: POST /:id/sync-sessions?from=2026-04-01T00:00:00Z&to=2026-06-01T00:00:00Z
+// will sweep April + May across every installation under the
+// credential and idempotently land every session with cost.
 adminVendorCredentialsAll.post(
   "/:id/sync-sessions",
   requirePermission("platform.tenant.write"),
@@ -145,21 +153,75 @@ adminVendorCredentialsAll.post(
     const db = makePrisma(c.env);
     try {
       const auth = await unsealAndAuth(db, c.env.OCPP_CRED_KEK!, c.req.param("id"));
-      const result = await syncZaptecSessions(db, {
-        accessToken: auth.accessToken,
-        installationId: c.req.query("installationId"),
-        chargerId: c.req.query("chargerId"),
-        from: c.req.query("from"),
-        to: c.req.query("to"),
-      });
+      const installationIdParam = c.req.query("installationId");
+      const chargerId = c.req.query("chargerId");
+      const from = c.req.query("from");
+      const to = c.req.query("to");
+
+      // If installationId or chargerId given → narrow scope path.
+      if (installationIdParam || chargerId) {
+        const result = await syncZaptecSessions(db, {
+          accessToken: auth.accessToken,
+          installationId: installationIdParam,
+          chargerId,
+          from,
+          to,
+        });
+        return c.json({
+          installationsScanned: 1,
+          zaptecCount: result.zaptecCount,
+          importedCount: result.imported.length,
+          skippedCount: result.skipped.length,
+          errorCount: result.errors.length,
+          imported: result.imported,
+          skipped: result.skipped,
+          errors: result.errors,
+        });
+      }
+
+      // No filter → fan out across every installation the credential
+      // can see. Aggregates the per-installation results into a
+      // single response.
+      const installsResp = await listInstallations(auth.accessToken);
+      if (!installsResp.ok) {
+        return c.json(
+          {
+            error: "zaptec_installations_fetch_failed",
+            detail: JSON.stringify(installsResp.error),
+          },
+          502,
+        );
+      }
+      let zaptecCount = 0;
+      const imported: typeof installsResp extends { value: infer _ }
+        ? Array<{ zaptecId: string; ourSessionId: string; energyKwh: number; costIskMinor: string }>
+        : never = [] as never;
+      const skipped: Array<{ zaptecId: string; reason: string }> = [];
+      const errors: Array<{ zaptecId: string; code: string; detail: string }> = [];
+      let installationsScanned = 0;
+      for (const inst of installsResp.value) {
+        if (!inst.Id) continue;
+        const result = await syncZaptecSessions(db, {
+          accessToken: auth.accessToken,
+          installationId: inst.Id,
+          from,
+          to,
+        });
+        installationsScanned++;
+        zaptecCount += result.zaptecCount;
+        imported.push(...result.imported);
+        skipped.push(...result.skipped);
+        errors.push(...result.errors);
+      }
       return c.json({
-        zaptecCount: result.zaptecCount,
-        importedCount: result.imported.length,
-        skippedCount: result.skipped.length,
-        errorCount: result.errors.length,
-        imported: result.imported,
-        skipped: result.skipped,
-        errors: result.errors,
+        installationsScanned,
+        zaptecCount,
+        importedCount: imported.length,
+        skippedCount: skipped.length,
+        errorCount: errors.length,
+        imported,
+        skipped,
+        errors,
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
