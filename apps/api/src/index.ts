@@ -44,10 +44,7 @@ import { handleOcppEventsBatch } from "./queues/ocpp-events";
 import { handleArchiveEventsBatch } from "./queues/archive-events";
 import { ensureForwardPartitions } from "./lib/db/partition-cron";
 import { makePool } from "./lib/db/raw";
-import {
-  runZaptecCronSync,
-  runZaptecChargerStatusCron,
-} from "./lib/zaptec-sync-cron";
+import { runZaptecCronSync } from "./lib/zaptec-sync-cron";
 import type {
   Env,
   OutboundCommandMessage,
@@ -285,11 +282,12 @@ const handler: ExportedHandler<Env, AnyQueueMessage> = {
       })(),
     );
 
-    // Sprint 8.7 — Zaptec API-only writeback. Pulls ChargeHistory for
-    // every active Zaptec credential over a 26h rolling window and
-    // synthesises ChargeSession + session_ledger rows for sessions
-    // that didn't arrive over OCPP. Idempotent via imported_cdr_refs.
-    // Skipped when KEK is not bound (e.g. local dev without secret).
+    // Sprint 8.7/8.8 — combined Zaptec sync (8.14.1). Single OAuth
+    // grant per credential per tick: sessions writeback + status
+    // sync share the access token to avoid Zaptec's back-to-back
+    // /oauth/token rate limiter, which used to cause alternating
+    // tick failures. Sessions writeback fans out per installation
+    // since /api/chargehistory returns nothing without InstallationId.
     if (env.OCPP_CRED_KEK) {
       const kek = env.OCPP_CRED_KEK;
       ctx.waitUntil(
@@ -302,6 +300,14 @@ const handler: ExportedHandler<Env, AnyQueueMessage> = {
             ) {
               console.log("[zaptec-sync-cron]", {
                 credentials: result.credentials,
+                installationsScanned: result.outcomes.reduce(
+                  (n, o) => n + o.installationsScanned,
+                  0,
+                ),
+                zaptecCount: result.outcomes.reduce(
+                  (n, o) => n + o.zaptecCount,
+                  0,
+                ),
                 imported: result.outcomes.reduce(
                   (n, o) => n + o.importedCount,
                   0,
@@ -317,40 +323,25 @@ const handler: ExportedHandler<Env, AnyQueueMessage> = {
                 failedCredentials: result.failures.length,
               });
             }
-          } catch (err) {
-            console.error("[zaptec-sync-cron] failed", {
-              error: err instanceof Error ? err.message : String(err),
-            });
-          }
-        })(),
-      );
-
-      // Sprint 8.8 — charger-status companion. Stamps OcppIdentity
-      // status + lastSeenAt from the bulk /api/chargers response so
-      // operators see online/offline/charging without OCPP traffic.
-      ctx.waitUntil(
-        (async () => {
-          try {
-            const result = await runZaptecChargerStatusCron(db, kek);
             if (
-              result.outcomes.length > 0 ||
-              result.failures.length > 0
+              result.status.outcomes.length > 0 ||
+              result.status.failures.length > 0
             ) {
               console.log("[zaptec-status-cron]", {
                 credentials: result.credentials,
-                updated: result.outcomes.reduce(
+                updated: result.status.outcomes.reduce(
                   (n, o) => n + o.updatedCount,
                   0,
                 ),
-                skipped: result.outcomes.reduce(
+                skipped: result.status.outcomes.reduce(
                   (n, o) => n + o.skippedCount,
                   0,
                 ),
-                failedCredentials: result.failures.length,
+                failedCredentials: result.status.failures.length,
               });
             }
           } catch (err) {
-            console.error("[zaptec-status-cron] failed", {
+            console.error("[zaptec-sync-cron] failed", {
               error: err instanceof Error ? err.message : String(err),
             });
           }
