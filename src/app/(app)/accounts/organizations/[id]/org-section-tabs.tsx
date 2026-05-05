@@ -15,6 +15,7 @@ export function OrgSectionTabs({ orgId }: { orgId: string }) {
     { href: base, label: "Profile", exact: true },
     { href: `${base}/sites`, label: "Sites" },
     { href: `${base}/installations`, label: "Installations" },
+    { href: `${base}/sessions`, label: "Sessions" },
     { href: `${base}/driver-groups`, label: "Driver groups" },
     { href: `${base}/tariff-chain`, label: "Tariff chain" },
     { href: `${base}/contracts`, label: "Contracts" },
