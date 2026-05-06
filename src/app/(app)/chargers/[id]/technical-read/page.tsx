@@ -71,17 +71,33 @@ export default async function ChargerTechnicalReadPage({
   // 8.4.8 — latest closed session for this charger (for the
   // "Last session kWh / ended" rows under Session timeline). Same
   // endpoint LatestSessionChart uses on the parent profile page.
-  const latestSession = await apiFetchServer(
-    `/api/admin/billing/sessions?chargingStationId=${encodeURIComponent(id)}&limit=1`,
+  // 8.4.9 — fetch up to 20 sessions in the same call so the
+  // Charge history section can render real rows.
+  const sessionsList = await apiFetchServer(
+    `/api/admin/billing/sessions?chargingStationId=${encodeURIComponent(id)}&limit=20`,
   )
     .then(async (r) => {
-      if (!r.ok) return null;
+      if (!r.ok) return [];
       const j = (await r.json()) as {
-        sessions: { sessionId: string; energyKwh: number | null; endedAt: string | null }[];
+        sessions: {
+          sessionId: string;
+          startedAt: string;
+          stoppedAt: string | null;
+          energyKwh: string;
+          costFormatted: string | null;
+          driverIdTag: string | null;
+        }[];
       };
-      return j.sessions[0] ?? null;
+      return j.sessions;
     })
-    .catch(() => null);
+    .catch(() => [] as never[]);
+  const latestSession = sessionsList[0]
+    ? {
+        sessionId: sessionsList[0].sessionId,
+        energyKwh: Number(sessionsList[0].energyKwh),
+        endedAt: sessionsList[0].stoppedAt,
+      }
+    : null;
 
   const evse = charger.evses[0];
   const identity = charger.ocppIdentities[0];
@@ -255,9 +271,35 @@ export default async function ChargerTechnicalReadPage({
 
         {/* Charge history + Firmware */}
         <div className="mt-5 grid gap-5 lg:grid-cols-2">
-          <TechSection title="Charge history" source="api" hint="last N sessions">
-            <PlaceholderRow label="Session list" trailing="paginated · most-recent-first" />
-            <PlaceholderRow label="Per row" trailing="start / end / kWh / kr / driver tag" />
+          <TechSection title="Charge history" source="api" hint={`last ${sessionsList.length} sessions`}>
+            {sessionsList.length === 0 ? (
+              <PlaceholderRow label="Session list" trailing="no closed sessions yet" />
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-[11px]">
+                  <thead className="text-[9px] uppercase tracking-brand text-ink-500">
+                    <tr className="text-left">
+                      <th className="py-1 pr-2 font-medium">Started</th>
+                      <th className="py-1 pr-2 font-medium">Ended</th>
+                      <th className="py-1 pr-2 text-right font-medium">kWh</th>
+                      <th className="py-1 pr-2 text-right font-medium">Cost</th>
+                      <th className="py-1 font-medium">Driver tag</th>
+                    </tr>
+                  </thead>
+                  <tbody className="font-mono text-ink-200">
+                    {sessionsList.map((s) => (
+                      <tr key={s.sessionId} className="border-t border-bg-border/30">
+                        <td className="py-1 pr-2">{fmtDate(s.startedAt)}</td>
+                        <td className="py-1 pr-2 text-ink-400">{fmtDate(s.stoppedAt)}</td>
+                        <td className="py-1 pr-2 text-right">{Number(s.energyKwh).toFixed(3)}</td>
+                        <td className="py-1 pr-2 text-right text-ink-300">{s.costFormatted ?? DASH}</td>
+                        <td className="py-1 truncate text-ink-400">{s.driverIdTag ?? DASH}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </TechSection>
           <TechSection title="Firmware" source="api" hint="installation rollout state">
             <InfoRow label="Computer SW (911)" info={t?.firmwareVersion ?? charger.firmwareVersion ?? DASH} mono />
