@@ -12,6 +12,18 @@ export interface ChargerSummary {
   connectorType: string;
   ocppVersion: string;
   createdAt: string;
+  // Sprint 8.4.7 — list-view enrichment populated by the status-sync
+  // cron from per-charger /state observations. All optional; legacy
+  // chargers without a recent /state poll render em-dashes.
+  firmwareVersion: string | null;        // StateId 911
+  mainboardSwVersion: string | null;     // StateId 908
+  smartBootloaderVersion: string | null; // StateId 912
+  hardwareVersion: string | null;        // StateId 913
+  lifetimeKwh: number | null;            // ChargingStation.lifetimeKwhCached
+  status: string | null;                 // OcppIdentity.status (offline | available | charging | …)
+  online: boolean;                       // status !== "offline" && lastSeenAt within 12 min
+  onlineSinceAt: string | null;          // ISO; populated only when online=true
+  lastSeenAt: string | null;             // ISO
 }
 
 export interface ChargerCreateResult extends ChargerSummary {

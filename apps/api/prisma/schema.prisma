@@ -752,6 +752,15 @@ model ChargingStation {
   lastTelemetryRead      Json?     @map("last_telemetry_read") @db.JsonB
   lastTelemetryAt        DateTime? @map("last_telemetry_at") @db.Timestamptz(6)
 
+  // ── Firmware detail + online-since (Sprint 8.4.7) ─────────────────
+  // Extracted from /state observations every cron tick. firmwareVersion
+  // above mirrors StateId 911 (BootNotification path also writes there);
+  // these three are the rest of the firmware identity.
+  mainboardSwVersion     String?   @map("mainboard_sw_version")        // StateId 908
+  smartBootloaderVersion String?   @map("smart_bootloader_version")    // StateId 912
+  hardwareVersion        String?   @map("hardware_version")             // StateId 913
+  onlineSinceAt          DateTime? @map("online_since_at") @db.Timestamptz(6)
+
   // ── Existing relations ───────────────────────────────────────────
   siteAsset        SiteAsset     @relation(fields: [siteAssetId], references: [id], onDelete: Cascade)
   organization     Organization  @relation("StationOperator", fields: [orgId], references: [id])

@@ -910,6 +910,18 @@ model ChargingStation {
   lastTelemetryRead      Json?     @map("last_telemetry_read") @db.JsonB
   lastTelemetryAt        DateTime? @map("last_telemetry_at") @db.Timestamptz(6)
 
+  // ── Firmware detail + online-since (Sprint 8.4.7) ─────────────────
+  // Extracted from Zaptec /state observations on every cron tick (8.13.2)
+  // so the /chargers list view can show them without a per-row Zaptec
+  // round-trip. firmwareVersion above mirrors StateId 911; these three
+  // are the rest of the firmware identity. onlineSinceAt is the
+  // Timestamp on StateId -2 when ValueAsString=true — cleared when the
+  // charger flips offline.
+  mainboardSwVersion     String?   @map("mainboard_sw_version")        // StateId 908
+  smartBootloaderVersion String?   @map("smart_bootloader_version")    // StateId 912
+  hardwareVersion        String?   @map("hardware_version")             // StateId 913
+  onlineSinceAt          DateTime? @map("online_since_at") @db.Timestamptz(6)
+
   // ── Existing relations ───────────────────────────────────────────
   siteAsset        SiteAsset     @relation(fields: [siteAssetId], references: [id], onDelete: Cascade)
   organization     Organization  @relation("StationOperator", fields: [orgId], references: [id])

@@ -191,6 +191,43 @@ export async function syncZaptecChargerStatus(
       data: isOnline ? { status, lastSeenAt: now } : { status },
     });
 
+    // Sprint 8.4.7 — extract firmware versions + online-since from the
+    // same /state response so the /chargers list view can render them
+    // without a per-row Zaptec round-trip. Best-effort; failure here
+    // doesn't break status sync.
+    const stationId = await db.ocppIdentity
+      .findUnique({
+        where: { id: identity.id },
+        select: { chargingStationId: true },
+      })
+      .then((r) => r?.chargingStationId);
+    if (stationId) {
+      const stateById = (id: number) =>
+        stateRes.value.find((e) => e.StateId === id)?.ValueAsString ?? null;
+      const firmware911 = stateById(911);
+      const mainboard908 = stateById(908);
+      const bootloader912 = stateById(912);
+      const hardware913 = stateById(913);
+      // /state[-2] Timestamp is when Zaptec last observed IsOnline=true;
+      // it's the canonical "online since" value the site-tree exposes.
+      const onlineEntry = stateRes.value.find((e) => e.StateId === -2);
+      const onlineSinceAt = isOnline && onlineEntry?.Timestamp
+        ? new Date(onlineEntry.Timestamp)
+        : null;
+      const stationData: Record<string, unknown> = {};
+      if (firmware911) stationData.firmwareVersion = firmware911;
+      if (mainboard908) stationData.mainboardSwVersion = mainboard908;
+      if (bootloader912) stationData.smartBootloaderVersion = bootloader912;
+      if (hardware913) stationData.hardwareVersion = hardware913;
+      if (isOnline) stationData.onlineSinceAt = onlineSinceAt;
+      else stationData.onlineSinceAt = null; // clear when offline
+      if (Object.keys(stationData).length > 0) {
+        await db.chargingStation
+          .update({ where: { siteAssetId: stationId }, data: stationData })
+          .catch(() => undefined);
+      }
+    }
+
     // Sprint 8.14.6 — write-through Zaptec's display name to
     // SiteAsset.displayName so /charge-log shows "K1" / "Festi 8"
     // instead of UUID slices. Only updates when the asset's current

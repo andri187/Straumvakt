@@ -25,6 +25,11 @@ function generatePassword(): string {
   return hex;
 }
 
+// 12-min online window — same as site-tree.ts. lastSeenAt is the
+// gateway/vendor heartbeat freshness; outside that window the charger
+// is considered offline regardless of what status field carries.
+const ONLINE_WINDOW_MS = 12 * 60 * 1000;
+
 export async function listAllChargers(db: PrismaClient): Promise<ChargerSummary[]> {
   const rows = await db.chargingStation.findMany({
     orderBy: [{ updatedAt: "desc" }],
@@ -39,21 +44,42 @@ export async function listAllChargers(db: PrismaClient): Promise<ChargerSummary[
       ocppIdentities: { take: 1, orderBy: { createdAt: "asc" } },
     },
   });
-  return rows.map((r) => ({
-    chargingStationId: r.siteAssetId,
-    evseId: r.evses[0]?.id ?? "",
-    connectorId: r.evses[0]?.connectors[0]?.id ?? "",
-    ocppIdentityId: r.ocppIdentities[0]?.id ?? "",
-    identityString: r.ocppIdentities[0]?.identityString ?? "—",
-    orgDisplayName: r.organization.displayName,
-    siteDisplayName: r.siteAsset.site.displayName,
-    vendor: r.vendor,
-    model: r.model,
-    serialNumber: r.serialNumber,
-    connectorType: r.evses[0]?.connectors[0]?.type ?? "—",
-    ocppVersion: r.ocppIdentities[0]?.ocppVersion ?? "—",
-    createdAt: r.createdAt.toISOString(),
-  }));
+  const now = Date.now();
+  return rows.map((r) => {
+    const identity = r.ocppIdentities[0];
+    const lastSeen = identity?.lastSeenAt ?? null;
+    const within = lastSeen != null && now - lastSeen.getTime() < ONLINE_WINDOW_MS;
+    const online = within && identity?.status !== "offline";
+    return {
+      chargingStationId: r.siteAssetId,
+      evseId: r.evses[0]?.id ?? "",
+      connectorId: r.evses[0]?.connectors[0]?.id ?? "",
+      ocppIdentityId: identity?.id ?? "",
+      identityString: identity?.identityString ?? "—",
+      orgDisplayName: r.organization.displayName,
+      siteDisplayName: r.siteAsset.site.displayName,
+      vendor: r.vendor,
+      model: r.model,
+      serialNumber: r.serialNumber,
+      connectorType: r.evses[0]?.connectors[0]?.type ?? "—",
+      ocppVersion: identity?.ocppVersion ?? "—",
+      createdAt: r.createdAt.toISOString(),
+      // Sprint 8.4.7 — list-view enrichment.
+      firmwareVersion: r.firmwareVersion,
+      mainboardSwVersion: r.mainboardSwVersion,
+      smartBootloaderVersion: r.smartBootloaderVersion,
+      hardwareVersion: r.hardwareVersion,
+      lifetimeKwh: r.lifetimeKwhCached != null ? Number(r.lifetimeKwhCached) : null,
+      // Force "offline" badge when online=false (same semantic as
+      // site-tree's row composition, 8.13.4) — a charger that's stuck
+      // with status="charging" but lastSeenAt past 12 min should not
+      // claim to be charging in the list.
+      status: online ? (identity?.status ?? null) : "offline",
+      online,
+      onlineSinceAt: online && r.onlineSinceAt ? r.onlineSinceAt.toISOString() : null,
+      lastSeenAt: lastSeen ? lastSeen.toISOString() : null,
+    };
+  });
 }
 
 export async function listSiteCircuits(
@@ -244,6 +270,17 @@ export async function createCharger(
     connectorType: input.connectorType,
     ocppVersion: input.ocppVersion,
     createdAt: new Date().toISOString(),
+    // Sprint 8.4.7 — fresh charger has no /state observations yet;
+    // these populate on the first cron tick.
+    firmwareVersion: null,
+    mainboardSwVersion: null,
+    smartBootloaderVersion: null,
+    hardwareVersion: null,
+    lifetimeKwh: null,
+    status: null,
+    online: false,
+    onlineSinceAt: null,
+    lastSeenAt: null,
     ocppPassword: password,
   };
 }
