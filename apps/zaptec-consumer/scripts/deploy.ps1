@@ -2,7 +2,7 @@
 #
 # Walks through:
 #   1. flyctl install / auth check
-#   2. flyctl launch (idempotent — skips if app already exists)
+#   2. flyctl launch (idempotent - skips if app already exists)
 #   3. Prompts for ZAPTEC_USERNAME, ZAPTEC_PASSWORD, OCPP_INGEST_SECRET
 #      via Read-Host -AsSecureString (values masked, never echoed)
 #   4. flyctl secrets import via stdin (avoids ps-listing the values)
@@ -12,11 +12,16 @@
 #
 # Run from this directory:
 #   .\scripts\deploy.ps1
+#
+# ASCII-only by design - PowerShell 5.1 reads non-BOM scripts as
+# Windows-1252 and mangles UTF-8 multi-byte sequences (caught when
+# the original em-dash / box-drawing chars failed to parse,
+# 2026-05-06).
 
 $ErrorActionPreference = "Stop"
 $AppName = "straumvakt-zaptec-consumer-staging"
 
-# ── Step 1: flyctl present? ────────────────────────────────────────
+# Step 1: flyctl present?
 $fly = Get-Command flyctl -ErrorAction SilentlyContinue
 if (-not $fly) { $fly = Get-Command fly -ErrorAction SilentlyContinue }
 if (-not $fly) {
@@ -29,7 +34,7 @@ Restart your shell after, then re-run this script.
 }
 $flyExe = $fly.Source
 
-# ── Step 2: auth check ─────────────────────────────────────────────
+# Step 2: auth check
 & $flyExe auth whoami 2>&1 | Out-Null
 if ($LASTEXITCODE -ne 0) {
   Write-Host "Not logged in. Running flyctl auth login..." -ForegroundColor Yellow
@@ -42,12 +47,12 @@ if ($LASTEXITCODE -ne 0) {
 $me = (& $flyExe auth whoami).Trim()
 Write-Host "Authed as: $me" -ForegroundColor Green
 
-# ── Step 3: app exists? launch if not ──────────────────────────────
+# Step 3: app exists? launch if not
 Push-Location (Split-Path -Parent $PSScriptRoot)
 try {
   & $flyExe status --app $AppName 2>&1 | Out-Null
   if ($LASTEXITCODE -ne 0) {
-    Write-Host "App '$AppName' doesn't exist — running flyctl launch..." -ForegroundColor Yellow
+    Write-Host "App '$AppName' doesn't exist - running flyctl launch..." -ForegroundColor Yellow
     & $flyExe launch `
       --no-deploy `
       --copy-config `
@@ -63,7 +68,7 @@ try {
     Write-Host "App '$AppName' exists. Will redeploy." -ForegroundColor Green
   }
 
-  # ── Step 4: prompt secrets, import via stdin ──────────────────
+  # Step 4: prompt secrets, import via stdin
   function Read-Plain($name) {
     $sec = Read-Host -Prompt "Enter $name (input hidden)" -AsSecureString
     $bstr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec)
@@ -75,7 +80,7 @@ try {
     }
   }
 
-  Write-Host "`nProvisioning secrets — values stay in this shell only." -ForegroundColor Cyan
+  Write-Host "`nProvisioning secrets - values stay in this shell only." -ForegroundColor Cyan
   $zaptecUser = Read-Plain "ZAPTEC_USERNAME"
   $zaptecPass = Read-Plain "ZAPTEC_PASSWORD"
   $ingestSec  = Read-Plain "OCPP_INGEST_SECRET (same as the API Worker's)"
@@ -86,10 +91,10 @@ try {
     Write-Error "Secrets import failed."
     exit 1
   }
-  # Wipe the locals (best-effort — PowerShell GC will get them anyway).
+  # Wipe the locals (best-effort - PowerShell GC will get them anyway).
   Remove-Variable zaptecUser, zaptecPass, ingestSec, blob -ErrorAction SilentlyContinue
 
-  # ── Step 5: deploy ────────────────────────────────────────────
+  # Step 5: deploy
   Write-Host "`nDeploying..." -ForegroundColor Cyan
   & $flyExe deploy --app $AppName --remote-only
   if ($LASTEXITCODE -ne 0) {
@@ -97,8 +102,8 @@ try {
     exit 1
   }
 
-  # ── Step 6: tail for ~30s ─────────────────────────────────────
-  Write-Host "`nDeployed. Tailing logs for 30s — Ctrl+C to stop earlier:`n" -ForegroundColor Green
+  # Step 6: tail for ~30s
+  Write-Host "`nDeployed. Tailing logs for 30s - Ctrl+C to stop earlier:`n" -ForegroundColor Green
   $job = Start-Job -ScriptBlock {
     param($exe, $app)
     & $exe logs --app $app
