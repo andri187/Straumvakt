@@ -132,7 +132,11 @@ export function startListener(config: ListenerConfig): {
           config.installationId,
         );
 
-        const connectionString = `Endpoint=sb://${mcd.Host}/;SharedAccessSignature=${mcd.Password}`;
+        // Sprint 9 Phase 1.1 — Azure Service Bus rejects the SAS-signature
+        // form here ("Missing 'sharedAccessKeyName'"). Zaptec returns
+        // Username = key name, Password = key (NOT a SAS token), so build
+        // the standard key-based connection string the SDK expects.
+        const connectionString = `Endpoint=sb://${mcd.Host}/;SharedAccessKeyName=${mcd.Username};SharedAccessKey=${mcd.Password}`;
         currentClient = new ServiceBusClient(connectionString);
         currentReceiver = currentClient.createReceiver(
           mcd.Topic,
