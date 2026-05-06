@@ -29,10 +29,12 @@ if (-not $fly) { $fly = Get-Command fly -ErrorAction SilentlyContinue }
 if (-not $fly) {
   $defaultInstall = Join-Path $env:USERPROFILE ".fly\bin\flyctl.exe"
   if (Test-Path $defaultInstall) {
-    $fly = Get-Item $defaultInstall
-    # Make subsequent script invocations cleaner by exporting to PATH
-    # for this session (not persistent).
+    # Add the install dir to session PATH, then re-resolve via
+    # Get-Command so we get a proper CommandInfo (with .Source) -
+    # Get-Item returns a FileInfo which doesn't have that property
+    # and breaks the '& $flyExe' invocation later.
     $env:Path += ";$env:USERPROFILE\.fly\bin"
+    $fly = Get-Command flyctl -ErrorAction SilentlyContinue
   }
 }
 if (-not $fly) {
