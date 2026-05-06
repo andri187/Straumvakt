@@ -86,3 +86,9 @@ prisma/generated/
 apps/api/src/generated/
 apps/*/node_modules/
 packages/*/node_modules/
+
+# Diagnostic probe output — captures raw vendor event streams for
+# offline review. Don't commit; payloads can contain SAS tokens or
+# event data we shouldn't preserve in git history.
+apps/api/scripts/zaptec-amqp-probe.jsonl
+apps/api/scripts/*-probe-output.jsonl

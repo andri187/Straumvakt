@@ -1,0 +1,36 @@
+# Auto-deploy Zaptec consumer to Fly.io on push to main branches.
+# Triggered only when files under apps/zaptec-consumer/ change so
+# unrelated commits don't redeploy the consumer.
+#
+# Setup (operator-side, one-time):
+#   1. Generate a Fly deploy token: `flyctl tokens create deploy -a <app-name>`
+#   2. GitHub repo → Settings → Secrets → Actions:
+#        New secret: FLY_API_TOKEN_ZAPTEC_CONSUMER = <token>
+#   3. Push a change to apps/zaptec-consumer/ — workflow runs.
+
+name: Deploy zaptec-consumer
+
+on:
+  push:
+    branches:
+      - dev/zaptec-consumer-fly
+      - staging
+      - master
+    paths:
+      - "apps/zaptec-consumer/**"
+      - ".github/workflows/zaptec-consumer-deploy.yml"
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy to Fly.io
+    runs-on: ubuntu-latest
+    concurrency: deploy-zaptec-consumer
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Deploy
+        working-directory: apps/zaptec-consumer
+        run: flyctl deploy --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_ZAPTEC_CONSUMER }}
