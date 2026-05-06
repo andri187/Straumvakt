@@ -21,18 +21,31 @@
 $ErrorActionPreference = "Stop"
 $AppName = "straumvakt-zaptec-consumer-staging"
 
-# Step 1: flyctl present?
+# Step 1: flyctl present? Check PATH first; fall back to the default
+# install location ($env:USERPROFILE\.fly\bin) since the install script
+# appends to user PATH but doesn't propagate to existing shells.
 $fly = Get-Command flyctl -ErrorAction SilentlyContinue
 if (-not $fly) { $fly = Get-Command fly -ErrorAction SilentlyContinue }
 if (-not $fly) {
+  $defaultInstall = Join-Path $env:USERPROFILE ".fly\bin\flyctl.exe"
+  if (Test-Path $defaultInstall) {
+    $fly = Get-Item $defaultInstall
+    # Make subsequent script invocations cleaner by exporting to PATH
+    # for this session (not persistent).
+    $env:Path += ";$env:USERPROFILE\.fly\bin"
+  }
+}
+if (-not $fly) {
   Write-Error @"
-flyctl not on PATH. Install on Windows:
+flyctl not on PATH and not at $env:USERPROFILE\.fly\bin\flyctl.exe.
+Install on Windows:
   iwr https://fly.io/install.ps1 -useb | iex
 Restart your shell after, then re-run this script.
 "@
   exit 1
 }
 $flyExe = $fly.Source
+Write-Host "Using flyctl: $flyExe" -ForegroundColor DarkGray
 
 # Step 2: auth check
 & $flyExe auth whoami 2>&1 | Out-Null
