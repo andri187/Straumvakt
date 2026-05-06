@@ -49,9 +49,22 @@ Restart your shell after, then re-run this script.
 $flyExe = $fly.Source
 Write-Host "Using flyctl: $flyExe" -ForegroundColor DarkGray
 
-# Step 2: auth check
-& $flyExe auth whoami 2>&1 | Out-Null
+# Step 2: auth check. Note: do NOT use 2>&1 redirection on native
+# commands under PS 5.1 + ErrorActionPreference=Stop - it wraps
+# stderr in ErrorRecords and aborts the script. Redirect stderr to
+# $null instead so we can inspect $LASTEXITCODE cleanly.
+& $flyExe auth whoami *> $null
 if ($LASTEXITCODE -ne 0) {
+  if ($env:FLY_API_TOKEN) {
+    Write-Error @"
+flyctl couldn't validate the FLY_API_TOKEN env var. Either it's
+expired/revoked, or there's a connectivity issue. Try:
+  1. Generate a fresh token at https://fly.io/user/personal_access_tokens
+  2. `$env:FLY_API_TOKEN = '<new token>'`
+  3. Re-run this script
+"@
+    exit 1
+  }
   Write-Host "Not logged in. Running flyctl auth login..." -ForegroundColor Yellow
   & $flyExe auth login
   if ($LASTEXITCODE -ne 0) {
