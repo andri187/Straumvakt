@@ -148,6 +148,13 @@ export function TechnicalReadDetail({ read }: { read: ChargerTechnicalRead | nul
   const phasesActive = read.phases.some(
     (p) => (p.voltageV != null && p.voltageV > 0) || (p.currentA != null && p.currentA > 0),
   );
+  // 8.13.4 — when Zaptec reports the charger offline, the residual
+  // power / voltage / current values it echoes are last-known snapshots,
+  // not live readings. Showing "0.00 kW" or "L1 6V/0.0A" implies activity
+  // that isn't happening. Render "offline" for those fields and skip
+  // the phases card entirely.
+  const isOffline = read.isOnline === false;
+  const offlineOr = (s: string) => (isOffline ? "offline" : s);
 
   return (
     <section className="mt-6 space-y-3">
@@ -163,22 +170,24 @@ export function TechnicalReadDetail({ read }: { read: ChargerTechnicalRead | nul
 
       <div className="grid gap-3 lg:grid-cols-2">
         <Card title="Live dashboard" hint="StateId 710 / 513 / 553 / 501–509">
-          <Row label="Operation mode" value={read.chargerOperationMode ?? DASH} />
+          <Row label="Operation mode" value={isOffline ? "offline" : (read.chargerOperationMode ?? DASH)} />
           <Row label="Online" value={fmtBool(read.isOnline, "yes", "no")} />
           <Row label="Enabled" value={fmtBool(read.isEnabled, "yes", "no")} />
           <Row
             label="Power"
-            value={fmtNum(read.totalChargePowerW != null ? read.totalChargePowerW / 1000 : null, " kW", 2)}
+            value={offlineOr(
+              fmtNum(read.totalChargePowerW != null ? read.totalChargePowerW / 1000 : null, " kW", 2),
+            )}
           />
           <Row
             label="Session energy"
-            value={fmtNum(read.totalChargeEnergySessionKWh, " kWh", 3)}
+            value={offlineOr(fmtNum(read.totalChargeEnergySessionKWh, " kWh", 3))}
           />
-          <Row label="Max current" value={fmtNum(read.chargerMaxCurrentA, " A")} />
-          <Row label="Allocated (DLB)" value={fmtNum(read.chargeCurrentSetA, " A")} />
+          <Row label="Max current" value={offlineOr(fmtNum(read.chargerMaxCurrentA, " A"))} />
+          <Row label="Allocated (DLB)" value={offlineOr(fmtNum(read.chargeCurrentSetA, " A"))} />
         </Card>
 
-        {phasesActive && (
+        {phasesActive && !isOffline && (
           <Card title="Phases" hint="Voltage 501/502/503 · Current 507/508/509">
             <table className="w-full text-[11px]">
               <thead className="text-[10px] uppercase tracking-brand text-ink-500">

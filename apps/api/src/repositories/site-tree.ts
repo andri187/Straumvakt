@@ -564,7 +564,13 @@ export async function listSiteTree(
           ? Math.max(liveSnapshot.lifetimeEnergyKWh, c.lifetimeKwhCached)
           : (liveSnapshot?.lifetimeEnergyKWh ?? c.lifetimeKwhCached ?? null),
       decommissioned: liveSnapshot?.decommissioned ?? null,
-      status: identity?.status ?? "—",
+      // 8.13.4 — when online=false, force the badge to "offline"
+      // regardless of identity.status. A charger going offline mid-
+      // session leaves status="charging" stuck in the DB until the
+      // next cron tick observes IsOnline=false; the row would
+      // otherwise show online dot=grey + badge="charging" which is
+      // contradictory.
+      status: !online ? "offline" : (identity?.status ?? "—"),
       lastSeenAt: lastSeen ? new Date(lastSeen).toISOString() : null,
       connectorSummary,
       connectors,

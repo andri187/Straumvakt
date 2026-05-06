@@ -141,25 +141,27 @@ export default async function ChargerTechnicalReadPage({
             <DashboardColumn
               icon={Zap}
               label="Charging power"
-              trailing={fmtKW(t?.totalChargePowerW ?? null)}
+              trailing={t?.isOnline === false ? "offline" : fmtKW(t?.totalChargePowerW ?? null)}
             />
             <DashboardColumn
               icon={ShieldCheck}
               label="Operation mode"
-              trailing={t?.chargerOperationMode ?? DASH}
+              trailing={t?.isOnline === false ? "offline" : (t?.chargerOperationMode ?? DASH)}
             />
             <DashboardColumn
               icon={Radio}
               label="Phases"
               trailing={
-                t?.phases
-                  ? t.phases
-                      .map(
-                        (p, i) =>
-                          `L${i + 1} ${p.voltageV != null ? `${p.voltageV.toFixed(0)}V` : "—"} / ${p.currentA != null ? `${p.currentA.toFixed(1)}A` : "—"}`,
-                      )
-                      .join(" · ")
-                  : DASH
+                t?.isOnline === false
+                  ? "offline"
+                  : t?.phases
+                    ? t.phases
+                        .map(
+                          (p, i) =>
+                            `L${i + 1} ${p.voltageV != null ? `${p.voltageV.toFixed(0)}V` : "—"} / ${p.currentA != null ? `${p.currentA.toFixed(1)}A` : "—"}`,
+                        )
+                        .join(" · ")
+                    : DASH
               }
             />
           </div>
@@ -420,18 +422,23 @@ export default async function ChargerTechnicalReadPage({
               label="Energy.Active.Import.Register"
               info={t?.lifetimeEnergyKWh != null ? `${t.lifetimeEnergyKWh.toFixed(3)} kWh lifetime` : DASH}
             />
-            <InfoRow label="Power.Active.Import" info={fmtKW(t?.totalChargePowerW ?? null)} />
+            <InfoRow
+              label="Power.Active.Import"
+              info={t?.isOnline === false ? "offline" : fmtKW(t?.totalChargePowerW ?? null)}
+            />
             <InfoRow
               label="Voltage / Current per phase"
               info={
-                t?.phases
-                  ? t.phases
-                      .map(
-                        (p, i) =>
-                          `L${i + 1} ${p.voltageV != null ? `${p.voltageV.toFixed(0)}V` : "—"}/${p.currentA != null ? `${p.currentA.toFixed(1)}A` : "—"}`,
-                      )
-                      .join(" · ")
-                  : DASH
+                t?.isOnline === false
+                  ? "offline"
+                  : t?.phases
+                    ? t.phases
+                        .map(
+                          (p, i) =>
+                            `L${i + 1} ${p.voltageV != null ? `${p.voltageV.toFixed(0)}V` : "—"}/${p.currentA != null ? `${p.currentA.toFixed(1)}A` : "—"}`,
+                        )
+                        .join(" · ")
+                    : DASH
               }
               mono
             />

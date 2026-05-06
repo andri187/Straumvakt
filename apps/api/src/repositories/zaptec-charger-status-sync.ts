@@ -101,6 +101,23 @@ function parseIsOnlineFromState(
   return null;
 }
 
+/**
+ * Parse StateId 710 (ChargerOperationMode — live) out of a /state
+ * response. Returns the integer enum value, or null/undefined to
+ * signal "use the bulk listing's OperatingMode as fallback". Bulk's
+ * OperatingMode is the same denormalised cache that lied about
+ * IsOnline in 8.13.2; preferring /state's live value keeps `status`
+ * truthful (8.13.4 — K3 was charging while bulk said Available).
+ */
+function parseOperationModeFromState(
+  observations: ZaptecStateEntry[],
+): number | undefined {
+  const entry = observations.find((e) => e.StateId === 710);
+  if (!entry || entry.ValueAsString == null) return undefined;
+  const n = Number(entry.ValueAsString);
+  return Number.isFinite(n) ? n : undefined;
+}
+
 export async function syncZaptecChargerStatus(
   db: PrismaClient,
   options: ChargerStatusSyncOptions,
@@ -164,7 +181,11 @@ export async function syncZaptecChargerStatus(
       continue;
     }
 
-    const status = isOnline ? mapModeToStatus(charger.OperatingMode) : "offline";
+    // /state StateId 710 is the live OperationMode; falls back to
+    // bulk's OperatingMode only when the observation is absent.
+    const liveMode = parseOperationModeFromState(stateRes.value);
+    const operatingMode = liveMode ?? charger.OperatingMode;
+    const status = isOnline ? mapModeToStatus(operatingMode) : "offline";
     await db.ocppIdentity.update({
       where: { id: identity.id },
       data: isOnline ? { status, lastSeenAt: now } : { status },

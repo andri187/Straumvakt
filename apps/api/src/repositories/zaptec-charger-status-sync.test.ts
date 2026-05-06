@@ -102,6 +102,48 @@ describe("syncZaptecChargerStatus — /state-as-truth contract", () => {
     expect(captured[0].data.lastSeenAt).toBeInstanceOf(Date);
   });
 
+  it("/state StateId 710 overrides bulk's stale OperatingMode (the K3 case)", async () => {
+    // K3 / ZPR042320 — bulk listing said OperatingMode=1 (Available)
+    // but /state's StateId 710=3 (Charging) was the actual live state.
+    // The cron should write status="charging", not "available".
+    vi.mocked(listChargers).mockResolvedValueOnce(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      { ok: true, value: [makeCharger({ OperatingMode: 1 })] } as any,
+    );
+    vi.mocked(getChargerState).mockResolvedValueOnce(
+      stateOk([
+        { StateId: -2, ValueAsString: "true" },
+        { StateId: 710, ValueAsString: "3" },
+      ]),
+    );
+
+    const captured: CapturedUpdate[] = [];
+    const db = makeFakeDb(captured);
+    await syncZaptecChargerStatus(db, { accessToken: "x" });
+
+    expect(captured).toHaveLength(1);
+    expect(captured[0].data.status).toBe("charging");
+  });
+
+  it("falls back to bulk's OperatingMode when /state StateId 710 is absent", async () => {
+    // Defensive: if /state doesn't carry StateId 710 we still get a
+    // status from the bulk listing's OperatingMode field.
+    vi.mocked(listChargers).mockResolvedValueOnce(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      { ok: true, value: [makeCharger({ OperatingMode: 2 })] } as any,
+    );
+    vi.mocked(getChargerState).mockResolvedValueOnce(
+      stateOk([{ StateId: -2, ValueAsString: "true" }]),
+    );
+
+    const captured: CapturedUpdate[] = [];
+    const db = makeFakeDb(captured);
+    await syncZaptecChargerStatus(db, { accessToken: "x" });
+
+    expect(captured).toHaveLength(1);
+    expect(captured[0].data.status).toBe("preparing");
+  });
+
   it("/state succeeds + IsOnline=false → status='offline' + lastSeenAt UNTOUCHED", async () => {
     vi.mocked(listChargers).mockResolvedValueOnce(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
