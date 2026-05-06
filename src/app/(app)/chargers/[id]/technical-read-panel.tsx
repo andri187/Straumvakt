@@ -28,7 +28,30 @@ function fmtBool(v: boolean | null, on = "yes", off = "no"): string {
 }
 function fmtSignal(dbm: number | null): string {
   if (dbm == null) return DASH;
-  return `${dbm} dBm`;
+  // RF signal strength in dBm is always negative (RSSI / RSRP / RSCP).
+  // Some Zaptec firmwares report the magnitude as a positive integer;
+  // normalize to the canonical negative form for display.
+  const v = dbm <= 0 ? dbm : -dbm;
+  return `${v} dBm`;
+}
+
+/**
+ * Map signal magnitude (|dBm|) to a quality bucket per operator-defined
+ * thresholds (Sprint 8.4.7.2):
+ *   green  30–55  excellent
+ *   yellow 55–70  good
+ *   orange 70–80  fair
+ *   red    80+    poor
+ * Null → gray (no measurement). Same scale used by Wi-Fi RSSI and 4G
+ * RSRP — stronger signals have smaller magnitude.
+ */
+function signalIconClass(dbm: number | null): string {
+  if (dbm == null) return "text-ink-500";
+  const magnitude = Math.abs(dbm);
+  if (magnitude < 55) return "text-emerald-400";
+  if (magnitude < 70) return "text-yellow-400";
+  if (magnitude < 80) return "text-orange-400";
+  return "text-rose-400";
 }
 
 export function TechnicalReadPills({
@@ -49,7 +72,12 @@ export function TechnicalReadPills({
 
   return (
     <section className="mb-4 grid grid-cols-3 gap-2 rounded-lg border border-bg-border bg-bg-base/30 p-3 sm:grid-cols-6">
-      <Pill icon={Signal} label="Signal" value={fmtSignal(read?.signalDbm ?? null)} />
+      <Pill
+        icon={Signal}
+        label="Signal"
+        value={fmtSignal(read?.signalDbm ?? null)}
+        iconClass={signalIconClass(read?.signalDbm ?? null)}
+      />
       <Pill icon={Radio} label="Comm" value={read?.communicationMode ?? DASH} />
       <Pill
         icon={ShieldCheck}
@@ -118,12 +146,16 @@ function Pill({
   value,
   mono = false,
   tone,
+  iconClass,
 }: {
   icon: typeof Signal;
   label: string;
   value: string;
   mono?: boolean;
   tone?: "ok" | "warn";
+  /** Override the icon's text color — used by the Signal pill to render
+   *  green/yellow/orange/red bars based on dBm magnitude. */
+  iconClass?: string;
 }) {
   const valueClass = [
     mono ? "font-mono" : "",
@@ -133,7 +165,7 @@ function Pill({
     .join(" ");
   return (
     <div className="flex items-center gap-2 min-w-0">
-      <Icon className="h-3.5 w-3.5 shrink-0 text-ink-500" />
+      <Icon className={`h-3.5 w-3.5 shrink-0 ${iconClass ?? "text-ink-500"}`} />
       <div className="flex flex-col min-w-0">
         <span className="text-[9px] font-medium uppercase tracking-brand text-ink-500">{label}</span>
         <span className={`text-xs truncate ${valueClass}`}>{value}</span>

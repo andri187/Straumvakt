@@ -169,7 +169,12 @@ export default async function ChargerTechnicalReadPage({
 
         {/* Tech summary ribbon */}
         <section className="mt-4 grid grid-cols-2 gap-3 rounded-lg border border-bg-border bg-bg-surface/50 p-4 sm:grid-cols-4 lg:grid-cols-6">
-          <Metric icon={Signal} label="Signal" value={t?.signalDbm != null ? `${t.signalDbm} dBm` : DASH} />
+          <Metric
+            icon={Signal}
+            label="Signal"
+            value={fmtSignal(t?.signalDbm ?? null)}
+            iconClass={signalIconClass(t?.signalDbm ?? null)}
+          />
           <Metric icon={Radio} label="Comm" value={t?.communicationMode ?? DASH} />
           <Metric icon={ShieldCheck} label="OCPP" value={ocppPillValue(t)} />
           <Metric
@@ -284,7 +289,7 @@ export default async function ChargerTechnicalReadPage({
             <InfoRow label="Communication mode" info={t?.communicationMode ?? DASH} />
             <InfoRow
               label="Signal strength"
-              info={t?.signalDbm != null ? `${t.signalDbm} dBm` : DASH}
+              info={fmtSignal(t?.signalDbm ?? null)}
             />
             <InfoRow
               label="LTE roaming disabled (753)"
@@ -550,16 +555,19 @@ function Metric({
   label,
   value,
   mono,
+  iconClass,
 }: {
   icon: typeof Signal;
   label: string;
   value: string;
   mono?: boolean;
+  /** Override the icon's text color — used by the Signal metric. */
+  iconClass?: string;
 }) {
   const empty = value === DASH;
   return (
     <div className="flex items-center gap-2">
-      <Icon className="h-4 w-4 text-ink-500" />
+      <Icon className={`h-4 w-4 ${iconClass ?? "text-ink-500"}`} />
       <div className="flex flex-col">
         <span className="text-[10px] uppercase tracking-brand text-ink-500">{label}</span>
         <span
@@ -574,6 +582,23 @@ function Metric({
       </div>
     </div>
   );
+}
+
+/** Normalize signal to negative dBm and pick a color tone. Same scale
+ *  as TechnicalReadPills (8.4.7.2): 30–55 green, 55–70 yellow,
+ *  70–80 orange, 80+ red, null gray. */
+function fmtSignal(dbm: number | null): string {
+  if (dbm == null) return DASH;
+  const v = dbm <= 0 ? dbm : -dbm;
+  return `${v} dBm`;
+}
+function signalIconClass(dbm: number | null): string {
+  if (dbm == null) return "text-ink-500";
+  const m = Math.abs(dbm);
+  if (m < 55) return "text-emerald-400";
+  if (m < 70) return "text-yellow-400";
+  if (m < 80) return "text-orange-400";
+  return "text-rose-400";
 }
 
 function DashboardColumn({
