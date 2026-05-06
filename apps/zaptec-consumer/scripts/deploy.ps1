@@ -49,12 +49,15 @@ Restart your shell after, then re-run this script.
 $flyExe = $fly.Source
 Write-Host "Using flyctl: $flyExe" -ForegroundColor DarkGray
 
-# Step 2: auth check. Note: do NOT use 2>&1 redirection on native
-# commands under PS 5.1 + ErrorActionPreference=Stop - it wraps
-# stderr in ErrorRecords and aborts the script. Redirect stderr to
-# $null instead so we can inspect $LASTEXITCODE cleanly.
+# Step 2: auth check. PS 5.1 + ErrorActionPreference=Stop turns any
+# native-command stderr into a terminating NativeCommandError, so we
+# locally relax to Continue around the probe and rely on $LASTEXITCODE.
+$prevErr = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
 & $flyExe auth whoami *> $null
-if ($LASTEXITCODE -ne 0) {
+$authExit = $LASTEXITCODE
+$ErrorActionPreference = $prevErr
+if ($authExit -ne 0) {
   if ($env:FLY_API_TOKEN) {
     Write-Error @"
 flyctl couldn't validate the FLY_API_TOKEN env var. Either it's
