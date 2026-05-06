@@ -88,6 +88,11 @@ export interface ChargerTechnicalRead {
   lastChargeCard: string | null;            // StateId 750 — `<UUID>;<card>;<group>` last seen
   pin: string | null;                       // detail.Pin — wallet PIN
   hasSessions: boolean | null;              // detail.HasSessions
+  // detail.DeviceType — Zaptec product line (0=Unknown, 1=Smart,
+  // 2=Portable, 3=HomeApm, 4=Apollo, 5=OtherApm, 6=GenericApm,
+  // 7=HanApm, 8=TicApm). Used as model fallback when our DB model
+  // column is null (8.4.10).
+  deviceTypeLabel: string | null;
 
   // Installation-level fields (separate Zaptec fetch). null when
   // the installation detail call fails or isn't attempted.

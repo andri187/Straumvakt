@@ -594,7 +594,10 @@ export default async function ChargerTechnicalReadPage({
           <TechSection title="Charger metadata" source="api">
             <InfoRow label="Name" info={identity?.identityString ?? charger.serialNumber ?? DASH} />
             <InfoRow label="Serial" info={charger.serialNumber ?? DASH} mono />
-            <InfoRow label="Device type" info={`${charger.vendor ?? DASH} / ${charger.model ?? DASH}`} />
+            <InfoRow
+              label="Device type"
+              info={`${charger.vendor ?? DASH} / ${charger.model ?? t?.deviceTypeLabel ?? DASH}`}
+            />
             <InfoRow label="Created on" info={fmtDate(charger.warrantyExpires)} />
             <InfoRow label="Property OCPP URL override" info={t?.propertyOcppUrl ?? DASH} mono />
           </TechSection>

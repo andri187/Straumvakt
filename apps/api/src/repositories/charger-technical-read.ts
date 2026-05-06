@@ -93,6 +93,18 @@ const AUTH_TYPE_LABELS: Record<number, string> = {
   2: "OCPP 1.6J cloud",
   3: "Native OCPP",
 };
+// 8.4.10 — Zaptec /api/chargers/{id} detail.DeviceType enum.
+const DEVICE_TYPE_LABELS: Record<number, string> = {
+  0: "Unknown",
+  1: "Smart",
+  2: "Portable",
+  3: "HomeApm",
+  4: "Apollo",
+  5: "OtherApm",
+  6: "GenericApm",
+  7: "HanApm",
+  8: "TicApm",
+};
 
 function emptyRead(cachedAt: string | null = null): ChargerTechnicalRead {
   return {
@@ -148,6 +160,7 @@ function emptyRead(cachedAt: string | null = null): ChargerTechnicalRead {
     lastChargeCard: null,
     pin: null,
     hasSessions: null,
+    deviceTypeLabel: null,
     installation: null,
     warningsBitmask: null,
   };
@@ -437,6 +450,10 @@ export async function getChargerTechnicalRead(
       lastChargeCard: pickState(state, STATE_IDS.NewChargeCard),
       pin: typeof d.Pin === "string" ? d.Pin : null,
       hasSessions: typeof d.HasSessions === "boolean" ? d.HasSessions : null,
+      deviceTypeLabel:
+        typeof d.DeviceType === "number"
+          ? DEVICE_TYPE_LABELS[d.DeviceType] ?? `Unknown (${d.DeviceType})`
+          : null,
       installation: installationSnapshot,
       warningsBitmask: warnings ?? notifications,
     };
