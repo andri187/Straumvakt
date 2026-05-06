@@ -68,6 +68,21 @@ export default async function ChargerTechnicalReadPage({
     )
     .catch(() => null);
 
+  // 8.4.8 — latest closed session for this charger (for the
+  // "Last session kWh / ended" rows under Session timeline). Same
+  // endpoint LatestSessionChart uses on the parent profile page.
+  const latestSession = await apiFetchServer(
+    `/api/admin/billing/sessions?chargingStationId=${encodeURIComponent(id)}&limit=1`,
+  )
+    .then(async (r) => {
+      if (!r.ok) return null;
+      const j = (await r.json()) as {
+        sessions: { sessionId: string; energyKwh: number | null; endedAt: string | null }[];
+      };
+      return j.sessions[0] ?? null;
+    })
+    .catch(() => null);
+
   const evse = charger.evses[0];
   const identity = charger.ocppIdentities[0];
   const t = technicalRead;
@@ -205,8 +220,28 @@ export default async function ChargerTechnicalReadPage({
             ))}
           </div>
           <div className="mt-3 grid gap-2 sm:grid-cols-2 text-xs">
-            <PlaceholderRow label="Last session kWh" trailing="from CompletedSession blob" />
-            <PlaceholderRow label="Last session ended" trailing="ISO timestamp" />
+            {latestSession ? (
+              <>
+                <InfoRow
+                  label="Last session kWh"
+                  info={
+                    latestSession.energyKwh != null
+                      ? `${latestSession.energyKwh.toFixed(3)} kWh`
+                      : DASH
+                  }
+                />
+                <InfoRow
+                  label="Last session ended"
+                  info={fmtDate(latestSession.endedAt)}
+                  mono
+                />
+              </>
+            ) : (
+              <>
+                <PlaceholderRow label="Last session kWh" trailing="no closed sessions yet" />
+                <PlaceholderRow label="Last session ended" trailing="no closed sessions yet" />
+              </>
+            )}
           </div>
         </TechSection>
 

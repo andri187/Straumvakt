@@ -390,7 +390,11 @@ export async function getChargerTechnicalRead(
       chargeCurrentSetA: pickStateNumber(state, STATE_IDS.ChargeCurrentSet),
       serialNo: typeof d.SerialNo === "string" ? d.SerialNo : null,
       deviceId: typeof d.DeviceId === "string" ? d.DeviceId : null,
-      mid: pickState(state, STATE_IDS.MidCalibrationID),
+      // 8.4.8 — /state StateId 982 not exposed by some firmwares;
+      // fall back to detail.MID which Zaptec returns regardless.
+      mid:
+        pickState(state, STATE_IDS.MidCalibrationID) ??
+        (typeof d.MID === "string" ? (d.MID as string) : null),
       macMain: pickState(state, STATE_IDS.MacMain),
       macWifi: pickState(state, STATE_IDS.MacWifi),
       lteIccid: pickState(state, STATE_IDS.LteIccid),
