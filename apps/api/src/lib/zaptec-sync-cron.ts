@@ -236,3 +236,103 @@ export async function runZaptecChargerStatusCron(
     failures: [],
   };
 }
+
+/**
+ * Sessions-only sync — Sprint 9.1. Runs every minute on the four
+ * non-multiple-of-5 ticks per cycle (1, 2, 3, 4, 6, 7, ...); the full
+ * runZaptecCronSync still fires at minute 0, 5, 10, ... and includes
+ * sessions. Cost: 1 OAuth + N installations x /chargehistory per
+ * credential per minute. Skips the per-charger /state sweep entirely
+ * so we keep the API budget close to current.
+ *
+ * Why this exists: AMQP catches active-session signals within seconds
+ * for chargers connected to Zaptec's Service Bus, but offline /
+ * non-AMQP chargers only update via cron. Bumping sessions to once
+ * per minute means /charge-log and the technical-read history block
+ * reflect in-progress sessions roughly every minute regardless of
+ * whether AMQP can reach the charger.
+ */
+export async function runZaptecSessionsOnlyCron(
+  db: PrismaClient,
+  kek: string,
+): Promise<CronSyncReport> {
+  const ranAt = new Date();
+  const windowFrom = new Date(ranAt.getTime() - ROLLING_WINDOW_MS);
+  const fromIso = windowFrom.toISOString();
+  const toIso = ranAt.toISOString();
+
+  const credentials = await db.vendorCredential.findMany({
+    where: { status: "active", vendor: { slug: "zaptec" } },
+    select: { id: true },
+  });
+
+  const sessionOutcomes: CredentialSyncOutcome[] = [];
+  const sessionFailures: CredentialSyncFailure[] = [];
+
+  for (const cred of credentials) {
+    const sessionStartedAt = Date.now();
+    let auth: Awaited<ReturnType<typeof unsealAndAuth>>;
+    try {
+      auth = await unsealAndAuth(db, kek, cred.id);
+    } catch (err) {
+      sessionFailures.push({
+        credentialId: cred.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      continue;
+    }
+
+    try {
+      const installsResp = await listInstallations(auth.accessToken);
+      if (!installsResp.ok) {
+        throw new Error(
+          `zaptec_installations_fetch_failed: ${JSON.stringify(installsResp.error)}`,
+        );
+      }
+      let totalZaptec = 0;
+      let totalImported = 0;
+      let totalSkipped = 0;
+      let totalErrors = 0;
+      let installationsScanned = 0;
+      for (const inst of installsResp.value) {
+        if (!inst.Id) continue;
+        const result = await syncZaptecSessions(db, {
+          accessToken: auth.accessToken,
+          installationId: inst.Id,
+          from: fromIso,
+          to: toIso,
+        });
+        installationsScanned++;
+        totalZaptec += result.zaptecCount;
+        totalImported += result.imported.length;
+        totalSkipped += result.skipped.length;
+        totalErrors += result.errors.length;
+      }
+      sessionOutcomes.push({
+        credentialId: cred.id,
+        ownerOrgId: auth.ownerOrgId,
+        zaptecCount: totalZaptec,
+        importedCount: totalImported,
+        skippedCount: totalSkipped,
+        errorCount: totalErrors,
+        installationsScanned,
+        durationMs: Date.now() - sessionStartedAt,
+      });
+    } catch (err) {
+      sessionFailures.push({
+        credentialId: cred.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  return {
+    ranAt: ranAt.toISOString(),
+    windowFromIso: fromIso,
+    windowToIso: toIso,
+    credentials: credentials.length,
+    outcomes: sessionOutcomes,
+    failures: sessionFailures,
+    status: { outcomes: [], failures: [] },
+  };
+}

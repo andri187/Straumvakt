@@ -45,7 +45,7 @@ import { handleOcppEventsBatch } from "./queues/ocpp-events";
 import { handleArchiveEventsBatch } from "./queues/archive-events";
 import { ensureForwardPartitions } from "./lib/db/partition-cron";
 import { makePool } from "./lib/db/raw";
-import { runZaptecCronSync } from "./lib/zaptec-sync-cron";
+import { runZaptecCronSync, runZaptecSessionsOnlyCron } from "./lib/zaptec-sync-cron";
 import type {
   Env,
   OutboundCommandMessage,
@@ -294,12 +294,22 @@ const handler: ExportedHandler<Env, AnyQueueMessage> = {
     // /oauth/token rate limiter, which used to cause alternating
     // tick failures. Sessions writeback fans out per installation
     // since /api/chargehistory returns nothing without InstallationId.
+    //
+    // Sprint 9.1 — cron now fires every minute. On minutes 0,5,10,...
+    // we run the full sync (sessions + status + cache writes); on the
+    // other 4 minutes per cycle we run sessions-only so /charge-log
+    // and the technical-read history block reflect in-progress sessions
+    // within ~1 minute even for chargers AMQP can't reach. Net API
+    // budget ~+20% over the previous */5 cadence.
     if (env.OCPP_CRED_KEK) {
       const kek = env.OCPP_CRED_KEK;
+      const isFullTick = new Date().getUTCMinutes() % 5 === 0;
       ctx.waitUntil(
         (async () => {
           try {
-            const result = await runZaptecCronSync(db, kek);
+            const result = isFullTick
+              ? await runZaptecCronSync(db, kek)
+              : await runZaptecSessionsOnlyCron(db, kek);
             if (
               result.outcomes.length > 0 ||
               result.failures.length > 0

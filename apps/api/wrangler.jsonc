@@ -107,7 +107,12 @@
       // dispatcher.sweepStuckPending). Catches the producer-publish-
       // failed race and DLQ'd rows.
       "triggers": {
-        "crons": ["*/5 * * * *"]
+        // Sprint 9.1 — fires every minute. Code branches in
+        // index.ts scheduled() handler: minutes %5 == 0 run the full
+        // sync (sessions + status + cache); other minutes run a
+        // sessions-only sweep so /charge-log catches in-progress
+        // sessions within ~1 minute even for chargers AMQP can't see.
+        "crons": ["* * * * *"]
       }
     }
   }
