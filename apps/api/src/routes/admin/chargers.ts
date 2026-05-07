@@ -25,6 +25,10 @@ import {
   updateCharger,
 } from "../../repositories/chargers";
 import { getChargerTechnicalRead } from "../../repositories/charger-technical-read";
+import {
+  getChargerZaptecConfig,
+  writeChargerZaptecProperty,
+} from "../../repositories/charger-zaptec-config";
 import { enqueueCommand } from "../../repositories/outbound-commands";
 import type { Env } from "../../bindings";
 
@@ -74,6 +78,68 @@ adminChargers.get(
     const db = makePrisma(c.env);
     const read = await getChargerTechnicalRead(db, c.req.param("id"), c.env.OCPP_CRED_KEK);
     return c.json({ technicalRead: read });
+  },
+);
+
+// Sprint 9.5 — raw Zaptec configuration: full /state observations +
+// detail properties. Backs the Configuration panel below the chart on
+// /chargers/[id]. Read endpoint is the slow path (one Zaptec auth +
+// two API calls); write endpoint proxies to PUT /api/chargers/{id}.
+adminChargers.get(
+  "/:id/zaptec-state",
+  requirePermission("charger.read"),
+  async (c) => {
+    const db = makePrisma(c.env);
+    const snapshot = await getChargerZaptecConfig(
+      db,
+      c.env.OCPP_CRED_KEK,
+      c.req.param("id"),
+    );
+    return c.json(snapshot);
+  },
+);
+
+adminChargers.post(
+  "/:id/zaptec-state",
+  requirePermission("charger.config"),
+  async (c) => {
+    const raw = (await c.req.json().catch(() => null)) as unknown;
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+      return c.json({ error: "body must be a flat key/value object" }, 400);
+    }
+    const body: Record<string, string | number | boolean> = {};
+    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+      if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") {
+        body[k] = v;
+      }
+    }
+    if (Object.keys(body).length === 0) {
+      return c.json({ error: "no writable fields in body" }, 400);
+    }
+    const db = makePrisma(c.env);
+    const result = await writeChargerZaptecProperty(
+      db,
+      c.env.OCPP_CRED_KEK,
+      c.req.param("id"),
+      body,
+    );
+    if (!result.ok) {
+      // Surface the Zaptec status code as our HTTP status so the
+      // operator can tell 401/403/404 apart. Default to 502 (bad
+      // gateway) when Zaptec was unreachable.
+      const status: 400 | 401 | 403 | 404 | 500 | 502 =
+        result.status === 401
+          ? 401
+          : result.status === 403
+            ? 403
+            : result.status === 404
+              ? 404
+              : result.status && result.status >= 500
+                ? 502
+                : 500;
+      return c.json({ error: result.error ?? "write_failed" }, status);
+    }
+    return c.json({ ok: true });
   },
 );
 
