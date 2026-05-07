@@ -1,10 +1,14 @@
 "use client";
 // Sprint 8.4.7 — sortable client-side table for /chargers list.
-// Page (Server Component) fetches the data once; this component owns
-// the sort state and re-orders the array on each header click.
+// Sprint 9.7  — dropped the 3 firmware columns (Computer SW / Mainboard
+// / Bootloader) — those still live on the per-charger Technical Read.
+// Replaced with two compact "emblem + value" columns that are far more
+// useful at-a-glance: Connector (type emblem + status) and Signal
+// (colored bars by magnitude + -dBm value).
 
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
+import { Plug, Signal } from "lucide-react";
 import type { ChargerSummary } from "@straumvakt/shared/domain/chargers";
 
 const DASH = "—";
@@ -13,9 +17,8 @@ type SortKey =
   | "identityString"
   | "orgSite"
   | "vendorModel"
-  | "firmwareVersion"
-  | "mainboardSwVersion"
-  | "smartBootloaderVersion"
+  | "connector"
+  | "signal"
   | "lifetimeKwh"
   | "online";
 
@@ -56,6 +59,29 @@ function compareNullable<T>(a: T | null, b: T | null, cmp: (x: T, y: T) => numbe
 const STR = (a: string, b: string) => a.localeCompare(b);
 const NUM = (a: number, b: number) => a - b;
 
+/**
+ * Map signal magnitude (|dBm|) -> Tailwind colour class. Same scale
+ * as TechnicalReadPills (8.4.7.2): 30-55 green · 55-70 yellow ·
+ * 70-80 orange · 80+ red · null gray. Stronger signals have smaller
+ * magnitude (closer to 0).
+ */
+function signalIconClass(dbm: number | null): string {
+  if (dbm == null) return "text-ink-600";
+  const m = Math.abs(dbm);
+  if (m < 55) return "text-emerald-400";
+  if (m < 70) return "text-yellow-400";
+  if (m < 80) return "text-orange-400";
+  return "text-rose-400";
+}
+
+function fmtSignal(dbm: number | null): string {
+  if (dbm == null) return DASH;
+  // RF signal strength is negative dBm. Some Zaptec firmwares report
+  // magnitude as positive; normalize to canonical negative form.
+  const v = dbm <= 0 ? dbm : -dbm;
+  return `${v} dBm`;
+}
+
 function sortedRows(rows: ChargerSummary[], key: SortKey, dir: SortDir): ChargerSummary[] {
   const dirMul = dir === "asc" ? 1 : -1;
   const sorted = [...rows];
@@ -74,21 +100,25 @@ function sortedRows(rows: ChargerSummary[], key: SortKey, dir: SortDir): Charger
         n = compareNullable(av || null, bv || null, STR);
         break;
       }
-      case "firmwareVersion":
-        n = compareNullable(a.firmwareVersion, b.firmwareVersion, STR);
+      case "connector":
+        // Sort by status first (charging > available > offline > —),
+        // then by connector type as tiebreak.
+        n = STR(connectorStatusLabel(a), connectorStatusLabel(b));
+        if (n === 0) n = STR(a.connectorType, b.connectorType);
         break;
-      case "mainboardSwVersion":
-        n = compareNullable(a.mainboardSwVersion, b.mainboardSwVersion, STR);
-        break;
-      case "smartBootloaderVersion":
-        n = compareNullable(a.smartBootloaderVersion, b.smartBootloaderVersion, STR);
+      case "signal":
+        // Stronger signal sorts first when asc. dBm is negative;
+        // we sort by |dBm| ascending so green/closer-to-zero wins.
+        n = compareNullable(
+          a.signalDbm != null ? Math.abs(a.signalDbm) : null,
+          b.signalDbm != null ? Math.abs(b.signalDbm) : null,
+          NUM,
+        );
         break;
       case "lifetimeKwh":
         n = compareNullable(a.lifetimeKwh, b.lifetimeKwh, NUM);
         break;
       case "online": {
-        // Group by online (true first when asc), tiebreak by onlineSinceAt
-        // (longer-online first) for online rows, lastSeenAt for offline.
         if (a.online !== b.online) return a.online ? -dirMul : dirMul;
         if (a.online && b.online) {
           n = compareNullable(
@@ -109,6 +139,15 @@ function sortedRows(rows: ChargerSummary[], key: SortKey, dir: SortDir): Charger
     return n * dirMul;
   });
   return sorted;
+}
+
+function connectorStatusLabel(c: ChargerSummary): string {
+  // Per-connector status comes from OcppIdentity.status today (no
+  // separate per-connector tracking in the list endpoint). When the
+  // charger is offline, force "offline" same as the /sites tree
+  // (8.13.4) so the row reads consistently.
+  if (!c.online) return "offline";
+  return c.status ?? "—";
 }
 
 export function ChargersTable({ chargers }: { chargers: ChargerSummary[] }) {
@@ -134,9 +173,8 @@ export function ChargersTable({ chargers }: { chargers: ChargerSummary[] }) {
             <SortHeader label="Charger" k="identityString" sortKey={sortKey} sortDir={sortDir} onClick={onHeaderClick} />
             <SortHeader label="Org · Site" k="orgSite" sortKey={sortKey} sortDir={sortDir} onClick={onHeaderClick} />
             <SortHeader label="Vendor · Model" k="vendorModel" sortKey={sortKey} sortDir={sortDir} onClick={onHeaderClick} />
-            <SortHeader label="Computer SW (911)" k="firmwareVersion" sortKey={sortKey} sortDir={sortDir} onClick={onHeaderClick} />
-            <SortHeader label="Mainboard (908)" k="mainboardSwVersion" sortKey={sortKey} sortDir={sortDir} onClick={onHeaderClick} />
-            <SortHeader label="Bootloader (912)" k="smartBootloaderVersion" sortKey={sortKey} sortDir={sortDir} onClick={onHeaderClick} />
+            <SortHeader label="Connector" k="connector" sortKey={sortKey} sortDir={sortDir} onClick={onHeaderClick} />
+            <SortHeader label="Signal" k="signal" sortKey={sortKey} sortDir={sortDir} onClick={onHeaderClick} />
             <SortHeader label="Lifetime kWh" k="lifetimeKwh" sortKey={sortKey} sortDir={sortDir} onClick={onHeaderClick} align="right" />
             <SortHeader label="Online" k="online" sortKey={sortKey} sortDir={sortDir} onClick={onHeaderClick} />
           </tr>
@@ -192,8 +230,11 @@ function SortHeader({
 }
 
 function ChargerRow({ c, sameSerial }: { c: ChargerSummary; sameSerial: boolean }) {
+  // Decommissioned rows render dim so they're visibly distinct from
+  // active hardware when the toggle is on.
+  const dim = c.decommissioned === true ? "opacity-60" : "";
   return (
-    <tr className="hover:bg-bg-base/20">
+    <tr className={`hover:bg-bg-base/20 ${dim}`}>
       <td className="px-3 py-1.5">
         <Link
           href={`/chargers/${c.chargingStationId}`}
@@ -204,6 +245,11 @@ function ChargerRow({ c, sameSerial }: { c: ChargerSummary; sameSerial: boolean 
         {!sameSerial && c.serialNumber && (
           <span className="ml-2 font-mono text-[10px] text-ink-500">{c.serialNumber}</span>
         )}
+        {c.decommissioned === true && (
+          <span className="ml-2 rounded border border-amber-700/40 bg-amber-950/30 px-1.5 py-0.5 text-[9px] uppercase tracking-brand text-amber-300">
+            decom
+          </span>
+        )}
       </td>
       <td className="px-3 py-1.5 text-ink-300">
         <span className="text-ink-400">{c.orgDisplayName}</span>
@@ -213,14 +259,51 @@ function ChargerRow({ c, sameSerial }: { c: ChargerSummary; sameSerial: boolean 
       <td className="px-3 py-1.5 text-ink-400">
         {c.vendor && c.model ? `${c.vendor} ${c.model}` : (c.vendor ?? c.model ?? DASH)}
       </td>
-      <td className="px-3 py-1.5 font-mono text-[11px] text-ink-300">{c.firmwareVersion ?? DASH}</td>
-      <td className="px-3 py-1.5 font-mono text-[11px] text-ink-300">{c.mainboardSwVersion ?? DASH}</td>
-      <td className="px-3 py-1.5 font-mono text-[11px] text-ink-300">{c.smartBootloaderVersion ?? DASH}</td>
+      <td className="px-3 py-1.5">
+        <ConnectorCell c={c} />
+      </td>
+      <td className="px-3 py-1.5">
+        <SignalCell dbm={c.signalDbm} />
+      </td>
       <td className="px-3 py-1.5 text-right font-mono text-ink-200">{fmtKWh(c.lifetimeKwh)}</td>
       <td className="px-3 py-1.5">
         <OnlineCell c={c} />
       </td>
     </tr>
+  );
+}
+
+function ConnectorCell({ c }: { c: ChargerSummary }) {
+  const status = connectorStatusLabel(c);
+  // Tone for the status label — same scale as the /sites pill.
+  const tone =
+    status === "available"
+      ? "text-emerald-300"
+      : status === "charging" ||
+          status === "preparing" ||
+          status === "finishing" ||
+          status === "suspended"
+        ? "text-sv-sky"
+        : status === "offline"
+          ? "text-amber-300"
+          : status === "faulted"
+            ? "text-rose-300"
+            : "text-ink-500";
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <Plug className="h-3.5 w-3.5 shrink-0 text-ink-500" />
+      <span className="font-mono text-[10px] text-ink-400">{c.connectorType}</span>
+      <span className={`text-[11px] ${tone}`}>{status}</span>
+    </span>
+  );
+}
+
+function SignalCell({ dbm }: { dbm: number | null }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <Signal className={`h-3.5 w-3.5 shrink-0 ${signalIconClass(dbm)}`} />
+      <span className="font-mono text-[11px] text-ink-300">{fmtSignal(dbm)}</span>
+    </span>
   );
 }
 

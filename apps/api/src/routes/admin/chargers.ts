@@ -40,7 +40,13 @@ adminChargers.use("*", requireAdmin);
 
 adminChargers.get("/", requirePermission("platform.tenant.read"), async (c) => {
   const db = makePrisma(c.env);
-  const chargers = await listAllChargers(db);
+  const includeDecommissioned =
+    c.req.query("includeDecommissioned") === "1" ||
+    c.req.query("includeDecommissioned") === "true";
+  const chargers = await listAllChargers(db, {
+    includeDecommissioned,
+    kek: c.env.OCPP_CRED_KEK,
+  });
   return c.json({ chargers });
 });
 

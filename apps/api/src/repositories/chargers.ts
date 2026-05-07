@@ -16,6 +16,8 @@ import type {
 } from "@straumvakt/shared/inputs/chargers";
 import { sha256Hex } from "../lib/sha256";
 import { recordAuditAction } from "../lib/audit";
+import { listChargers as zaptecListChargers } from "../lib/zaptec";
+import { unsealAndAuth } from "./credential-management";
 
 function generatePassword(): string {
   const bytes = new Uint8Array(32);
@@ -30,7 +32,61 @@ function generatePassword(): string {
 // is considered offline regardless of what status field carries.
 const ONLINE_WINDOW_MS = 12 * 60 * 1000;
 
-export async function listAllChargers(db: PrismaClient): Promise<ChargerSummary[]> {
+/**
+ * Sprint 9.7 — collect all vendor_resource_ids visible across every
+ * active Zaptec credential's bulk listing. Anything in our DB whose
+ * vendorResourceId is NOT in this set is decommissioned-by-omission
+ * (Zaptec dropped it from the active fleet — Active=false / retired).
+ * Mirrors the post-pass detection in site-tree.ts.
+ *
+ * Returns null when no credential succeeded — leaves rows ambiguous
+ * rather than falsely marking everything decommissioned during a
+ * Zaptec outage.
+ */
+async function getActiveVendorResourceIds(
+  db: PrismaClient,
+  kek: string,
+): Promise<Set<string> | null> {
+  const credentials = await db.vendorCredential.findMany({
+    where: { status: "active", vendor: { slug: "zaptec" } },
+    select: { id: true },
+  });
+  if (credentials.length === 0) return null;
+  const seen = new Set<string>();
+  let attemptedAtLeastOne = false;
+  for (const cred of credentials) {
+    try {
+      const auth = await unsealAndAuth(db, kek, cred.id);
+      const list = await zaptecListChargers(auth.accessToken);
+      attemptedAtLeastOne = true;
+      if (list.ok) {
+        for (const c of list.value) {
+          if (typeof c.Id === "string") seen.add(c.Id);
+        }
+      }
+    } catch {
+      // skip — try next credential
+    }
+  }
+  return attemptedAtLeastOne ? seen : null;
+}
+
+export interface ListChargersOptions {
+  /** Include rows where vendor side reports the charger as
+   *  decommissioned (Active=false / dropped from listChargers).
+   *  Defaults to false — the operator console hides retired hardware
+   *  from the at-a-glance view. */
+  includeDecommissioned?: boolean;
+  /** KEK for the Zaptec OAuth round-trip used to determine the
+   *  decommissioned set. When undefined we skip the live check and
+   *  return all rows with decommissioned=null. */
+  kek?: string;
+}
+
+export async function listAllChargers(
+  db: PrismaClient,
+  options: ListChargersOptions = {},
+): Promise<ChargerSummary[]> {
   const rows = await db.chargingStation.findMany({
     orderBy: [{ updatedAt: "desc" }],
     include: {
@@ -44,8 +100,30 @@ export async function listAllChargers(db: PrismaClient): Promise<ChargerSummary[
       ocppIdentities: { take: 1, orderBy: { createdAt: "asc" } },
     },
   });
+
+  // 9.7 — pull signalDbm from the last_telemetry_read JSONB cache
+  // written by the technical-read repo. The shape there is
+  // ChargerTechnicalRead with signalDbm: number | null.
+  const signalByStation = new Map<string, number | null>();
+  for (const r of rows) {
+    const cache = r.lastTelemetryRead as { signalDbm?: unknown } | null;
+    const v = cache?.signalDbm;
+    signalByStation.set(
+      r.siteAssetId,
+      typeof v === "number" ? v : null,
+    );
+  }
+
+  // Sprint 9.7 — live decommissioned detection. One Zaptec listChargers
+  // round-trip per active credential per request. Skips when KEK isn't
+  // available (e.g. local dev) — falls back to decommissioned=null on
+  // every row, equivalent to the pre-9.7 behaviour.
+  const activeIds = options.kek
+    ? await getActiveVendorResourceIds(db, options.kek)
+    : null;
+
   const now = Date.now();
-  return rows.map((r) => {
+  const mapped = rows.map((r) => {
     const identity = r.ocppIdentities[0];
     const lastSeen = identity?.lastSeenAt ?? null;
     const within = lastSeen != null && now - lastSeen.getTime() < ONLINE_WINDOW_MS;
@@ -78,8 +156,26 @@ export async function listAllChargers(db: PrismaClient): Promise<ChargerSummary[
       online,
       onlineSinceAt: online && r.onlineSinceAt ? r.onlineSinceAt.toISOString() : null,
       lastSeenAt: lastSeen ? lastSeen.toISOString() : null,
+      // Sprint 9.7 — decommissioned-by-omission. null when we couldn't
+      // verify with Zaptec; true when the charger's vendorResourceId
+      // wasn't in any credential's listChargers; false when it was.
+      decommissioned:
+        activeIds == null
+          ? null
+          : identity?.vendorResourceId
+            ? !activeIds.has(identity.vendorResourceId)
+            : null,
+      signalDbm: signalByStation.get(r.siteAssetId) ?? null,
     };
   });
+
+  // Hide decommissioned by default. The flag is null when we
+  // couldn't verify (Zaptec outage / no credentials) — keep those
+  // visible so we don't accidentally drop rows during an outage.
+  if (!options.includeDecommissioned) {
+    return mapped.filter((c) => c.decommissioned !== true);
+  }
+  return mapped;
 }
 
 export async function listSiteCircuits(
@@ -281,6 +377,10 @@ export async function createCharger(
     online: false,
     onlineSinceAt: null,
     lastSeenAt: null,
+    // 9.7 — fresh row; assume not decommissioned. Will be re-evaluated
+    // on the next list-chargers fetch.
+    decommissioned: false,
+    signalDbm: null,
     ocppPassword: password,
   };
 }

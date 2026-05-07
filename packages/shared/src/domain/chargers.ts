@@ -24,6 +24,15 @@ export interface ChargerSummary {
   online: boolean;                       // status !== "offline" && lastSeenAt within 12 min
   onlineSinceAt: string | null;          // ISO; populated only when online=true
   lastSeenAt: string | null;             // ISO
+  /** Sprint 9.7 — true when the vendor (Zaptec) no longer lists this
+   *  charger in any credential's listChargers (Active=false / retired).
+   *  null when we couldn't verify (no credential / Zaptec outage). */
+  decommissioned: boolean | null;
+  /** Sprint 9.7 — signal strength in dBm from the last_telemetry_read
+   *  JSONB cache (StateId 809). Negative magnitude per RF convention.
+   *  null when the cache is empty / charger doesn't report signal
+   *  (PLC chargers). Drives the colored bars emblem in the list view. */
+  signalDbm: number | null;
 }
 
 export interface ChargerCreateResult extends ChargerSummary {
