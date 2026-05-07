@@ -33,7 +33,7 @@ generator nodeClient {
 
 datasource db {
   provider   = "postgresql"
-  schemas    = ["identity", "tenancy", "hosts", "properties", "assets", "hardware", "ocpp", "charging", "billing", "issues", "events", "audit", "entitlements", "people", "vendors", "roaming", "energy", "webhooks", "reports"]
+  schemas    = ["identity", "tenancy", "hosts", "properties", "assets", "hardware", "ocpp", "charging", "billing", "issues", "events", "audit", "entitlements", "people", "vendors", "roaming", "energy", "webhooks", "reports", "agreements"]
   extensions = [citext]
 }
 
@@ -146,6 +146,9 @@ model User {
   // EVs the driver has registered. Optional but useful for fleet
   // contracts and driver-side UX ("which car charged?").
   vehicles       Vehicle[]
+
+  // ── Sprint 9 / ADR 0019 — agreements schema back-relation ───────
+  driverGroupMemberships DriverGroupMembership[] @relation("DriverGroupMembershipUser")
 
   @@map("users")
   @@schema("identity")
@@ -539,6 +542,11 @@ model Organization {
   siteEnergyDaily     SiteEnergyDaily[]
   chargerUptimeDaily  ChargerUptimeDaily[]
   commandHistory      CommandHistory[]
+
+  // ── Sprint 9 / ADR 0019 — agreements schema back-relations ──────
+  agreementsAsCounterparty Agreement[]   @relation("AgreementCounterparty")
+  rateReferencesAsSupplier RateReference[] @relation("RateReferenceSupplier")
+  driverGroupsOwned        DriverGroup[] @relation("DriverGroupOwner")
 
   @@map("organizations")
   @@schema("tenancy")
@@ -1371,6 +1379,9 @@ model ChargeSession {
   billingLines      BillingLine[]
   protocolTransactionRefs ProtocolTransactionRef[]
   importedCdrRefs   ImportedCdrRef[]
+
+  // ── Sprint 9 / ADR 0019 — agreements schema back-relation ───────
+  agreementBillingLines AgreementBillingLine[] @relation("AgreementBillingLineSession")
 
   @@index([orgId, startedAt(sort: Desc)])
   @@index([evseId, startedAt(sort: Desc)])
@@ -2804,4 +2815,284 @@ model CommandHistory {
   @@index([identityId, createdAt(sort: Desc)])
   @@map("command_history")
   @@schema("reports")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// agreements — ADR 0019 (Sprint 9 milestone A.2)
+//
+// Three primitives: Agreement (legal contract Straumvakt <-> counterparty
+// ORG), BearerRule (override row at a scope x audience cell — diff against
+// the agreement default), RateReference (versioned rate book). Coexists
+// additively with the legacy billing.contracts* tables (ADR 0008); cutover
+// is a separate ADR after milestone A.6.
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum AgreementType {
+  cpo        // Straumvakt <-> CPO ORG (the operator running the chargers)
+  workplace  // Straumvakt <-> workplace ORG (employer absorbing factors for its drivers)
+
+  @@schema("agreements")
+}
+
+enum AgreementStatus {
+  draft
+  active
+  expired
+
+  @@schema("agreements")
+}
+
+enum BearerType {
+  org   // counterparty ORG of the parent agreement (the CPO)
+  usr   // the driver running the session
+  wrk   // workplace ORG that owns the driver's DriverGroup (resolved via group.owner_org_id)
+  trd   // a specific other User (bearer_ref required)
+
+  @@schema("agreements")
+}
+
+enum RuleScopeType {
+  site
+  installation
+  circuit
+  charger
+
+  @@schema("agreements")
+}
+
+enum RuleAudienceType {
+  driver_group
+  user
+
+  @@schema("agreements")
+}
+
+enum RateBasis {
+  per_kwh
+  per_minute
+  per_day
+  per_session
+
+  @@schema("agreements")
+}
+
+enum BillingLineKind {
+  passthrough  // amount routes to the supplier on RateReference (e.g. Veitur, retailer)
+  markup       // amount routes to CPO ORG (revenue line)
+
+  @@schema("agreements")
+}
+
+enum AgrCostFactorStatus {
+  draft
+  active
+  archived
+
+  @@schema("agreements")
+}
+
+// Per ADR 0019 — revised cost-factor catalog (DSO, ELE, ACS, PRM, TRF, SRF,
+// RNT, MTR). Coexists with the legacy billing.cost_factors catalog (DSOF,
+// REPF, ...) until cutover. Seeded by milestone A.4.
+model AgreementCostFactor {
+  id              String                @id @default(uuid()) @db.Uuid
+  code            String                @unique // DSO, ELE, ACS, PRM, TRF, SRF, RNT, MTR
+  displayNameIs   String                @map("display_name_is")
+  displayNameEn   String                @map("display_name_en")
+  description     String?
+  status          AgrCostFactorStatus   @default(active)
+  createdAt       DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  rateReferences  RateReference[]
+  clauses         AgreementClause[]
+  bearerRules     BearerRule[]
+
+  @@map("cost_factors")
+  @@schema("agreements")
+}
+
+// Versioned rate book. Rules and Agreement defaults reference rates by
+// `code` (stable identifier). New supplier rates land as new rows with
+// updated effective_from; the resolver picks the row active at session_time.
+model RateReference {
+  id              String              @id @default(uuid()) @db.Uuid
+  code            String              // e.g. "veitur-dso-c", "n1-retail-ele-2026q2"
+  costFactorId    String              @map("cost_factor_id") @db.Uuid
+  supplierOrgId   String?             @map("supplier_org_id") @db.Uuid // null when there is no external supplier (e.g. ACS, PRM)
+  basis           RateBasis
+  priceMinor      BigInt              @map("price_minor")               // currency-minor per unit basis
+  currency        String              @default("ISK")
+  vatRatePct      Decimal             @map("vat_rate_pct") @db.Decimal(4, 2)
+  effectiveFrom   DateTime            @map("effective_from") @db.Timestamptz(6)
+  effectiveUntil  DateTime?           @map("effective_until") @db.Timestamptz(6)
+  notes           String?
+  createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  costFactor      AgreementCostFactor @relation(fields: [costFactorId], references: [id])
+  supplierOrg     Organization?       @relation("RateReferenceSupplier", fields: [supplierOrgId], references: [id], onDelete: SetNull)
+
+  @@index([code, effectiveFrom(sort: Desc)])
+  @@index([costFactorId, effectiveFrom(sort: Desc)])
+  @@map("rate_references")
+  @@schema("agreements")
+}
+
+// Top-level legal contract between Straumvakt and a counterparty ORG. Either
+// type=cpo (the ORG operates chargers) or type=workplace (the ORG absorbs
+// factors on behalf of its drivers at someone else's chargers).
+model Agreement {
+  id                String              @id @default(uuid()) @db.Uuid
+  counterpartyOrgId String              @map("counterparty_org_id") @db.Uuid
+  agreementType     AgreementType       @map("agreement_type")
+  displayName       String              @map("display_name")
+  status            AgreementStatus     @default(draft)
+  effectiveFrom     DateTime            @map("effective_from") @db.Timestamptz(6)
+  effectiveUntil    DateTime?           @map("effective_until") @db.Timestamptz(6)
+  notes             String?
+  createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  counterpartyOrg   Organization        @relation("AgreementCounterparty", fields: [counterpartyOrgId], references: [id], onDelete: Cascade)
+
+  clauses           AgreementClause[]
+  driverGroups     DriverGroup[]
+  bearerRules       BearerRule[]
+  billingLines      AgreementBillingLine[]
+
+  @@index([counterpartyOrgId, status])
+  @@index([effectiveFrom])
+  @@map("agreements")
+  @@schema("agreements")
+}
+
+// Per-factor default for an Agreement. Names default bearer + rate ref +
+// allocation. One row per (agreement, cost_factor) — only enlisted factors
+// have a clause; non-enlisted factors are silently absent (no billing_line
+// emitted at session-stop).
+model AgreementClause {
+  id                  String              @id @default(uuid()) @db.Uuid
+  agreementId         String              @map("agreement_id") @db.Uuid
+  costFactorId        String              @map("cost_factor_id") @db.Uuid
+  defaultBearerType   BearerType          @map("default_bearer_type")
+  defaultBearerRef    String?             @map("default_bearer_ref") @db.Uuid // required when defaultBearerType=trd
+  defaultRateRefCode  String?             @map("default_rate_ref_code")       // null when factor has no rate (rare)
+  allocationJson      Json                @map("allocation_json") @db.JsonB
+  createdAt           DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  agreement           Agreement           @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+  costFactor          AgreementCostFactor @relation(fields: [costFactorId], references: [id])
+
+  @@unique([agreementId, costFactorId])
+  @@map("agreement_clauses")
+  @@schema("agreements")
+}
+
+// A group of drivers under an Agreement. owner_org_id resolves the WRK
+// bearer at session-stop. scope_filter_json is an opt-in restriction on
+// where the group is allowed to charge (sites/installations/circuits/
+// chargers); empty = no restriction.
+model DriverGroup {
+  id              String              @id @default(uuid()) @db.Uuid
+  agreementId     String              @map("agreement_id") @db.Uuid
+  ownerOrgId      String              @map("owner_org_id") @db.Uuid
+  displayName     String              @map("display_name")
+  scopeFilterJson Json                @default("{}") @map("scope_filter_json") @db.JsonB
+  createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  agreement       Agreement           @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+  ownerOrg        Organization        @relation("DriverGroupOwner", fields: [ownerOrgId], references: [id], onDelete: Restrict)
+
+  memberships     DriverGroupMembership[]
+
+  @@index([agreementId])
+  @@index([ownerOrgId])
+  @@map("driver_groups")
+  @@schema("agreements")
+}
+
+model DriverGroupMembership {
+  id              String              @id @default(uuid()) @db.Uuid
+  driverGroupId   String              @map("driver_group_id") @db.Uuid
+  userId          String              @map("user_id") @db.Uuid
+  addedAt         DateTime            @default(now()) @map("added_at") @db.Timestamptz(6)
+
+  driverGroup     DriverGroup         @relation(fields: [driverGroupId], references: [id], onDelete: Cascade)
+  user            User                @relation("DriverGroupMembershipUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([driverGroupId, userId])
+  @@index([userId])
+  @@map("driver_group_memberships")
+  @@schema("agreements")
+}
+
+// The override row. Lives at one cell of (scope x audience). Each override
+// field is independently nullable: NULL = inherit from the next walk step.
+// One rule per cost factor (the ADR rejects factor=NULL wildcards in
+// storage; UI may fan out a wildcard into per-factor rows on save).
+model BearerRule {
+  id              String              @id @default(uuid()) @db.Uuid
+  agreementId     String              @map("agreement_id") @db.Uuid
+  costFactorId    String              @map("cost_factor_id") @db.Uuid
+  scopeType       RuleScopeType?      @map("scope_type")
+  scopeId         String?             @map("scope_id") @db.Uuid
+  audienceType    RuleAudienceType?   @map("audience_type")
+  audienceId      String?             @map("audience_id") @db.Uuid
+  bearerType      BearerType?         @map("bearer_type")           // null = inherit
+  bearerRef       String?             @map("bearer_ref") @db.Uuid   // required when bearerType=trd
+  rateRefCode     String?             @map("rate_ref_code")         // null = inherit
+  allocationJson  Json?               @map("allocation_json") @db.JsonB // null = inherit
+  effectiveFrom   DateTime            @map("effective_from") @db.Timestamptz(6)
+  effectiveUntil  DateTime?           @map("effective_until") @db.Timestamptz(6)
+  createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  agreement       Agreement           @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+  costFactor      AgreementCostFactor @relation(fields: [costFactorId], references: [id])
+
+  // Resolver lookup — see ADR 0019 §"per-attribute walk has 13 lookup steps".
+  @@index([agreementId, costFactorId, audienceType, audienceId, scopeType, scopeId, effectiveFrom])
+  @@index([effectiveFrom])
+  @@map("bearer_rules")
+  @@schema("agreements")
+}
+
+// Output table — one row per (session, factor, kind). passthrough lines
+// route to the supplier on RateReference; markup lines route to CPO ORG.
+// Invoicing rolls billing_lines up by (recipient, period). Distinct from
+// the legacy billing.billing_lines table (ADR 0008); both will coexist
+// until cutover.
+model AgreementBillingLine {
+  id                String          @id @default(uuid()) @db.Uuid
+  agreementId       String          @map("agreement_id") @db.Uuid
+  sessionId         String          @map("session_id") @db.Uuid
+  factorCode        String          @map("factor_code")
+  kind              BillingLineKind
+  basisType         RateBasis       @map("basis_type")
+  basisQuantity     Decimal         @map("basis_quantity") @db.Decimal(14, 4) // kWh / minutes / days / sessions
+  unitPriceMinor    BigInt          @map("unit_price_minor")
+  amountExVatMinor  BigInt          @map("amount_ex_vat_minor")
+  vatRatePct        Decimal         @map("vat_rate_pct") @db.Decimal(4, 2)
+  vatAmountMinor    BigInt          @map("vat_amount_minor")
+  amountIncVatMinor BigInt          @map("amount_inc_vat_minor")
+  currency          String          @default("ISK")
+  bearerType        BearerType      @map("bearer_type")
+  bearerRef         String?         @map("bearer_ref") @db.Uuid
+  recipientOrgId    String?         @map("recipient_org_id") @db.Uuid
+  recipientUserId   String?         @map("recipient_user_id") @db.Uuid
+  rateRefId         String?         @map("rate_ref_id") @db.Uuid
+  ruleId            String?         @map("rule_id") @db.Uuid // BearerRule that won; null when only agreement defaults applied
+  computationDetail Json            @map("computation_detail") @db.JsonB
+  createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  agreement         Agreement       @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+  session           ChargeSession   @relation("AgreementBillingLineSession", fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([agreementId, sessionId])
+  @@index([sessionId, factorCode, kind])
+  @@index([recipientOrgId, createdAt(sort: Desc)])
+  @@map("billing_lines")
+  @@schema("agreements")
 }
