@@ -28,6 +28,10 @@ import {
 } from "@/components/reference/tech-section";
 import { adminSessionConfig, verifyAdminSession } from "@/lib/admin-session";
 import { apiFetchServer } from "@/lib/api-client-server";
+import {
+  signalIconClass,
+  formatSignal as fmtSignal,
+} from "@/lib/signal-quality";
 import type { ChargerDetail } from "@straumvakt/shared/domain/chargers";
 import type { ChargerTechnicalRead } from "@straumvakt/shared/domain/charger-technical-read";
 
@@ -203,8 +207,8 @@ export default async function ChargerTechnicalReadPage({
           <Metric
             icon={Signal}
             label="Signal"
-            value={fmtSignal(t?.signalDbm ?? null)}
-            iconClass={signalIconClass(t?.signalDbm ?? null)}
+            value={fmtSignal(t?.signalDbm ?? null, t?.communicationMode ?? null)}
+            iconClass={signalIconClass(t?.signalDbm ?? null, t?.communicationMode ?? null)}
           />
           <Metric icon={Radio} label="Comm" value={t?.communicationMode ?? DASH} />
           <Metric icon={ShieldCheck} label="OCPP" value={ocppPillValue(t)} />
@@ -366,7 +370,7 @@ export default async function ChargerTechnicalReadPage({
             <InfoRow label="Communication mode" info={t?.communicationMode ?? DASH} />
             <InfoRow
               label="Signal strength"
-              info={fmtSignal(t?.signalDbm ?? null)}
+              info={fmtSignal(t?.signalDbm ?? null, t?.communicationMode ?? null)}
             />
             <InfoRow
               label="LTE roaming disabled (753)"
@@ -664,22 +668,7 @@ function Metric({
   );
 }
 
-/** Normalize signal to negative dBm and pick a color tone. Same scale
- *  as TechnicalReadPills (8.4.7.2): 30–55 green, 55–70 yellow,
- *  70–80 orange, 80+ red, null gray. */
-function fmtSignal(dbm: number | null): string {
-  if (dbm == null) return DASH;
-  const v = dbm <= 0 ? dbm : -dbm;
-  return `${v} dBm`;
-}
-function signalIconClass(dbm: number | null): string {
-  if (dbm == null) return "text-ink-500";
-  const m = Math.abs(dbm);
-  if (m < 55) return "text-emerald-400";
-  if (m < 70) return "text-yellow-400";
-  if (m < 80) return "text-orange-400";
-  return "text-rose-400";
-}
+// 9.8.2 — signal helpers moved to @/lib/signal-quality.
 
 function DashboardColumn({
   icon: Icon,

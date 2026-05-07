@@ -10,6 +10,11 @@ import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { Signal, Wifi, RadioTower, Cable, Network } from "lucide-react";
 import type { ChargerSummary } from "@straumvakt/shared/domain/chargers";
+import {
+  signalIconClass,
+  formatSignal,
+  signalQuality,
+} from "@/lib/signal-quality";
 
 const DASH = "—";
 
@@ -60,50 +65,8 @@ function compareNullable<T>(a: T | null, b: T | null, cmp: (x: T, y: T) => numbe
 const STR = (a: string, b: string) => a.localeCompare(b);
 const NUM = (a: number, b: number) => a - b;
 
-/**
- * Sprint 9.8.1 — signal interpretation depends on transport.
- *   • Wi-Fi (and other RF where Zaptec reports raw RSSI/RSRP) — value
- *     is dBm. Some firmwares emit it negative (-70), some positive
- *     (70 meaning -70). Magnitude < 55 green, < 70 yellow, < 80
- *     orange, >= 80 red.
- *   • LTE / cellular — Zaptec emits a 0–100 percentage / CSQ-like
- *     scale where HIGHER is better. 100 ≠ "-100 dBm"; that gave
- *     us LTE chargers showing red while online + charging. Treat
- *     >= 75 green, 50–75 yellow, 25–50 orange, < 25 red.
- *   • PLC / Ethernet — no signal reported; null.
- *   • Unknown comm mode — fall back to dBm interpretation
- *     (preserves prior behaviour for unmapped transports).
- */
-function isCellular(comm: string | null): boolean {
-  if (!comm) return false;
-  return /lte|cellular|4g|5g|3g|gsm/i.test(comm);
-}
-
-function signalIconClass(value: number | null, comm: string | null): string {
-  if (value == null) return "text-ink-600";
-  if (isCellular(comm)) {
-    if (value >= 75) return "text-emerald-400";
-    if (value >= 50) return "text-yellow-400";
-    if (value >= 25) return "text-orange-400";
-    return "text-rose-400";
-  }
-  const m = Math.abs(value);
-  if (m < 55) return "text-emerald-400";
-  if (m < 70) return "text-yellow-400";
-  if (m < 80) return "text-orange-400";
-  return "text-rose-400";
-}
-
-function fmtSignal(value: number | null, comm: string | null): string {
-  if (value == null) return DASH;
-  if (isCellular(comm)) {
-    // Cellular: Zaptec uses 0-100 percentage where higher is better.
-    return `${Math.round(value)}%`;
-  }
-  // RF (Wi-Fi etc.): canonical negative dBm.
-  const v = value <= 0 ? value : -value;
-  return `${v} dBm`;
-}
+// 9.8.2 — signal logic moved to @/lib/signal-quality (shared with
+// the technical-read panel). Cisco-aligned thresholds.
 
 function sortedRows(rows: ChargerSummary[], key: SortKey, dir: SortDir): ChargerSummary[] {
   const dirMul = dir === "asc" ? 1 : -1;
@@ -133,19 +96,12 @@ function sortedRows(rows: ChargerSummary[], key: SortKey, dir: SortDir): Charger
         n = compareNullable(a.commMode, b.commMode, STR);
         break;
       case "signal": {
-        // Sprint 9.8.1 — sort by quality, not raw value, so LTE
-        // percentage (higher better) and Wi-Fi dBm (closer to zero
-        // better) sort consistently. Map both onto a 0–100 quality
-        // proxy: cellular passes through; dBm gets `100 - |dBm|`.
-        const quality = (val: number | null, comm: string | null): number | null => {
-          if (val == null) return null;
-          if (isCellular(comm)) return val;
-          return 100 - Math.abs(val);
-        };
-        // Strongest first (descending) when asc.
+        // Strongest first (descending) when asc — quality is the
+        // 0-100 proxy from @/lib/signal-quality so cellular % and
+        // Wi-Fi |dBm| sort onto the same axis.
         n = compareNullable(
-          quality(b.signalDbm, b.commMode),
-          quality(a.signalDbm, a.commMode),
+          signalQuality(b.signalDbm, b.commMode),
+          signalQuality(a.signalDbm, a.commMode),
           NUM,
         );
         break;
@@ -415,7 +371,7 @@ function SignalCell({ value, comm }: { value: number | null; comm: string | null
   return (
     <span className="inline-flex items-center gap-1.5">
       <Signal className={`h-3.5 w-3.5 shrink-0 ${signalIconClass(value, comm)}`} />
-      <span className="font-mono text-[11px] text-ink-300">{fmtSignal(value, comm)}</span>
+      <span className="font-mono text-[11px] text-ink-300">{formatSignal(value, comm)}</span>
     </span>
   );
 }

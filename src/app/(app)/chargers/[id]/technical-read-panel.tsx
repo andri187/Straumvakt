@@ -1,4 +1,8 @@
 "use client";
+import {
+  signalIconClass as signalIconClassShared,
+  formatSignal as formatSignalShared,
+} from "@/lib/signal-quality";
 // Two presentational components that render the
 // /api/admin/chargers/:id/technical-read payload:
 //
@@ -26,33 +30,10 @@ function fmtBool(v: boolean | null, on = "yes", off = "no"): string {
   if (v == null) return DASH;
   return v ? on : off;
 }
-function fmtSignal(dbm: number | null): string {
-  if (dbm == null) return DASH;
-  // RF signal strength in dBm is always negative (RSSI / RSRP / RSCP).
-  // Some Zaptec firmwares report the magnitude as a positive integer;
-  // normalize to the canonical negative form for display.
-  const v = dbm <= 0 ? dbm : -dbm;
-  return `${v} dBm`;
-}
-
-/**
- * Map signal magnitude (|dBm|) to a quality bucket per operator-defined
- * thresholds (Sprint 8.4.7.2):
- *   green  30–55  excellent
- *   yellow 55–70  good
- *   orange 70–80  fair
- *   red    80+    poor
- * Null → gray (no measurement). Same scale used by Wi-Fi RSSI and 4G
- * RSRP — stronger signals have smaller magnitude.
- */
-function signalIconClass(dbm: number | null): string {
-  if (dbm == null) return "text-ink-500";
-  const magnitude = Math.abs(dbm);
-  if (magnitude < 55) return "text-emerald-400";
-  if (magnitude < 70) return "text-yellow-400";
-  if (magnitude < 80) return "text-orange-400";
-  return "text-rose-400";
-}
+// 9.8.2 — signal helpers moved to @/lib/signal-quality (Cisco-aligned
+// thresholds: ≥-67 dBm green / -67 to -75 yellow / -75 to -85 orange /
+// <-85 red — and matching cellular percentage scale). Imported as
+// signalIconClassShared / formatSignalShared at the top of this file.
 
 export function TechnicalReadPills({
   read,
@@ -75,8 +56,8 @@ export function TechnicalReadPills({
       <Pill
         icon={Signal}
         label="Signal"
-        value={fmtSignal(read?.signalDbm ?? null)}
-        iconClass={signalIconClass(read?.signalDbm ?? null)}
+        value={formatSignalShared(read?.signalDbm ?? null, read?.communicationMode ?? null)}
+        iconClass={signalIconClassShared(read?.signalDbm ?? null, read?.communicationMode ?? null)}
       />
       <Pill icon={Radio} label="Comm" value={read?.communicationMode ?? DASH} />
       <Pill
@@ -255,7 +236,7 @@ export function TechnicalReadDetail({ read }: { read: ChargerTechnicalRead | nul
         <Card title="Network &amp; uptime" hint="StateId 150 / 715 / 809 / 820">
           <Row label="Comm mode" value={read.communicationMode ?? DASH} />
           <Row label="Grid (network type)" value={read.networkType ?? DASH} />
-          <Row label="Signal" value={fmtSignal(read.signalDbm)} />
+          <Row label="Signal" value={formatSignalShared(read.signalDbm, read.communicationMode)} />
           <Row label="Uptime" value={fmtNum(read.uptimeHours, " h", 1)} />
           <Row label="Internal temp" value={fmtNum(read.internalTemperatureC, " °C", 1)} />
           <Row
