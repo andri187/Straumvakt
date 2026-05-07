@@ -113,3 +113,57 @@ async function doTrigger(
     });
   }
 }
+
+/**
+ * Sprint 9.6 — fire-and-forget per-state-observation POST. Each
+ * AMQP message that resolves to a parseable observation gets one of
+ * these. The API Worker's /api/internal/zaptec-state-event endpoint
+ * filters to a small whitelist of StateIds (710 / 513 / 553) and
+ * upserts charging.live_sessions accordingly. Everything else is
+ * a 200 OK no-op on the API side.
+ *
+ * No debounce — we want the latest power / energy observation to land
+ * in the DB so the UI's "active session" card stays fresh per second.
+ */
+export async function postStateEvent(
+  observation: {
+    chargerId: string;
+    stateId: number;
+    value: string | null;
+    timestamp: string;
+  },
+  options: TriggerSyncOptions,
+): Promise<void> {
+  const url = `${options.apiBaseUrl.replace(/\/+$/, "")}/api/internal/zaptec-state-event`;
+  const body = JSON.stringify({
+    chargerId: observation.chargerId,
+    stateId: observation.stateId,
+    value: observation.value,
+    timestamp: observation.timestamp,
+  });
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-straumvakt-ingest": options.ingestSecret,
+      },
+      body,
+    });
+    if (res.status !== 200) {
+      const txt = await res.text().catch(() => "");
+      log.warn("state_event_non_200", {
+        chargerId: observation.chargerId,
+        stateId: observation.stateId,
+        status: res.status,
+        body: txt.slice(0, 200),
+      });
+    }
+  } catch (err) {
+    log.warn("state_event_network_error", {
+      chargerId: observation.chargerId,
+      stateId: observation.stateId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}

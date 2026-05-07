@@ -495,6 +495,7 @@ model Organization {
   controlRoutingPolicies  ControlRoutingPolicy[]
   protocolTransactionRefs ProtocolTransactionRef[]
   importedCdrRefs         ImportedCdrRef[]
+  liveSessions            LiveSession[]
   tariffs             Tariff[]
   customerPlans       CustomerPlan[]
   subscriptions       Subscription[]
@@ -936,6 +937,7 @@ model ChargingStation {
   capabilityProfiles CapabilityProfile[]
   controlRoutingPolicy ControlRoutingPolicy?
   sessions           ChargeSession[]
+  liveSession        LiveSession?
 
   // ── Rev-3 / Rev-4 relations ──────────────────────────────────────
   circuit          Circuit?      @relation("CircuitStations", fields: [circuitId], references: [id])
@@ -1238,6 +1240,7 @@ model OcppIdentity {
   outboundCommands     OutboundCommand[]
   configurationKeys    OcppConfigurationKey[]
   sessions             ChargeSession[]
+  liveSession          LiveSession?
 
   @@unique([orgId, identityString])
   @@index([orgId, chargingStationId])
@@ -1457,6 +1460,41 @@ model ImportedCdrRef {
   @@unique([sourceKind, sourceCdrId])
   @@index([sessionId])
   @@map("imported_cdr_refs")
+  @@schema("charging")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// charging.live_sessions — Sprint 9.6 active-session tracker
+//
+// One row per charger that has a session in progress. Created when the
+// AMQP consumer sees StateId 710 transition to 3 (Charging). Updated as
+// later observations land (StateId 513 power, 553 session-energy).
+// Deleted on transition to 5 (Finished) or 1 (Disconnected) — at which
+// point the consumer also fires the chargehistory claim-check trigger
+// to enrich the closed CDR.
+//
+// chargingStationId is the primary key (one active session per charger).
+// ─────────────────────────────────────────────────────────────────────────────
+model LiveSession {
+  chargingStationId    String   @id @map("charging_station_id") @db.Uuid
+  orgId                String   @map("org_id") @db.Uuid
+  ocppIdentityId       String   @unique @map("ocpp_identity_id") @db.Uuid
+  vendorResourceId     String   @map("vendor_resource_id")
+  startedAt            DateTime @map("started_at") @db.Timestamptz(6)
+  lastObservedAt       DateTime @map("last_observed_at") @db.Timestamptz(6)
+  lastOperationMode    Int?     @map("last_operation_mode")
+  lastPowerW           Decimal? @map("last_power_w") @db.Decimal(10, 0)
+  lastSessionEnergyWh  Decimal? @map("last_session_energy_wh") @db.Decimal(12, 0)
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization         Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  chargingStation      ChargingStation  @relation(fields: [chargingStationId], references: [siteAssetId], onDelete: Cascade)
+  ocppIdentity         OcppIdentity     @relation(fields: [ocppIdentityId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@index([lastObservedAt])
+  @@map("live_sessions")
   @@schema("charging")
 }
 

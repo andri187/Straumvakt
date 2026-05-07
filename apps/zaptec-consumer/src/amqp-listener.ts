@@ -23,7 +23,7 @@ import {
   invalidateToken,
 } from "./zaptec-auth.js";
 import { log } from "./logger.js";
-import { triggerSync, type TriggerSyncOptions } from "./trigger.js";
+import { triggerSync, postStateEvent, type TriggerSyncOptions } from "./trigger.js";
 
 export interface ListenerConfig {
   installationId: string;
@@ -94,14 +94,34 @@ export function startListener(config: ListenerConfig): {
       body: msg.body,
     });
 
-    // Phase 2 — claim-check trigger. Pull a charger id out of the
-    // message and tell the API Worker to refetch its sessions.
-    // Per-charger debounce in trigger.ts handles bursts; runs in
-    // background so we don't slow down message acknowledgement.
+    // Sprint 9.6 — fan out per observation:
+    //   1. ALWAYS POST /zaptec-state-event for every parseable obs
+    //      (the API Worker filters to StateId 710 / 513 / 553 and
+    //      upserts charging.live_sessions; everything else is no-op).
+    //   2. ONLY fire /zaptec-trigger-sync on StateId 710 transitions
+    //      to 5 (Finished) or 1 (Disconnected) — i.e. end of session.
+    //      The chargehistory enrichment is expensive (OAuth + REST
+    //      fan-out per installation); firing once at session end is
+    //      enough. The */1 sessions cron on the API Worker is the
+    //      backstop for missed transitions.
     if (config.trigger) {
-      const chargerId = extractChargerId(msg);
-      if (chargerId) {
-        void triggerSync(chargerId, config.trigger);
+      const obs = parseObservation(msg);
+      if (obs) {
+        void postStateEvent(
+          {
+            chargerId: obs.ChargerId,
+            stateId: obs.StateId,
+            value: obs.ValueAsString,
+            timestamp: obs.Timestamp,
+          },
+          config.trigger,
+        );
+        if (obs.StateId === 710) {
+          const mode = obs.ValueAsString != null ? Number(obs.ValueAsString) : NaN;
+          if (mode === 5 || mode === 1) {
+            void triggerSync(obs.ChargerId, config.trigger);
+          }
+        }
       }
     }
 
@@ -220,38 +240,104 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/**
- * Extract a charger id (Zaptec internal UUID) from a Service Bus
- * message. Defensive across multiple shapes since we don't have a
- * stable schema yet:
- *   1. body.ChargerId / chargerId / DeviceId / deviceId
- *   2. applicationProperties.ChargerId / chargerId
- *   3. subject prefix (some Zaptec subjects look like "<uuid>/...")
- *
- * Returns null when none of the above yield a valid UUID.
- */
-function extractChargerId(msg: ServiceBusReceivedMessage): string | null {
-  const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  const tryString = (v: unknown): string | null =>
-    typeof v === "string" && uuidRe.test(v) ? v : null;
+// Sprint 9.6 — extractChargerId removed in favour of parseObservation
+// inline at the message handler (fans out state-event + trigger-sync).
 
-  const body = msg.body;
-  if (body && typeof body === "object") {
-    const obj = body as Record<string, unknown>;
-    for (const k of ["ChargerId", "chargerId", "DeviceId", "deviceId"]) {
-      const candidate = tryString(obj[k]);
-      if (candidate) return candidate;
+/**
+ * Sprint 9.6 — Zaptec wraps state observations as AMQP-encoded
+ * strings. The @azure/service-bus client surfaces them as a Buffer
+ * (or `{ type: "Buffer", data: number[] }` after JSON-roundtrip).
+ * Inside is an AMQP framing prefix (string-type marker + length)
+ * followed by a UTF-8 JSON document. We just decode the buffer to
+ * text, find the first `{`, and parse from there.
+ *
+ * Expected shape after parse:
+ *   {
+ *     "DeviceId": "ZPR042316",
+ *     "DeviceType": 1,
+ *     "ChargerId": "<uuid>",
+ *     "StateId": 201,
+ *     "Timestamp": "2026-05-06T00:45:04.691493Z",
+ *     "ValueAsString": "14.7348"
+ *   }
+ */
+export interface ZaptecObservation {
+  ChargerId: string;
+  DeviceId?: string;
+  StateId: number;
+  ValueAsString: string | null;
+  Timestamp: string;
+}
+
+export function parseObservation(
+  msg: ServiceBusReceivedMessage,
+): ZaptecObservation | null {
+  // Try parsed-object first (some clients pre-decode).
+  if (msg.body && typeof msg.body === "object" && !Buffer.isBuffer(msg.body)) {
+    const obj = msg.body as Record<string, unknown>;
+    if (typeof obj.ChargerId === "string" && typeof obj.StateId === "number") {
+      return {
+        ChargerId: obj.ChargerId,
+        DeviceId: typeof obj.DeviceId === "string" ? obj.DeviceId : undefined,
+        StateId: obj.StateId,
+        ValueAsString:
+          typeof obj.ValueAsString === "string"
+            ? obj.ValueAsString
+            : obj.ValueAsString === null
+              ? null
+              : String(obj.ValueAsString ?? ""),
+        Timestamp:
+          typeof obj.Timestamp === "string" ? obj.Timestamp : new Date().toISOString(),
+      };
     }
   }
-  if (msg.applicationProperties) {
-    for (const k of ["ChargerId", "chargerId"]) {
-      const candidate = tryString(msg.applicationProperties[k]);
-      if (candidate) return candidate;
+  // Fall back to buffer decode + JSON tail.
+  const bytes = bodyToBytes(msg.body);
+  if (!bytes) return null;
+  // Find the first '{' (0x7B) — everything before it is AMQP framing.
+  const start = bytes.indexOf(0x7b);
+  if (start < 0) return null;
+  const slice = bytes.subarray(start);
+  const text = new TextDecoder("utf-8", { fatal: false }).decode(slice);
+  // The JSON document ends at the matching '}'; allow trailing AMQP
+  // bytes after by parsing only up to the last '}'.
+  const end = text.lastIndexOf("}");
+  if (end < 0) return null;
+  const json = text.slice(0, end + 1);
+  try {
+    const obj = JSON.parse(json) as Record<string, unknown>;
+    if (typeof obj.ChargerId !== "string" || typeof obj.StateId !== "number") {
+      return null;
     }
+    return {
+      ChargerId: obj.ChargerId,
+      DeviceId: typeof obj.DeviceId === "string" ? obj.DeviceId : undefined,
+      StateId: obj.StateId,
+      ValueAsString:
+        typeof obj.ValueAsString === "string"
+          ? obj.ValueAsString
+          : obj.ValueAsString === null
+            ? null
+            : String(obj.ValueAsString ?? ""),
+      Timestamp:
+        typeof obj.Timestamp === "string" ? obj.Timestamp : new Date().toISOString(),
+    };
+  } catch {
+    return null;
   }
-  if (typeof msg.subject === "string") {
-    const m = msg.subject.match(uuidRe);
-    if (m) return m[0];
+}
+
+function bodyToBytes(body: unknown): Uint8Array | null {
+  if (!body) return null;
+  if (Buffer.isBuffer(body)) return body;
+  if (body instanceof Uint8Array) return body;
+  if (typeof body === "string") return new TextEncoder().encode(body);
+  // The JSON-roundtrip shape: { type: "Buffer", data: number[] }.
+  if (typeof body === "object") {
+    const obj = body as { type?: unknown; data?: unknown };
+    if (obj.type === "Buffer" && Array.isArray(obj.data)) {
+      return Uint8Array.from(obj.data as number[]);
+    }
   }
   return null;
 }

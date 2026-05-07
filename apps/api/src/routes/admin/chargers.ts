@@ -81,6 +81,40 @@ adminChargers.get(
   },
 );
 
+// Sprint 9.6 — active session for this charger if any. Reads
+// charging.live_sessions which the AMQP consumer maintains. Returns
+// null when no active session.
+adminChargers.get(
+  "/:id/active-session",
+  requirePermission("charger.read"),
+  async (c) => {
+    const db = makePrisma(c.env);
+    const row = await db.liveSession.findUnique({
+      where: { chargingStationId: c.req.param("id") },
+      select: {
+        startedAt: true,
+        lastObservedAt: true,
+        lastOperationMode: true,
+        lastPowerW: true,
+        lastSessionEnergyWh: true,
+        vendorResourceId: true,
+      },
+    });
+    if (!row) return c.json({ activeSession: null });
+    return c.json({
+      activeSession: {
+        startedAt: row.startedAt.toISOString(),
+        lastObservedAt: row.lastObservedAt.toISOString(),
+        lastOperationMode: row.lastOperationMode,
+        lastPowerW: row.lastPowerW != null ? Number(row.lastPowerW) : null,
+        lastSessionEnergyWh:
+          row.lastSessionEnergyWh != null ? Number(row.lastSessionEnergyWh) : null,
+        vendorResourceId: row.vendorResourceId,
+      },
+    });
+  },
+);
+
 // Sprint 9.5 — raw Zaptec configuration: full /state observations +
 // detail properties. Backs the Configuration panel below the chart on
 // /chargers/[id]. Read endpoint is the slow path (one Zaptec auth +

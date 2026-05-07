@@ -18,6 +18,7 @@ import { adminCircuits } from "./routes/admin/circuits";
 import { adminUsers } from "./routes/admin/users";
 import { adminMemberships } from "./routes/admin/memberships";
 import { adminChargers } from "./routes/admin/chargers";
+import { adminActiveSessions } from "./routes/admin/active-sessions";
 import { adminOnboarding } from "./routes/admin/onboarding";
 import { adminMe } from "./routes/admin/me";
 import { adminZaptec } from "./routes/admin/zaptec";
@@ -37,6 +38,7 @@ import { internalOcppAuthorize } from "./routes/internal/ocpp-authorize";
 import { internalOcppEvents } from "./routes/internal/ocpp-events";
 import { internalPendingDiscovery } from "./routes/internal/pending-discovery";
 import { internalZaptecTriggerSync } from "./routes/internal/zaptec-trigger-sync";
+import { internalZaptecStateEvent } from "./routes/internal/zaptec-state-event";
 import { zaptecWebhooks } from "./routes/webhooks/zaptec";
 import { makePrisma } from "./lib/prisma";
 import { buildRegistry } from "./lib/dispatch-targets";
@@ -104,6 +106,7 @@ app.route("/api/admin/circuits", adminCircuits);
 app.route("/api/admin/users", adminUsers);
 app.route("/api/admin/memberships", adminMemberships);
 app.route("/api/admin/chargers", adminChargers);
+app.route("/api/admin/active-sessions", adminActiveSessions);
 app.route("/api/admin/onboarding", adminOnboarding);
 app.route("/api/admin/me", adminMe);
 app.route("/api/admin/zaptec", adminZaptec);
@@ -153,6 +156,7 @@ app.route("/api/internal/pending-discovery", internalPendingDiscovery);
 // AMQP arrives → consumer POSTs here → we fetch the authoritative
 // session payload via REST + DetailLevel=1 + write through.
 app.route("/api/internal/zaptec-trigger-sync", internalZaptecTriggerSync);
+app.route("/api/internal/zaptec-state-event", internalZaptecStateEvent);
 
 // Sprint 8.9 — Zaptec webhook receivers for AuthenticationType=1
 // (Webhooks). Operator pastes these URLs into the Zaptec portal:
