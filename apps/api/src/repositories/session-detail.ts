@@ -97,23 +97,29 @@ export async function getSessionDetail(
       .catch(() => null),
   ]);
 
-  // Derive time series. Prefer the structured EnergyDetails (clean,
-  // post-DetailLevel=1). Fall back to OCMF parsing of SignedSession
-  // (older imports) so existing rows visualise the same way.
+  // Derive time series. Sprint 9.1.1 — prefer OCMF SignedSession over
+  // EnergyDetails: OCMF.RV is unambiguously cumulative meter readings
+  // (signed, defined in the OCMF spec); EnergyDetails.Energy is
+  // interval-energy and was previously misinterpreted as cumulative.
+  // Both projectEnergyDetails and deriveIntervals now produce the
+  // same PowerInterval shape with cumulativeKwh session-relative.
   let intervals: PowerInterval[] = [];
   let timeSeriesSource: SessionDetail["timeSeriesSource"] = null;
 
   const raw = importedRef?.rawPayload as Record<string, unknown> | null | undefined;
   if (raw) {
-    const ed = raw["EnergyDetails"];
-    if (Array.isArray(ed) && ed.length >= 2) {
-      timeSeriesSource = "energyDetails";
-      intervals = projectEnergyDetails(ed);
-    } else if (typeof raw["SignedSession"] === "string") {
+    if (typeof raw["SignedSession"] === "string") {
       const parsed = parseOcmf(raw["SignedSession"] as string);
       if (parsed && parsed.readings.length >= 2) {
         timeSeriesSource = "ocmf";
         intervals = deriveIntervals(parsed.readings);
+      }
+    }
+    if (intervals.length === 0) {
+      const ed = raw["EnergyDetails"];
+      if (Array.isArray(ed) && ed.length >= 2) {
+        timeSeriesSource = "energyDetails";
+        intervals = projectEnergyDetails(ed);
       }
     }
   }
@@ -160,10 +166,19 @@ export async function getSessionDetail(
 function projectEnergyDetails(
   ed: unknown[],
 ): PowerInterval[] {
-  // EnergyDetails per Zaptec swagger:
+  // EnergyDetails per Zaptec /api/chargehistory DetailLevel=1:
   //   [{ Timestamp: ISO, Energy: number }]
-  // Energy here is the cumulative kWh per Zaptec's docs.
-  const points: { t: number; energy: number }[] = [];
+  //
+  // Sprint 9.1.1 — Energy is INTERVAL energy (kWh delivered since the
+  // previous Timestamp), NOT cumulative — earlier comment was wrong.
+  // Confirmed empirically against staging session 05b1a205-3b08-... :
+  //   • Values decrease from 1.012 -> 0.957 -> 0.954, which is
+  //     impossible for a monotonically-rising cumulative meter.
+  //   • Sum of all Energy entries equals the session total
+  //     (Energy / Energy field on the CDR itself) = 12.130 kWh.
+  // OCMF SignedSession.RD[].RV is the true cumulative source if present;
+  // see deriveIntervals in lib/ocmf.ts.
+  const points: { t: number; intervalKwh: number }[] = [];
   for (const e of ed) {
     if (!e || typeof e !== "object") continue;
     const obj = e as Record<string, unknown>;
@@ -173,23 +188,25 @@ function projectEnergyDetails(
     if (typeof en !== "number") continue;
     const t = Date.parse(ts);
     if (!Number.isFinite(t)) continue;
-    points.push({ t, energy: en });
+    points.push({ t, intervalKwh: en });
   }
   if (points.length < 2) return [];
-  const e0 = points[0]!.energy;
   const out: PowerInterval[] = [];
+  let cumulative = 0;
   for (let i = 1; i < points.length; i++) {
     const prev = points[i - 1]!;
     const cur = points[i]!;
     const durationMs = Math.max(0, cur.t - prev.t);
     const hours = durationMs / 3_600_000;
-    const deltaKwh = Math.max(0, cur.energy - prev.energy);
+    // cur.intervalKwh is energy delivered between prev.t and cur.t.
+    const deltaKwh = Math.max(0, cur.intervalKwh);
+    cumulative += deltaKwh;
     const avgPowerKw = hours > 0 ? deltaKwh / hours : 0;
     out.push({
       timestamp: new Date(cur.t).toISOString(),
       durationSec: Math.round(durationMs / 1000),
       avgPowerKw: Number(avgPowerKw.toFixed(3)),
-      cumulativeKwh: Number((cur.energy - e0).toFixed(3)),
+      cumulativeKwh: Number(cumulative.toFixed(3)),
       charging: deltaKwh > 0.001,
     });
   }
