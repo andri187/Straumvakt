@@ -33,6 +33,13 @@ export interface SessionDetail {
   /** Derived per-interval power + cumulative-energy points.
    *  Empty when timeSeriesSource is null. */
   intervals: PowerInterval[];
+  /** Sprint 9.2 — split of plug time into charging vs idle. Both
+   *  derived by summing per-interval durations from `intervals`
+   *  (charging=true vs charging=false). Null when intervals is empty
+   *  (no per-interval data available; only plug time is known).
+   *  The two should sum to durationSec when both are non-null. */
+  chargeTimeSec: number | null;
+  idleTimeSec: number | null;
   /** Anonymous markers for caller awareness — Native auth at
    *  Dalvegur means we never see a driver here regardless of
    *  channel. */
@@ -124,6 +131,22 @@ export async function getSessionDetail(
     }
   }
 
+  // Sprint 9.2 — split plug time into charging vs idle by summing
+  // per-interval durations. Plug time = endedAt - startedAt; charge
+  // time = sum where deltaKwh > threshold; idle = remainder.
+  let chargeTimeSec: number | null = null;
+  let idleTimeSec: number | null = null;
+  if (intervals.length > 0) {
+    let charge = 0;
+    let idle = 0;
+    for (const iv of intervals) {
+      if (iv.charging) charge += iv.durationSec;
+      else idle += iv.durationSec;
+    }
+    chargeTimeSec = charge;
+    idleTimeSec = idle;
+  }
+
   const energyKwh = ledger?.energyKwh
     ? ledger.energyKwh.toString()
     : session.energyWh
@@ -159,6 +182,8 @@ export async function getSessionDetail(
     stopReason: session.stopReason,
     timeSeriesSource,
     intervals,
+    chargeTimeSec,
+    idleTimeSec,
     driverAvailable: Boolean(ledger?.driverIdTag ?? session.idTag),
   };
 }

@@ -25,6 +25,8 @@ interface SessionDetail {
   stopReason: string | null;
   timeSeriesSource: "ocmf" | "energyDetails" | null;
   intervals: PowerInterval[];
+  chargeTimeSec: number | null;
+  idleTimeSec: number | null;
   driverAvailable: boolean;
 }
 
@@ -147,10 +149,28 @@ export function SessionDetailModal({
               <dt className="text-ink-500">Ended</dt>
               <dd className="text-ink-200">{formatTime(detail.endedAt)}</dd>
 
-              <dt className="text-ink-500">Duration</dt>
+              <dt className="text-ink-500">Plug time</dt>
               <dd className="text-ink-200">
                 {formatDuration(detail.durationSec)}
               </dd>
+
+              {/* Sprint 9.2 — split plug time into charging vs idle.
+                  Only render when we have per-interval data; otherwise
+                  hide the rows so legacy sessions without OCMF /
+                  EnergyDetails don't show "—". */}
+              {detail.chargeTimeSec !== null && detail.idleTimeSec !== null && (
+                <>
+                  <dt className="text-ink-500">Charging</dt>
+                  <dd className="text-emerald-300">
+                    {formatDuration(detail.chargeTimeSec)}
+                  </dd>
+
+                  <dt className="text-ink-500">Idle (plugged-in)</dt>
+                  <dd className="text-amber-300">
+                    {formatDuration(detail.idleTimeSec)}
+                  </dd>
+                </>
+              )}
 
               <dt className="text-ink-500">Energy</dt>
               <dd className="text-ink-100">

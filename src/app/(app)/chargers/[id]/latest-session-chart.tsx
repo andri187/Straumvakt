@@ -34,6 +34,8 @@ interface SessionDetail {
   driverIdTag: string | null;
   timeSeriesSource: "ocmf" | "energyDetails" | null;
   intervals: PowerInterval[];
+  chargeTimeSec: number | null;
+  idleTimeSec: number | null;
 }
 
 function formatDuration(sec: number | null): string {
@@ -93,8 +95,21 @@ export async function LatestSessionChart({
             {session.endedAt && (
               <> → {new Date(session.endedAt).toLocaleString()}</>
             )}
-            {" · "}
+            {" · plug "}
             {formatDuration(session.durationSec)}
+            {/* 9.2 — charge/idle split when interval data is available. */}
+            {session.chargeTimeSec !== null && session.idleTimeSec !== null && (
+              <>
+                {" · "}
+                <span className="text-emerald-300">
+                  charging {formatDuration(session.chargeTimeSec)}
+                </span>
+                {" · "}
+                <span className="text-amber-300">
+                  idle {formatDuration(session.idleTimeSec)}
+                </span>
+              </>
+            )}
             {" · "}
             {Number(session.energyKwh).toFixed(2)} kWh
             {session.costFormatted && (
