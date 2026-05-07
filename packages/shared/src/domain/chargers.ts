@@ -37,6 +37,13 @@ export interface ChargerSummary {
    *  chargers may return nothing on /state). */
   commMode: string | null;     // "Wi-Fi" / "LTE" / "PLC" / "Ethernet" / "None"
   signalDbm: number | null;    // integer dBm magnitude (negative for real RF)
+  /** Sprint 9.9 — installation + circuit attached to the charger so
+   *  the /chargers list can group rows hierarchically. Both nullable
+   *  for orphan chargers that haven't been placed yet. */
+  installationId: string | null;
+  installationDisplayName: string | null;
+  circuitId: string | null;
+  circuitDisplayName: string | null;
 }
 
 export interface ChargerCreateResult extends ChargerSummary {

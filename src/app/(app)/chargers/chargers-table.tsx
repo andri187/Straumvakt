@@ -6,7 +6,7 @@
 // useful at-a-glance: Connector (type emblem + status) and Signal
 // (colored bars by magnitude + -dBm value).
 
-import { useState, type ReactNode } from "react";
+import { Fragment, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { Signal, Wifi, RadioTower, Cable, Network } from "lucide-react";
 import type { ChargerSummary } from "@straumvakt/shared/domain/chargers";
@@ -141,6 +141,72 @@ function connectorStatusLabel(c: ChargerSummary): string {
   return c.status ?? "—";
 }
 
+// Sprint 9.9 — grouped table. Rows nest under Installation -> Circuit
+// section headers with distinct surface tones so the operator can scan
+// the fleet structurally instead of sorting a flat list.
+//
+// Surface palette (darker = deeper level):
+//   Installation header   bg-sv-sky/10  · text-sv-sky
+//   Circuit header        bg-bg-raised   · text-ink-200
+//   Charger row           transparent (hover bg-bg-base/20)
+//
+// Sorting now happens within a circuit only (clicking a column header
+// re-sorts each circuit's rows independently). Group order is fixed
+// alphabetically — Installation name first, Circuit name second.
+// Orphan chargers (no installation / no circuit) collect at the bottom
+// under "Unassigned".
+
+interface CircuitGroup {
+  circuitId: string | null;
+  circuitDisplayName: string | null;
+  chargers: ChargerSummary[];
+}
+
+interface InstallationGroup {
+  installationId: string | null;
+  installationDisplayName: string | null;
+  circuits: CircuitGroup[];
+  totalCount: number;
+}
+
+function groupChargers(chargers: ChargerSummary[]): InstallationGroup[] {
+  const byInstallation = new Map<string, InstallationGroup>();
+  for (const c of chargers) {
+    const ikey = c.installationId ?? "__unassigned_installation__";
+    let inst = byInstallation.get(ikey);
+    if (!inst) {
+      inst = {
+        installationId: c.installationId,
+        installationDisplayName: c.installationDisplayName,
+        circuits: [],
+        totalCount: 0,
+      };
+      byInstallation.set(ikey, inst);
+    }
+    const ckey = c.circuitId ?? "__unassigned_circuit__";
+    let circuit = inst.circuits.find((g) => (g.circuitId ?? "__unassigned_circuit__") === ckey);
+    if (!circuit) {
+      circuit = {
+        circuitId: c.circuitId,
+        circuitDisplayName: c.circuitDisplayName,
+        chargers: [],
+      };
+      inst.circuits.push(circuit);
+    }
+    circuit.chargers.push(c);
+    inst.totalCount++;
+  }
+  // Sort installations + circuits alphabetically; Unassigned (null name)
+  // sinks to the bottom of each level.
+  const orderName = (s: string | null) => s ?? "￿"; // unassigned last
+  const groups = Array.from(byInstallation.values());
+  groups.sort((a, b) => orderName(a.installationDisplayName).localeCompare(orderName(b.installationDisplayName)));
+  for (const g of groups) {
+    g.circuits.sort((a, b) => orderName(a.circuitDisplayName).localeCompare(orderName(b.circuitDisplayName)));
+  }
+  return groups;
+}
+
 export function ChargersTable({ chargers }: { chargers: ChargerSummary[] }) {
   const [sortKey, setSortKey] = useState<SortKey>("identityString");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
@@ -154,7 +220,7 @@ export function ChargersTable({ chargers }: { chargers: ChargerSummary[] }) {
     }
   };
 
-  const sorted = sortedRows(chargers, sortKey, sortDir);
+  const groups = groupChargers(chargers);
 
   return (
     <div className="overflow-x-auto rounded-md border border-bg-border bg-bg-base/30">
@@ -171,12 +237,49 @@ export function ChargersTable({ chargers }: { chargers: ChargerSummary[] }) {
             <SortHeader label="Online" k="online" sortKey={sortKey} sortDir={sortDir} onClick={onHeaderClick} />
           </tr>
         </thead>
-        <tbody className="divide-y divide-bg-border/40">
-          {sorted.map((c) => {
-            const sameSerial =
-              c.serialNumber != null &&
-              c.identityString.toLowerCase() === c.serialNumber.toLowerCase();
-            return <ChargerRow key={c.chargingStationId} c={c} sameSerial={sameSerial} />;
+        <tbody>
+          {groups.map((g) => {
+            const installationKey = g.installationId ?? "__unassigned_installation__";
+            return (
+              <Fragment key={installationKey}>
+                <tr className="bg-sv-sky/10 ring-1 ring-inset ring-sv-sky/20">
+                  <td colSpan={8} className="px-3 py-1.5 text-[11px] font-semibold text-sv-sky">
+                    <span className="uppercase tracking-brand text-[9px] text-sv-sky/70">Installation · </span>
+                    {g.installationDisplayName ?? (
+                      <span className="italic text-ink-500">Unassigned</span>
+                    )}
+                    <span className="ml-2 text-[10px] font-normal text-ink-500">
+                      ({g.totalCount} charger{g.totalCount === 1 ? "" : "s"})
+                    </span>
+                  </td>
+                </tr>
+                {g.circuits.map((circuit) => {
+                  const circuitKey = `${installationKey}::${circuit.circuitId ?? "__unassigned_circuit__"}`;
+                  const sortedRowsInCircuit = sortedRows(circuit.chargers, sortKey, sortDir);
+                  return (
+                    <Fragment key={circuitKey}>
+                      <tr className="bg-bg-raised/60">
+                        <td colSpan={8} className="px-6 py-1 text-[10px] text-ink-300">
+                          <span className="uppercase tracking-brand text-[9px] text-ink-500">Circuit · </span>
+                          {circuit.circuitDisplayName ?? (
+                            <span className="italic text-ink-500">Unassigned</span>
+                          )}
+                          <span className="ml-2 text-[10px] text-ink-500">
+                            ({circuit.chargers.length})
+                          </span>
+                        </td>
+                      </tr>
+                      {sortedRowsInCircuit.map((c) => {
+                        const sameSerial =
+                          c.serialNumber != null &&
+                          c.identityString.toLowerCase() === c.serialNumber.toLowerCase();
+                        return <ChargerRow key={c.chargingStationId} c={c} sameSerial={sameSerial} />;
+                      })}
+                    </Fragment>
+                  );
+                })}
+              </Fragment>
+            );
           })}
         </tbody>
       </table>

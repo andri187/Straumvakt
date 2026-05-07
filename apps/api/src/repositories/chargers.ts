@@ -92,6 +92,8 @@ export async function listAllChargers(
     include: {
       organization: { select: { displayName: true } },
       siteAsset: { select: { site: { select: { displayName: true } } } },
+      installation: { select: { id: true, displayName: true } },
+      circuit: { select: { id: true, displayName: true } },
       evses: {
         take: 1,
         orderBy: { evseIndex: "asc" },
@@ -158,6 +160,11 @@ export async function listAllChargers(
             : null,
       commMode: r.commMode,
       signalDbm: r.signalDbm,
+      // 9.9 — installation + circuit for the /chargers grouped view.
+      installationId: r.installation?.id ?? null,
+      installationDisplayName: r.installation?.displayName ?? null,
+      circuitId: r.circuit?.id ?? null,
+      circuitDisplayName: r.circuit?.displayName ?? null,
     };
   });
 
@@ -374,6 +381,10 @@ export async function createCharger(
     decommissioned: false,
     commMode: null,
     signalDbm: null,
+    installationId: input.installationId ?? null,
+    installationDisplayName: null,
+    circuitId: input.circuitId ?? null,
+    circuitDisplayName: null,
     ocppPassword: password,
   };
 }
