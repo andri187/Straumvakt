@@ -32,6 +32,7 @@ import { adminIdTokens } from "./routes/admin/id-tokens";
 import { adminOrgInvites } from "./routes/admin/org-invites";
 import { adminBilling } from "./routes/admin/billing";
 import { adminContracts } from "./routes/admin/contracts";
+import { adminAgreementsDebug } from "./routes/admin/agreements-debug";
 import { publicInvites } from "./routes/public/invites";
 import { internalOcppAuth } from "./routes/internal/ocpp-auth";
 import { internalOcppAuthorize } from "./routes/internal/ocpp-authorize";
@@ -130,6 +131,11 @@ app.route("/api/admin/billing", adminBilling);
 // Org-scoped list is at /api/admin/orgs/:id/contracts; this is the
 // platform-wide view + individual mutations.
 app.route("/api/admin/contracts", adminContracts);
+
+// Sprint 9 / ADR 0019 milestone A.6 — read-only debug endpoint for the
+// agreement resolver. Operator picks (driver, charger, time) and sees
+// what the resolver would emit at session-stop. Never writes.
+app.route("/api/admin/agreements", adminAgreementsDebug);
 
 // Sprint 5.8 — agent invite flow (recipient side). Public routes
 // gated by the token itself, NOT by the admin session cookie.
