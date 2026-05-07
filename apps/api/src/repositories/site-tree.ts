@@ -522,18 +522,36 @@ export async function listSiteTree(
       e.connectors.map((k) => {
         const ocppReal = isRealOcppStatus(k.status);
         const useVendor = !ocppReal && vendorStatus != null;
+        // 8.13.5 — when the charger is offline, the vendor's last-known
+        // ChargerOperationMode (StateId 710) and any cached OCPP
+        // StatusNotification are stale snapshots, not live state. Force
+        // a synthetic "Offline" so the connector pill matches the
+        // charger-level badge instead of contradicting it (caught at
+        // Klettas 3 / ZPR103043: row showed "Charging · offline").
+        const status = !online
+          ? "Offline"
+          : useVendor
+            ? vendorStatus
+            : k.status;
         return {
           evseIndex: e.evseIndex,
           connectorIndex: k.connectorIndex,
           type: k.type,
-          status: useVendor ? vendorStatus : k.status,
-          errorCode: useVendor ? null : k.errorCode,
-          statusUpdatedAt: useVendor
-            ? null
-            : k.statusUpdatedAt
-              ? new Date(k.statusUpdatedAt).toISOString()
-              : null,
-          source: ocppReal ? "ocpp" : useVendor ? "vendor" : null,
+          status,
+          errorCode: !online || useVendor ? null : k.errorCode,
+          statusUpdatedAt:
+            !online || useVendor
+              ? null
+              : k.statusUpdatedAt
+                ? new Date(k.statusUpdatedAt).toISOString()
+                : null,
+          source: !online
+            ? "vendor"
+            : ocppReal
+              ? "ocpp"
+              : useVendor
+                ? "vendor"
+                : null,
         } as SiteTreeChargerNode["connectors"][number];
       }),
     );

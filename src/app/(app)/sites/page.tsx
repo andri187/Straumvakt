@@ -654,6 +654,11 @@ function statusLabel(s: string): string {
       return "Suspended (EV)";
     case "SuspendedEVSE":
       return "Suspended (EVSE)";
+    case "Offline":
+      // 8.13.5 — synthetic status from site-tree when online=false.
+      // Lowercased to read like the trailing "offline" elsewhere in the
+      // row instead of the OCPP-enum CamelCase.
+      return "offline";
     default:
       return s;
   }
@@ -675,6 +680,10 @@ function statusTone(s: string): string {
       return "bg-rose-950/40 text-rose-300 ring-1 ring-rose-700/40";
     case "Unavailable":
       return "bg-bg-base/50 text-ink-400 ring-1 ring-bg-border";
+    case "Offline":
+      // 8.13.5 — yellow tone so an offline charger reads
+      // distinctly from "Available" (green) and "Charging" (sky).
+      return "bg-amber-950/40 text-amber-300 ring-1 ring-amber-700/40";
     default:
       return "bg-bg-base/50 text-ink-500 ring-1 ring-bg-border";
   }
