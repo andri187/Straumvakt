@@ -277,3 +277,97 @@ separate ADR.
    into per-factor rows.
 
 These are revisited at the cutover ADR after A.6 evidence lands.
+
+---
+
+## Addendum 2026-05-07 — `cpo_org_id`, STR factor, admin-only operational data
+
+Filed the same day as the original ADR after the operator walked through
+the Krónan / N1 scenarios and pruned the model. Three narrowing changes.
+
+### Drivers gain access via explicit memberships only
+
+There is no implicit "audience-null clause = anyone can charge" grant.
+A charging session resolves only when the driver is a member of a
+`DriverGroup` whose Agreement covers the charger's CPO. The route
+handler's session-context builder denies access before the resolver
+runs if no membership matches.
+
+This collapses resolution to two concepts (no separate "L3 driver
+policy" tier):
+
+- The **Agreement** (`agreement_type=cpo` or `workplace`) — sets which
+  factors apply, default bearer per factor, default rate references.
+- **Driver memberships** in groups under that Agreement — the access
+  grant. Direct customers of a CPO go in a group under the CPO
+  Agreement; workplace employees go in a group under the workplace
+  Agreement. A driver may hold both kinds of membership at once.
+
+Per-driver overrides (the case ADR drafts called "L3") are just
+`BearerRule` rows with `audience=user`. No separate primitive.
+
+### Schema delta — `Agreement.cpo_org_id`
+
+Workplace agreements name which CPO ORG they bind at via a new
+nullable column with a CHECK pairing it to `agreement_type`:
+
+| `agreement_type` | `cpo_org_id` |
+|---|---|
+| `cpo` | NULL — the counterparty IS the CPO |
+| `workplace` | NOT NULL — names the CPO this workplace deal binds at |
+
+Migration `20260507190000_agreements_cpo_org_id_and_str_factor` —
+additive on top of `agreements_v1`; safe to apply because no rows
+exist yet.
+
+The session-context builder uses this column directly to find the
+applicable workplace agreements for a session, no JSONB inspection
+required.
+
+### New cost factor — STR (Straumvaktargjald)
+
+The original eight-factor catalog had no factor that pays Straumvakt
+itself. Added as the 9th catalog row in `agreements.cost_factors`. STR's
+**recipient is structurally pinned to Straumvakt's own ORG row** via
+the `RateReference.supplier_org_id`. No new bearer type required.
+
+Default bearer depends on agreement type the operator authors:
+
+- On a CPO agreement: `ORG` (the CPO covers the platform fee out of
+  revenue) or `USR` if the CPO opts to surface it to the driver.
+- On a workplace agreement: `WRK` (workplace pays the per-session
+  mediation fee).
+
+Default basis at pilot is `per_session`. Per-kWh stays supported via
+a different RateReference code under the same factor.
+
+### Per-driver overrides cannot reduce a workplace's commitment
+
+A `BearerRule` whose audience is more specific than the workplace
+group cannot leave the workplace bearing less than the agreement's
+audience-null clause already commits. The dial only goes one way: the
+workplace can absorb MORE for a specific driver, never LESS.
+
+Operator-side discipline — enforced by Zod validation in the
+rule-authoring API. Not enforced in the DB. The resolver doesn't need
+to know.
+
+### Operational data is admin-created
+
+Agreements, DriverGroups, DriverGroupMemberships, BearerRules, and
+RateReferences are all created through admin UI / API. The seed
+populates **only the cost factor catalog** (`agreements.cost_factors`,
+nine rows) — that's the only universal reference data. No
+tenant-specific or pilot-specific bootstrap script ships in the
+repository; the operator builds those rows manually.
+
+### What this addendum does NOT change
+
+- The resolver in `apps/api/src/lib/agreement/resolve.ts` is unchanged.
+  STR walks the same ladder as every other factor; recipient pinning
+  happens via `RateReference.supplier_org_id`.
+- The `BearerRule` table is unchanged.
+- The `AgreementBillingLine.agreement_id` convention from the original
+  open-question list (always = CPO Agreement; workplace contribution
+  recoverable via `rule_id`) stands.
+

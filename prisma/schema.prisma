@@ -545,6 +545,7 @@ model Organization {
 
   // ── Sprint 9 / ADR 0019 — agreements schema back-relations ──────
   agreementsAsCounterparty Agreement[]   @relation("AgreementCounterparty")
+  agreementsAsCpo          Agreement[]   @relation("AgreementCpo")
   rateReferencesAsSupplier RateReference[] @relation("RateReferenceSupplier")
   driverGroupsOwned        DriverGroup[] @relation("DriverGroupOwner")
 
@@ -2945,6 +2946,12 @@ model Agreement {
   id                String              @id @default(uuid()) @db.Uuid
   counterpartyOrgId String              @map("counterparty_org_id") @db.Uuid
   agreementType     AgreementType       @map("agreement_type")
+  // Sprint 9 / ADR 0019 addendum — three-layer model.
+  // Names which CPO ORG a *workplace* (L2) agreement binds at. NULL on
+  // type=cpo agreements (the counterparty IS the CPO). DB-side CHECK
+  // enforces the type↔nullness pairing — see migration
+  // 20260507190000_agreements_cpo_org_id_and_str_factor.
+  cpoOrgId          String?             @map("cpo_org_id") @db.Uuid
   displayName       String              @map("display_name")
   status            AgreementStatus     @default(draft)
   effectiveFrom     DateTime            @map("effective_from") @db.Timestamptz(6)
@@ -2954,6 +2961,7 @@ model Agreement {
   updatedAt         DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   counterpartyOrg   Organization        @relation("AgreementCounterparty", fields: [counterpartyOrgId], references: [id], onDelete: Cascade)
+  cpoOrg            Organization?       @relation("AgreementCpo", fields: [cpoOrgId], references: [id], onDelete: Restrict)
 
   clauses           AgreementClause[]
   driverGroups     DriverGroup[]
@@ -2961,6 +2969,7 @@ model Agreement {
   billingLines      AgreementBillingLine[]
 
   @@index([counterpartyOrgId, status])
+  @@index([cpoOrgId])
   @@index([effectiveFrom])
   @@map("agreements")
   @@schema("agreements")

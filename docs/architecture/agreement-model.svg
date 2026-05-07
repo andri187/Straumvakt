@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1480 920" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif">
+  <defs>
+    <marker id="arrow-sky" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#38bdf8"/>
+    </marker>
+    <marker id="arrow-emerald" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#34d399"/>
+    </marker>
+    <marker id="arrow-slate" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#94a3b8"/>
+    </marker>
+    <style>
+      .bg { fill: #0f172a; }
+      .title { fill: #f1f5f9; font-size: 32px; font-weight: 700; }
+      .subtitle { fill: #94a3b8; font-size: 16px; }
+      .h2 { fill: #f1f5f9; font-size: 22px; font-weight: 700; }
+      .driver-card { fill: #2a1018; stroke: #fb7185; stroke-width: 2; }
+      .agreement-cpo { fill: #0c1e2e; stroke: #38bdf8; stroke-width: 2; }
+      .agreement-wkp { fill: #0c2418; stroke: #34d399; stroke-width: 2; }
+      .step { fill: #170c1f; stroke: #c084fc; stroke-width: 1.5; }
+      .footer { fill: #0c1628; stroke: #475569; stroke-width: 1; }
+      .label { fill: #f1f5f9; font-size: 16px; font-weight: 600; }
+      .body { fill: #cbd5e1; font-size: 14px; }
+      .small { fill: #94a3b8; font-size: 12px; }
+      .quote { fill: #e2e8f0; font-size: 15px; font-style: italic; }
+      .role-tag { fill: #f1f5f9; font-size: 12px; font-weight: 700; letter-spacing: 1.5px; }
+      .text-sky { fill: #38bdf8; }
+      .text-emerald { fill: #34d399; }
+      .text-rose { fill: #fb7185; }
+      .text-slate { fill: #94a3b8; }
+      .text-amber { fill: #fbbf24; }
+      .arrow-sky { stroke: #38bdf8; stroke-width: 2.5; fill: none; }
+      .arrow-emerald { stroke: #34d399; stroke-width: 2.5; fill: none; }
+      .arrow-slate { stroke: #94a3b8; stroke-width: 2; fill: none; }
+      .divider { stroke: #1e293b; stroke-width: 1; }
+      .gate-bar { fill: #fb7185; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1480" height="920"/>
+
+  <!-- HEADER -->
+  <text class="title" x="40" y="56">Agreement model</text>
+  <text class="subtitle" x="40" y="84">Two agreement types. Driver memberships gate access. No implicit defaults.</text>
+
+  <!-- DRIVER CARD (top center) -->
+  <g transform="translate(620, 130)">
+    <rect class="driver-card" rx="12" width="240" height="120"/>
+    <rect fill="#fb7185" x="20" y="20" width="80" height="22" rx="11"/>
+    <text class="role-tag" x="60" y="36" text-anchor="middle">DRIVER</text>
+    <text class="label" x="20" y="74">A Straumvakt user</text>
+    <text class="small" x="20" y="96">audience=driver. Charges with their</text>
+    <text class="small" x="20" y="112">RFID/app at any agreement they hold.</text>
+  </g>
+
+  <!-- "must hold a membership" line -->
+  <text class="text-rose" x="740" y="280" text-anchor="middle" font-size="13" font-weight="600">must hold a membership in at least one ↓</text>
+
+  <!-- ===== TWO AGREEMENT TYPES ===== -->
+
+  <!-- CPO Agreement -->
+  <g transform="translate(80, 320)">
+    <rect class="agreement-cpo" rx="12" width="600" height="280"/>
+    <rect fill="#38bdf8" x="20" y="20" width="160" height="24" rx="12"/>
+    <text class="role-tag" x="100" y="37" text-anchor="middle">CPO AGREEMENT</text>
+
+    <text class="h2" x="20" y="80">Straumvakt ⇄ CPO</text>
+    <text class="text-sky body" x="20" y="104">e.g. N1, Olís, Orka náttúrunnar</text>
+
+    <text class="quote" x="20" y="140">"N1 sets which factors apply,</text>
+    <text class="quote" x="20" y="162">at what rate, and who pays by default."</text>
+
+    <text class="label" x="20" y="206">A driver in a group under this Agreement</text>
+    <text class="label" x="20" y="226">is a direct customer of the CPO.</text>
+
+    <text class="small" x="20" y="256">Bill = the CPO's clauses, no overrides.</text>
+  </g>
+
+  <!-- Workplace Agreement -->
+  <g transform="translate(800, 320)">
+    <rect class="agreement-wkp" rx="12" width="600" height="280"/>
+    <rect fill="#34d399" x="20" y="20" width="220" height="24" rx="12"/>
+    <text class="role-tag" x="130" y="37" text-anchor="middle">WORKPLACE AGREEMENT</text>
+
+    <text class="h2" x="20" y="80">Straumvakt ⇄ Workplace</text>
+    <text class="text-emerald body" x="20" y="104">e.g. Krónan — bound to one CPO via cpo_org_id</text>
+
+    <text class="quote" x="20" y="140">"Krónan covers some factors for its staff</text>
+    <text class="quote" x="20" y="162">at N1's chargers, on top of N1's defaults."</text>
+
+    <text class="label" x="20" y="206">A driver in a group under this Agreement</text>
+    <text class="label" x="20" y="226">is a workplace customer at that CPO.</text>
+
+    <text class="small" x="20" y="256">Bill = CPO clauses + workplace overrides.</text>
+  </g>
+
+  <!-- Membership arrows from driver to each agreement -->
+  <path class="arrow-sky" d="M 700 250 Q 460 290 380 320" marker-end="url(#arrow-sky)"/>
+  <path class="arrow-emerald" d="M 780 250 Q 1020 290 1100 320" marker-end="url(#arrow-emerald)"/>
+
+  <text class="text-sky small" x="430" y="290">membership ↘</text>
+  <text class="text-emerald small" x="1020" y="290">↙ membership</text>
+
+  <!-- ===== HOW BILLS RESOLVE ===== -->
+  <line class="divider" x1="40" y1="630" x2="1440" y2="630"/>
+
+  <text class="h2" x="40" y="666">At session-stop</text>
+
+  <g transform="translate(40, 686)">
+    <!-- Step 1 -->
+    <rect class="step" rx="8" width="340" height="90"/>
+    <text class="text-amber label" x="14" y="26">1.  Find memberships</text>
+    <text class="body" x="14" y="50">Which of the driver's groups</text>
+    <text class="body" x="14" y="68">cover the charger's CPO?</text>
+    <text class="text-rose small" x="14" y="84">If none — deny.</text>
+
+    <!-- arrow -->
+    <path class="arrow-slate" d="M 350 731 L 388 731" marker-end="url(#arrow-slate)"/>
+
+    <!-- Step 2 -->
+    <rect class="step" rx="8" x="396" width="340" height="90"/>
+    <text class="text-amber label" x="410" y="26">2.  Walk the rules</text>
+    <text class="body" x="410" y="50">Per attribute (bearer / rate /</text>
+    <text class="body" x="410" y="68">allocation): driver → group →</text>
+    <text class="body" x="410" y="84">agreement default. First non-null wins.</text>
+
+    <path class="arrow-slate" d="M 746 731 L 784 731" marker-end="url(#arrow-slate)"/>
+
+    <!-- Step 3 -->
+    <rect class="step" rx="8" x="792" width="340" height="90"/>
+    <text class="text-amber label" x="806" y="26">3.  Compute amounts</text>
+    <text class="body" x="806" y="50">Apply RateReference × basis.</text>
+    <text class="body" x="806" y="68">Split per allocation.</text>
+    <text class="body" x="806" y="84">Add markup if any.</text>
+
+    <path class="arrow-slate" d="M 1142 731 L 1180 731" marker-end="url(#arrow-slate)"/>
+
+    <!-- Step 4 -->
+    <rect class="step" rx="8" x="1188" width="220" height="90"/>
+    <text class="text-amber label" x="1202" y="26">4.  Emit lines</text>
+    <text class="body" x="1202" y="50">One billing_line per</text>
+    <text class="body" x="1202" y="68">(factor, kind). Ready for</text>
+    <text class="body" x="1202" y="84">invoice rollup.</text>
+  </g>
+
+  <!-- ===== SEED + ADMIN BOUNDARY ===== -->
+  <g transform="translate(40, 800)">
+    <rect class="footer" rx="10" width="1400" height="100"/>
+    <text class="label" x="20" y="32">What the seed creates</text>
+    <text class="body" x="20" y="58">Only the cost factor catalog (DSO, ELE, ACS, PRM, TRF, SRF, RNT, MTR, STR) — universal reference data.</text>
+
+    <line x1="700" y1="20" x2="700" y2="80" stroke="#1e293b"/>
+
+    <text class="label" x="720" y="32">What admin creates</text>
+    <text class="body" x="720" y="58">Agreements, RateReferences, DriverGroups, DriverGroupMemberships, BearerRules.</text>
+    <text class="text-slate small" x="720" y="80">All operational data lands through admin UI / API. No tenant-specific bootstrap script ships in the repo.</text>
+  </g>
+</svg>
