@@ -85,20 +85,12 @@ export default async function ChargerDetailPage({ params }: { params: Promise<{ 
       >
       <TechnicalReadPillsLive firmwareFromBoot={charger.firmwareVersion} />
 
-      {/* Sprint 8.4.2 — latest-session timeline. Same SVG chart the
-          /charge-log session-detail modal renders, scoped to the most
-          recent closed session for THIS charger. Server-fetched so
-          it lands on the same render as the rest of the page. */}
-      <LatestSessionChart chargingStationId={charger.chargingStationId} />
-
       {/* Operator command surface — only mount when there's an OcppIdentity
           (without one, /api/admin/chargers/<id>/<command> would 404 since
-          the route keys on ocppIdentityId). */}
-      {/* Connectors + commands — live status pill + per-connector
-          Start/Stop inline. GetConfig / ChangeConfig collapsed in
-          a <details> at the bottom. Pulls connector status straight
-          from the connector.status_updated projection (live, updated
-          on each StatusNotification). */}
+          the route keys on ocppIdentityId). Connectors + commands placed
+          right under the pill ribbon (Sprint 9.3) so the connector live-
+          status reads alongside Signal/Comm/OCPP and the operator can act
+          before scrolling past the session timeline. */}
       {identity && (
         <div className="mb-6">
           <ChargerCommandsPanel
@@ -131,6 +123,12 @@ export default async function ChargerDetailPage({ params }: { params: Promise<{ 
           />
         </div>
       )}
+
+      {/* Sprint 8.4.2 — latest-session timeline. Same SVG chart the
+          /charge-log session-detail modal renders, scoped to the most
+          recent closed session for THIS charger. Server-fetched so
+          it lands on the same render as the rest of the page. */}
+      <LatestSessionChart chargingStationId={charger.chargingStationId} />
 
       {/* Hardware identity / OCPP boot profile. Always shown when we
           have anything from either source — DB columns (populated by
