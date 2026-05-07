@@ -101,9 +101,45 @@ async function seedCostFactorCatalog() {
   console.log(`[seed] cost-factor catalog: ${COST_FACTORS.length} factors upserted.`);
 }
 
+// ── ADR 0019 — agreements cost-factor catalog (revised) ──────────────
+// Coexists with the legacy ADR 0008 catalog above until cutover.
+const AGREEMENT_COST_FACTORS = [
+  { code: "DSO", displayNameIs: "Dreifing",       displayNameEn: "DSO grid fee",                description: "Distribution-system-operator grid fee. Pass-through to the DSO (Veitur, Norðurorka, RARIK, ...). Site-anchored." },
+  { code: "ELE", displayNameIs: "Rafmagn",        displayNameEn: "Retailer energy price",       description: "Electricity commodity price from the retailer. Pass-through. Installation-anchored in pilot." },
+  { code: "ACS", displayNameIs: "Notendagjald",   displayNameEn: "User access fee",             description: "Per-session or per-month flat access fee. Recipient is typically the CPO." },
+  { code: "PRM", displayNameIs: "Premium",        displayNameEn: "Premium user access fee",     description: "Higher-tier user access fee for differentiated pricing." },
+  { code: "TRF", displayNameIs: "Tímagjald",      displayNameEn: "Extra tariffs",               description: "Idle-minute fees, surge pricing, etc. Recipient is the CPO." },
+  { code: "SRF", displayNameIs: "Þjónustugjald",  displayNameEn: "Service / installer fee",     description: "Fee paid to the contractor handling installation/maintenance." },
+  { code: "RNT", displayNameIs: "Leiga",          displayNameEn: "Charger rental fee",          description: "Hardware-rental fee when the charger is rented vs. owned. Null/absent when owned." },
+  { code: "MTR", displayNameIs: "Mælagjald",      displayNameEn: "E-meter daily fee",           description: "Daily fee the DSO charges for the e-meter on the installation. Pass-through." },
+];
+
+async function seedAgreementCostFactorCatalog() {
+  for (const f of AGREEMENT_COST_FACTORS) {
+    await prisma.agreementCostFactor.upsert({
+      where: { code: f.code },
+      update: {
+        displayNameIs: f.displayNameIs,
+        displayNameEn: f.displayNameEn,
+        description: f.description,
+      },
+      create: {
+        code: f.code,
+        displayNameIs: f.displayNameIs,
+        displayNameEn: f.displayNameEn,
+        description: f.description,
+        status: "active",
+      },
+    });
+  }
+  // eslint-disable-next-line no-console
+  console.log(`[seed] agreements cost-factor catalog: ${AGREEMENT_COST_FACTORS.length} factors upserted.`);
+}
+
 async function main() {
   await seedHardwareCatalog();
   await seedCostFactorCatalog();
+  await seedAgreementCostFactorCatalog();
 }
 
 main()
