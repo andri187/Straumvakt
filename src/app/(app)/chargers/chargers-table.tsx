@@ -8,7 +8,7 @@
 
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
-import { Plug, Signal } from "lucide-react";
+import { Signal, Wifi, RadioTower, Cable, Network } from "lucide-react";
 import type { ChargerSummary } from "@straumvakt/shared/domain/chargers";
 
 const DASH = "—";
@@ -18,6 +18,7 @@ type SortKey =
   | "orgSite"
   | "vendorModel"
   | "connector"
+  | "comm"
   | "signal"
   | "lifetimeKwh"
   | "online";
@@ -106,6 +107,9 @@ function sortedRows(rows: ChargerSummary[], key: SortKey, dir: SortDir): Charger
         n = STR(connectorStatusLabel(a), connectorStatusLabel(b));
         if (n === 0) n = STR(a.connectorType, b.connectorType);
         break;
+      case "comm":
+        n = compareNullable(a.commMode, b.commMode, STR);
+        break;
       case "signal":
         // Stronger signal sorts first when asc. dBm is negative;
         // we sort by |dBm| ascending so green/closer-to-zero wins.
@@ -174,6 +178,7 @@ export function ChargersTable({ chargers }: { chargers: ChargerSummary[] }) {
             <SortHeader label="Org · Site" k="orgSite" sortKey={sortKey} sortDir={sortDir} onClick={onHeaderClick} />
             <SortHeader label="Vendor · Model" k="vendorModel" sortKey={sortKey} sortDir={sortDir} onClick={onHeaderClick} />
             <SortHeader label="Connector" k="connector" sortKey={sortKey} sortDir={sortDir} onClick={onHeaderClick} />
+            <SortHeader label="Comm" k="comm" sortKey={sortKey} sortDir={sortDir} onClick={onHeaderClick} />
             <SortHeader label="Signal" k="signal" sortKey={sortKey} sortDir={sortDir} onClick={onHeaderClick} />
             <SortHeader label="Lifetime kWh" k="lifetimeKwh" sortKey={sortKey} sortDir={sortDir} onClick={onHeaderClick} align="right" />
             <SortHeader label="Online" k="online" sortKey={sortKey} sortDir={sortDir} onClick={onHeaderClick} />
@@ -263,6 +268,9 @@ function ChargerRow({ c, sameSerial }: { c: ChargerSummary; sameSerial: boolean 
         <ConnectorCell c={c} />
       </td>
       <td className="px-3 py-1.5">
+        <CommCell mode={c.commMode} />
+      </td>
+      <td className="px-3 py-1.5">
         <SignalCell dbm={c.signalDbm} />
       </td>
       <td className="px-3 py-1.5 text-right font-mono text-ink-200">{fmtKWh(c.lifetimeKwh)}</td>
@@ -270,6 +278,59 @@ function ChargerRow({ c, sameSerial }: { c: ChargerSummary; sameSerial: boolean 
         <OnlineCell c={c} />
       </td>
     </tr>
+  );
+}
+
+/**
+ * Connector-shape emblem. Lucide doesn't ship IEC 62196 plug icons,
+ * so each connector type gets its own inline SVG. Type 2 has the
+ * canonical 7-pin Mennekes layout (1 large flat top, 6 round
+ * lower pins); CCS has the Type 2 head plus two large DC pins
+ * underneath. CHAdeMO and Type 1 fall through to a generic plug.
+ *
+ * Drawn at 16×16 viewBox; the wrapping <span> sets size via
+ * Tailwind so the emblem matches the row height of the other icons.
+ */
+function ConnectorEmblem({ type, className }: { type: string; className?: string }) {
+  const t = type.toLowerCase();
+  if (t.includes("ccs")) {
+    return (
+      <svg viewBox="0 0 16 16" className={className} fill="none" stroke="currentColor" strokeWidth="1" aria-hidden>
+        <circle cx="8" cy="6" r="4.5" />
+        <line x1="8" y1="2" x2="8" y2="3.2" strokeWidth="1.4" />
+        <circle cx="6" cy="6" r="0.7" fill="currentColor" />
+        <circle cx="10" cy="6" r="0.7" fill="currentColor" />
+        <circle cx="6" cy="8" r="0.7" fill="currentColor" />
+        <circle cx="10" cy="8" r="0.7" fill="currentColor" />
+        <circle cx="5" cy="13" r="1.3" fill="currentColor" />
+        <circle cx="11" cy="13" r="1.3" fill="currentColor" />
+      </svg>
+    );
+  }
+  if (t.includes("chademo")) {
+    return (
+      <svg viewBox="0 0 16 16" className={className} fill="none" stroke="currentColor" strokeWidth="1" aria-hidden>
+        <circle cx="8" cy="8" r="6" />
+        <circle cx="5.5" cy="6" r="1" fill="currentColor" />
+        <circle cx="10.5" cy="6" r="1" fill="currentColor" />
+        <circle cx="5.5" cy="10" r="1" fill="currentColor" />
+        <circle cx="10.5" cy="10" r="1" fill="currentColor" />
+        <circle cx="8" cy="11.5" r="0.8" fill="currentColor" />
+      </svg>
+    );
+  }
+  // Default: Type 2 (Mennekes) — 7-pin Schuko-derived layout.
+  return (
+    <svg viewBox="0 0 16 16" className={className} fill="none" stroke="currentColor" strokeWidth="1" aria-hidden>
+      <circle cx="8" cy="8" r="6.2" />
+      <line x1="8" y1="2.5" x2="8" y2="4" strokeWidth="1.4" />
+      <circle cx="5.5" cy="6.5" r="0.8" fill="currentColor" />
+      <circle cx="10.5" cy="6.5" r="0.8" fill="currentColor" />
+      <circle cx="4.6" cy="9" r="0.8" fill="currentColor" />
+      <circle cx="11.4" cy="9" r="0.8" fill="currentColor" />
+      <circle cx="6.5" cy="11" r="0.8" fill="currentColor" />
+      <circle cx="9.5" cy="11" r="0.8" fill="currentColor" />
+    </svg>
   );
 }
 
@@ -291,9 +352,30 @@ function ConnectorCell({ c }: { c: ChargerSummary }) {
             : "text-ink-500";
   return (
     <span className="inline-flex items-center gap-1.5">
-      <Plug className="h-3.5 w-3.5 shrink-0 text-ink-500" />
+      <ConnectorEmblem type={c.connectorType} className="h-4 w-4 shrink-0 text-ink-400" />
       <span className="font-mono text-[10px] text-ink-400">{c.connectorType}</span>
       <span className={`text-[11px] ${tone}`}>{status}</span>
+    </span>
+  );
+}
+
+function CommCell({ mode }: { mode: string | null }) {
+  // Pick an icon by transport. PLC + Ethernet share the cable icon
+  // (both wired); Wi-Fi and LTE get their own.
+  const Icon =
+    mode == null
+      ? Network
+      : /wi[-\s]?fi/i.test(mode)
+        ? Wifi
+        : /lte|4g|5g|cellular/i.test(mode)
+          ? RadioTower
+          : /plc|ethernet|wired/i.test(mode)
+            ? Cable
+            : Network;
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <Icon className="h-3.5 w-3.5 shrink-0 text-ink-400" />
+      <span className="text-[11px] text-ink-300">{mode ?? DASH}</span>
     </span>
   );
 }

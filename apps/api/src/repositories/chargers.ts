@@ -101,18 +101,9 @@ export async function listAllChargers(
     },
   });
 
-  // 9.7 — pull signalDbm from the last_telemetry_read JSONB cache
-  // written by the technical-read repo. The shape there is
-  // ChargerTechnicalRead with signalDbm: number | null.
-  const signalByStation = new Map<string, number | null>();
-  for (const r of rows) {
-    const cache = r.lastTelemetryRead as { signalDbm?: unknown } | null;
-    const v = cache?.signalDbm;
-    signalByStation.set(
-      r.siteAssetId,
-      typeof v === "number" ? v : null,
-    );
-  }
+  // 9.8 — signalDbm + commMode now come from dedicated columns
+  // populated by the */1 cron. JSONB-cache fallback removed since
+  // every charger gets fresh values from the cron.
 
   // Sprint 9.7 — live decommissioned detection. One Zaptec listChargers
   // round-trip per active credential per request. Skips when KEK isn't
@@ -165,7 +156,8 @@ export async function listAllChargers(
           : identity?.vendorResourceId
             ? !activeIds.has(identity.vendorResourceId)
             : null,
-      signalDbm: signalByStation.get(r.siteAssetId) ?? null,
+      commMode: r.commMode,
+      signalDbm: r.signalDbm,
     };
   });
 
@@ -377,9 +369,10 @@ export async function createCharger(
     online: false,
     onlineSinceAt: null,
     lastSeenAt: null,
-    // 9.7 — fresh row; assume not decommissioned. Will be re-evaluated
-    // on the next list-chargers fetch.
+    // 9.7/9.8 — fresh row; assume not decommissioned. Will be
+    // re-evaluated on the next list-chargers fetch + cron tick.
     decommissioned: false,
+    commMode: null,
     signalDbm: null,
     ocppPassword: password,
   };

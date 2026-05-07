@@ -214,11 +214,34 @@ export async function syncZaptecChargerStatus(
       const onlineSinceAt = isOnline && onlineEntry?.Timestamp
         ? new Date(onlineEntry.Timestamp)
         : null;
+      // Sprint 9.8 — comm mode (StateId 150) + signal RSSI (StateId 809).
+      // Both observable on the same /state response. Comm is a Zaptec
+      // numeric enum (0=None / 1=Wi-Fi / 2=LTE / 3=PLC / 4=Ethernet);
+      // map to label for the UI. Signal is integer dBm magnitude.
+      const COMM_MODES: Record<string, string> = {
+        "0": "None",
+        "1": "Wi-Fi",
+        "2": "LTE",
+        "3": "PLC",
+        "4": "Ethernet",
+      };
+      const commRaw = stateById(150);
+      const commLabel =
+        commRaw != null
+          ? (COMM_MODES[commRaw] ?? commRaw)
+          : null;
+      const signalRaw = stateById(809);
+      const signalDbm =
+        signalRaw != null && Number.isFinite(Number(signalRaw))
+          ? Math.trunc(Number(signalRaw))
+          : null;
       const stationData: Record<string, unknown> = {};
       if (firmware911) stationData.firmwareVersion = firmware911;
       if (mainboard908) stationData.mainboardSwVersion = mainboard908;
       if (bootloader912) stationData.smartBootloaderVersion = bootloader912;
       if (hardware913) stationData.hardwareVersion = hardware913;
+      if (commLabel != null) stationData.commMode = commLabel;
+      if (signalDbm != null) stationData.signalDbm = signalDbm;
       if (isOnline) stationData.onlineSinceAt = onlineSinceAt;
       else stationData.onlineSinceAt = null; // clear when offline
       if (Object.keys(stationData).length > 0) {

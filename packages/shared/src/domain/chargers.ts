@@ -28,11 +28,15 @@ export interface ChargerSummary {
    *  charger in any credential's listChargers (Active=false / retired).
    *  null when we couldn't verify (no credential / Zaptec outage). */
   decommissioned: boolean | null;
-  /** Sprint 9.7 — signal strength in dBm from the last_telemetry_read
-   *  JSONB cache (StateId 809). Negative magnitude per RF convention.
-   *  null when the cache is empty / charger doesn't report signal
-   *  (PLC chargers). Drives the colored bars emblem in the list view. */
-  signalDbm: number | null;
+  /** Sprint 9.8 — communication mode + signal strength cached on
+   *  ChargingStation by the every-minute cron (extracted from /state
+   *  StateId 150 + 809). Replaces the JSONB-only path so the list
+   *  view sees fresh values for every charger without each operator
+   *  first visiting /chargers/[id]. Both null when the charger
+   *  doesn't report (PLC chargers report no signal; Native auth
+   *  chargers may return nothing on /state). */
+  commMode: string | null;     // "Wi-Fi" / "LTE" / "PLC" / "Ethernet" / "None"
+  signalDbm: number | null;    // integer dBm magnitude (negative for real RF)
 }
 
 export interface ChargerCreateResult extends ChargerSummary {
