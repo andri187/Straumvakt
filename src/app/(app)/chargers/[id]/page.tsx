@@ -13,6 +13,7 @@ import {
   TechnicalReadDetailLive,
 } from "./technical-read-live";
 import { LatestSessionChart } from "./latest-session-chart";
+import { ChargerConfigPanel } from "./config-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -129,6 +130,11 @@ export default async function ChargerDetailPage({ params }: { params: Promise<{ 
           recent closed session for THIS charger. Server-fetched so
           it lands on the same render as the rest of the page. */}
       <LatestSessionChart chargingStationId={charger.chargingStationId} />
+
+      {/* Sprint 9.4 — OCPP Configuration panel. Collapsed by default;
+          expand to GetConfiguration (single key or all keys),
+          ChangeConfiguration. Polls the gateway response. */}
+      {identity && <ChargerConfigPanel ocppIdentityId={identity.id} />}
 
       {/* Hardware identity / OCPP boot profile. Always shown when we
           have anything from either source — DB columns (populated by

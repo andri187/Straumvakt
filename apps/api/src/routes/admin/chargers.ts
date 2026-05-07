@@ -221,3 +221,37 @@ adminChargers.post(
   return c.json({ commandId: enqueued.id, status: enqueued.status }, 202);
   },
 );
+
+// Sprint 9.4 — read the result of a previously-enqueued command. UI
+// fires GetConfiguration via POST /:id/get-configuration, then polls
+// this endpoint with the returned commandId until status="completed"
+// (or "failed" / "timed_out") and renders result.configurationKey[].
+adminChargers.get(
+  "/commands/:commandId",
+  requirePermission("charger.read"),
+  async (c) => {
+    const db = makePrisma(c.env);
+    const cmd = await db.outboundCommand.findUnique({
+      where: { id: c.req.param("commandId") },
+      select: {
+        id: true,
+        status: true,
+        controlDomain: true,
+        attempts: true,
+        result: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+    if (!cmd) return c.json({ error: "command not found" }, 404);
+    return c.json({
+      commandId: cmd.id,
+      status: cmd.status,
+      controlDomain: cmd.controlDomain,
+      attempts: cmd.attempts,
+      result: cmd.result,
+      createdAt: cmd.createdAt.toISOString(),
+      updatedAt: cmd.updatedAt.toISOString(),
+    });
+  },
+);

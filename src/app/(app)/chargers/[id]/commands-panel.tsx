@@ -57,10 +57,7 @@ export function ChargerCommandsPanel({
   const [idTagByConnector, setIdTagByConnector] = useState<Record<string, string>>({});
   const [stopTxIdByConnector, setStopTxIdByConnector] = useState<Record<string, string>>({});
 
-  // Config state.
-  const [getConfigKey, setGetConfigKey] = useState("");
-  const [changeConfigKey, setChangeConfigKey] = useState("");
-  const [changeConfigValue, setChangeConfigValue] = useState("");
+  // Sprint 9.4 — config UI moved to ChargerConfigPanel below the chart.
 
   async function fire(action: string, body: Record<string, unknown>, busyKey: string): Promise<void> {
     setError(null);
@@ -187,76 +184,6 @@ export function ChargerCommandsPanel({
           })}
         </ul>
       )}
-
-      <details className="mt-3 rounded border border-bg-border/40 bg-bg-base/30">
-        <summary className="cursor-pointer px-2 py-1 text-[10px] font-semibold uppercase tracking-brand text-ink-400 hover:text-ink-200">
-          Configuration · GetConfiguration / ChangeConfiguration
-        </summary>
-        <div className="grid gap-2 border-t border-bg-border/40 p-2 sm:grid-cols-2">
-          <div>
-            <label className="block text-[9px] uppercase tracking-brand text-ink-500">
-              Read key (blank = all)
-            </label>
-            <div className="mt-1 flex gap-1">
-              <input
-                type="text"
-                value={getConfigKey}
-                onChange={(e) => setGetConfigKey(e.target.value)}
-                placeholder="HeartbeatInterval"
-                maxLength={50}
-                className="min-w-0 flex-1 rounded border border-bg-border bg-bg-inset px-2 py-1 font-mono text-[11px] text-ink-50"
-              />
-              <button
-                type="button"
-                onClick={() =>
-                  fire("get-configuration", getConfigKey ? { key: [getConfigKey] } : {}, "get-configuration")
-                }
-                disabled={busy !== null}
-                className="rounded-md bg-sv-sky/20 px-2 py-1 text-[11px] font-medium text-sv-sky ring-1 ring-sv-sky/30 hover:bg-sv-sky/30 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {busy === "get-configuration" ? "…" : "Read"}
-              </button>
-            </div>
-          </div>
-          <div>
-            <label className="block text-[9px] uppercase tracking-brand text-ink-500">
-              Write key + value
-            </label>
-            <div className="mt-1 grid grid-cols-[1fr_1fr_auto] gap-1">
-              <input
-                type="text"
-                value={changeConfigKey}
-                onChange={(e) => setChangeConfigKey(e.target.value)}
-                placeholder="key"
-                maxLength={50}
-                className="min-w-0 rounded border border-bg-border bg-bg-inset px-2 py-1 font-mono text-[11px] text-ink-50"
-              />
-              <input
-                type="text"
-                value={changeConfigValue}
-                onChange={(e) => setChangeConfigValue(e.target.value)}
-                placeholder="value"
-                maxLength={500}
-                className="min-w-0 rounded border border-bg-border bg-bg-inset px-2 py-1 font-mono text-[11px] text-ink-50"
-              />
-              <button
-                type="button"
-                onClick={() =>
-                  fire(
-                    "change-configuration",
-                    { key: changeConfigKey, value: changeConfigValue },
-                    "change-configuration",
-                  )
-                }
-                disabled={!changeConfigKey || busy !== null}
-                className="rounded-md bg-sv-sky/20 px-2 py-1 text-[11px] font-medium text-sv-sky ring-1 ring-sv-sky/30 hover:bg-sv-sky/30 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {busy === "change-configuration" ? "…" : "Write"}
-              </button>
-            </div>
-          </div>
-        </div>
-      </details>
 
       {error && (
         <p className="mt-2 rounded border border-rose-700/40 bg-rose-950/30 px-2 py-1 text-[11px] text-rose-200">
