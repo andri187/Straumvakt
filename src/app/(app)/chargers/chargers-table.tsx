@@ -61,25 +61,47 @@ const STR = (a: string, b: string) => a.localeCompare(b);
 const NUM = (a: number, b: number) => a - b;
 
 /**
- * Map signal magnitude (|dBm|) -> Tailwind colour class. Same scale
- * as TechnicalReadPills (8.4.7.2): 30-55 green · 55-70 yellow ·
- * 70-80 orange · 80+ red · null gray. Stronger signals have smaller
- * magnitude (closer to 0).
+ * Sprint 9.8.1 — signal interpretation depends on transport.
+ *   • Wi-Fi (and other RF where Zaptec reports raw RSSI/RSRP) — value
+ *     is dBm. Some firmwares emit it negative (-70), some positive
+ *     (70 meaning -70). Magnitude < 55 green, < 70 yellow, < 80
+ *     orange, >= 80 red.
+ *   • LTE / cellular — Zaptec emits a 0–100 percentage / CSQ-like
+ *     scale where HIGHER is better. 100 ≠ "-100 dBm"; that gave
+ *     us LTE chargers showing red while online + charging. Treat
+ *     >= 75 green, 50–75 yellow, 25–50 orange, < 25 red.
+ *   • PLC / Ethernet — no signal reported; null.
+ *   • Unknown comm mode — fall back to dBm interpretation
+ *     (preserves prior behaviour for unmapped transports).
  */
-function signalIconClass(dbm: number | null): string {
-  if (dbm == null) return "text-ink-600";
-  const m = Math.abs(dbm);
+function isCellular(comm: string | null): boolean {
+  if (!comm) return false;
+  return /lte|cellular|4g|5g|3g|gsm/i.test(comm);
+}
+
+function signalIconClass(value: number | null, comm: string | null): string {
+  if (value == null) return "text-ink-600";
+  if (isCellular(comm)) {
+    if (value >= 75) return "text-emerald-400";
+    if (value >= 50) return "text-yellow-400";
+    if (value >= 25) return "text-orange-400";
+    return "text-rose-400";
+  }
+  const m = Math.abs(value);
   if (m < 55) return "text-emerald-400";
   if (m < 70) return "text-yellow-400";
   if (m < 80) return "text-orange-400";
   return "text-rose-400";
 }
 
-function fmtSignal(dbm: number | null): string {
-  if (dbm == null) return DASH;
-  // RF signal strength is negative dBm. Some Zaptec firmwares report
-  // magnitude as positive; normalize to canonical negative form.
-  const v = dbm <= 0 ? dbm : -dbm;
+function fmtSignal(value: number | null, comm: string | null): string {
+  if (value == null) return DASH;
+  if (isCellular(comm)) {
+    // Cellular: Zaptec uses 0-100 percentage where higher is better.
+    return `${Math.round(value)}%`;
+  }
+  // RF (Wi-Fi etc.): canonical negative dBm.
+  const v = value <= 0 ? value : -value;
   return `${v} dBm`;
 }
 
@@ -110,15 +132,24 @@ function sortedRows(rows: ChargerSummary[], key: SortKey, dir: SortDir): Charger
       case "comm":
         n = compareNullable(a.commMode, b.commMode, STR);
         break;
-      case "signal":
-        // Stronger signal sorts first when asc. dBm is negative;
-        // we sort by |dBm| ascending so green/closer-to-zero wins.
+      case "signal": {
+        // Sprint 9.8.1 — sort by quality, not raw value, so LTE
+        // percentage (higher better) and Wi-Fi dBm (closer to zero
+        // better) sort consistently. Map both onto a 0–100 quality
+        // proxy: cellular passes through; dBm gets `100 - |dBm|`.
+        const quality = (val: number | null, comm: string | null): number | null => {
+          if (val == null) return null;
+          if (isCellular(comm)) return val;
+          return 100 - Math.abs(val);
+        };
+        // Strongest first (descending) when asc.
         n = compareNullable(
-          a.signalDbm != null ? Math.abs(a.signalDbm) : null,
-          b.signalDbm != null ? Math.abs(b.signalDbm) : null,
+          quality(b.signalDbm, b.commMode),
+          quality(a.signalDbm, a.commMode),
           NUM,
         );
         break;
+      }
       case "lifetimeKwh":
         n = compareNullable(a.lifetimeKwh, b.lifetimeKwh, NUM);
         break;
@@ -271,7 +302,7 @@ function ChargerRow({ c, sameSerial }: { c: ChargerSummary; sameSerial: boolean 
         <CommCell mode={c.commMode} />
       </td>
       <td className="px-3 py-1.5">
-        <SignalCell dbm={c.signalDbm} />
+        <SignalCell value={c.signalDbm} comm={c.commMode} />
       </td>
       <td className="px-3 py-1.5 text-right font-mono text-ink-200">{fmtKWh(c.lifetimeKwh)}</td>
       <td className="px-3 py-1.5">
@@ -380,11 +411,11 @@ function CommCell({ mode }: { mode: string | null }) {
   );
 }
 
-function SignalCell({ dbm }: { dbm: number | null }) {
+function SignalCell({ value, comm }: { value: number | null; comm: string | null }) {
   return (
     <span className="inline-flex items-center gap-1.5">
-      <Signal className={`h-3.5 w-3.5 shrink-0 ${signalIconClass(dbm)}`} />
-      <span className="font-mono text-[11px] text-ink-300">{fmtSignal(dbm)}</span>
+      <Signal className={`h-3.5 w-3.5 shrink-0 ${signalIconClass(value, comm)}`} />
+      <span className="font-mono text-[11px] text-ink-300">{fmtSignal(value, comm)}</span>
     </span>
   );
 }
