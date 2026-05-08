@@ -14,6 +14,7 @@ import {
 } from "./technical-read-live";
 import { LatestSessionChart } from "./latest-session-chart";
 import { ChargerConfigPanel } from "./config-panel";
+import { ActiveSessionBlock } from "./active-session-block";
 
 export const dynamic = "force-dynamic";
 
@@ -85,6 +86,12 @@ export default async function ChargerDetailPage({ params }: { params: Promise<{ 
         initial={technicalRead}
       >
       <TechnicalReadPillsLive firmwareFromBoot={charger.firmwareVersion} />
+
+      {/* Sprint 9 / 2026-05-08 — live active-session block. Polls
+          /api/admin/chargers/:id/active-session every 5s. Renders
+          plug/charge/non-charge timers + power/energy + sparkline
+          when a session is active; one-line "no session" otherwise. */}
+      <ActiveSessionBlock chargingStationId={charger.chargingStationId} />
 
       {/* Operator command surface — only mount when there's an OcppIdentity
           (without one, /api/admin/chargers/<id>/<command> would 404 since

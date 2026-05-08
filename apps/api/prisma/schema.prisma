@@ -810,6 +810,7 @@ model ChargingStation {
   controlRoutingPolicy ControlRoutingPolicy?
   sessions           ChargeSession[]
   liveSession        LiveSession?
+  liveSessionSamples LiveSessionSample[] @relation("LiveSessionSampleCharger")
 
   // ── Rev-3 / Rev-4 relations ──────────────────────────────────────
   circuit          Circuit?      @relation("CircuitStations", fields: [circuitId], references: [id])
@@ -1338,6 +1339,15 @@ model LiveSession {
   lastOperationMode    Int?     @map("last_operation_mode")
   lastPowerW           Decimal? @map("last_power_w") @db.Decimal(10, 0)
   lastSessionEnergyWh  Decimal? @map("last_session_energy_wh") @db.Decimal(12, 0)
+
+  // Sprint 9 / 2026-05-08 — plug / charge / non-charge timers maintained
+  // by the AMQP state-event handler across OperationMode transitions.
+  connectedAt          DateTime? @map("connected_at") @db.Timestamptz(6)
+  chargingStartedAt    DateTime? @map("charging_started_at") @db.Timestamptz(6)
+  lastModeAt           DateTime? @map("last_mode_at") @db.Timestamptz(6)
+  chargingSeconds      Int       @default(0) @map("charging_seconds")
+  nonChargingSeconds   Int       @default(0) @map("non_charging_seconds")
+
   createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt            DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -1348,6 +1358,23 @@ model LiveSession {
   @@index([orgId])
   @@index([lastObservedAt])
   @@map("live_sessions")
+  @@schema("charging")
+}
+
+// Sprint 9 / 2026-05-08 — AMQP-derived telemetry samples.
+model LiveSessionSample {
+  id          String   @id @default(uuid()) @db.Uuid
+  chargerId   String   @map("charger_id") @db.Uuid
+  observedAt  DateTime @map("observed_at") @db.Timestamptz(6)
+  powerW      Int?     @map("power_w")
+  energyWh    BigInt?  @map("energy_wh")
+  stateId     Int      @map("state_id")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  charger     ChargingStation @relation("LiveSessionSampleCharger", fields: [chargerId], references: [siteAssetId], onDelete: Cascade)
+
+  @@index([chargerId, observedAt(sort: Desc)])
+  @@map("live_session_samples")
   @@schema("charging")
 }
 

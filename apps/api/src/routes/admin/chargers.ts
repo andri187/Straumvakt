@@ -90,13 +90,20 @@ adminChargers.get(
 // Sprint 9.6 — active session for this charger if any. Reads
 // charging.live_sessions which the AMQP consumer maintains. Returns
 // null when no active session.
+//
+// Sprint 9 / 2026-05-08 — extended with plug/charge/non-charge timers
+// + recent telemetry samples (live_session_samples) for the UI's
+// active-session block. The "current segment seconds" is computed
+// against now() so the operator sees a live-counting timer for the
+// current mode without waiting for the next state event to bump it.
 adminChargers.get(
   "/:id/active-session",
   requirePermission("charger.read"),
   async (c) => {
+    const chargingStationId = c.req.param("id");
     const db = makePrisma(c.env);
     const row = await db.liveSession.findUnique({
-      where: { chargingStationId: c.req.param("id") },
+      where: { chargingStationId },
       select: {
         startedAt: true,
         lastObservedAt: true,
@@ -104,18 +111,61 @@ adminChargers.get(
         lastPowerW: true,
         lastSessionEnergyWh: true,
         vendorResourceId: true,
+        connectedAt: true,
+        chargingStartedAt: true,
+        lastModeAt: true,
+        chargingSeconds: true,
+        nonChargingSeconds: true,
       },
     });
     if (!row) return c.json({ activeSession: null });
+
+    // Compute the in-flight delta — time spent in the current mode since
+    // the last transition. The DB only persists deltas when transitions
+    // arrive, so we add the live-running segment to whichever bucket
+    // matches the current mode for an honest UI total.
+    const now = Date.now();
+    const lastModeAt = row.lastModeAt ?? row.startedAt;
+    const liveDeltaSec = Math.max(0, Math.floor((now - lastModeAt.getTime()) / 1000));
+    const isCharging = row.lastOperationMode === 3;
+    const isPluggedIdle =
+      row.lastOperationMode != null &&
+      row.lastOperationMode !== 1 &&
+      row.lastOperationMode !== 3;
+
+    const chargingSeconds = row.chargingSeconds + (isCharging ? liveDeltaSec : 0);
+    const nonChargingSeconds = row.nonChargingSeconds + (isPluggedIdle ? liveDeltaSec : 0);
+    const plugSeconds = chargingSeconds + nonChargingSeconds;
+
+    // Last 200 samples — enough for ~30 minutes at one sample / 10s.
+    const samples = await db.liveSessionSample.findMany({
+      where: { chargerId: chargingStationId },
+      select: { observedAt: true, powerW: true, energyWh: true, stateId: true },
+      orderBy: { observedAt: "desc" },
+      take: 200,
+    });
+
     return c.json({
       activeSession: {
         startedAt: row.startedAt.toISOString(),
+        connectedAt: row.connectedAt?.toISOString() ?? null,
+        chargingStartedAt: row.chargingStartedAt?.toISOString() ?? null,
         lastObservedAt: row.lastObservedAt.toISOString(),
         lastOperationMode: row.lastOperationMode,
         lastPowerW: row.lastPowerW != null ? Number(row.lastPowerW) : null,
         lastSessionEnergyWh:
           row.lastSessionEnergyWh != null ? Number(row.lastSessionEnergyWh) : null,
         vendorResourceId: row.vendorResourceId,
+        chargingSeconds,
+        nonChargingSeconds,
+        plugSeconds,
+        // Reverse to ascending so the chart can plot left-to-right.
+        samples: samples.reverse().map((s) => ({
+          observedAt: s.observedAt.toISOString(),
+          powerW: s.powerW,
+          energyWh: s.energyWh != null ? Number(s.energyWh) : null,
+          stateId: s.stateId,
+        })),
       },
     });
   },
