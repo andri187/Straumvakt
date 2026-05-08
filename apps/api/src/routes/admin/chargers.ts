@@ -116,6 +116,16 @@ adminChargers.get(
         lastModeAt: true,
         chargingSeconds: true,
         nonChargingSeconds: true,
+        userId: true,
+        user: {
+          select: {
+            id: true,
+            displayName: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
       },
     });
     if (!row) return c.json({ activeSession: null });
@@ -159,6 +169,16 @@ adminChargers.get(
         chargingSeconds,
         nonChargingSeconds,
         plugSeconds,
+        driver: row.user
+          ? {
+              id: row.user.id,
+              label:
+                [row.user.firstName, row.user.lastName].filter(Boolean).join(" ").trim() ||
+                row.user.displayName ||
+                row.user.email,
+              email: row.user.email,
+            }
+          : null,
         // Reverse to ascending so the chart can plot left-to-right.
         samples: samples.reverse().map((s) => ({
           observedAt: s.observedAt.toISOString(),

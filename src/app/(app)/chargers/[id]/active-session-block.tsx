@@ -21,6 +21,12 @@ type Sample = {
   stateId: number;
 };
 
+type Driver = {
+  id: string;
+  label: string;
+  email: string;
+};
+
 type ActiveSessionResponse = {
   activeSession: null | {
     startedAt: string;
@@ -34,6 +40,7 @@ type ActiveSessionResponse = {
     chargingSeconds: number;
     nonChargingSeconds: number;
     plugSeconds: number;
+    driver: Driver | null;
     samples: Sample[];
   };
 };
@@ -163,6 +170,12 @@ export function ActiveSessionBlock({
         >
           {modeLabel(data.lastOperationMode)}
         </span>
+        {data.driver ? (
+          <span className="inline-flex items-center gap-1 rounded-full bg-sv-sky/15 px-2 py-0.5 text-xs font-medium text-sv-sky ring-1 ring-inset ring-sv-sky/30">
+            <span className="font-mono text-[10px] uppercase tracking-wide opacity-70">driver</span>
+            {data.driver.label}
+          </span>
+        ) : null}
         <span className="text-xs text-ink-500">
           last observed {new Date(data.lastObservedAt).toLocaleTimeString()}
         </span>

@@ -109,6 +109,9 @@ model User {
   // ── Sprint 9 / ADR 0019 — agreements schema back-relation ───────
   driverGroupMemberships  DriverGroupMembership[] @relation("DriverGroupMembershipUser")
 
+  // ── Sprint 9 / 2026-05-08 — AMQP StateId 722 driver enrichment ──
+  liveSessions            LiveSession[]    @relation("LiveSessionUser")
+
   @@map("users")
   @@schema("identity")
 }
@@ -1348,15 +1351,20 @@ model LiveSession {
   chargingSeconds      Int       @default(0) @map("charging_seconds")
   nonChargingSeconds   Int       @default(0) @map("non_charging_seconds")
 
+  // Sprint 9 / 2026-05-08 — real-time driver enrichment from StateId 722.
+  userId               String?  @map("user_id") @db.Uuid
+
   createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt            DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   organization         Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
   chargingStation      ChargingStation  @relation(fields: [chargingStationId], references: [siteAssetId], onDelete: Cascade)
   ocppIdentity         OcppIdentity     @relation(fields: [ocppIdentityId], references: [id], onDelete: Cascade)
+  user                 User?            @relation("LiveSessionUser", fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([orgId])
   @@index([lastObservedAt])
+  @@index([userId])
   @@map("live_sessions")
   @@schema("charging")
 }

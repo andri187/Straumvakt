@@ -53,7 +53,11 @@ internalZaptecStateEvent.post("/", async (c) => {
   const { chargerId, stateId, value, timestamp } = parsed.data;
 
   // We only act on a small whitelist; everything else is acked.
-  if (stateId !== 710 && stateId !== 513 && stateId !== 553) {
+  // 710 — ChargerOperationMode (lifecycle + plug/charge/non-charge timers)
+  // 513 — TotalChargePower (live power + samples)
+  // 553 — TotalChargePowerSession (live energy + samples)
+  // 722 — ChargerCurrentUserUuid (real-time driver enrichment)
+  if (stateId !== 710 && stateId !== 513 && stateId !== 553 && stateId !== 722) {
     return c.json({ ok: true, action: "ignored" });
   }
 
@@ -258,6 +262,47 @@ internalZaptecStateEvent.post("/", async (c) => {
       })
       .catch(() => null);
     return c.json({ ok: true, action: "energy_updated" });
+  }
+
+  // Sprint 9 / 2026-05-08 — StateId 722 (ChargerCurrentUserUuid).
+  // Maps the active driver's Zaptec UUID to a Straumvakt User via
+  // identity.user_vendor_refs (vendor_slug='zaptec') and stamps userId
+  // on the live_sessions row. Update-only — if no row exists yet, ack
+  // and skip (a 722 firing before the first 710!=Disconnected is rare
+  // and the next 722 picks up the right state).
+  if (stateId === 722) {
+    const trimmed = (value ?? "").trim();
+    if (!trimmed) {
+      // Empty value — Zaptec sometimes blanks 722 on session end. Clear
+      // the user_id on the row so downstream views don't keep showing
+      // a stale driver after the cable is unplugged.
+      await db.liveSession
+        .update({
+          where: { chargingStationId: identity.chargingStationId },
+          data: { userId: null, lastObservedAt: observedAt },
+        })
+        .catch(() => null);
+      return c.json({ ok: true, action: "user_cleared" });
+    }
+    // Lookup Zaptec UUID -> Straumvakt User. The unique key is
+    // (vendor_slug, vendor_user_id).
+    const ref = await db.userVendorRef.findUnique({
+      where: { vendorSlug_vendorUserId: { vendorSlug: "zaptec", vendorUserId: trimmed } },
+      select: { userId: true },
+    });
+    if (!ref) {
+      // Unknown Zaptec user — Straumvakt hasn't seen this driver yet.
+      // Surface the action so the operator can spot orphan drivers in
+      // logs and onboard them.
+      return c.json({ ok: true, action: "user_unknown", zaptecUserUuid: trimmed });
+    }
+    await db.liveSession
+      .update({
+        where: { chargingStationId: identity.chargingStationId },
+        data: { userId: ref.userId, lastObservedAt: observedAt },
+      })
+      .catch(() => null);
+    return c.json({ ok: true, action: "user_resolved", userId: ref.userId });
   }
 
   return c.json({ ok: true, action: "noop" });
