@@ -70,7 +70,7 @@ CREATE TABLE "charging"."live_session_samples" (
   "created_at"    TIMESTAMPTZ(6) NOT NULL DEFAULT now(),
 
   CONSTRAINT "live_session_samples_charger_fk"
-    FOREIGN KEY ("charger_id") REFERENCES "assets"."chargers"("site_asset_id") ON DELETE CASCADE
+    FOREIGN KEY ("charger_id") REFERENCES "assets"."charging_stations"("site_asset_id") ON DELETE CASCADE
 );
 
 CREATE INDEX "live_session_samples_charger_observed_idx"
