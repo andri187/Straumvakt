@@ -148,9 +148,19 @@ export function ChargerCommandsPanel({
                   />
                   <button
                     type="button"
-                    onClick={() =>
-                      fire("remote-start", { connectorId: c.id, idTag: idTag || undefined }, startKey)
-                    }
+                    onClick={() => {
+                      // Trim + uppercase so trailing whitespace from a
+                      // paste doesn't reach the wire (idTag is matched
+                      // case-sensitively in the resolver). Empty after
+                      // trim → undefined so the charger uses its
+                      // locally-configured Default ID tag.
+                      const cleaned = idTag.trim().toUpperCase();
+                      fire(
+                        "remote-start",
+                        { connectorId: c.id, idTag: cleaned || undefined },
+                        startKey,
+                      );
+                    }}
                     disabled={busy !== null}
                     className="rounded-md bg-sv-green/20 px-2 py-1 text-[11px] font-medium text-sv-green ring-1 ring-sv-green/30 hover:bg-sv-green/30 disabled:cursor-not-allowed disabled:opacity-40"
                   >
