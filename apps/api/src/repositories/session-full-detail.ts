@@ -51,11 +51,16 @@ export interface SessionFullDetail {
   chargeTimeSec: number | null;
   idleTimeSec: number | null;
 
+  // Lifecycle status (enum: active / completed / aborted / ...)
+  status: string | null;
+
   // Energy
   energyKwh: string;                  // string to preserve precision
   totalEnergyWh: string | null;       // raw Wh from session row
-  costIskMinor: string | null;
-  costFormatted: string | null;
+  costIskMinor: string | null;        // legacy single-cost (preserved for back-compat)
+  costFormatted: string | null;       // legacy formatted
+  costExVatMinor: string | null;      // raw ex-VAT, accounting clarity
+  costIncVatMinor: string | null;     // raw inc-VAT, accounting clarity
   stopReason: string | null;
 
   // OCMF identity (the EVCCID / EMAID future-proof slot)
@@ -79,6 +84,13 @@ export interface SessionFullDetail {
     signedSessionKwh: string | null;
     signedSessionRaw: string | null;  // OCMF| envelope, returned only when ?include=raw
     capturedAt: string | null;        // when 723 fired
+    /**
+     * How OCMF metadata reached this session.
+     *  - "live"        — captured via AMQP StateId 723 in real time (completed_session_raw_json IS NOT NULL)
+     *  - "backfilled"  — derived from /chargehistory raw_payload after the fact (the May 8 backfill)
+     *  - null          — no OCMF data on this session at all
+     */
+    provenance: "live" | "backfilled" | null;
   } | null;
 
   // Power-time intervals derived from OCMF or EnergyDetails
@@ -109,6 +121,7 @@ export async function getSessionFullDetail(
       startedAt: true,
       endedAt: true,
       stopReason: true,
+      status: true,
       energyWh: true,
       costExVatMinor: true,
       costIncVatMinor: true,
@@ -299,6 +312,13 @@ export async function getSessionFullDetail(
         signedSessionKwh: session.ocmfSignedSessionKwh?.toString() ?? null,
         signedSessionRaw: opts.includeRaw ? session.ocmfSignedSession : null,
         capturedAt: session.completedSessionSeenAt?.toISOString() ?? null,
+        // Distinguish live AMQP capture from after-the-fact backfill.
+        // Only the AMQP 723 handler writes completedSessionRawJson; the
+        // backfill script leaves it NULL. So that field is the
+        // unambiguous tell.
+        provenance: (session.completedSessionRawJson
+          ? "live"
+          : "backfilled") as "live" | "backfilled" | null,
       }
     : null;
 
@@ -333,6 +353,15 @@ export async function getSessionFullDetail(
         : null,
     costFormatted:
       costIskMinor !== null && costIskMinor !== undefined ? formatIsk(costIskMinor) : null,
+    costExVatMinor:
+      session.costExVatMinor !== null && session.costExVatMinor !== undefined
+        ? session.costExVatMinor.toString()
+        : null,
+    costIncVatMinor:
+      session.costIncVatMinor !== null && session.costIncVatMinor !== undefined
+        ? session.costIncVatMinor.toString()
+        : null,
+    status: session.status ?? null,
     stopReason: session.stopReason,
     identity,
     ocmf,
