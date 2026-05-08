@@ -1215,6 +1215,23 @@ model ChargeSession {
   costExVatMinor    BigInt?   @map("cost_ex_vat_minor")
   costIncVatMinor   BigInt?   @map("cost_inc_vat_minor")
 
+  // ── Sprint 9 / 2026-05-08 — Zaptec StateId 723 (CompletedSession) capture ──
+  completedSessionRawJson  Json?     @map("completed_session_raw_json") @db.JsonB
+  ocmfSignedSession        String?   @map("ocmf_signed_session") @db.Text
+  ocmfFormatVersion        String?   @map("ocmf_format_version")
+  ocmfGatewayId            String?   @map("ocmf_gateway_id")
+  ocmfGatewaySerial        String?   @map("ocmf_gateway_serial")
+  ocmfGatewayVersion       String?   @map("ocmf_gateway_version")
+  authIdStatus             Boolean?  @map("auth_id_status")
+  authIdLevel              String?   @map("auth_id_level")
+  authIdType               String?   @map("auth_id_type")
+  authIdValue              String?   @map("auth_id_value")
+  authIdFlags              String[]  @map("auth_id_flags")
+  ocmfFirstReadingKwh      Decimal?  @map("ocmf_first_reading_kwh") @db.Decimal(14, 4)
+  ocmfLastReadingKwh       Decimal?  @map("ocmf_last_reading_kwh") @db.Decimal(14, 4)
+  ocmfSignedSessionKwh     Decimal?  @map("ocmf_signed_session_kwh") @db.Decimal(14, 4)
+  completedSessionSeenAt   DateTime? @map("completed_session_seen_at") @db.Timestamptz(6)
+
   organization      Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
   site              Site             @relation(fields: [siteId], references: [id])
   chargingStation   ChargingStation  @relation(fields: [chargingStationId], references: [siteAssetId])

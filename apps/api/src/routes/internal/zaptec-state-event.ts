@@ -24,6 +24,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { makePrisma } from "../../lib/prisma";
 import { verifyIngest } from "../../lib/ocpp-internal-auth";
+import { parseOcmf, type OcmfParsed } from "../../lib/ocmf";
 import type { Env } from "../../bindings";
 
 export const internalZaptecStateEvent = new Hono<{ Bindings: Env }>();
@@ -57,7 +58,14 @@ internalZaptecStateEvent.post("/", async (c) => {
   // 513 — TotalChargePower (live power + samples)
   // 553 — TotalChargePowerSession (live energy + samples)
   // 722 — ChargerCurrentUserUuid (real-time driver enrichment)
-  if (stateId !== 710 && stateId !== 513 && stateId !== 553 && stateId !== 722) {
+  // 723 — CompletedSession (full session JSON + OCMF SignedSession at session-end)
+  if (
+    stateId !== 710 &&
+    stateId !== 513 &&
+    stateId !== 553 &&
+    stateId !== 722 &&
+    stateId !== 723
+  ) {
     return c.json({ ok: true, action: "ignored" });
   }
 
@@ -305,8 +313,144 @@ internalZaptecStateEvent.post("/", async (c) => {
     return c.json({ ok: true, action: "user_resolved", userId: ref.userId });
   }
 
+  // Sprint 9 / 2026-05-08 — StateId 723 (CompletedSession).
+  // Carries the full session JSON with embedded OCMF SignedSession.
+  // Find the matching ChargeSession (by chargingStationId + closest
+  // started_at to the blob's StartDateTime) and stamp the parsed
+  // session metadata onto it. Idempotent — guarded by
+  // completed_session_seen_at NOT NULL check on update.
+  //
+  // Falls back to logging when:
+  //   - the value isn't valid JSON
+  //   - no matching ChargeSession exists yet (can land via /chargehistory cron later)
+  if (stateId === 723) {
+    if (!value || typeof value !== "string" || value.trim().length === 0) {
+      return c.json({ ok: true, action: "value_unparseable" });
+    }
+    let blob: Record<string, unknown>;
+    try {
+      blob = JSON.parse(value) as Record<string, unknown>;
+    } catch {
+      return c.json({ ok: true, action: "json_parse_failed" });
+    }
+
+    const startStr = pickString(blob, ["StartDateTime", "startDateTime"]);
+    const endStr = pickString(blob, ["EndDateTime", "endDateTime"]);
+    const signedSession = pickString(blob, ["SignedSession", "signedSession"]);
+    const externallyEnded = pickBool(blob, ["ExternallyEnded", "externallyEnded"]);
+    const externalId = pickString(blob, ["ExternalId", "externalId"]);
+    const energyKwh = pickNumber(blob, ["Energy", "energy"]);
+
+    const startedAt = startStr ? new Date(startStr) : null;
+    const endedAt = endStr ? new Date(endStr) : null;
+    if (!startedAt || Number.isNaN(startedAt.getTime())) {
+      return c.json({ ok: true, action: "no_started_at" });
+    }
+
+    // Match a ChargeSession on (chargingStationId, ±60s on startedAt).
+    // We use the asymmetric +/- because clock skew between Zaptec and
+    // our recorded started_at is typically sub-second but defensive.
+    const windowMs = 60_000;
+    const session = await db.chargeSession.findFirst({
+      where: {
+        chargingStationId: identity.chargingStationId,
+        startedAt: {
+          gte: new Date(startedAt.getTime() - windowMs),
+          lte: new Date(startedAt.getTime() + windowMs),
+        },
+      },
+      select: { id: true, completedSessionSeenAt: true, energyWh: true, endedAt: true },
+      orderBy: { startedAt: "desc" },
+    });
+
+    if (!session) {
+      // No matching session yet — the /chargehistory cron will create
+      // it later, and a follow-up reconciliation step (separate sprint)
+      // can replay the 723 blob onto it. For now, ack.
+      return c.json({ ok: true, action: "no_matching_session" });
+    }
+
+    if (session.completedSessionSeenAt) {
+      // Already captured for this session — second 723 firing is rare
+      // but defensive idempotency.
+      return c.json({ ok: true, action: "already_captured", sessionId: session.id });
+    }
+
+    const ocmf: OcmfParsed | null = signedSession ? parseOcmf(signedSession) : null;
+    const firstReading = ocmf?.readings[0]?.cumulativeKwh ?? null;
+    const lastReading = ocmf?.readings[ocmf.readings.length - 1]?.cumulativeKwh ?? null;
+    const computedKwh =
+      firstReading !== null && lastReading !== null ? lastReading - firstReading : null;
+
+    await db.chargeSession.update({
+      where: { id: session.id },
+      data: {
+        completedSessionRawJson: blob as unknown as object,
+        ocmfSignedSession: signedSession ?? null,
+        ocmfFormatVersion: ocmf?.formatVersion ?? null,
+        ocmfGatewayId: ocmf?.gatewayId ?? null,
+        ocmfGatewaySerial: ocmf?.gatewaySerial ?? null,
+        ocmfGatewayVersion: ocmf?.gatewayVersion ?? null,
+        authIdStatus: ocmf?.identity?.identified ?? null,
+        authIdLevel: ocmf?.identity?.level ?? null,
+        authIdType: ocmf?.identity?.idType ?? null,
+        authIdValue: ocmf?.identity?.idValue ?? null,
+        authIdFlags: ocmf?.identity?.flags ?? [],
+        ocmfFirstReadingKwh: firstReading !== null ? firstReading.toString() : null,
+        ocmfLastReadingKwh: lastReading !== null ? lastReading.toString() : null,
+        ocmfSignedSessionKwh: computedKwh !== null ? computedKwh.toString() : null,
+        completedSessionSeenAt: observedAt,
+        // Backfill endedAt + energyWh from the blob if not already set.
+        ...(session.endedAt ? {} : endedAt ? { endedAt } : {}),
+        ...(session.energyWh != null
+          ? {}
+          : energyKwh != null
+          ? { energyWh: BigInt(Math.round(energyKwh * 1000)) }
+          : {}),
+      },
+    });
+
+    return c.json({
+      ok: true,
+      action: "completed_session_captured",
+      sessionId: session.id,
+      authIdType: ocmf?.identity?.idType ?? null,
+      authIdValue: ocmf?.identity?.idValue ?? null,
+      externallyEnded: externallyEnded ?? null,
+      externalId: externalId ?? null,
+      ocmfReadings: ocmf?.readings.length ?? 0,
+    });
+  }
+
   return c.json({ ok: true, action: "noop" });
 });
+
+// Small JSON-blob accessors used by the 723 handler. Tolerant of
+// case-variant keys (Zaptec mixes PascalCase and camelCase across
+// endpoints); returns null when the value is missing or wrong-typed.
+function pickString(obj: Record<string, unknown>, keys: string[]): string | null {
+  for (const k of keys) {
+    const v = obj[k];
+    if (typeof v === "string" && v.length > 0) return v;
+  }
+  return null;
+}
+
+function pickBool(obj: Record<string, unknown>, keys: string[]): boolean | null {
+  for (const k of keys) {
+    const v = obj[k];
+    if (typeof v === "boolean") return v;
+  }
+  return null;
+}
+
+function pickNumber(obj: Record<string, unknown>, keys: string[]): number | null {
+  for (const k of keys) {
+    const v = obj[k];
+    if (typeof v === "number" && Number.isFinite(v)) return v;
+  }
+  return null;
+}
 
 // Compute integer-seconds delta between two timestamps. Returns 0 on
 // missing or backwards / clock-skew cases — defensive, since AMQP

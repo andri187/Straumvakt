@@ -43,8 +43,38 @@ export interface OcmfParsed {
   gatewaySerial: string | null;
   /** Firmware string, e.g. "3.3.5.1". */
   gatewayVersion: string | null;
+
+  /**
+   * OCMF identification triple — who authorised this charging session.
+   * Per OCMF v1.0 §3, idType picks among ISO14443 (RFID UID),
+   * ISO15693, EMAID (PnC contract), EVCCID (vehicle MAC from ISO 15118
+   * PnC handshake), EVCOID, ISO7812, CARD_TXN_NR, CENTRAL*, LOCAL*,
+   * PHONE_NUMBER, KEY_CODE — and idValue carries the corresponding
+   * identifier.
+   *
+   * Today's RFID-started Zaptec sessions surface as idType=ISO14443
+   * with idValue=<RFID UID hex>. Once Zaptec ships ISO 15118 PnC
+   * firmware, sessions started via Plug-and-Charge surface as
+   * idType=EVCCID (vehicle MAC) or EMAID (contract certificate) with
+   * no parser change required.
+   */
+  identity: OcmfIdentity | null;
+
   /** Reading data, ordered as in source. */
   readings: OcmfReading[];
+}
+
+export interface OcmfIdentity {
+  /** Was the session identified at all? (`IS`) */
+  identified: boolean | null;
+  /** Confidence level — `NONE` / `HEARSAY` / `TRUSTED` / `VERIFIED` / `CERTIFIED` / `SECURE` / `MISMATCH` / `INVALID` / `OUTDATED` (`IL`). */
+  level: string | null;
+  /** Identification type — `ISO14443` / `ISO15693` / `EMAID` / `EVCCID` / `EVCOID` / `ISO7812` / `PHONE_NUMBER` / etc. (`IT`) */
+  idType: string | null;
+  /** Identification data — RFID hex, EMAID, vehicle MAC, etc. (`ID`) */
+  idValue: string | null;
+  /** Optional flags qualifying interpretation of `IT` and `ID` (`IF`). */
+  flags: string[] | null;
 }
 
 export function parseOcmf(blob: string | null | undefined): OcmfParsed | null {
@@ -64,6 +94,8 @@ export function parseOcmf(blob: string | null | undefined): OcmfParsed | null {
     return null;
   }
 
+  const identity = parseIdentity(env);
+
   const rd = env["RD"];
   if (!Array.isArray(rd)) {
     return {
@@ -71,6 +103,7 @@ export function parseOcmf(blob: string | null | undefined): OcmfParsed | null {
       gatewayId: typeof env["GI"] === "string" ? (env["GI"] as string) : null,
       gatewaySerial: typeof env["GS"] === "string" ? (env["GS"] as string) : null,
       gatewayVersion: typeof env["GV"] === "string" ? (env["GV"] as string) : null,
+      identity,
       readings: [],
     };
   }
@@ -105,7 +138,31 @@ export function parseOcmf(blob: string | null | undefined): OcmfParsed | null {
     gatewayId: typeof env["GI"] === "string" ? (env["GI"] as string) : null,
     gatewaySerial: typeof env["GS"] === "string" ? (env["GS"] as string) : null,
     gatewayVersion: typeof env["GV"] === "string" ? (env["GV"] as string) : null,
+    identity,
     readings,
+  };
+}
+
+/**
+ * Parse the OCMF identification block — `IS` / `IL` / `IT` / `ID` / `IF`.
+ *
+ * Returns null only when none of the five fields are present (some OCMF
+ * envelopes from older firmware omit identity entirely). Otherwise
+ * returns a record with whatever fields are populated; missing fields
+ * are nulled rather than dropping the whole block.
+ */
+function parseIdentity(env: Record<string, unknown>): OcmfIdentity | null {
+  const has = (key: string) => key in env && env[key] !== null && env[key] !== undefined;
+  if (!has("IS") && !has("IL") && !has("IT") && !has("ID") && !has("IF")) {
+    return null;
+  }
+  const flags = env["IF"];
+  return {
+    identified: typeof env["IS"] === "boolean" ? (env["IS"] as boolean) : null,
+    level: typeof env["IL"] === "string" ? (env["IL"] as string) : null,
+    idType: typeof env["IT"] === "string" ? (env["IT"] as string) : null,
+    idValue: typeof env["ID"] === "string" ? (env["ID"] as string) : null,
+    flags: Array.isArray(flags) ? flags.filter((f): f is string => typeof f === "string") : null,
   };
 }
 
