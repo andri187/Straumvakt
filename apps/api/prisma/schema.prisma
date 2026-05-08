@@ -699,6 +699,8 @@ model Installation {
 }
 
 // Sprint 9 / ADR 0019 (2026-05-08) — installation classification.
+// Lives in the properties schema next to the installations table that
+// uses it.
 enum InstallationType {
   workplace
   mdu
@@ -706,7 +708,7 @@ enum InstallationType {
   private
   mixed
 
-  @@schema("assets")
+  @@schema("properties")
 }
 
 enum InstallationOnboardingStatus {

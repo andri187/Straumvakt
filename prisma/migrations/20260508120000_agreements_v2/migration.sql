@@ -23,10 +23,10 @@
 CREATE SCHEMA IF NOT EXISTS "agreements";
 
 -- ─────────────────────────────────────────────────────────────────────────
--- Installation type (assets.installations addition)
+-- Installation type (properties.installations addition)
 -- ─────────────────────────────────────────────────────────────────────────
 
-CREATE TYPE "assets"."InstallationType" AS ENUM (
+CREATE TYPE "properties"."InstallationType" AS ENUM (
   'workplace',
   'mdu',
   'public',
@@ -34,8 +34,8 @@ CREATE TYPE "assets"."InstallationType" AS ENUM (
   'mixed'
 );
 
-ALTER TABLE "assets"."installations"
-  ADD COLUMN "installation_type" "assets"."InstallationType"
+ALTER TABLE "properties"."installations"
+  ADD COLUMN "installation_type" "properties"."InstallationType"
     NOT NULL DEFAULT 'workplace';
 
 -- ─────────────────────────────────────────────────────────────────────────
@@ -160,7 +160,7 @@ CREATE TABLE "agreements"."agreements" (
   CONSTRAINT "agreements_cpo_org_fk"
     FOREIGN KEY ("cpo_org_id") REFERENCES "tenancy"."organizations"("id") ON DELETE RESTRICT,
   CONSTRAINT "agreements_installation_fk"
-    FOREIGN KEY ("installation_id") REFERENCES "assets"."installations"("id") ON DELETE RESTRICT,
+    FOREIGN KEY ("installation_id") REFERENCES "properties"."installations"("id") ON DELETE RESTRICT,
 
   CONSTRAINT "agreements_typed_anchors_consistency" CHECK (
     -- service_cpo: counterparty=CPO, no cpo_org, no installation
