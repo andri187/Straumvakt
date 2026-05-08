@@ -48,10 +48,13 @@ interface SessionFullDetail {
   durationSec: number | null;
   chargeTimeSec: number | null;
   idleTimeSec: number | null;
+  status: string | null;
   energyKwh: string;
   totalEnergyWh: string | null;
   costIskMinor: string | null;
   costFormatted: string | null;
+  costExVatMinor: string | null;
+  costIncVatMinor: string | null;
   stopReason: string | null;
   identity: {
     type: string | null;
@@ -71,6 +74,7 @@ interface SessionFullDetail {
     signedSessionKwh: string | null;
     signedSessionRaw: string | null;
     capturedAt: string | null;
+    provenance: "live" | "backfilled" | null;
   } | null;
   timeSeriesSource: "ocmf" | "energyDetails" | null;
   intervals: PowerInterval[];
@@ -140,6 +144,10 @@ export default async function SessionDetailPage({
     session.driverIdTag ??
     "Unknown driver";
 
+  const placeholder = "—";
+  const formatMinorIsk = (m: string | null) =>
+    m === null ? placeholder : `${(Number(m) / 100).toLocaleString("is-IS", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kr`;
+
   return (
     <div className="mx-auto max-w-5xl px-6 py-8">
       <Link href="/charge-log" className="mb-4 inline-block text-xs text-ink-400 hover:text-sv-sky">
@@ -148,7 +156,10 @@ export default async function SessionDetailPage({
 
       {/* HEADER */}
       <header className="mb-6 border-b border-bg-border pb-4">
-        <div className="mb-1 text-xs uppercase tracking-wide text-ink-500">Charging session</div>
+        <div className="mb-1 flex flex-wrap items-center gap-2">
+          <span className="text-xs uppercase tracking-wide text-ink-500">Charging session</span>
+          {session.status && <StatusPill status={session.status} />}
+        </div>
         <h1 className="text-2xl font-semibold text-ink-50">
           {session.energyKwh} kWh · {formatDuration(session.durationSec)}
           {session.costFormatted ? <span className="ml-2 text-ink-300">· {session.costFormatted}</span> : null}
@@ -156,7 +167,7 @@ export default async function SessionDetailPage({
         <p className="mt-1 text-sm text-ink-400">
           <span className="text-ink-200">{driverLine}</span>
           {" · "}
-          {session.chargerDisplayName ?? "—"}
+          {session.chargerDisplayName ?? placeholder}
           {session.installationDisplayName && <> · {session.installationDisplayName}</>}
           {session.siteDisplayName && <> · {session.siteDisplayName}</>}
           {session.orgDisplayName && (
@@ -171,6 +182,16 @@ export default async function SessionDetailPage({
         </div>
       </header>
 
+      {/* COST */}
+      <section className="mb-6 rounded-lg border border-bg-border bg-bg-base/30 p-5">
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-ink-400">Cost</h2>
+        <dl className="grid grid-cols-2 gap-x-6 gap-y-3 md:grid-cols-3">
+          <Stat label="Ex-VAT" value={formatMinorIsk(session.costExVatMinor)} />
+          <Stat label="Inc-VAT" value={formatMinorIsk(session.costIncVatMinor)} />
+          <Stat label="Stop reason" value={session.stopReason ?? placeholder} />
+        </dl>
+      </section>
+
       {/* TIMING */}
       <section className="mb-6 rounded-lg border border-bg-border bg-bg-base/30 p-5">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-ink-400">Timing</h2>
@@ -178,172 +199,223 @@ export default async function SessionDetailPage({
           <Stat label="Started" value={formatDateTime(session.startedAt)} />
           <Stat label="Ended" value={formatDateTime(session.endedAt)} />
           <Stat label="Plug duration" value={formatDuration(session.durationSec)} />
-          {session.chargeTimeSec !== null && (
-            <Stat
-              label="Charging"
-              value={formatDuration(session.chargeTimeSec)}
-              accent="emerald"
-            />
-          )}
-          {session.idleTimeSec !== null && (
-            <Stat
-              label="Idle"
-              value={formatDuration(session.idleTimeSec)}
-              accent="amber"
-            />
-          )}
-          {session.stopReason && <Stat label="Stop reason" value={session.stopReason} />}
+          <Stat
+            label="Charging"
+            value={formatDuration(session.chargeTimeSec)}
+            accent={session.chargeTimeSec !== null ? "emerald" : undefined}
+          />
+          <Stat
+            label="Idle"
+            value={formatDuration(session.idleTimeSec)}
+            accent={session.idleTimeSec !== null ? "amber" : undefined}
+          />
         </dl>
-        {session.chargeTimeSec !== null && session.idleTimeSec !== null && (
+        {session.chargeTimeSec !== null && session.idleTimeSec !== null ? (
           <div className="mt-4">
             <TimingBar chargeSec={session.chargeTimeSec} idleSec={session.idleTimeSec} />
           </div>
+        ) : (
+          <p className="mt-3 text-xs italic text-ink-500">
+            Charge / idle split not derived — needs per-interval data from OCMF or AMQP.
+          </p>
         )}
       </section>
 
       {/* IDENTITY */}
-      {session.identity ? (
-        <section className="mb-6 rounded-lg border border-bg-border bg-bg-base/30 p-5">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-ink-400">
-            Identification
-          </h2>
-          <div className="flex flex-wrap items-center gap-3">
-            <span
-              className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset ${identityBadgeColor(session.identity.type)}`}
-            >
-              {session.identity.type ?? "UNKNOWN"} — {session.identity.typeLabel}
-            </span>
-            {session.identity.level && (
+      <section className="mb-6 rounded-lg border border-bg-border bg-bg-base/30 p-5">
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-ink-400">
+          Identification
+        </h2>
+        {session.identity ? (
+          <>
+            <div className="flex flex-wrap items-center gap-3">
               <span
-                className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${levelBadgeColor(session.identity.level)}`}
+                className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset ${identityBadgeColor(session.identity.type)}`}
               >
-                {session.identity.level}
+                {session.identity.type ?? "UNKNOWN"} — {session.identity.typeLabel}
               </span>
-            )}
-            {session.identity.status === true && (
-              <span className="text-xs text-emerald-300">✓ identified</span>
-            )}
-            {session.identity.status === false && (
-              <span className="text-xs text-rose-300">✗ not identified</span>
-            )}
-          </div>
-          {session.identity.value && (
-            <div className="mt-3">
-              <div className="mb-1 text-xs uppercase tracking-wide text-ink-500">Identifier</div>
-              <code className="block break-all rounded bg-bg-base/50 px-3 py-2 font-mono text-sm text-ink-100">
-                {session.identity.value}
-              </code>
-              {session.identity.type === "EVCCID" && (
-                <p className="mt-2 text-xs text-purple-300">
-                  This is the vehicle&apos;s PLC MAC address from an ISO 15118 Plug &amp; Charge
-                  handshake.
-                </p>
+              {session.identity.level && (
+                <span
+                  className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${levelBadgeColor(session.identity.level)}`}
+                >
+                  {session.identity.level}
+                </span>
               )}
-              {session.identity.type === "EMAID" && (
-                <p className="mt-2 text-xs text-emerald-300">
-                  This is the contract certificate identifier from an ISO 15118 Plug &amp; Charge
-                  session.
-                </p>
+              {session.identity.status === true && (
+                <span className="text-xs text-emerald-300">✓ identified</span>
+              )}
+              {session.identity.status === false && (
+                <span className="text-xs text-rose-300">✗ not identified</span>
               )}
             </div>
-          )}
-          {session.identity.flags.length > 0 && (
-            <div className="mt-3">
-              <div className="mb-1 text-xs uppercase tracking-wide text-ink-500">Flags</div>
-              <div className="flex flex-wrap gap-1">
-                {session.identity.flags.map((f) => (
-                  <span
-                    key={f}
-                    className="inline-flex rounded bg-bg-raised/60 px-1.5 py-0.5 font-mono text-[10px] text-ink-300"
-                  >
-                    {f}
-                  </span>
-                ))}
+            <dl className="mt-3 grid grid-cols-1 gap-x-6 gap-y-2 text-sm md:grid-cols-2">
+              <KV label="Type" value={session.identity.type ?? placeholder} />
+              <KV label="Level (confidence)" value={session.identity.level ?? placeholder} />
+              <KV label="Identifier" value={session.identity.value ?? placeholder} />
+              <KV
+                label="Identified flag"
+                value={
+                  session.identity.status === null
+                    ? placeholder
+                    : session.identity.status
+                      ? "true"
+                      : "false"
+                }
+              />
+            </dl>
+            {session.identity.type === "EVCCID" && (
+              <p className="mt-3 text-xs text-purple-300">
+                This is the vehicle&apos;s PLC MAC address from an ISO 15118 Plug &amp; Charge handshake.
+              </p>
+            )}
+            {session.identity.type === "EMAID" && (
+              <p className="mt-3 text-xs text-emerald-300">
+                This is the contract certificate identifier from an ISO 15118 Plug &amp; Charge session.
+              </p>
+            )}
+            {session.identity.flags.length > 0 ? (
+              <div className="mt-3">
+                <div className="mb-1 text-xs uppercase tracking-wide text-ink-500">Flags</div>
+                <div className="flex flex-wrap gap-1">
+                  {session.identity.flags.map((f) => (
+                    <span
+                      key={f}
+                      className="inline-flex rounded bg-bg-raised/60 px-1.5 py-0.5 font-mono text-[10px] text-ink-300"
+                    >
+                      {f}
+                    </span>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
-          {session.driverIdTag && session.identity.value !== session.driverIdTag && (
-            <div className="mt-3 text-xs text-ink-500">
-              Legacy <span className="text-ink-300 font-mono">idTag</span>: <span className="font-mono">{session.driverIdTag}</span>
-            </div>
-          )}
-        </section>
-      ) : null}
+            ) : (
+              <div className="mt-3 text-xs text-ink-500">Flags: {placeholder}</div>
+            )}
+          </>
+        ) : (
+          <p className="text-xs italic text-ink-500">
+            No OCMF identity captured. Slot reserved for ISO 14443 RFID UID, ISO 15118 vehicle MAC (EVCCID),
+            or PnC contract (EMAID) — populated when Zaptec firmware ships ISO 15118 PnC support.
+          </p>
+        )}
+        <div className="mt-3 text-xs text-ink-500">
+          Legacy <span className="font-mono text-ink-300">idTag</span> on session row:{" "}
+          <span className="font-mono">{session.driverIdTag ?? placeholder}</span>
+        </div>
+      </section>
 
       {/* POWER OVER TIME (OCMF intervals) */}
-      {session.intervals.length > 0 ? (
-        <section className="mb-6 rounded-lg border border-bg-border bg-bg-base/30 p-5">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-ink-400">
-            Power timeline
-            <span className="ml-2 text-[10px] font-normal text-ink-500">
-              source: {session.timeSeriesSource}
-            </span>
-          </h2>
+      <section className="mb-6 rounded-lg border border-bg-border bg-bg-base/30 p-5">
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-ink-400">
+          Power timeline
+          <span className="ml-2 text-[10px] font-normal text-ink-500">
+            source: {session.timeSeriesSource ?? placeholder}
+          </span>
+        </h2>
+        {session.intervals.length > 0 ? (
           <ChargeChart intervals={session.intervals} source={session.timeSeriesSource} />
-        </section>
-      ) : null}
+        ) : (
+          <p className="text-xs italic text-ink-500">
+            No interval data — needs OCMF readings or EnergyDetails on the imported CDR.
+          </p>
+        )}
+      </section>
 
       {/* AMQP TELEMETRY SAMPLES */}
-      {session.samples.length > 0 ? (
-        <section className="mb-6 rounded-lg border border-bg-border bg-bg-base/30 p-5">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-ink-400">
-            Live telemetry samples
-            <span className="ml-2 text-[10px] font-normal text-ink-500">
-              {session.samples.length} samples · AMQP path
-            </span>
-          </h2>
+      <section className="mb-6 rounded-lg border border-bg-border bg-bg-base/30 p-5">
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-ink-400">
+          Live telemetry samples
+          <span className="ml-2 text-[10px] font-normal text-ink-500">
+            {session.samples.length} samples · AMQP path
+          </span>
+        </h2>
+        {session.samples.length > 0 ? (
           <SamplePowerChart samples={session.samples} />
-        </section>
-      ) : null}
+        ) : (
+          <p className="text-xs italic text-ink-500">
+            0 samples — AMQP feed silent during this window. Source is{" "}
+            <span className="font-mono">charging.live_session_samples</span>, populated by AMQP
+            StateId 513/553/501-509 via the Fly consumer.
+          </p>
+        )}
+      </section>
 
       {/* OCMF RECEIPT */}
-      {session.ocmf ? (
-        <section className="mb-6 rounded-lg border border-bg-border bg-bg-base/30 p-5">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-ink-400">
-            OCMF signed-meter receipt
-          </h2>
-          <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm md:grid-cols-2">
-            <KV label="Format version" value={session.ocmf.formatVersion ?? "—"} />
-            <KV label="Captured" value={formatDateTime(session.ocmf.capturedAt)} />
-            <KV label="Gateway id" value={session.ocmf.gatewayId ?? "—"} />
-            <KV label="Gateway serial" value={session.ocmf.gatewaySerial ?? "—"} />
-            <KV label="Gateway firmware" value={session.ocmf.gatewayVersion ?? "—"} />
-            <KV
-              label="Signed kWh"
-              value={
-                session.ocmf.signedSessionKwh
-                  ? `${session.ocmf.signedSessionKwh} kWh`
-                  : "—"
+      <section className="mb-6 rounded-lg border border-bg-border bg-bg-base/30 p-5">
+        <h2 className="mb-3 flex flex-wrap items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-400">
+          <span>OCMF signed-meter receipt</span>
+          {session.ocmf?.provenance && (
+            <span
+              className={
+                "rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-brand ring-1 ring-inset " +
+                (session.ocmf.provenance === "live"
+                  ? "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30"
+                  : "bg-amber-500/15 text-amber-300 ring-amber-500/30")
               }
-            />
-            {session.ocmf.firstReadingKwh && (
+              title={
+                session.ocmf.provenance === "live"
+                  ? "Captured live via AMQP StateId 723 (CompletedSession)"
+                  : "Backfilled after the fact from /chargehistory raw_payload — synthetic capturedAt"
+              }
+            >
+              {session.ocmf.provenance}
+            </span>
+          )}
+        </h2>
+        {session.ocmf ? (
+          <>
+            <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm md:grid-cols-2">
+              <KV label="Format version" value={session.ocmf.formatVersion ?? placeholder} />
+              <KV label="Captured" value={formatDateTime(session.ocmf.capturedAt)} />
+              <KV label="Gateway id" value={session.ocmf.gatewayId ?? placeholder} />
+              <KV label="Gateway serial" value={session.ocmf.gatewaySerial ?? placeholder} />
+              <KV label="Gateway firmware" value={session.ocmf.gatewayVersion ?? placeholder} />
+              <KV
+                label="Signed kWh"
+                value={
+                  session.ocmf.signedSessionKwh
+                    ? `${session.ocmf.signedSessionKwh} kWh`
+                    : placeholder
+                }
+              />
               <KV
                 label="First reading"
-                value={`${session.ocmf.firstReadingKwh} kWh`}
+                value={
+                  session.ocmf.firstReadingKwh
+                    ? `${session.ocmf.firstReadingKwh} kWh`
+                    : placeholder
+                }
               />
-            )}
-            {session.ocmf.lastReadingKwh && (
               <KV
                 label="Last reading"
-                value={`${session.ocmf.lastReadingKwh} kWh`}
+                value={
+                  session.ocmf.lastReadingKwh
+                    ? `${session.ocmf.lastReadingKwh} kWh`
+                    : placeholder
+                }
               />
+            </dl>
+            {!includeRaw ? (
+              <div className="mt-4 text-xs">
+                <a
+                  href={`/charge-log/${session.sessionId}?include=raw`}
+                  className="text-sv-sky hover:underline"
+                >
+                  Load raw OCMF envelope + completed-session JSON →
+                </a>
+              </div>
+            ) : null}
+            {includeRaw && session.ocmf.signedSessionRaw && (
+              <RawBlobAccordion title="Raw OCMF envelope" content={session.ocmf.signedSessionRaw} />
             )}
-          </dl>
-          {!includeRaw && session.identity ? (
-            <div className="mt-4 text-xs">
-              <a
-                href={`/charge-log/${session.sessionId}?include=raw`}
-                className="text-sv-sky hover:underline"
-              >
-                Load raw OCMF envelope + completed-session JSON →
-              </a>
-            </div>
-          ) : null}
-          {includeRaw && session.ocmf.signedSessionRaw && (
-            <RawBlobAccordion title="Raw OCMF envelope" content={session.ocmf.signedSessionRaw} />
-          )}
-        </section>
-      ) : null}
+          </>
+        ) : (
+          <p className="text-xs italic text-ink-500">
+            No OCMF data on this session. Backfill captured 110 historical sessions on
+            2026-05-08; rows imported afterward only get OCMF if AMQP StateId 723
+            (CompletedSession) fires for them.
+          </p>
+        )}
+      </section>
 
       {/* CHARGER */}
       <section className="mb-6 rounded-lg border border-bg-border bg-bg-base/30 p-5">
@@ -379,6 +451,24 @@ export default async function SessionDetailPage({
         </section>
       ) : null}
     </div>
+  );
+}
+
+function StatusPill({ status }: { status: string }) {
+  const tone =
+    status === "completed"
+      ? "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30"
+      : status === "active"
+        ? "bg-sv-sky/15 text-sv-sky ring-sv-sky/30"
+        : status === "aborted" || status === "failed"
+          ? "bg-rose-500/15 text-rose-300 ring-rose-500/30"
+          : "bg-ink-500/15 text-ink-300 ring-bg-border";
+  return (
+    <span
+      className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-brand ring-1 ring-inset ${tone}`}
+    >
+      {status}
+    </span>
   );
 }
 
