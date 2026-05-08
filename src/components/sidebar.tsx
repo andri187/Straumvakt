@@ -281,6 +281,12 @@ const nav: NavItem[] = [
             label: { is: "Teltonika RUT", en: "Teltonika RUT" },
             icon: RadioTower,
           },
+          {
+            kind: "leaf",
+            href: "/reference/unifi-api",
+            label: { is: "UniFi API", en: "UniFi API" },
+            icon: Network,
+          },
         ],
       },
     ],
