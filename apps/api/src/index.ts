@@ -50,6 +50,7 @@ import { handleArchiveEventsBatch } from "./queues/archive-events";
 import { ensureForwardPartitions } from "./lib/db/partition-cron";
 import { makePool } from "./lib/db/raw";
 import { runZaptecCronSync, runZaptecSessionsOnlyCron } from "./lib/zaptec-sync-cron";
+import { runAgreementsBillingTick } from "./lib/agreement/billing-tick";
 import type {
   Env,
   OutboundCommandMessage,
@@ -318,6 +319,33 @@ const handler: ExportedHandler<Env, AnyQueueMessage> = {
     // and the technical-read history block reflect in-progress sessions
     // within ~1 minute even for chargers AMQP can't reach. Net API
     // budget ~+20% over the previous */5 cadence.
+    // Sprint 9 / ADR 0019 (2026-05-08) — agreements billing tick.
+    // Picks up finalized + user-enriched ChargeSession rows that don't
+    // yet have agreements.billing_lines and runs the resolver. Gated
+    // off the same cadence as the other crons. Logs only when
+    // something actually happened so operator log noise stays low.
+    ctx.waitUntil(
+      (async () => {
+        try {
+          const result = await runAgreementsBillingTick(db);
+          if (result.scanned > 0) {
+            console.log("[agreements-billing-tick]", {
+              scanned: result.scanned,
+              emitted: result.emitted,
+              alreadyExisted: result.alreadyExisted,
+              denied: result.denied,
+              errorCount: result.errors.length,
+              firstErrors: result.errors.slice(0, 3),
+            });
+          }
+        } catch (err) {
+          console.error("[agreements-billing-tick] failed", {
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      })(),
+    );
+
     if (env.OCPP_CRED_KEK) {
       const kek = env.OCPP_CRED_KEK;
       const isFullTick = new Date().getUTCMinutes() % 5 === 0;
