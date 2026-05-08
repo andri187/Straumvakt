@@ -237,7 +237,15 @@ export function TokensPanel({
           before closure item 1 landed.
         </p>
       ) : (
-        <ul className="divide-y divide-bg-border/40">
+        <>
+          <div className="hidden md:grid grid-cols-[minmax(0,170px)_minmax(0,1fr)_80px_minmax(0,120px)_auto] gap-x-3 px-1 pb-1 text-[10px] font-semibold uppercase tracking-brand text-ink-500">
+            <span>Value</span>
+            <span>Label</span>
+            <span>Status</span>
+            <span>Kind · added</span>
+            <span className="text-right">Actions</span>
+          </div>
+          <ul className="divide-y divide-bg-border/40">
           {tokens.map((t) => (
             <li
               key={t.id}
@@ -294,10 +302,10 @@ export function TokensPanel({
                   </div>
                 </form>
               ) : (
-                <div className="flex flex-wrap items-center gap-3">
+                <div className="grid grid-cols-1 gap-y-1 gap-x-3 md:grid-cols-[minmax(0,170px)_minmax(0,1fr)_80px_minmax(0,120px)_auto] md:items-center">
                   <code
                     className={
-                      "select-all rounded bg-bg-base/60 px-2 py-1 font-mono text-sm ring-1 " +
+                      "select-all justify-self-start rounded bg-bg-base/60 px-2 py-1 font-mono text-sm ring-1 " +
                       (t.status === "active"
                         ? "text-emerald-100 ring-emerald-500/30"
                         : "text-ink-400 line-through ring-bg-border/40")
@@ -305,12 +313,12 @@ export function TokensPanel({
                   >
                     {t.value}
                   </code>
-                  <span className="text-xs text-ink-300">
+                  <span className="truncate text-xs text-ink-300">
                     {t.label ?? <span className="italic text-ink-500">no label</span>}
                   </span>
                   <span
                     className={
-                      "rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-brand " +
+                      "justify-self-start rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-brand " +
                       (t.status === "active"
                         ? "bg-emerald-500/20 text-emerald-200"
                         : t.status === "revoked"
@@ -323,43 +331,45 @@ export function TokensPanel({
                     {t.status}
                   </span>
                   <span className="text-[10px] text-ink-500">
-                    {t.kind} · added {new Date(t.createdAt).toLocaleDateString()}
+                    {t.kind} · {new Date(t.createdAt).toLocaleDateString()}
                   </span>
-                  <span className="ml-auto" />
-                  <button
-                    type="button"
-                    onClick={() => startEdit(t)}
-                    disabled={busy}
-                    className="rounded border border-bg-border bg-bg-base/40 px-2 py-1 text-[11px] text-ink-300 hover:bg-bg-base/70 disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    Edit
-                  </button>
-                  {t.status === "active" && (
+                  <div className="flex flex-wrap items-center gap-2 justify-self-end">
                     <button
                       type="button"
-                      onClick={() => revoke(t.id)}
+                      onClick={() => startEdit(t)}
                       disabled={busy}
-                      className="rounded border border-rose-700/40 bg-rose-950/30 px-2 py-1 text-[11px] text-rose-200 hover:bg-rose-950/60 disabled:cursor-not-allowed disabled:opacity-40"
+                      className="rounded border border-bg-border bg-bg-base/40 px-2 py-1 text-[11px] text-ink-300 hover:bg-bg-base/70 disabled:cursor-not-allowed disabled:opacity-40"
                     >
-                      Revoke
+                      Edit
                     </button>
-                  )}
-                  {t.status === "revoked" && (
-                    <button
-                      type="button"
-                      onClick={() => permanentDelete(t.id, t.value)}
-                      disabled={busy}
-                      title="Permanently remove the row from the database (loses audit history)."
-                      className="rounded border border-rose-900/60 bg-rose-950/60 px-2 py-1 text-[11px] text-rose-200 hover:bg-rose-900/80 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      Delete permanently
-                    </button>
-                  )}
+                    {t.status === "active" && (
+                      <button
+                        type="button"
+                        onClick={() => revoke(t.id)}
+                        disabled={busy}
+                        className="rounded border border-rose-700/40 bg-rose-950/30 px-2 py-1 text-[11px] text-rose-200 hover:bg-rose-950/60 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Revoke
+                      </button>
+                    )}
+                    {t.status === "revoked" && (
+                      <button
+                        type="button"
+                        onClick={() => permanentDelete(t.id, t.value)}
+                        disabled={busy}
+                        title="Permanently remove the row from the database (loses audit history)."
+                        className="rounded border border-rose-900/60 bg-rose-950/60 px-2 py-1 text-[11px] text-rose-200 hover:bg-rose-900/80 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Delete permanently
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
             </li>
           ))}
         </ul>
+        </>
       )}
 
       {error && (
