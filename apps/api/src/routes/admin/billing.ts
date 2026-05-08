@@ -25,6 +25,7 @@ import {
   type LedgerScope,
 } from "../../repositories/session-ledger";
 import { getSessionDetail } from "../../repositories/session-detail";
+import { getSessionFullDetail } from "../../repositories/session-full-detail";
 import { formatIskMinor } from "../../lib/tariff/compute-session-cost";
 import type { Env } from "../../bindings";
 
@@ -76,6 +77,22 @@ adminBilling.get(
   async (c) => {
     const db = makePrisma(c.env);
     const detail = await getSessionDetail(db, c.req.param("id"));
+    if (!detail) return c.json({ error: "not_found" }, 404);
+    return c.json({ session: detail });
+  },
+);
+
+// Sprint 9 / 2026-05-08 — full enriched session detail for the
+// standalone /charge-log/[sessionId] page. Same row, more columns:
+// OCMF identity (auth_id_*), full OCMF gateway block, AMQP-derived
+// telemetry samples, and the raw 723 + OCMF blobs when ?include=raw.
+adminBilling.get(
+  "/sessions/:id/full",
+  requirePermission("billing.read"),
+  async (c) => {
+    const db = makePrisma(c.env);
+    const includeRaw = c.req.query("include") === "raw";
+    const detail = await getSessionFullDetail(db, c.req.param("id"), { includeRaw });
     if (!detail) return c.json({ error: "not_found" }, 404);
     return c.json({ session: detail });
   },

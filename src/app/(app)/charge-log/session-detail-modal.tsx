@@ -91,16 +91,26 @@ export function SessionDetailModal({
         className="my-8 w-full max-w-3xl rounded-lg border border-bg-border bg-bg-base p-6 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="mb-4 flex items-center justify-between">
+        <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="text-lg font-semibold text-ink-50">Session details</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded border border-bg-border px-2 py-1 text-xs text-ink-300 hover:bg-bg-base/50"
-            aria-label="Close"
-          >
-            ✕
-          </button>
+          <div className="flex items-center gap-2">
+            {sessionId && (
+              <a
+                href={`/charge-log/${sessionId}`}
+                className="rounded bg-sv-sky/15 px-3 py-1 text-xs font-medium text-sv-sky ring-1 ring-inset ring-sv-sky/30 hover:bg-sv-sky/25"
+              >
+                Open full view →
+              </a>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded border border-bg-border px-2 py-1 text-xs text-ink-300 hover:bg-bg-base/50"
+              aria-label="Close"
+            >
+              ✕
+            </button>
+          </div>
         </div>
 
         {loading && (
