@@ -101,23 +101,37 @@ async function seedCostFactorCatalog() {
   console.log(`[seed] cost-factor catalog: ${COST_FACTORS.length} factors upserted.`);
 }
 
-// ── ADR 0019 — agreements cost-factor catalog (revised) ──────────────
-// Coexists with the legacy ADR 0008 catalog above until cutover.
-// STR (Straumvaktargjald) is the platform fee — recipient is always the
-// Straumvakt ORG row. Bearer is per-clause: ORG when N1 covers it out
-// of revenue, WRK on workplace agreements (e.g. Krónan pays a mediation
-// fee), USR when a CPO opts to surface it as a driver-visible "platform
-// fee."  Default basis at pilot is per_session.
+// ── ADR 0019 (2026-05-08 addendum) — 15-factor agreements catalog.
+// Replaces the 9-factor catalog from the original addendum. Coexists
+// with the legacy ADR 0008 catalog above until cutover.
+//
+// Five-agreement placement (lock):
+//   service_cpo         INT, USRF, CNR, RVN, PRM
+//   service_contractor  AGN, RVN
+//   service_workplace   WRK
+//   installation        DSO, ELE, MTR, RNT, TRF, IDL (mdu only), NET (mdu only)
+//   issues engine       SRF (deferred — non-session billing track)
 const AGREEMENT_COST_FACTORS = [
-  { code: "DSO", displayNameIs: "Dreifing",        displayNameEn: "DSO grid fee",                description: "Distribution-system-operator grid fee. Pass-through to the DSO (Veitur, Norðurorka, RARIK, ...). Site-anchored." },
-  { code: "ELE", displayNameIs: "Rafmagn",         displayNameEn: "Retailer energy price",       description: "Electricity commodity price from the retailer. Pass-through. Installation-anchored in pilot." },
-  { code: "ACS", displayNameIs: "Notendagjald",    displayNameEn: "User access fee",             description: "Per-session or per-month flat access fee. Recipient is typically the CPO." },
-  { code: "PRM", displayNameIs: "Premium",         displayNameEn: "Premium user access fee",     description: "Higher-tier user access fee for differentiated pricing." },
-  { code: "TRF", displayNameIs: "Tímagjald",       displayNameEn: "Extra tariffs",               description: "Idle-minute fees, surge pricing, etc. Recipient is the CPO." },
-  { code: "SRF", displayNameIs: "Þjónustugjald",   displayNameEn: "Service / installer fee",     description: "Fee paid to the contractor handling installation/maintenance." },
-  { code: "RNT", displayNameIs: "Leiga",           displayNameEn: "Charger rental fee",          description: "Hardware-rental fee when the charger is rented vs. owned. Null/absent when owned." },
-  { code: "MTR", displayNameIs: "Mælagjald",       displayNameEn: "E-meter daily fee",           description: "Daily fee the DSO charges for the e-meter on the installation. Pass-through." },
-  { code: "STR", displayNameIs: "Straumvaktargjald", displayNameEn: "Straumvakt platform fee",   description: "Per-session (default) or per-kWh fee paid to Straumvakt for platform services. Recipient is always the Straumvakt ORG row. Default bearer depends on agreement type — ORG on CPO agreements, WRK on workplace agreements." },
+  // service_cpo (Straumvakt revenue from the CPO).
+  { code: "INT",  displayNameIs: "Hleðslukerfagjald",          displayNameEn: "Price per installation",      description: "Flat per-installation fee Straumvakt invoices the CPO. Lives on a service_cpo agreement." },
+  { code: "USRF", displayNameIs: "Notendagjald",               displayNameEn: "Per-user-on-installation",    description: "Per-user-on-installation fee Straumvakt invoices the CPO. CPO can absorb or forward to drivers. Lives on a service_cpo agreement." },
+  { code: "CNR",  displayNameIs: "Tenglagjald",                displayNameEn: "Per-connector",               description: "Per-connector fee Straumvakt invoices the CPO. Lives on a service_cpo agreement." },
+  { code: "RVN",  displayNameIs: "Veltutengd gjöld",           displayNameEn: "% of kWh charges",            description: "Percent of kWh-priced charges (= pct × kWh × (ELE_rate + DSO_rate)). Lives on service_cpo and service_contractor agreements." },
+  { code: "PRM",  displayNameIs: "Premium",                    displayNameEn: "Premium user fee",            description: "Premium user fee. Straumvakt revenue. Lives on service_cpo agreements; CPO chooses absorb or forward." },
+  // service_contractor (Straumvakt revenue from a contractor).
+  { code: "AGN",  displayNameIs: "Per Contractor Agent access", displayNameEn: "Per-agent (contractor)",     description: "Per-agent access fee Straumvakt invoices a contractor. Lives on a service_contractor agreement." },
+  // service_workplace (Straumvakt revenue from a workplace).
+  { code: "WRK",  displayNameIs: "Vinnan",                     displayNameEn: "Workplace service fee",       description: "Per workplace-covered driver per month. Once per workplace (not duplicated per CPO the workplace covers them at). Lives on a service_workplace agreement." },
+  // installation (CPO operational facts).
+  { code: "DSO",  displayNameIs: "Dreifing",                   displayNameEn: "DSO grid fee",                description: "Distribution-system-operator grid fee. Pass-through to the DSO (Veitur, Norðurorka, RARIK). Bound to the DSO rate table." },
+  { code: "ELE",  displayNameIs: "Rafmagn",                    displayNameEn: "Retailer energy",             description: "Electricity commodity price from the retailer. Pass-through. Bound to the electricity rate table." },
+  { code: "MTR",  displayNameIs: "Mælagjald",                  displayNameEn: "E-meter daily fee",           description: "Daily fee the DSO charges for the e-meter on the installation. Pass-through. Default bearer ORG (CPO); CPO can split with USR." },
+  { code: "RNT",  displayNameIs: "Leiga",                      displayNameEn: "Charger rental",              description: "Hardware-rental fee when the charger is rented rather than owned. Default bearer ORG (CPO)." },
+  { code: "TRF",  displayNameIs: "Álag",                       displayNameEn: "Idle / extra tariff",         description: "Per-minute idle fees, surge pricing, etc. CPO-set." },
+  { code: "IDL",  displayNameIs: "Idlepower",                  displayNameEn: "Idle power loss",             description: "Difference between the electrical bill and kWh charged. MDU only — CPO can split with dwellers via Allocation. Null on workplace installations." },
+  { code: "NET",  displayNameIs: "Internet",                   displayNameEn: "Internet / SIM cost",         description: "Cost of internet / 4G modem + SIM at the installation. MDU only. Null on workplace installations." },
+  // issues engine (deferred — non-session billing track).
+  { code: "SRF",  displayNameIs: "Þjónustugjald",              displayNameEn: "Service line item",           description: "Service work line item raised by the issues engine. Sum of contractor service costs; Straumvakt takes 5% RVN on each service invoice. Non-session billable_event_type = service_invoice." },
 ];
 
 async function seedAgreementCostFactorCatalog() {

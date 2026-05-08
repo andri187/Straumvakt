@@ -1,24 +1,53 @@
--- Sprint 9 / ADR 0019 — agreements schema (milestone A.2/A.3)
+-- Sprint 9 / ADR 0019 (2026-05-08 addendum) — agreements schema v2.
 --
--- New top-level namespace for the contract architecture re-base. Three
--- primitives — Agreement, BearerRule, RateReference — plus a revised
--- cost-factor catalog (DSO / ELE / ACS / PRM / TRF / SRF / RNT / MTR),
--- DriverGroup + memberships, and an output billing_lines table distinct
--- from the legacy billing.billing_lines.
+-- Consolidated migration. Supersedes:
+--   - 20260507180000_agreements_v1
+--   - 20260507190000_agreements_cpo_org_id_and_str_factor
+-- Both never applied to any environment. Squashed into this single
+-- coherent migration.
 --
--- Coexists with billing.contracts*, billing.cost_factors,
--- billing.tariff_definitions (ADR 0008). No FKs into the legacy schema.
--- Cutover is a separate ADR after milestone A.6.
+-- Five agreement types across three layers:
+--   - service_cpo / service_contractor / service_workplace  (commercial)
+--   - installation                                          (operational, CPO-authored)
+--   - workplace                                             (cost-bearing, CPO ↔ Workplace)
+--
+-- Plus:
+--   - assets.installations.installation_type — load-bearing for factor
+--     enlistment, audience flavors, TRD applicability, public access.
+--   - agreements.billing_lines future-proofed for non-session events
+--     via session_id NULL + billable_event_type discriminator.
+--
+-- Coexists with billing.contracts* (ADR 0008). No FKs into the legacy
+-- schema.
 
 CREATE SCHEMA IF NOT EXISTS "agreements";
 
 -- ─────────────────────────────────────────────────────────────────────────
--- Enums
+-- Installation type (assets.installations addition)
+-- ─────────────────────────────────────────────────────────────────────────
+
+CREATE TYPE "assets"."InstallationType" AS ENUM (
+  'workplace',
+  'mdu',
+  'public',
+  'private',
+  'mixed'
+);
+
+ALTER TABLE "assets"."installations"
+  ADD COLUMN "installation_type" "assets"."InstallationType"
+    NOT NULL DEFAULT 'workplace';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- Agreement-namespace enums
 -- ─────────────────────────────────────────────────────────────────────────
 
 CREATE TYPE "agreements"."AgreementType" AS ENUM (
-  'cpo',        -- Straumvakt <-> CPO ORG
-  'workplace'   -- Straumvakt <-> workplace ORG
+  'service_cpo',         -- Straumvakt ↔ CPO        (commercial)
+  'service_contractor',  -- Straumvakt ↔ Contractor (commercial)
+  'service_workplace',   -- Straumvakt ↔ Workplace  (commercial)
+  'installation',        -- CPO ↔ themselves        (operational)
+  'workplace'            -- CPO ↔ Workplace         (cost-bearing)
 );
 
 CREATE TYPE "agreements"."AgreementStatus" AS ENUM (
@@ -28,10 +57,9 @@ CREATE TYPE "agreements"."AgreementStatus" AS ENUM (
 );
 
 CREATE TYPE "agreements"."BearerType" AS ENUM (
-  'org',  -- counterparty ORG of parent agreement (the CPO)
+  'org',  -- any Straumvakt-customer ORG (CPO / Contractor / Workplace)
   'usr',  -- the driver running the session
-  'wrk',  -- workplace ORG that owns the driver's DriverGroup
-  'trd'   -- a specific other User (bearer_ref required)
+  'trd'   -- another User (MDU only, must already have access)
 );
 
 CREATE TYPE "agreements"."RuleScopeType" AS ENUM (
@@ -54,8 +82,8 @@ CREATE TYPE "agreements"."RateBasis" AS ENUM (
 );
 
 CREATE TYPE "agreements"."BillingLineKind" AS ENUM (
-  'passthrough',  -- routes to RateReference.supplier_org_id
-  'markup'        -- routes to CPO ORG (revenue line)
+  'passthrough',
+  'markup'
 );
 
 CREATE TYPE "agreements"."AgrCostFactorStatus" AS ENUM (
@@ -65,7 +93,7 @@ CREATE TYPE "agreements"."AgrCostFactorStatus" AS ENUM (
 );
 
 -- ─────────────────────────────────────────────────────────────────────────
--- Cost-factor catalog (revised)
+-- Cost-factor catalog (15-factor v2 catalog)
 -- ─────────────────────────────────────────────────────────────────────────
 
 CREATE TABLE "agreements"."cost_factors" (
@@ -109,32 +137,65 @@ CREATE INDEX "rate_references_factor_effective_idx"
   ON "agreements"."rate_references" ("cost_factor_id", "effective_from" DESC);
 
 -- ─────────────────────────────────────────────────────────────────────────
--- Agreement (top-level legal contract)
+-- Agreement (5-type)
 -- ─────────────────────────────────────────────────────────────────────────
 
 CREATE TABLE "agreements"."agreements" (
-  "id"                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  "counterparty_org_id"   UUID NOT NULL,
-  "agreement_type"        "agreements"."AgreementType" NOT NULL,
-  "display_name"          TEXT NOT NULL,
-  "status"                "agreements"."AgreementStatus" NOT NULL DEFAULT 'draft',
-  "effective_from"        TIMESTAMPTZ(6) NOT NULL,
-  "effective_until"       TIMESTAMPTZ(6),
-  "notes"                 TEXT,
-  "created_at"            TIMESTAMPTZ(6) NOT NULL DEFAULT now(),
-  "updated_at"            TIMESTAMPTZ(6) NOT NULL DEFAULT now(),
+  "id"                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  "agreement_type"          "agreements"."AgreementType" NOT NULL,
+  "counterparty_org_id"     UUID NOT NULL,
+  "cpo_org_id"              UUID,
+  "installation_id"         UUID,
+  "default_driver_group_id" UUID,                                -- public installations only
+  "display_name"            TEXT NOT NULL,
+  "status"                  "agreements"."AgreementStatus" NOT NULL DEFAULT 'draft',
+  "effective_from"          TIMESTAMPTZ(6) NOT NULL,
+  "effective_until"         TIMESTAMPTZ(6),
+  "notes"                   TEXT,
+  "created_at"              TIMESTAMPTZ(6) NOT NULL DEFAULT now(),
+  "updated_at"              TIMESTAMPTZ(6) NOT NULL DEFAULT now(),
 
   CONSTRAINT "agreements_counterparty_fk"
-    FOREIGN KEY ("counterparty_org_id") REFERENCES "tenancy"."organizations"("id") ON DELETE CASCADE
+    FOREIGN KEY ("counterparty_org_id") REFERENCES "tenancy"."organizations"("id") ON DELETE CASCADE,
+  CONSTRAINT "agreements_cpo_org_fk"
+    FOREIGN KEY ("cpo_org_id") REFERENCES "tenancy"."organizations"("id") ON DELETE RESTRICT,
+  CONSTRAINT "agreements_installation_fk"
+    FOREIGN KEY ("installation_id") REFERENCES "assets"."installations"("id") ON DELETE RESTRICT,
+
+  CONSTRAINT "agreements_typed_anchors_consistency" CHECK (
+    -- service_cpo: counterparty=CPO, no cpo_org, no installation
+    (agreement_type = 'service_cpo'
+       AND cpo_org_id IS NULL AND installation_id IS NULL)
+    OR
+    -- service_contractor: counterparty=Contractor, no cpo_org, no installation
+    (agreement_type = 'service_contractor'
+       AND cpo_org_id IS NULL AND installation_id IS NULL)
+    OR
+    -- service_workplace: counterparty=Workplace, no cpo_org, no installation
+    (agreement_type = 'service_workplace'
+       AND cpo_org_id IS NULL AND installation_id IS NULL)
+    OR
+    -- installation: counterparty=CPO, installation required, no cpo_org
+    (agreement_type = 'installation'
+       AND cpo_org_id IS NULL AND installation_id IS NOT NULL)
+    OR
+    -- workplace: counterparty=Workplace, cpo_org required, no installation
+    (agreement_type = 'workplace'
+       AND cpo_org_id IS NOT NULL AND installation_id IS NULL)
+  )
 );
 
 CREATE INDEX "agreements_counterparty_status_idx"
   ON "agreements"."agreements" ("counterparty_org_id", "status");
+CREATE INDEX "agreements_cpo_org_idx"
+  ON "agreements"."agreements" ("cpo_org_id");
+CREATE INDEX "agreements_installation_idx"
+  ON "agreements"."agreements" ("installation_id");
 CREATE INDEX "agreements_effective_idx"
   ON "agreements"."agreements" ("effective_from");
 
 -- ─────────────────────────────────────────────────────────────────────────
--- Per-factor agreement defaults
+-- AgreementClause — per-factor defaults
 -- ─────────────────────────────────────────────────────────────────────────
 
 CREATE TABLE "agreements"."agreement_clauses" (
@@ -156,7 +217,7 @@ CREATE TABLE "agreements"."agreement_clauses" (
 );
 
 -- ─────────────────────────────────────────────────────────────────────────
--- Driver groups
+-- DriverGroup + Membership
 -- ─────────────────────────────────────────────────────────────────────────
 
 CREATE TABLE "agreements"."driver_groups" (
@@ -196,7 +257,7 @@ CREATE INDEX "driver_group_memberships_user_idx"
   ON "agreements"."driver_group_memberships" ("user_id");
 
 -- ─────────────────────────────────────────────────────────────────────────
--- BearerRule — the override row
+-- BearerRule — override row at (scope × audience)
 -- ─────────────────────────────────────────────────────────────────────────
 
 CREATE TABLE "agreements"."bearer_rules" (
@@ -221,23 +282,19 @@ CREATE TABLE "agreements"."bearer_rules" (
   CONSTRAINT "bearer_rules_factor_fk"
     FOREIGN KEY ("cost_factor_id") REFERENCES "agreements"."cost_factors"("id"),
 
-  -- Either both scope_type + scope_id are NULL or both set.
   CONSTRAINT "bearer_rules_scope_consistency"
     CHECK (("scope_type" IS NULL AND "scope_id" IS NULL)
         OR ("scope_type" IS NOT NULL AND "scope_id" IS NOT NULL)),
 
-  -- Either both audience_type + audience_id are NULL or both set.
   CONSTRAINT "bearer_rules_audience_consistency"
     CHECK (("audience_type" IS NULL AND "audience_id" IS NULL)
         OR ("audience_type" IS NOT NULL AND "audience_id" IS NOT NULL)),
 
-  -- bearer_ref is required iff bearer_type = 'trd'.
   CONSTRAINT "bearer_rules_bearer_ref_consistency"
     CHECK (("bearer_type" = 'trd' AND "bearer_ref" IS NOT NULL)
         OR ("bearer_type" IS NULL OR "bearer_type" <> 'trd'))
 );
 
--- Resolver lookup — covers the per-attribute walk per ADR 0019.
 CREATE INDEX "bearer_rules_walk_idx"
   ON "agreements"."bearer_rules"
      ("agreement_id", "cost_factor_id", "audience_type", "audience_id",
@@ -246,13 +303,14 @@ CREATE INDEX "bearer_rules_effective_idx"
   ON "agreements"."bearer_rules" ("effective_from");
 
 -- ─────────────────────────────────────────────────────────────────────────
--- AgreementBillingLine — output table
+-- AgreementBillingLine — output table (future-proofed for non-session events)
 -- ─────────────────────────────────────────────────────────────────────────
 
 CREATE TABLE "agreements"."billing_lines" (
   "id"                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   "agreement_id"          UUID NOT NULL,
-  "session_id"            UUID NOT NULL,
+  "billable_event_type"   TEXT NOT NULL DEFAULT 'session',
+  "session_id"            UUID,                                  -- nullable for non-session events
   "factor_code"           TEXT NOT NULL,
   "kind"                  "agreements"."BillingLineKind" NOT NULL,
   "basis_type"            "agreements"."RateBasis" NOT NULL,
@@ -275,11 +333,15 @@ CREATE TABLE "agreements"."billing_lines" (
   CONSTRAINT "agr_billing_lines_agreement_fk"
     FOREIGN KEY ("agreement_id") REFERENCES "agreements"."agreements"("id") ON DELETE CASCADE,
   CONSTRAINT "agr_billing_lines_session_fk"
-    FOREIGN KEY ("session_id") REFERENCES "charging"."sessions"("id") ON DELETE CASCADE
+    FOREIGN KEY ("session_id") REFERENCES "charging"."sessions"("id") ON DELETE CASCADE,
+
+  CONSTRAINT "agr_billing_lines_session_id_required_for_session" CHECK (
+    (billable_event_type <> 'session') OR (session_id IS NOT NULL)
+  )
 );
 
-CREATE INDEX "agr_billing_lines_agreement_session_idx"
-  ON "agreements"."billing_lines" ("agreement_id", "session_id");
+CREATE INDEX "agr_billing_lines_agreement_event_idx"
+  ON "agreements"."billing_lines" ("agreement_id", "billable_event_type");
 CREATE INDEX "agr_billing_lines_session_factor_idx"
   ON "agreements"."billing_lines" ("session_id", "factor_code", "kind");
 CREATE INDEX "agr_billing_lines_recipient_idx"

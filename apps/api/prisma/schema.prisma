@@ -667,6 +667,11 @@ model Installation {
   // verifying the IdToken table is seeded with every known card.
   enforceAuthorize       Boolean                       @default(false) @map("enforce_authorize")
 
+  // ── Sprint 9 / ADR 0019 (2026-05-08) — load-bearing for agreements ──
+  // Gates: factor enlistment (IDL/NET MDU-only), DriverGroup audience
+  // flavors, TRD bearer applicability, public-vs-membership semantics.
+  installationType       InstallationType              @default(workplace) @map("installation_type")
+
   // ── Existing relations ───────────────────────────────────────────
   organization           Organization                  @relation(fields: [orgId], references: [id], onDelete: Cascade)
   site                   Site                          @relation(fields: [siteId], references: [id], onDelete: Cascade)
@@ -684,10 +689,24 @@ model Installation {
   scopedIdTokens         IdToken[]                     @relation("InstallationIdTokens")
   vendorUserGroups       VendorUserGroup[]             @relation("InstallationVendorUserGroups")
 
+  // ── Sprint 9 / ADR 0019 (2026-05-08) — agreements back-relation ──
+  agreementsAtInstallation Agreement[]                 @relation("AgreementInstallation")
+
   @@index([orgId, siteId])
   @@index([vendorId])
   @@map("installations")
   @@schema("properties")
+}
+
+// Sprint 9 / ADR 0019 (2026-05-08) — installation classification.
+enum InstallationType {
+  workplace
+  mdu
+  public
+  private
+  mixed
+
+  @@schema("assets")
 }
 
 enum InstallationOnboardingStatus {
@@ -2594,8 +2613,14 @@ model CommandHistory {
 // ─────────────────────────────────────────────────────────────────────────────
 
 enum AgreementType {
-  cpo        // Straumvakt <-> CPO ORG (the operator running the chargers)
-  workplace  // Straumvakt <-> workplace ORG (employer absorbing factors for its drivers)
+  // Commercial — Straumvakt's revenue from each customer party.
+  service_cpo         // Straumvakt <-> CPO        (INT, USRF, CNR, RVN, PRM)
+  service_contractor  // Straumvakt <-> Contractor (AGN, RVN)
+  service_workplace   // Straumvakt <-> Workplace  (WRK)
+  // Operational — CPO-authored, per-installation cost facts.
+  installation        // CPO <-> themselves (per Installation)
+  // Cost-bearing — CPO <-> Workplace mediated by Straumvakt.
+  workplace           // Holds BearerRule overrides on installation factors only.
 
   @@schema("agreements")
 }
@@ -2609,10 +2634,10 @@ enum AgreementStatus {
 }
 
 enum BearerType {
-  org   // counterparty ORG of the parent agreement (the CPO)
-  usr   // the driver running the session
-  wrk   // workplace ORG that owns the driver's DriverGroup (resolved via group.owner_org_id)
-  trd   // a specific other User (bearer_ref required)
+  org   // any Straumvakt-customer ORG (CPO / Contractor / Workplace).
+        // bearer_ref optional; defaults to the agreement's counterparty_org_id.
+  usr   // the driver running the session.
+  trd   // another User. MDU only. bearer_ref required and revalidated at billing time.
 
   @@schema("agreements")
 }
@@ -2707,34 +2732,40 @@ model RateReference {
 // Top-level legal contract between Straumvakt and a counterparty ORG. Either
 // type=cpo (the ORG operates chargers) or type=workplace (the ORG absorbs
 // factors on behalf of its drivers at someone else's chargers).
+// Sprint 9 / ADR 0019 (2026-05-08 addendum) — five-type agreement.
+// CHECK constraint pairs (agreement_type, cpo_org_id, installation_id):
+//   service_cpo / service_contractor / service_workplace
+//                                     → cpo_org_id NULL, installation_id NULL
+//   installation                      → cpo_org_id NULL, installation_id NOT NULL
+//   workplace                         → cpo_org_id NOT NULL, installation_id NULL
+// See migration 20260508120000_agreements_v2.
 model Agreement {
-  id                String              @id @default(uuid()) @db.Uuid
-  counterpartyOrgId String              @map("counterparty_org_id") @db.Uuid
-  agreementType     AgreementType       @map("agreement_type")
-  // Sprint 9 / ADR 0019 addendum — three-layer model.
-  // Names which CPO ORG a *workplace* (L2) agreement binds at. NULL on
-  // type=cpo agreements (the counterparty IS the CPO). DB-side CHECK
-  // enforces the type↔nullness pairing — see migration
-  // 20260507190000_agreements_cpo_org_id_and_str_factor.
-  cpoOrgId          String?             @map("cpo_org_id") @db.Uuid
-  displayName       String              @map("display_name")
-  status            AgreementStatus     @default(draft)
-  effectiveFrom     DateTime            @map("effective_from") @db.Timestamptz(6)
-  effectiveUntil    DateTime?           @map("effective_until") @db.Timestamptz(6)
-  notes             String?
-  createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt         DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id                    String              @id @default(uuid()) @db.Uuid
+  agreementType         AgreementType       @map("agreement_type")
+  counterpartyOrgId     String              @map("counterparty_org_id") @db.Uuid
+  cpoOrgId              String?             @map("cpo_org_id") @db.Uuid
+  installationId        String?             @map("installation_id") @db.Uuid
+  defaultDriverGroupId  String?             @map("default_driver_group_id") @db.Uuid // public installations only
+  displayName           String              @map("display_name")
+  status                AgreementStatus     @default(draft)
+  effectiveFrom         DateTime            @map("effective_from") @db.Timestamptz(6)
+  effectiveUntil        DateTime?           @map("effective_until") @db.Timestamptz(6)
+  notes                 String?
+  createdAt             DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  counterpartyOrg   Organization        @relation("AgreementCounterparty", fields: [counterpartyOrgId], references: [id], onDelete: Cascade)
-  cpoOrg            Organization?       @relation("AgreementCpo", fields: [cpoOrgId], references: [id], onDelete: Restrict)
+  counterpartyOrg       Organization        @relation("AgreementCounterparty", fields: [counterpartyOrgId], references: [id], onDelete: Cascade)
+  cpoOrg                Organization?       @relation("AgreementCpo", fields: [cpoOrgId], references: [id], onDelete: Restrict)
+  installation          Installation?       @relation("AgreementInstallation", fields: [installationId], references: [id], onDelete: Restrict)
 
-  clauses           AgreementClause[]
-  driverGroups     DriverGroup[]
-  bearerRules       BearerRule[]
-  billingLines      AgreementBillingLine[]
+  clauses               AgreementClause[]
+  driverGroups          DriverGroup[]
+  bearerRules           BearerRule[]
+  billingLines          AgreementBillingLine[]
 
   @@index([counterpartyOrgId, status])
   @@index([cpoOrgId])
+  @@index([installationId])
   @@index([effectiveFrom])
   @@map("agreements")
   @@schema("agreements")
@@ -2841,7 +2872,11 @@ model BearerRule {
 model AgreementBillingLine {
   id                String          @id @default(uuid()) @db.Uuid
   agreementId       String          @map("agreement_id") @db.Uuid
-  sessionId         String          @map("session_id") @db.Uuid
+  // Sprint 9 / ADR 0019 (2026-05-08) — future-proofed for non-session events.
+  // Values now: 'session'. Later: 'service_invoice', 'subscription',
+  // 'manual_adjustment'. CHECK enforces session_id NOT NULL when type='session'.
+  billableEventType String          @default("session") @map("billable_event_type")
+  sessionId         String?         @map("session_id") @db.Uuid
   factorCode        String          @map("factor_code")
   kind              BillingLineKind
   basisType         RateBasis       @map("basis_type")
@@ -2862,9 +2897,9 @@ model AgreementBillingLine {
   createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
 
   agreement         Agreement       @relation(fields: [agreementId], references: [id], onDelete: Cascade)
-  session           ChargeSession   @relation("AgreementBillingLineSession", fields: [sessionId], references: [id], onDelete: Cascade)
+  session           ChargeSession?  @relation("AgreementBillingLineSession", fields: [sessionId], references: [id], onDelete: Cascade)
 
-  @@index([agreementId, sessionId])
+  @@index([agreementId, billableEventType])
   @@index([sessionId, factorCode, kind])
   @@index([recipientOrgId, createdAt(sort: Desc)])
   @@map("billing_lines")

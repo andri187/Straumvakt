@@ -1,0 +1,478 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1800 1900" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif">
+  <defs>
+    <marker id="arrow-sky" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#38bdf8"/>
+    </marker>
+    <marker id="arrow-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#fbbf24"/>
+    </marker>
+    <marker id="arrow-emerald" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#34d399"/>
+    </marker>
+    <marker id="arrow-purple" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#c084fc"/>
+    </marker>
+    <marker id="arrow-rose" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#fb7185"/>
+    </marker>
+    <marker id="arrow-slate" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#94a3b8"/>
+    </marker>
+    <style>
+      .bg { fill: #0f172a; }
+      .title { fill: #f1f5f9; font-size: 32px; font-weight: 700; }
+      .subtitle { fill: #94a3b8; font-size: 16px; }
+      .section-h { fill: #f1f5f9; font-size: 20px; font-weight: 700; }
+      .section-sub { fill: #94a3b8; font-size: 13px; }
+      .hub { fill: #1e293b; stroke: #f1f5f9; stroke-width: 2; }
+      .hub-label { fill: #f1f5f9; font-size: 22px; font-weight: 700; }
+      .card-cpo { fill: #0c1e2e; stroke: #38bdf8; stroke-width: 2; }
+      .card-contractor { fill: #2e240c; stroke: #fbbf24; stroke-width: 2; }
+      .card-workplace-svc { fill: #0c2418; stroke: #34d399; stroke-width: 2; }
+      .card-installation { fill: #170c1f; stroke: #c084fc; stroke-width: 2; }
+      .card-workplace-op { fill: #2a1018; stroke: #fb7185; stroke-width: 2; }
+      .card-driver { fill: #2a1010; stroke: #fb7185; stroke-width: 2; }
+      .card-bearer { fill: #0c1628; stroke: #475569; stroke-width: 1.5; }
+      .card-catalog { fill: #0a0f1c; stroke: #475569; stroke-width: 1; }
+      .role-tag { fill: #f1f5f9; font-size: 11px; font-weight: 700; letter-spacing: 1.5px; }
+      .h2 { fill: #f1f5f9; font-size: 18px; font-weight: 700; }
+      .h3 { fill: #f1f5f9; font-size: 14px; font-weight: 600; }
+      .body { fill: #cbd5e1; font-size: 14px; }
+      .small { fill: #94a3b8; font-size: 12px; }
+      .tiny { fill: #94a3b8; font-size: 10px; }
+      .quote { fill: #e2e8f0; font-size: 14px; font-style: italic; }
+      .mono { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; }
+      .text-sky { fill: #38bdf8; }
+      .text-amber { fill: #fbbf24; }
+      .text-emerald { fill: #34d399; }
+      .text-purple { fill: #c084fc; }
+      .text-rose { fill: #fb7185; }
+      .text-slate { fill: #94a3b8; }
+      .text-ink { fill: #f1f5f9; }
+      .arrow-sky { stroke: #38bdf8; stroke-width: 2.5; fill: none; }
+      .arrow-amber { stroke: #fbbf24; stroke-width: 2.5; fill: none; }
+      .arrow-emerald { stroke: #34d399; stroke-width: 2.5; fill: none; }
+      .arrow-purple { stroke: #c084fc; stroke-width: 2.5; fill: none; stroke-dasharray: 5,3; }
+      .arrow-rose { stroke: #fb7185; stroke-width: 2.5; fill: none; }
+      .arrow-slate { stroke: #94a3b8; stroke-width: 2; fill: none; }
+      .divider { stroke: #1e293b; stroke-width: 1; }
+      .row-band { fill: #0a0f1c; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1800" height="1900"/>
+
+  <!-- HEADER -->
+  <text class="title" x="40" y="56">Agreement model — locked</text>
+  <text class="subtitle" x="40" y="86">Five agreement types across three layers. Driver memberships gate access. Three bearer codes (ORG, USR, TRD). All shape-deciding questions answered (see "Locked decisions" below).</text>
+  <rect fill="#34d399" x="1640" y="40" width="120" height="22" rx="11"/>
+  <text class="role-tag" x="1700" y="56" text-anchor="middle">DECISIONS LOCKED</text>
+
+  <!-- ╔══════════════════════════════════════════════════════╗ -->
+  <!-- LAYER 1 — COMMERCIAL                                    -->
+  <!-- ╚══════════════════════════════════════════════════════╝ -->
+  <text class="section-h" x="40" y="140">Layer 1 — Commercial agreements</text>
+  <text class="section-sub" x="40" y="160">Straumvakt's revenue from each customer party. Independent of operations.</text>
+
+  <!-- Hub: Straumvakt -->
+  <g transform="translate(800, 192)">
+    <rect class="hub" rx="40" width="200" height="60"/>
+    <text class="hub-label" x="100" y="38" text-anchor="middle">Straumvakt</text>
+  </g>
+
+  <!-- Lines from hub to three commercial agreements -->
+  <path class="arrow-sky" d="M 870 252 Q 600 300 380 340" marker-end="url(#arrow-sky)"/>
+  <path class="arrow-amber" d="M 900 252 L 900 340" marker-end="url(#arrow-amber)"/>
+  <path class="arrow-emerald" d="M 930 252 Q 1200 300 1420 340" marker-end="url(#arrow-emerald)"/>
+
+  <!-- service_cpo card -->
+  <g transform="translate(80, 340)">
+    <rect class="card-cpo" rx="10" width="540" height="240"/>
+    <rect fill="#38bdf8" x="20" y="20" width="160" height="22" rx="11"/>
+    <text class="role-tag" x="100" y="36" text-anchor="middle">SERVICE_CPO</text>
+
+    <text class="h2" x="20" y="78">Straumvakt ⇄ CPO</text>
+    <text class="quote" x="20" y="104">"The CPO uses our platform to operate chargers."</text>
+
+    <text class="h3" x="20" y="142">Factors enlisted on this agreement</text>
+    <g class="mono" font-size="13">
+      <text class="text-ink" x="20" y="166">INT  — flat per installation               990 kr</text>
+      <text class="text-ink" x="20" y="184">USRF — per user on installation             75 kr</text>
+      <text class="text-ink" x="20" y="202">CNR  — per connector                        75 kr</text>
+      <text class="text-ink" x="20" y="220">RVN  — % of energy cost                      0%</text>
+      <text class="text-ink" x="20" y="218"></text>
+    </g>
+
+    <text class="text-sky" x="20" y="232" font-size="12">+ PRM (premium-tier user fee, opt-in)</text>
+  </g>
+
+  <!-- service_contractor card -->
+  <g transform="translate(640, 340)">
+    <rect class="card-contractor" rx="10" width="520" height="240"/>
+    <rect fill="#fbbf24" x="20" y="20" width="220" height="22" rx="11"/>
+    <text class="role-tag" x="130" y="36" text-anchor="middle">SERVICE_CONTRACTOR</text>
+
+    <text class="h2" x="20" y="78">Straumvakt ⇄ Contractor</text>
+    <text class="quote" x="20" y="104">"The contractor invoices service work via our platform."</text>
+
+    <text class="h3" x="20" y="142">Factors enlisted on this agreement</text>
+    <g class="mono" font-size="13">
+      <text class="text-ink" x="20" y="166">AGN — per agent access (flat)              999 kr</text>
+      <text class="text-ink" x="20" y="184">RVN — % of each service invoice              5%</text>
+    </g>
+
+    <text class="text-amber" x="20" y="222" font-size="12">SRF (service line item) — defined later by issues engine.</text>
+  </g>
+
+  <!-- service_workplace card -->
+  <g transform="translate(1180, 340)">
+    <rect class="card-workplace-svc" rx="10" width="540" height="240"/>
+    <rect fill="#34d399" x="20" y="20" width="200" height="22" rx="11"/>
+    <text class="role-tag" x="120" y="36" text-anchor="middle">SERVICE_WORKPLACE</text>
+
+    <text class="h2" x="20" y="78">Straumvakt ⇄ Workplace ORG</text>
+    <text class="quote" x="20" y="104">"The workplace pays employees' bills via our platform."</text>
+
+    <text class="h3" x="20" y="142">Factor enlisted on this agreement</text>
+    <g class="mono" font-size="13">
+      <text class="text-ink" x="20" y="166">WRK — workplace service fee                 75 kr</text>
+      <text class="text-emerald" x="20" y="184">       per covered driver per month</text>
+    </g>
+
+    <text class="text-emerald" x="20" y="218" font-size="12">Required if workplace covers ANY driver bills.</text>
+    <text class="small" x="20" y="234" font-size="11">One WRK fee per workplace-covered driver — invoiced once,</text>
+    <text class="small" x="20" y="248" font-size="11">not duplicated per CPO the workplace covers them at.</text>
+  </g>
+
+  <!-- ╔══════════════════════════════════════════════════════╗ -->
+  <!-- LAYER 2 — OPERATIONAL                                   -->
+  <!-- ╚══════════════════════════════════════════════════════╝ -->
+  <line class="divider" x1="40" y1="612" x2="1760" y2="612"/>
+  <text class="section-h" x="40" y="648">Layer 2 — Operational contracts</text>
+  <text class="section-sub" x="40" y="668">CPO-authored. Independent of Straumvakt's commercial terms.</text>
+
+  <!-- installation contract -->
+  <g transform="translate(80, 690)">
+    <rect class="card-installation" rx="10" width="800" height="280"/>
+    <rect fill="#c084fc" x="20" y="20" width="180" height="22" rx="11"/>
+    <text class="role-tag" x="110" y="36" text-anchor="middle">INSTALLATION</text>
+
+    <text class="h2" x="20" y="78">CPO ⇄ themselves (per Installation)</text>
+    <text class="quote" x="20" y="104">"What it costs to operate this installation."</text>
+
+    <text class="h3" x="20" y="142">Factors</text>
+    <g class="mono" font-size="13">
+      <text class="text-ink" x="20" y="164">DSO — DSO grid fee     bound to DSO rate table  (fixed)</text>
+      <text class="text-ink" x="20" y="180">ELE — Energy           bound to electricity rates (fixed)</text>
+      <text class="text-ink" x="20" y="196">MTR — E-meter daily fee   (CPO-set; bearer ORG by default)</text>
+      <text class="text-ink" x="20" y="212">RNT — Charger rental      (only if chargers rented, not owned)</text>
+      <text class="text-ink" x="20" y="228">TRF — Idle / extra time   (CPO-set)</text>
+      <text class="text-purple" x="20" y="248">IDL — Idle power loss     (MDU only — CPO can split with USR)</text>
+      <text class="text-purple" x="20" y="264">NET — Internet / SIM      (MDU only)</text>
+    </g>
+
+    <text class="text-purple" x="450" y="142" font-size="14" font-weight="600">installation_type</text>
+    <text class="small" x="450" y="166">workplace · mdu · public · private · mixed</text>
+    <text class="small" x="450" y="190">Gates which factors can be enlisted.</text>
+    <text class="small" x="450" y="208">Gates which audience flavors can join.</text>
+    <text class="small" x="450" y="226">Gates whether TRD bearer is allowed.</text>
+    <text class="small" x="450" y="244">Gates public-vs-membership semantics.</text>
+  </g>
+
+  <!-- workplace agreement (CPO ↔ Workplace) -->
+  <g transform="translate(920, 690)">
+    <rect class="card-workplace-op" rx="10" width="800" height="280"/>
+    <rect fill="#fb7185" x="20" y="20" width="160" height="22" rx="11"/>
+    <text class="role-tag" x="100" y="36" text-anchor="middle">WORKPLACE</text>
+
+    <text class="h2" x="20" y="78">CPO ⇄ Workplace ORG</text>
+    <text class="quote" x="20" y="104">"Krónan covers some installation factors for K-staff at N1."</text>
+
+    <text class="h3" x="20" y="142">Holds</text>
+    <g class="mono" font-size="13">
+      <text class="text-ink" x="20" y="166">No new factors — only BearerRule overrides on</text>
+      <text class="text-ink" x="20" y="184">installation factors (which the workplace absorbs</text>
+      <text class="text-ink" x="20" y="202">for its DriverGroup members).</text>
+    </g>
+
+    <text class="text-rose" x="20" y="240" font-size="14" font-weight="600">Hard rule</text>
+    <text class="small" x="20" y="262">An override can only redirect cost AWAY from drivers,</text>
+    <text class="small" x="20" y="278">never reduce what the workplace owes per the agreement.</text>
+  </g>
+
+  <!-- ╔══════════════════════════════════════════════════════╗ -->
+  <!-- LAYER 3 — ACCESS                                        -->
+  <!-- ╚══════════════════════════════════════════════════════╝ -->
+  <line class="divider" x1="40" y1="1000" x2="1760" y2="1000"/>
+  <text class="section-h" x="40" y="1036">Layer 3 — Access (driver memberships)</text>
+  <text class="section-sub" x="40" y="1056">No implicit defaults. A driver charges only when they hold a membership covering the charger's installation.</text>
+
+  <!-- Driver figure left -->
+  <g transform="translate(80, 1080)">
+    <rect class="card-driver" rx="10" width="280" height="180"/>
+    <rect fill="#fb7185" x="20" y="20" width="80" height="22" rx="11"/>
+    <text class="role-tag" x="60" y="36" text-anchor="middle">DRIVER</text>
+    <text class="h2" x="20" y="76">A Straumvakt user</text>
+    <text class="small" x="20" y="100">Audience = driver. Charges with their</text>
+    <text class="small" x="20" y="116">RFID / app at any installation they</text>
+    <text class="small" x="20" y="132">have a membership for.</text>
+    <text class="text-rose small" x="20" y="160">No membership = denied at session-stop.</text>
+  </g>
+
+  <!-- Memberships block -->
+  <g transform="translate(420, 1080)">
+    <rect class="card-bearer" rx="10" width="600" height="180"/>
+    <text class="h2" x="20" y="36">Membership in a DriverGroup</text>
+
+    <text class="h3" x="20" y="74">Direct customer</text>
+    <text class="small" x="20" y="92">Group sits under an installation contract.</text>
+    <text class="small" x="20" y="108">Bill = installation defaults. No workplace coverage.</text>
+
+    <text class="h3" x="20" y="134">Workplace customer</text>
+    <text class="small" x="20" y="152">Group sits under a workplace agreement.</text>
+    <text class="small" x="20" y="168">Bill = installation defaults + workplace overrides.</text>
+  </g>
+
+  <!-- Bearer codes block -->
+  <g transform="translate(1080, 1080)">
+    <rect class="card-bearer" rx="10" width="640" height="180"/>
+    <text class="h2" x="20" y="36">Bearer codes (3)</text>
+
+    <g class="mono" font-size="13">
+      <text class="text-ink" x="20" y="68">ORG  — any Straumvakt-customer org (CPO / workplace / contractor)</text>
+      <text class="small" x="20" y="86">       bearer_ref optional (defaults to agreement counterparty)</text>
+
+      <text class="text-ink" x="20" y="116">USR  — the driver running the session</text>
+
+      <text class="text-ink" x="20" y="146">TRD  — another User (MDU only, must already have access)</text>
+      <text class="small" x="20" y="164">       bearer_ref required and revalidated at session-stop</text>
+    </g>
+  </g>
+
+  <!-- Driver to memberships arrow -->
+  <path class="arrow-rose" d="M 360 1170 L 418 1170" marker-end="url(#arrow-rose)"/>
+
+  <!-- ╔══════════════════════════════════════════════════════╗ -->
+  <!-- COST FACTOR CATALOG                                     -->
+  <!-- ╚══════════════════════════════════════════════════════╝ -->
+  <line class="divider" x1="40" y1="1290" x2="1760" y2="1290"/>
+  <text class="section-h" x="40" y="1326">Cost factor catalog — placement</text>
+
+  <g transform="translate(40, 1346)">
+    <!-- Header row -->
+    <rect class="card-catalog" rx="6" width="1720" height="34"/>
+    <g font-size="11" font-weight="700" class="text-slate" letter-spacing="1">
+      <text x="20" y="22">CODE</text>
+      <text x="100" y="22">ICELANDIC</text>
+      <text x="280" y="22">ENGLISH</text>
+      <text x="600" y="22">LIVES ON</text>
+      <text x="900" y="22">BEARER DEFAULT</text>
+      <text x="1100" y="22">RECIPIENT</text>
+      <text x="1300" y="22">NOTES</text>
+    </g>
+  </g>
+
+  <g transform="translate(40, 1380)" class="mono" font-size="11">
+    <!-- service_cpo factors -->
+    <g>
+      <text class="text-sky" x="20" y="14">INT</text>
+      <text class="text-ink" x="100" y="14">Hleðslukerfagjald</text>
+      <text class="text-ink" x="280" y="14">Price per installation</text>
+      <text class="text-sky" x="600" y="14">service_cpo</text>
+      <text class="text-ink" x="900" y="14">ORG (CPO)</text>
+      <text class="text-ink" x="1100" y="14">Straumvakt</text>
+      <text class="text-slate" x="1300" y="14">flat 990 kr/installation</text>
+    </g>
+    <g transform="translate(0, 18)">
+      <text class="text-sky" x="20" y="14">USRF</text>
+      <text class="text-ink" x="100" y="14">Notendagjald</text>
+      <text class="text-ink" x="280" y="14">Per-user-on-installation</text>
+      <text class="text-sky" x="600" y="14">service_cpo</text>
+      <text class="text-ink" x="900" y="14">ORG (CPO)</text>
+      <text class="text-ink" x="1100" y="14">Straumvakt</text>
+      <text class="text-slate" x="1300" y="14">75 kr; CPO can forward to USR</text>
+    </g>
+    <g transform="translate(0, 36)">
+      <text class="text-sky" x="20" y="14">CNR</text>
+      <text class="text-ink" x="100" y="14">Tenglagjald</text>
+      <text class="text-ink" x="280" y="14">Per-connector</text>
+      <text class="text-sky" x="600" y="14">service_cpo</text>
+      <text class="text-ink" x="900" y="14">ORG (CPO)</text>
+      <text class="text-ink" x="1100" y="14">Straumvakt</text>
+      <text class="text-slate" x="1300" y="14">75 kr × connector count</text>
+    </g>
+    <g transform="translate(0, 54)">
+      <text class="text-sky" x="20" y="14">RVN</text>
+      <text class="text-ink" x="100" y="14">Veltutengd gjöld</text>
+      <text class="text-ink" x="280" y="14">% of kWh charges</text>
+      <text class="text-sky" x="600" y="14">service_cpo + service_contractor</text>
+      <text class="text-ink" x="900" y="14">ORG</text>
+      <text class="text-ink" x="1100" y="14">Straumvakt</text>
+      <text class="text-slate" x="1300" y="14">% × kWh × (ELE_rate + DSO_rate)</text>
+    </g>
+    <g transform="translate(0, 72)">
+      <text class="text-sky" x="20" y="14">PRM</text>
+      <text class="text-ink" x="100" y="14">Premium</text>
+      <text class="text-ink" x="280" y="14">Premium user fee</text>
+      <text class="text-sky" x="600" y="14">service_cpo (opt-in)</text>
+      <text class="text-ink" x="900" y="14">ORG (CPO) or USR</text>
+      <text class="text-ink" x="1100" y="14">Straumvakt</text>
+      <text class="text-slate" x="1300" y="14">CPO chooses absorb / forward</text>
+    </g>
+
+    <!-- service_contractor -->
+    <g transform="translate(0, 96)">
+      <text class="text-amber" x="20" y="14">AGN</text>
+      <text class="text-ink" x="100" y="14">Per Contractor Agent access</text>
+      <text class="text-ink" x="280" y="14">Per-agent access</text>
+      <text class="text-amber" x="600" y="14">service_contractor</text>
+      <text class="text-ink" x="900" y="14">ORG (Contractor)</text>
+      <text class="text-ink" x="1100" y="14">Straumvakt</text>
+      <text class="text-slate" x="1300" y="14">999 kr / agent</text>
+    </g>
+
+    <!-- service_workplace -->
+    <g transform="translate(0, 114)">
+      <text class="text-emerald" x="20" y="14">WRK</text>
+      <text class="text-ink" x="100" y="14">Vinnan</text>
+      <text class="text-ink" x="280" y="14">Workplace service fee</text>
+      <text class="text-emerald" x="600" y="14">service_workplace</text>
+      <text class="text-ink" x="900" y="14">ORG (Workplace)</text>
+      <text class="text-ink" x="1100" y="14">Straumvakt</text>
+      <text class="text-slate" x="1300" y="14">75 kr / covered driver / month</text>
+    </g>
+
+    <!-- installation factors -->
+    <g transform="translate(0, 138)">
+      <text class="text-purple" x="20" y="14">DSO</text>
+      <text class="text-ink" x="100" y="14">Dreifing</text>
+      <text class="text-ink" x="280" y="14">DSO grid fee</text>
+      <text class="text-purple" x="600" y="14">installation</text>
+      <text class="text-ink" x="900" y="14">USR</text>
+      <text class="text-ink" x="1100" y="14">DSO supplier</text>
+      <text class="text-slate" x="1300" y="14">bound to external DSO rate table</text>
+    </g>
+    <g transform="translate(0, 156)">
+      <text class="text-purple" x="20" y="14">ELE</text>
+      <text class="text-ink" x="100" y="14">Rafmagn</text>
+      <text class="text-ink" x="280" y="14">Retailer energy</text>
+      <text class="text-purple" x="600" y="14">installation</text>
+      <text class="text-ink" x="900" y="14">USR</text>
+      <text class="text-ink" x="1100" y="14">Retailer</text>
+      <text class="text-slate" x="1300" y="14">bound to electricity rate table</text>
+    </g>
+    <g transform="translate(0, 174)">
+      <text class="text-purple" x="20" y="14">MTR</text>
+      <text class="text-ink" x="100" y="14">Mælagjald</text>
+      <text class="text-ink" x="280" y="14">E-meter daily fee</text>
+      <text class="text-purple" x="600" y="14">installation</text>
+      <text class="text-ink" x="900" y="14">ORG (CPO)</text>
+      <text class="text-ink" x="1100" y="14">DSO supplier</text>
+      <text class="text-slate" x="1300" y="14">CPO can split with USR</text>
+    </g>
+    <g transform="translate(0, 192)">
+      <text class="text-purple" x="20" y="14">RNT</text>
+      <text class="text-ink" x="100" y="14">Leiga</text>
+      <text class="text-ink" x="280" y="14">Charger rental</text>
+      <text class="text-purple" x="600" y="14">installation</text>
+      <text class="text-ink" x="900" y="14">ORG (CPO)</text>
+      <text class="text-ink" x="1100" y="14">Hardware owner</text>
+      <text class="text-slate" x="1300" y="14">only when chargers rented vs owned</text>
+    </g>
+    <g transform="translate(0, 210)">
+      <text class="text-purple" x="20" y="14">TRF</text>
+      <text class="text-ink" x="100" y="14">Álag</text>
+      <text class="text-ink" x="280" y="14">Idle / extra tariff</text>
+      <text class="text-purple" x="600" y="14">installation</text>
+      <text class="text-ink" x="900" y="14">USR</text>
+      <text class="text-ink" x="1100" y="14">CPO</text>
+      <text class="text-slate" x="1300" y="14">CPO-set</text>
+    </g>
+    <g transform="translate(0, 228)">
+      <text class="text-purple" x="20" y="14">IDL</text>
+      <text class="text-ink" x="100" y="14">Idlepower</text>
+      <text class="text-ink" x="280" y="14">Idle power loss</text>
+      <text class="text-purple" x="600" y="14">installation (MDU only)</text>
+      <text class="text-ink" x="900" y="14">ORG (CPO) or split</text>
+      <text class="text-ink" x="1100" y="14">CPO</text>
+      <text class="text-slate" x="1300" y="14">meter vs sessions delta</text>
+    </g>
+    <g transform="translate(0, 246)">
+      <text class="text-purple" x="20" y="14">NET</text>
+      <text class="text-ink" x="100" y="14">Internet</text>
+      <text class="text-ink" x="280" y="14">Internet / SIM cost</text>
+      <text class="text-purple" x="600" y="14">installation (MDU only)</text>
+      <text class="text-ink" x="900" y="14">ORG (CPO) or split</text>
+      <text class="text-ink" x="1100" y="14">CPO</text>
+      <text class="text-slate" x="1300" y="14">4G modem + SIM or SIM only</text>
+    </g>
+
+    <!-- contractor SRF -->
+    <g transform="translate(0, 270)">
+      <text class="text-amber" x="20" y="14">SRF</text>
+      <text class="text-ink" x="100" y="14">Þjónustugjald</text>
+      <text class="text-ink" x="280" y="14">Service line item</text>
+      <text class="text-amber" x="600" y="14">issues engine (separate flow)</text>
+      <text class="text-ink" x="900" y="14">ORG (CPO)</text>
+      <text class="text-ink" x="1100" y="14">Contractor</text>
+      <text class="text-slate" x="1300" y="14">deferred — non-session billing track</text>
+    </g>
+  </g>
+
+  <!-- ╔══════════════════════════════════════════════════════╗ -->
+  <!-- LOCKED DECISIONS                                        -->
+  <!-- ╚══════════════════════════════════════════════════════╝ -->
+  <line class="divider" x1="40" y1="1700" x2="1760" y2="1700"/>
+  <text class="section-h" x="40" y="1736">Locked decisions (this revision)</text>
+  <text class="section-sub" x="40" y="1756">Eleven shape-deciding answers from the design rethink. The next migration is one consolidated step against these.</text>
+
+  <g transform="translate(40, 1780)" font-size="13">
+    <!-- Column 1 -->
+    <g>
+      <text class="text-amber h3" x="0" y="0">1.  Five-value agreement_type</text>
+      <text class="body" x="0" y="20">service_cpo · service_contractor · service_workplace · installation · workplace</text>
+
+      <text class="text-amber h3" x="0" y="50">2.  WRK basis</text>
+      <text class="body" x="0" y="70">75 kr per covered driver per month — once per workplace, not per CPO relation.</text>
+
+      <text class="text-amber h3" x="0" y="100">3.  ORG bearer guardrail</text>
+      <text class="body" x="0" y="120">bearer_ref must be an ORG with an active service_* agreement.</text>
+      <text class="body" x="0" y="138">bearer_ref=NULL → defaults to the agreement's counterparty.</text>
+
+      <text class="text-amber h3" x="0" y="170">4.  TRD bearer</text>
+      <text class="body" x="0" y="190">User-only · MDU-only · must already have access at billing time.</text>
+      <text class="body" x="0" y="208">Fail closed if invalid — never silent fallback to USR.</text>
+
+      <text class="text-amber h3" x="0" y="240">5.  RVN base</text>
+      <text class="body" x="0" y="260" class="mono">RVN = pct × kWh × (ELE_rate + DSO_rate)</text>
+      <text class="small" x="0" y="278">Excludes platform / service / fixed / penalty fees. Call it kwh_charges.</text>
+
+      <text class="text-amber h3" x="0" y="310">6.  installation_type is required + load-bearing</text>
+      <text class="body" x="0" y="330">Values: workplace · mdu · public · private · mixed.</text>
+      <text class="small" x="0" y="348">Gates: factor enlistment, group flavors, TRD applicability, public access semantics.</text>
+    </g>
+
+    <!-- Column 2 -->
+    <g transform="translate(900, 0)">
+      <text class="text-amber h3" x="0" y="0">7.  PRM lives on service_cpo</text>
+      <text class="body" x="0" y="20">Premium user fee. Straumvakt revenue. CPO chooses absorb / forward.</text>
+      <text class="small" x="0" y="38">Future "premium features" are flags, not billing.</text>
+
+      <text class="text-amber h3" x="0" y="70">8.  billing_lines future-proofed for non-session events</text>
+      <text class="body" x="0" y="90" class="mono">session_id NULLABLE  +  billable_event_type discriminator</text>
+      <text class="small" x="0" y="108">Values now: session. Later: service_invoice · subscription · manual_adjustment.</text>
+
+      <text class="text-amber h3" x="0" y="140">9.  Keep agreement_type as a single 5-value enum</text>
+      <text class="body" x="0" y="160">Don't decompose into kind+role yet. Revisit if filtering by kind gets painful.</text>
+
+      <text class="text-amber h3" x="0" y="190">10. Public access requires explicit Direct Customers group</text>
+      <text class="body" x="0" y="210">installation_type=public requires a default DriverGroup at the installation contract.</text>
+      <text class="body" x="0" y="228">Every public-charging driver joins it. No implicit anonymous default.</text>
+
+      <text class="text-amber h3" x="0" y="260">11. RateReference is enough now; RateTable later</text>
+      <text class="body" x="0" y="280">Optional rate_table_id column added later if a CPO subscribes to a published</text>
+      <text class="body" x="0" y="298">tariff bundle (e.g. "Veitur Tariff B"). Defer.</text>
+    </g>
+  </g>
+</svg>

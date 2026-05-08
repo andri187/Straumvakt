@@ -93,11 +93,22 @@ adminAgreementsDebug.post("/debug-resolve", async (c) => {
   const installationId = charger.installationId;
   const circuitId = charger.circuitId;
 
-  // CPO Agreement covering this charger's operator ORG.
-  const cpoAgreement = await prisma.agreement.findFirst({
+  if (!installationId) {
+    return c.json({
+      granted: false,
+      reason: "no_installation",
+      message:
+        "Charger is not yet placed under an Installation row — no installation contract can apply.",
+      cpoOrgId,
+    });
+  }
+
+  // Installation contract covering this charger's installation. Holds
+  // the operational cost facts (DSO, ELE, MTR, RNT, TRF, IDL, NET).
+  const installationAgreement = await prisma.agreement.findFirst({
     where: {
-      agreementType: "cpo",
-      counterpartyOrgId: cpoOrgId,
+      agreementType: "installation",
+      installationId,
       effectiveFrom: { lte: at },
       AND: [
         { status: "active" },
@@ -137,30 +148,37 @@ adminAgreementsDebug.post("/debug-resolve", async (c) => {
     },
   });
 
-  // Direct membership under the CPO Agreement (if any).
-  const directGroupMembership = cpoAgreement
+  // Direct membership in a group under the installation contract (if any).
+  // This is the "direct customer" path — the driver is enrolled directly
+  // by the CPO without a workplace mediation.
+  const directGroupMembership = installationAgreement
     ? await prisma.driverGroupMembership.findFirst({
         where: {
           userId,
-          driverGroup: { agreementId: cpoAgreement.id },
+          driverGroup: { agreementId: installationAgreement.id },
         },
         include: { driverGroup: { select: { id: true, ownerOrgId: true, displayName: true } } },
       })
     : null;
 
-  // Access gate: at least one membership covering this CPO.
+  // Access gate: at least one membership covering this charger's installation.
+  // Either a direct group under the installation contract, or a workplace
+  // agreement whose group the user is in (and which binds at this CPO).
   const hasMembership = !!directGroupMembership || workplaceAgreements.length > 0;
   if (!hasMembership) {
     return c.json({
       granted: false,
       reason: "no_membership",
       message:
-        "Driver has no DriverGroup membership covering this charger's CPO. " +
-        "Per ADR 0019 addendum, access requires an explicit membership.",
-      cpoAgreement: cpoAgreement
-        ? { id: cpoAgreement.id, displayName: cpoAgreement.displayName }
+        "Driver has no DriverGroup membership covering this charger's installation. " +
+        "Per ADR 0019 (2026-05-08 addendum), access requires an explicit membership — " +
+        "either in a direct-customer group on the installation contract or in a " +
+        "workplace agreement covering this CPO.",
+      installationAgreement: installationAgreement
+        ? { id: installationAgreement.id, displayName: installationAgreement.displayName }
         : null,
       cpoOrgId,
+      installationId,
     });
   }
 
@@ -181,8 +199,10 @@ adminAgreementsDebug.post("/debug-resolve", async (c) => {
       : null;
 
   // Aggregate clauses + rules from all applicable agreements.
+  // Installation contract supplies the operational defaults (DSO/ELE/...);
+  // workplace agreements layer overrides on top.
   const allAgreements = [
-    ...(cpoAgreement ? [cpoAgreement] : []),
+    ...(installationAgreement ? [installationAgreement] : []),
     ...workplaceAgreements,
   ];
 
@@ -251,7 +271,7 @@ adminAgreementsDebug.post("/debug-resolve", async (c) => {
   }));
 
   const ctx: SessionContext = {
-    agreementId: cpoAgreement?.id ?? "",
+    agreementId: installationAgreement?.id ?? "",
     cpoOrgId,
     user: { id: userId },
     driverGroup,
@@ -293,8 +313,8 @@ adminAgreementsDebug.post("/debug-resolve", async (c) => {
 
   return c.json({
     granted: true,
-    cpoAgreement: cpoAgreement
-      ? { id: cpoAgreement.id, displayName: cpoAgreement.displayName }
+    installationAgreement: installationAgreement
+      ? { id: installationAgreement.id, displayName: installationAgreement.displayName }
       : null,
     workplaceAgreements: workplaceAgreements.map((a) => ({
       id: a.id,

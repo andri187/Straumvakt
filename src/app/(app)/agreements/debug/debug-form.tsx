@@ -28,7 +28,7 @@ type BillingLine = {
 
 type Granted = {
   granted: true;
-  cpoAgreement: { id: string; displayName: string } | null;
+  installationAgreement: { id: string; displayName: string } | null;
   workplaceAgreements: {
     id: string;
     displayName: string;
@@ -49,10 +49,11 @@ type Granted = {
 
 type Denied = {
   granted: false;
-  reason: "no_membership" | string;
+  reason: "no_membership" | "no_installation" | string;
   message: string;
-  cpoAgreement: { id: string; displayName: string } | null;
+  installationAgreement?: { id: string; displayName: string } | null;
   cpoOrgId: string;
+  installationId?: string;
 };
 
 type Result = Granted | Denied;
@@ -233,11 +234,12 @@ function ResultBlock({ result }: { result: Result }) {
         <p className="mt-2 text-sm text-ink-300">{result.message}</p>
         <dl className="mt-4 grid grid-cols-1 gap-1 text-sm md:grid-cols-2">
           <KV label="CPO ORG id" value={result.cpoOrgId} />
+          <KV label="Installation id" value={result.installationId ?? "—"} />
           <KV
-            label="CPO Agreement"
+            label="Installation contract"
             value={
-              result.cpoAgreement
-                ? `${result.cpoAgreement.displayName} (${result.cpoAgreement.id.slice(0, 8)}…)`
+              result.installationAgreement
+                ? `${result.installationAgreement.displayName} (${result.installationAgreement.id.slice(0, 8)}…)`
                 : "none"
             }
           />
@@ -267,10 +269,10 @@ function ResultBlock({ result }: { result: Result }) {
         </h2>
         <dl className="mt-3 grid grid-cols-1 gap-1 text-sm md:grid-cols-2">
           <KV
-            label="CPO Agreement"
+            label="Installation contract"
             value={
-              result.cpoAgreement
-                ? `${result.cpoAgreement.displayName}`
+              result.installationAgreement
+                ? `${result.installationAgreement.displayName}`
                 : "none"
             }
           />

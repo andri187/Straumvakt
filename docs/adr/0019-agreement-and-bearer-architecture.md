@@ -280,7 +280,112 @@ These are revisited at the cutover ADR after A.6 evidence lands.
 
 ---
 
-## Addendum 2026-05-07 — `cpo_org_id`, STR factor, admin-only operational data
+## Addendum 2026-05-08 — five-agreement rethink (supersedes 2026-05-07 addendum)
+
+Filed the day after the original ADR + first addendum, after a deeper
+walk-through that surfaced the conflation of "Straumvakt's revenue from
+the CPO" with "the CPO's installation operating costs." This addendum
+**supersedes** the 2026-05-07 addendum below — the original addendum's
+content is preserved verbatim afterwards for archaeological clarity, but
+**the model that's authoritative as of 2026-05-08 is this one**.
+
+The original implementation (commits 4157952 → 7fb3786, branch
+`feat/agreement-architecture`) reflects the superseded model. A
+consolidated revised migration replaces the two `agreements_v1` /
+`agreements_cpo_org_id_and_str_factor` migrations before any rows land
+anywhere. See `docs/architecture/agreement-schema-plan.md` for the
+migration shape.
+
+### Why the rethink
+
+The 2026-05-07 model had a single `agreement_type=cpo` that mixed:
+
+- Straumvakt's commercial revenue from the CPO (e.g. STR platform fee), and
+- The CPO's operational costs at each installation (DSO, ELE, etc.).
+
+Those are decided by completely different parties, on different
+cadences, with different counterparties. Putting them on one row means
+the operator UI for "edit your CPO agreement" has to cover both, which
+doesn't match how either side of the business is run. Splitting them
+fixes the conceptual problem and matches how the operator actually
+authors contracts.
+
+### Five agreement types (was two)
+
+| Type | Parties | Anchored to | Holds |
+|---|---|---|---|
+| **service_cpo** | Straumvakt ↔ CPO | CPO ORG | Straumvakt's per-CPO revenue (INT, USRF, CNR, RVN, PRM). |
+| **service_contractor** | Straumvakt ↔ Contractor | Contractor ORG | Straumvakt's per-contractor revenue (AGN, RVN). |
+| **service_workplace** | Straumvakt ↔ Workplace ORG | Workplace ORG | Straumvakt's per-workplace revenue (WRK). |
+| **installation** | CPO ↔ themselves | An Installation row | Operational cost factors (DSO, ELE, MTR, RNT, TRF + IDL/NET in MDU). |
+| **workplace** | CPO ↔ Workplace, mediated by Straumvakt | An Installation (or set thereof) | No new factors — only `BearerRule` overrides on installation factors that the workplace absorbs. |
+
+A workplace covering employees at multiple CPOs has **one**
+`service_workplace` agreement (with Straumvakt) and **N** `workplace`
+agreements (one per CPO). A contractor providing service across
+multiple CPOs likewise has one `service_contractor`.
+
+### Cost-factor catalog (15 factors — supersedes the 9-factor catalog)
+
+Drop ACS (replaced by USRF on the commercial side) and STR
+(decomposed into INT/USRF/CNR/RVN/PRM by counterparty fee model).
+
+| Code | Icelandic | English | Lives on | Default bearer | Recipient |
+|---|---|---|---|---|---|
+| **INT** | Hleðslukerfagjald | Price per installation | service_cpo | ORG (CPO) | Straumvakt |
+| **USRF** | Notendagjald | Per-user-on-installation | service_cpo | ORG (CPO) — CPO can forward | Straumvakt |
+| **CNR** | Tenglagjald | Per-connector | service_cpo | ORG (CPO) | Straumvakt |
+| **RVN** | Veltutengd gjöld | % of kWh charges | service_cpo + service_contractor | ORG | Straumvakt |
+| **PRM** | Premium | Premium user fee (opt-in) | service_cpo | ORG (CPO) or USR | Straumvakt |
+| **AGN** | Per Contractor Agent access | Per-agent | service_contractor | ORG (Contractor) | Straumvakt |
+| **WRK** | Vinnan | Workplace service fee | service_workplace | ORG (Workplace) | Straumvakt |
+| **DSO** | Dreifing | DSO grid fee | installation | USR | DSO supplier |
+| **ELE** | Rafmagn | Retailer energy | installation | USR | Retailer |
+| **MTR** | Mælagjald | E-meter daily fee | installation | ORG (CPO) — CPO can split | DSO supplier |
+| **RNT** | Leiga | Charger rental | installation | ORG (CPO) | Hardware owner |
+| **TRF** | Álag | Idle / extra tariff | installation | USR | CPO |
+| **IDL** | Idlepower | Idle power loss | installation (MDU only) | ORG (CPO) — CPO can split | CPO |
+| **NET** | Internet | Internet / SIM cost | installation (MDU only) | ORG (CPO) — CPO can split | CPO |
+| **SRF** | Þjónustugjald | Service line item | issues engine (deferred) | ORG (CPO) | Contractor |
+
+### Eleven locked decisions
+
+1. **Five-value `agreement_type` enum.** `service_cpo · service_contractor · service_workplace · installation · workplace`.
+2. **WRK basis** = 75 ISK per workplace-covered driver per month, **once per service_workplace agreement** (not duplicated per CPO the workplace covers them at).
+3. **ORG bearer guardrail.** `bearer_ref` must point at an ORG with at least one active `service_*` agreement. Enforced in the rule-authoring API (Zod), not in DB. `bearer_ref = NULL` defaults to the agreement's `counterparty_org_id`.
+4. **TRD bearer scope.** User-only · MDU-only · the named user must already have an active `DriverGroupMembership` covering this installation at billing time. **Fail closed** if invalid — never silent fallback to USR.
+5. **RVN base** = `pct × kWh × (ELE_rate + DSO_rate)`. Excludes platform / service / fixed / penalty fees. Internal name: `kwh_charges`.
+6. **`installation_type` is required and load-bearing.** Values: `workplace · mdu · public · private · mixed`. Gates: factor enlistment (IDL/NET MDU-only), audience flavors, TRD applicability, public access semantics.
+7. **PRM lives on `service_cpo`.** Straumvakt revenue. CPO chooses absorb or forward to drivers. Future "premium features" are feature flags, not billing.
+8. **`billing_lines` future-proofed for non-session events.** `session_id` becomes nullable; new `billable_event_type` discriminator (values now: `session`; later: `service_invoice`, `subscription`, `manual_adjustment`).
+9. **Keep `agreement_type` as a single 5-value enum** for now. Don't decompose into kind+role until filtering by kind gets painful.
+10. **Public access requires an explicit Direct Customers DriverGroup** under the installation contract. `installation_type = public` requires a default group set on the installation. No implicit anonymous default — matches the "explicit memberships only" rule from the original ADR.
+11. **`RateReference` is enough now; `RateTable` is a deferred follow-up.** No schema burden today. Add `rate_table_id` later if/when a CPO subscribes to a published bundle.
+
+### Schema-shape implications (for the consolidated migration)
+
+The consolidated migration replaces both `agreements_v1` and
+`agreements_cpo_org_id_and_str_factor`. Key changes from those:
+
+- `AgreementType` enum: `cpo, workplace` → `service_cpo, service_contractor, service_workplace, installation, workplace`.
+- `Agreement.installation_id` (nullable, FK → `assets.installations`) — required for `installation` type.
+- `Agreement.cpo_org_id` (kept) — required for `workplace` type.
+- `Agreement` CHECK constraint covers all five typed-anchor combinations.
+- `assets.installations.installation_type` enum + column. Default: `workplace`.
+- `agreements.cost_factors` re-seeded with the 15-factor catalog (no rows currently exist; safe to re-create).
+- `agreements.billing_lines.session_id` becomes nullable.
+- `agreements.billing_lines.billable_event_type` (text, NOT NULL, default `session`).
+- `installation_type = 'public'` requires a `default_driver_group_id` at the installation contract — enforced by Zod / app, not DB CHECK (would require a circular FK).
+
+### What carries over from 2026-05-07 unchanged
+
+- "Drivers gain access via explicit memberships only" — same rule, just clarified at the installation level instead of the CPO level.
+- "Operational data is admin-created" — still true. Seed only loads the 15-factor catalog.
+- The resolver's per-attribute walk semantics — same code, same tests. The only thing that changes is which agreements the route handler aggregates clauses + rules from (now up to four agreement rows: service_cpo + installation + workplace + service_workplace).
+
+---
+
+## Addendum 2026-05-07 — `cpo_org_id`, STR factor, admin-only operational data  (SUPERSEDED)
 
 Filed the same day as the original ADR after the operator walked through
 the Krónan / N1 scenarios and pruned the model. Three narrowing changes.
