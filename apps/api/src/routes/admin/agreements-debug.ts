@@ -20,13 +20,7 @@ import { z } from "zod";
 import { makePrisma } from "../../lib/prisma";
 import { requireAdmin, type AuthVars } from "../../lib/auth-middleware";
 import { resolveBillingLines } from "../../lib/agreement/resolve";
-import {
-  allocationSchema,
-  type ClauseInput,
-  type RateRefInput,
-  type RuleInput,
-  type SessionContext,
-} from "../../lib/agreement/types";
+import { loadAgreementContext } from "../../lib/agreement/persist";
 import type { Env } from "../../bindings";
 
 export const adminAgreementsDebug = new Hono<{ Bindings: Env; Variables: AuthVars }>();
@@ -77,219 +71,35 @@ adminAgreementsDebug.post("/debug-resolve", async (c) => {
 
   const prisma = makePrisma(c.env);
 
-  // Load charger + asset path.
-  const charger = await prisma.chargingStation.findUnique({
-    where: { siteAssetId: chargingStationId },
-    include: {
-      siteAsset: { select: { id: true, displayName: true, siteId: true } },
-    },
-  });
-  if (!charger) {
-    return c.json({ error: "charger_not_found" }, 404);
-  }
-
-  const cpoOrgId = charger.orgId;
-  const siteId = charger.siteAsset.siteId;
-  const installationId = charger.installationId;
-  const circuitId = charger.circuitId;
-
-  if (!installationId) {
-    return c.json({
-      granted: false,
-      reason: "no_installation",
-      message:
-        "Charger is not yet placed under an Installation row — no installation contract can apply.",
-      cpoOrgId,
-    });
-  }
-
-  // Installation contract covering this charger's installation. Holds
-  // the operational cost facts (DSO, ELE, MTR, RNT, TRF, IDL, NET).
-  const installationAgreement = await prisma.agreement.findFirst({
-    where: {
-      agreementType: "installation",
-      installationId,
-      effectiveFrom: { lte: at },
-      AND: [
-        { status: "active" },
-        { OR: [{ effectiveUntil: null }, { effectiveUntil: { gt: at } }] },
-      ],
-    },
-    include: {
-      clauses: { include: { costFactor: { select: { code: true } } } },
-      bearerRules: true,
-    },
-  });
-
-  // Workplace agreements where the user is a member of a covered group
-  // AND cpo_org_id == this charger's CPO.
-  const workplaceAgreements = await prisma.agreement.findMany({
-    where: {
-      agreementType: "workplace",
-      cpoOrgId,
-      effectiveFrom: { lte: at },
-      AND: [
-        { status: "active" },
-        { OR: [{ effectiveUntil: null }, { effectiveUntil: { gt: at } }] },
-      ],
-      driverGroups: {
-        some: {
-          memberships: { some: { userId } },
-        },
-      },
-    },
-    include: {
-      clauses: { include: { costFactor: { select: { code: true } } } },
-      bearerRules: true,
-      driverGroups: {
-        where: { memberships: { some: { userId } } },
-        select: { id: true, ownerOrgId: true, displayName: true },
-      },
-    },
-  });
-
-  // Direct membership in a group under the installation contract (if any).
-  // This is the "direct customer" path — the driver is enrolled directly
-  // by the CPO without a workplace mediation.
-  const directGroupMembership = installationAgreement
-    ? await prisma.driverGroupMembership.findFirst({
-        where: {
-          userId,
-          driverGroup: { agreementId: installationAgreement.id },
-        },
-        include: { driverGroup: { select: { id: true, ownerOrgId: true, displayName: true } } },
-      })
-    : null;
-
-  // Access gate: at least one membership covering this charger's installation.
-  // Either a direct group under the installation contract, or a workplace
-  // agreement whose group the user is in (and which binds at this CPO).
-  const hasMembership = !!directGroupMembership || workplaceAgreements.length > 0;
-  if (!hasMembership) {
-    return c.json({
-      granted: false,
-      reason: "no_membership",
-      message:
-        "Driver has no DriverGroup membership covering this charger's installation. " +
-        "Per ADR 0019 (2026-05-08 addendum), access requires an explicit membership — " +
-        "either in a direct-customer group on the installation contract or in a " +
-        "workplace agreement covering this CPO.",
-      installationAgreement: installationAgreement
-        ? { id: installationAgreement.id, displayName: installationAgreement.displayName }
-        : null,
-      cpoOrgId,
-      installationId,
-    });
-  }
-
-  // Pick driverGroup — workplace beats direct (matches the resolver's
-  // audience-precedence walk; per-driver overrides on either still
-  // win at attribute level).
-  const driverGroup =
-    workplaceAgreements[0]?.driverGroups[0]
-      ? {
-          id: workplaceAgreements[0].driverGroups[0].id,
-          ownerOrgId: workplaceAgreements[0].driverGroups[0].ownerOrgId,
-        }
-      : directGroupMembership
-      ? {
-          id: directGroupMembership.driverGroupId,
-          ownerOrgId: directGroupMembership.driverGroup.ownerOrgId,
-        }
-      : null;
-
-  // Aggregate clauses + rules from all applicable agreements.
-  // Installation contract supplies the operational defaults (DSO/ELE/...);
-  // workplace agreements layer overrides on top.
-  const allAgreements = [
-    ...(installationAgreement ? [installationAgreement] : []),
-    ...workplaceAgreements,
-  ];
-
-  const clauses: ClauseInput[] = [];
-  for (const agr of allAgreements) {
-    for (const cl of agr.clauses) {
-      clauses.push({
-        costFactorId: cl.costFactorId,
-        costFactorCode: cl.costFactor.code,
-        defaultBearerType: cl.defaultBearerType,
-        defaultBearerRef: cl.defaultBearerRef,
-        defaultRateRefCode: cl.defaultRateRefCode,
-        allocation: allocationSchema.parse(cl.allocationJson),
-      });
-    }
-  }
-
-  const rules: RuleInput[] = [];
-  for (const agr of allAgreements) {
-    for (const r of agr.bearerRules) {
-      rules.push({
-        id: r.id,
-        costFactorId: r.costFactorId,
-        scopeType: r.scopeType,
-        scopeId: r.scopeId,
-        audienceType: r.audienceType,
-        audienceId: r.audienceId,
-        bearerType: r.bearerType,
-        bearerRef: r.bearerRef,
-        rateRefCode: r.rateRefCode,
-        allocation: r.allocationJson ? allocationSchema.parse(r.allocationJson) : null,
-        effectiveFrom: r.effectiveFrom,
-        effectiveUntil: r.effectiveUntil,
-      });
-    }
-  }
-
-  // Pull rate references referenced by any clause or rule.
-  const referencedCodes = Array.from(
-    new Set(
-      [
-        ...clauses.map((c) => c.defaultRateRefCode),
-        ...rules.map((r) => r.rateRefCode),
-      ].filter((s): s is string => s !== null)
-    )
-  );
-
-  const rateReferenceRows =
-    referencedCodes.length === 0
-      ? []
-      : await prisma.rateReference.findMany({
-          where: { code: { in: referencedCodes } },
-        });
-
-  const rateReferences: RateRefInput[] = rateReferenceRows.map((r) => ({
-    id: r.id,
-    code: r.code,
-    costFactorId: r.costFactorId,
-    basis: r.basis,
-    priceMinor: r.priceMinor,
-    vatRatePct: Number(r.vatRatePct),
-    currency: r.currency,
-    supplierOrgId: r.supplierOrgId,
-    effectiveFrom: r.effectiveFrom,
-    effectiveUntil: r.effectiveUntil,
-  }));
-
-  const ctx: SessionContext = {
-    agreementId: installationAgreement?.id ?? "",
-    cpoOrgId,
-    user: { id: userId },
-    driverGroup,
-    chargerId: chargingStationId,
-    circuitId,
-    installationId,
-    siteId,
-    startedAt: at,
-    endedAt: new Date(at.getTime() + durationMinutes * 60_000),
+  const result = await loadAgreementContext(prisma, {
+    userId,
+    chargingStationId,
+    at,
     energyKwh,
     durationMinutes,
     durationDays,
-    clauses,
-    rules,
-    rateReferences,
-  };
+  });
 
-  const billingLines = resolveBillingLines(ctx);
+  if (!result.granted) {
+    return c.json({
+      granted: false,
+      reason: result.reason,
+      message:
+        result.reason === "no_installation"
+          ? "Charger is not yet placed under an Installation row — no installation contract can apply."
+          : result.reason === "no_membership"
+          ? "Driver has no DriverGroup membership covering this charger's installation. " +
+            "Per ADR 0019 (2026-05-08 addendum), access requires an explicit membership — " +
+            "either in a direct-customer group on the installation contract or in a " +
+            "workplace agreement covering this CPO."
+          : `Resolver denied: ${result.reason}`,
+      installationAgreement: result.installationAgreement,
+      cpoOrgId: result.cpoOrgId,
+      installationId: result.installationId,
+    });
+  }
+
+  const billingLines = resolveBillingLines(result.ctx);
 
   const lines: BillingLineJson[] = billingLines.map((l) => ({
     factorCode: l.factorCode,
@@ -313,24 +123,17 @@ adminAgreementsDebug.post("/debug-resolve", async (c) => {
 
   return c.json({
     granted: true,
-    installationAgreement: installationAgreement
-      ? { id: installationAgreement.id, displayName: installationAgreement.displayName }
-      : null,
-    workplaceAgreements: workplaceAgreements.map((a) => ({
-      id: a.id,
-      displayName: a.displayName,
-      counterpartyOrgId: a.counterpartyOrgId,
-      driverGroupIds: a.driverGroups.map((g) => g.id),
-    })),
-    driverGroup,
+    installationAgreement: result.meta.installationAgreement,
+    workplaceAgreements: result.meta.workplaceAgreements,
+    driverGroup: result.meta.driverGroup,
     sessionInputs: {
       at: at.toISOString(),
       energyKwh,
       durationMinutes,
       durationDays,
     },
-    enlistedFactorCount: clauses.length,
-    applicableRuleCount: rules.length,
+    enlistedFactorCount: result.meta.enlistedFactorCount,
+    applicableRuleCount: result.meta.applicableRuleCount,
     billingLines: lines,
   });
 });

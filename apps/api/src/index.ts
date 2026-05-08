@@ -33,6 +33,7 @@ import { adminOrgInvites } from "./routes/admin/org-invites";
 import { adminBilling } from "./routes/admin/billing";
 import { adminContracts } from "./routes/admin/contracts";
 import { adminAgreementsDebug } from "./routes/admin/agreements-debug";
+import { adminAgreementsResolve } from "./routes/admin/agreements-resolve";
 import { publicInvites } from "./routes/public/invites";
 import { internalOcppAuth } from "./routes/internal/ocpp-auth";
 import { internalOcppAuthorize } from "./routes/internal/ocpp-authorize";
@@ -136,6 +137,12 @@ app.route("/api/admin/contracts", adminContracts);
 // agreement resolver. Operator picks (driver, charger, time) and sees
 // what the resolver would emit at session-stop. Never writes.
 app.route("/api/admin/agreements", adminAgreementsDebug);
+
+// Sprint 9 / ADR 0019 (2026-05-08) — manual session-resolution trigger.
+// POST /api/admin/agreements/sessions/:sessionId/resolve runs the
+// resolver against a real ChargeSession and writes agreements.billing_lines.
+// Idempotent — second call returns alreadyExisted=true.
+app.route("/api/admin/agreements/sessions", adminAgreementsResolve);
 
 // Sprint 5.8 — agent invite flow (recipient side). Public routes
 // gated by the token itself, NOT by the admin session cookie.
