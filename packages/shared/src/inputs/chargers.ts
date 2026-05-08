@@ -64,7 +64,15 @@ export type ChargerUpdateInput = z.infer<typeof ChargerUpdateInput>;
 
 export const RemoteStartBody = z.object({
   connectorId: z.string().uuid(),
-  idTag: z.string().max(20).optional(),
+  // OCPP idTag is CiString20Type — no whitespace expected. Trim
+  // before validating max-length so a copy-paste with trailing space
+  // doesn't push past the 20-char ceiling, and coerce
+  // empty-after-trim to undefined so the dispatch omits the field
+  // (charger uses its locally-configured Default ID tag).
+  idTag: z.preprocess(
+    (v) => (typeof v === "string" ? v.trim() || undefined : v),
+    z.string().max(20).optional(),
+  ),
 });
 export type RemoteStartBody = z.infer<typeof RemoteStartBody>;
 
