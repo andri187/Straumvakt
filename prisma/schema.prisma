@@ -1415,6 +1415,35 @@ model ChargeSession {
   ocmfSignedSessionKwh     Decimal?  @map("ocmf_signed_session_kwh") @db.Decimal(14, 4)
   completedSessionSeenAt   DateTime? @map("completed_session_seen_at") @db.Timestamptz(6)
 
+  // ── Sprint 9 / ADR 0021 — Autocharge: vehicle identity capture ──
+  // Three confidence tiers stored alongside the OCMF identity above
+  // (which is the application-layer tier). See ADR 0021 for the full
+  // story.
+  //
+  //   Link layer:        ev_plc_mac (StateId 953 MacPlcModuleEv) —
+  //                      EV's PLC modem MAC, exchanged during HomePlug
+  //                      GreenPHY pairing. Persistent vehicle ID.
+  //                      OUI prefix → vendor name (ev_plc_mac_oui_vendor).
+  //                      ev_plc_pib_version (StateId 921) — vehicle's
+  //                      PLC firmware version.
+  //
+  //   Protocol layer:    pnc_attempted (StateId 724) — vehicle initiated
+  //                      ISO 15118 PnC. pnc_succeeded null/true/false
+  //                      tracks the outcome. pnc_rejected_uuid (StateId
+  //                      725) carries the UUID denied if PnC failed.
+  //
+  //   Plus cable_type    (StateId 714) — Mode 3 / Type 2 / etc.
+  //
+  // Privacy: ev_plc_mac is PII (per ADR 0021 §9). UI must gate on
+  // operator permission and redact to last-3-bytes for non-priv views.
+  evPlcMac                 String?   @map("ev_plc_mac")
+  evPlcMacOuiVendor        String?   @map("ev_plc_mac_oui_vendor")
+  evPlcPibVersion          String?   @map("ev_plc_pib_version")
+  cableType                String?   @map("cable_type")
+  pncAttempted             Boolean?  @map("pnc_attempted")
+  pncSucceeded             Boolean?  @map("pnc_succeeded")
+  pncRejectedUuid          String?   @map("pnc_rejected_uuid")
+
   organization      Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
   site              Site             @relation(fields: [siteId], references: [id])
   chargingStation   ChargingStation  @relation(fields: [chargingStationId], references: [siteAssetId])
@@ -1433,6 +1462,10 @@ model ChargeSession {
   @@index([orgId, startedAt(sort: Desc)])
   @@index([evseId, startedAt(sort: Desc)])
   @@index([userId, startedAt(sort: Desc)])
+  // Sprint 9 / ADR 0021 — vehicle-recurrence lookup. Partial because the
+  // vast majority of historical rows have ev_plc_mac NULL until AMQP
+  // path lights up.
+  @@index([evPlcMac])
   @@map("sessions")
   @@schema("charging")
 }

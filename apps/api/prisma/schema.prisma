@@ -1232,6 +1232,19 @@ model ChargeSession {
   ocmfSignedSessionKwh     Decimal?  @map("ocmf_signed_session_kwh") @db.Decimal(14, 4)
   completedSessionSeenAt   DateTime? @map("completed_session_seen_at") @db.Timestamptz(6)
 
+  // ── Sprint 9 / ADR 0021 — Autocharge: vehicle identity capture ──
+  // Three confidence tiers stored alongside OCMF identity above (which
+  // is the application-layer tier). See ADR 0021 for the full story.
+  // Privacy: ev_plc_mac is PII — operator-only default, last-3-bytes
+  // redaction in non-priv views.
+  evPlcMac                 String?   @map("ev_plc_mac")
+  evPlcMacOuiVendor        String?   @map("ev_plc_mac_oui_vendor")
+  evPlcPibVersion          String?   @map("ev_plc_pib_version")
+  cableType                String?   @map("cable_type")
+  pncAttempted             Boolean?  @map("pnc_attempted")
+  pncSucceeded             Boolean?  @map("pnc_succeeded")
+  pncRejectedUuid          String?   @map("pnc_rejected_uuid")
+
   organization      Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
   site              Site             @relation(fields: [siteId], references: [id])
   chargingStation   ChargingStation  @relation(fields: [chargingStationId], references: [siteAssetId])
@@ -1250,6 +1263,8 @@ model ChargeSession {
   @@index([orgId, startedAt(sort: Desc)])
   @@index([evseId, startedAt(sort: Desc)])
   @@index([userId, startedAt(sort: Desc)])
+  // Sprint 9 / ADR 0021 — vehicle-recurrence lookup
+  @@index([evPlcMac])
   @@map("sessions")
   @@schema("charging")
 }
