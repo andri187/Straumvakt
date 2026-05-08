@@ -215,6 +215,75 @@ export async function getIdTokenById(
   return row ? toSummary(row) : null;
 }
 
+/**
+ * Hard delete — physically removes the row. Loses audit history.
+ * Distinct from `revokeIdToken` (soft, status='revoked', row preserved).
+ *
+ * Throws Prisma P2003 if a FK constraint blocks deletion (e.g. a
+ * ChargeSession.idTokenId references this row). The route handler
+ * catches that and returns 409 so the operator gets a clear "still
+ * referenced — revoke instead" instead of a 500.
+ */
+export async function hardDeleteIdToken(
+  db: PrismaClient,
+  tokenId: string,
+): Promise<void> {
+  await db.idToken.delete({ where: { id: tokenId } });
+}
+
+/**
+ * Patch the editable subset of an IdToken row. Only fields that don't
+ * compromise audit or transfer ownership are exposed:
+ *   • value — the OCPP-resolution key. Editing repoints which idTag
+ *     authorizes; the UI displays a warning.
+ *   • label — cosmetic.
+ *   • scopeInstallationId — restricts/widens which install the token
+ *     authorizes at (null = global).
+ *   • expiresAt — extend or set expiry.
+ *
+ * Disallowed via this path (need different operator flows):
+ *   • userId — token transfer between drivers
+ *   • kind — RFID vs eMAID semantics
+ *   • status — revoke is a separate operation; hard-delete is too
+ *
+ * Pass `undefined` to leave a field unchanged. Pass `null` (where
+ * permitted) to clear it.
+ */
+export async function updateIdToken(
+  db: PrismaClient,
+  tokenId: string,
+  patch: {
+    value?: string;
+    label?: string | null;
+    scopeInstallationId?: string | null;
+    expiresAt?: Date | null;
+  },
+): Promise<IdTokenSummary> {
+  const data: Prisma.IdTokenUncheckedUpdateInput = {};
+  if (patch.value !== undefined) {
+    const v = patch.value.trim();
+    if (v.length === 0) {
+      throw new Error("idtoken.value: empty string not allowed");
+    }
+    data.value = v;
+  }
+  if (patch.label !== undefined) {
+    const l = patch.label?.trim();
+    data.label = l && l.length > 0 ? l : null;
+  }
+  if (patch.scopeInstallationId !== undefined) {
+    data.scopeInstallationId = patch.scopeInstallationId;
+  }
+  if (patch.expiresAt !== undefined) {
+    data.expiresAt = patch.expiresAt;
+  }
+  const row = (await db.idToken.update({
+    where: { id: tokenId },
+    data,
+  })) as IdTokenRow;
+  return toSummary(row);
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // One-shot backfill — give pre-existing User rows their primary RFID
 // ─────────────────────────────────────────────────────────────────────

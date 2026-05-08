@@ -38,6 +38,13 @@ export function TokensPanel({
   const [error, setError] = useState<string | null>(null);
   const [justMintedId, setJustMintedId] = useState<string | null>(null);
 
+  // Per-row edit state. Only one token edits at a time — store the id
+  // currently in edit mode plus the working draft. Keeps state simple
+  // vs a Map of drafts per id.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const [editLabel, setEditLabel] = useState("");
+
   function resetForm() {
     setMode("auto");
     setValue("");
@@ -119,6 +126,108 @@ export function TokensPanel({
     }
   }
 
+  async function permanentDelete(tokenId: string, value: string) {
+    const typed = prompt(
+      `Permanently delete this token? This is IRREVERSIBLE — the row is removed from the database, audit history is lost.\n\nTo confirm, type the token value: ${value}`,
+    );
+    if (typed !== value) {
+      if (typed !== null) {
+        setError("Confirmation didn't match — token not deleted.");
+      }
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await apiFetch(
+        `/api/admin/tokens/${tokenId}/permanent`,
+        { method: "DELETE" },
+      );
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as
+          | { error?: string; message?: string }
+          | null;
+        throw new Error(body?.message ?? body?.error ?? `HTTP ${res.status}`);
+      }
+      setTokens(tokens.filter((t) => t.id !== tokenId));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function startEdit(t: IdTokenSummary) {
+    setEditingId(t.id);
+    setEditValue(t.value);
+    setEditLabel(t.label ?? "");
+    setError(null);
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditValue("");
+    setEditLabel("");
+  }
+
+  async function submitEdit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingId) return;
+    const original = tokens.find((t) => t.id === editingId);
+    if (!original) return;
+
+    const newValue = editValue.trim().toUpperCase();
+    const newLabel = editLabel.trim();
+    const valueChanged = newValue !== original.value;
+    const labelChanged = newLabel !== (original.label ?? "");
+
+    if (newValue.length === 0) {
+      setError("Value can't be empty.");
+      return;
+    }
+    if (!valueChanged && !labelChanged) {
+      cancelEdit();
+      return;
+    }
+    if (
+      valueChanged &&
+      !confirm(
+        `Changing the token value from "${original.value}" to "${newValue}" repoints which RFID UID this token authorizes. Sessions started after this change will require the new value. Proceed?`,
+      )
+    ) {
+      return;
+    }
+
+    setBusy(true);
+    setError(null);
+    try {
+      const patch: Record<string, string | null> = {};
+      if (valueChanged) patch.value = newValue;
+      if (labelChanged) patch.label = newLabel.length > 0 ? newLabel : null;
+      const res = await apiFetch(`/api/admin/tokens/${editingId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      const data = (await res.json().catch(() => null)) as
+        | { token?: IdTokenSummary; error?: string; message?: string }
+        | null;
+      if (!res.ok) {
+        throw new Error(
+          data?.message ?? data?.error ?? `HTTP ${res.status}`,
+        );
+      }
+      if (data?.token) {
+        setTokens(tokens.map((t) => (t.id === editingId ? data.token! : t)));
+      }
+      cancelEdit();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="px-5 py-4 space-y-3">
       {tokens.length === 0 ? (
@@ -133,50 +242,120 @@ export function TokensPanel({
             <li
               key={t.id}
               className={
-                "flex flex-wrap items-center gap-3 py-2 " +
+                "py-2 " +
                 (justMintedId === t.id ? "bg-emerald-500/5 -mx-2 px-2 rounded" : "")
               }
             >
-              <code
-                className={
-                  "select-all rounded bg-bg-base/60 px-2 py-1 font-mono text-sm ring-1 " +
-                  (t.status === "active"
-                    ? "text-emerald-100 ring-emerald-500/30"
-                    : "text-ink-400 line-through ring-bg-border/40")
-                }
-              >
-                {t.value}
-              </code>
-              <span className="text-xs text-ink-300">
-                {t.label ?? <span className="italic text-ink-500">no label</span>}
-              </span>
-              <span
-                className={
-                  "rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-brand " +
-                  (t.status === "active"
-                    ? "bg-emerald-500/20 text-emerald-200"
-                    : t.status === "revoked"
-                      ? "bg-rose-500/20 text-rose-200"
-                      : t.status === "expired"
-                        ? "bg-amber-500/20 text-amber-200"
-                        : "bg-ink-500/20 text-ink-300")
-                }
-              >
-                {t.status}
-              </span>
-              <span className="text-[10px] text-ink-500">
-                {t.kind} · added {new Date(t.createdAt).toLocaleDateString()}
-              </span>
-              <span className="ml-auto" />
-              {t.status === "active" && (
-                <button
-                  type="button"
-                  onClick={() => revoke(t.id)}
-                  disabled={busy}
-                  className="rounded border border-rose-700/40 bg-rose-950/30 px-2 py-1 text-[11px] text-rose-200 hover:bg-rose-950/60 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  Revoke
-                </button>
+              {editingId === t.id ? (
+                <form onSubmit={submitEdit} className="space-y-2 rounded border border-sv-sky/30 bg-bg-base/30 p-3">
+                  <label className="block">
+                    <span className="block text-[11px] font-semibold uppercase tracking-brand text-ink-400">
+                      Card UID (hex) — wire-format value
+                    </span>
+                    <input
+                      type="text"
+                      value={editValue}
+                      onChange={(e) => setEditValue(e.target.value)}
+                      className="mt-1 w-full rounded-md border border-bg-border bg-bg-base/50 px-3 py-2 font-mono text-sm uppercase text-ink-50 focus:border-sv-sky focus:outline-none"
+                      required
+                    />
+                    <span className="mt-0.5 block text-[10px] text-amber-300">
+                      ⚠ Editing changes which RFID UID this token authorizes. The OCPP Authorize handler matches on this exact value.
+                    </span>
+                  </label>
+                  <label className="block">
+                    <span className="block text-[11px] font-semibold uppercase tracking-brand text-ink-400">
+                      Label <span className="text-ink-500">(optional)</span>
+                    </span>
+                    <input
+                      type="text"
+                      value={editLabel}
+                      onChange={(e) => setEditLabel(e.target.value)}
+                      placeholder="Black tag · Office card · Spare"
+                      className="mt-1 w-full rounded-md border border-bg-border bg-bg-base/50 px-3 py-2 text-sm text-ink-50 focus:border-sv-sky focus:outline-none"
+                    />
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="submit"
+                      disabled={busy || editValue.trim().length === 0}
+                      className="rounded-md bg-sv-sky/20 px-3 py-2 text-xs font-medium text-sv-sky ring-1 ring-sv-sky/40 hover:bg-sv-sky/30 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {busy ? "Saving…" : "Save"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={cancelEdit}
+                      disabled={busy}
+                      className="rounded border border-bg-border px-3 py-2 text-xs text-ink-300 hover:bg-bg-base/50"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <div className="flex flex-wrap items-center gap-3">
+                  <code
+                    className={
+                      "select-all rounded bg-bg-base/60 px-2 py-1 font-mono text-sm ring-1 " +
+                      (t.status === "active"
+                        ? "text-emerald-100 ring-emerald-500/30"
+                        : "text-ink-400 line-through ring-bg-border/40")
+                    }
+                  >
+                    {t.value}
+                  </code>
+                  <span className="text-xs text-ink-300">
+                    {t.label ?? <span className="italic text-ink-500">no label</span>}
+                  </span>
+                  <span
+                    className={
+                      "rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-brand " +
+                      (t.status === "active"
+                        ? "bg-emerald-500/20 text-emerald-200"
+                        : t.status === "revoked"
+                          ? "bg-rose-500/20 text-rose-200"
+                          : t.status === "expired"
+                            ? "bg-amber-500/20 text-amber-200"
+                            : "bg-ink-500/20 text-ink-300")
+                    }
+                  >
+                    {t.status}
+                  </span>
+                  <span className="text-[10px] text-ink-500">
+                    {t.kind} · added {new Date(t.createdAt).toLocaleDateString()}
+                  </span>
+                  <span className="ml-auto" />
+                  <button
+                    type="button"
+                    onClick={() => startEdit(t)}
+                    disabled={busy}
+                    className="rounded border border-bg-border bg-bg-base/40 px-2 py-1 text-[11px] text-ink-300 hover:bg-bg-base/70 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Edit
+                  </button>
+                  {t.status === "active" && (
+                    <button
+                      type="button"
+                      onClick={() => revoke(t.id)}
+                      disabled={busy}
+                      className="rounded border border-rose-700/40 bg-rose-950/30 px-2 py-1 text-[11px] text-rose-200 hover:bg-rose-950/60 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Revoke
+                    </button>
+                  )}
+                  {t.status === "revoked" && (
+                    <button
+                      type="button"
+                      onClick={() => permanentDelete(t.id, t.value)}
+                      disabled={busy}
+                      title="Permanently remove the row from the database (loses audit history)."
+                      className="rounded border border-rose-900/60 bg-rose-950/60 px-2 py-1 text-[11px] text-rose-200 hover:bg-rose-900/80 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Delete permanently
+                    </button>
+                  )}
+                </div>
               )}
             </li>
           ))}
