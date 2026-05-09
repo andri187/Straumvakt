@@ -60,6 +60,11 @@ function makeTx() {
       update: vi.fn(async (args: unknown) => args),
     },
     chargeSession: {
+      // ADR 0021 Step C — onOcppRawMeterValues uses findFirst to
+      // resolve the in-progress session for an identity. Default
+      // returns null (no active session); the OCMF-projection test
+      // overrides per-call.
+      findFirst: vi.fn(async (_args: unknown): Promise<unknown> => null),
       create: vi.fn(async (args: unknown) => args),
       // session.stopped (Sprint 8.5) reads back fields it just
       // updated via `select:`. Return a fixture matching the
@@ -521,5 +526,161 @@ describe("projections — per-event handlers", () => {
     );
     expect(tx.eventLogEntry.create).toHaveBeenCalledOnce();
     expect(tx.ocppIdentity.update).not.toHaveBeenCalled();
+  });
+
+  // ── ADR 0021 Step C — ocpp.raw.MeterValues OCMF projection ─────────
+  describe("ocpp.raw.MeterValues — OCMF projection (Autocharge Step C)", () => {
+    const sampleOcmf =
+      "OCMF|" +
+      JSON.stringify({
+        FV: "1.0",
+        GI: "ZAPTEC PRO",
+        GS: "ZPR042316",
+        GV: "3.2.2.0",
+        PG: "T1",
+        RD: [
+          { TM: "2026-05-09T10:00:00,000+00:00 R", TX: "B", RV: "100.0000", RI: "1-0:1.8.0", RU: "kWh", RT: "AC", ST: "G" },
+          { TM: "2026-05-09T10:30:00,000+00:00 R", TX: "E", RV: "105.5000", RI: "1-0:1.8.0", RU: "kWh", RT: "AC", ST: "G" },
+        ],
+      }) + "|signature-here";
+
+    function meterValuesEvent(payload: Record<string, unknown>): IngestEvent {
+      return event({
+        eventType: "ocpp.raw.MeterValues",
+        retentionClass: "raw_protocol",
+        payload,
+      });
+    }
+
+    function ocmfFrame(ocmf: string) {
+      return {
+        action: "MeterValues",
+        request: {
+          transactionId: 12345,
+          connectorId: 1,
+          meterValue: [
+            {
+              timestamp: "2026-05-09T10:30:00.000Z",
+              sampledValue: [
+                { value: ocmf, format: "SignedData", measurand: "Energy.Active.Import.Register" },
+                { value: "5500", format: "Raw", measurand: "Energy.Active.Import.Register", unit: "Wh" },
+              ],
+            },
+          ],
+        },
+      };
+    }
+
+    it("projects OCMF gateway block onto in-progress session", async () => {
+      const tx = makeTx();
+      tx.chargeSession.findFirst = vi.fn(async () => ({
+        id: SESSION,
+        ocmfSignedSession: null,
+      })) as never;
+      tx.chargeSession.update = vi.fn(async (args: unknown) => args) as never;
+
+      await run(tx, meterValuesEvent(ocmfFrame(sampleOcmf)));
+
+      expect(tx.chargeSession.update).toHaveBeenCalledOnce();
+      const call = tx.chargeSession.update.mock.calls[0][0] as {
+        where: { id: string };
+        data: Record<string, unknown>;
+      };
+      expect(call.where.id).toBe(SESSION);
+      expect(call.data.ocmfSignedSession).toBe(sampleOcmf);
+      expect(call.data.ocmfFormatVersion).toBe("1.0");
+      expect(call.data.ocmfGatewayId).toBe("ZAPTEC PRO");
+      expect(call.data.ocmfGatewaySerial).toBe("ZPR042316");
+      expect(call.data.ocmfGatewayVersion).toBe("3.2.2.0");
+      expect(call.data.ocmfFirstReadingKwh).toBe("100.0000");
+      expect(call.data.ocmfLastReadingKwh).toBe("105.5000");
+      expect(call.data.ocmfSignedSessionKwh).toBe("5.5000");
+    });
+
+    it("skips when no in-progress session exists for identity", async () => {
+      const tx = makeTx();
+      // findFirst defaults to null
+      await run(tx, meterValuesEvent(ocmfFrame(sampleOcmf)));
+      expect(tx.chargeSession.update).not.toHaveBeenCalled();
+    });
+
+    it("idempotent: skips if ocmfSignedSession already populated", async () => {
+      const tx = makeTx();
+      tx.chargeSession.findFirst = vi.fn(async () => ({
+        id: SESSION,
+        ocmfSignedSession: "OCMF|already-here|sig",
+      })) as never;
+      tx.chargeSession.update = vi.fn(async (args: unknown) => args) as never;
+
+      await run(tx, meterValuesEvent(ocmfFrame(sampleOcmf)));
+      expect(tx.chargeSession.update).not.toHaveBeenCalled();
+    });
+
+    it("captures ev_plc_mac + vendor when OCMF identity is EVCCID", async () => {
+      // OCMF blob with identity block carrying EVCCID = Tesla MAC
+      const ocmfWithEvccid =
+        "OCMF|" +
+        JSON.stringify({
+          FV: "1.0",
+          GI: "ZAPTEC PRO",
+          GS: "ZPR042316",
+          GV: "3.3.5.1",
+          IS: true,
+          IL: "VERIFIED",
+          IT: "EVCCID",
+          ID: "4C:FC:AA:11:22:33", // Tesla OUI
+          IF: ["RFID_PLAIN"],
+          PG: "T1",
+          RD: [
+            { TM: "2026-05-09T10:00:00,000+00:00 R", TX: "B", RV: "100.0000", RI: "1-0:1.8.0", RU: "kWh", RT: "AC", ST: "G" },
+            { TM: "2026-05-09T10:30:00,000+00:00 R", TX: "E", RV: "105.5000", RI: "1-0:1.8.0", RU: "kWh", RT: "AC", ST: "G" },
+          ],
+        }) + "|signature";
+
+      const tx = makeTx();
+      tx.chargeSession.findFirst = vi.fn(async () => ({
+        id: SESSION,
+        ocmfSignedSession: null,
+      })) as never;
+      tx.chargeSession.update = vi.fn(async (args: unknown) => args) as never;
+
+      await run(tx, meterValuesEvent(ocmfFrame(ocmfWithEvccid)));
+
+      expect(tx.chargeSession.update).toHaveBeenCalledOnce();
+      const call = tx.chargeSession.update.mock.calls[0][0] as {
+        data: Record<string, unknown>;
+      };
+      expect(call.data.authIdType).toBe("EVCCID");
+      expect(call.data.authIdValue).toBe("4C:FC:AA:11:22:33");
+      expect(call.data.evPlcMac).toBe("4c:fc:aa:11:22:33");
+      expect(call.data.evPlcMacOuiVendor).toBe("Tesla");
+    });
+
+    it("skips when MeterValues frame has no SignedData entry", async () => {
+      const tx = makeTx();
+      tx.chargeSession.findFirst = vi.fn(async () => ({
+        id: SESSION,
+        ocmfSignedSession: null,
+      })) as never;
+
+      const frameWithoutOcmf = {
+        action: "MeterValues",
+        request: {
+          transactionId: 12345,
+          meterValue: [
+            {
+              timestamp: "2026-05-09T10:30:00.000Z",
+              sampledValue: [
+                { value: "5500", format: "Raw", measurand: "Energy.Active.Import.Register", unit: "Wh" },
+              ],
+            },
+          ],
+        },
+      };
+
+      await run(tx, meterValuesEvent(frameWithoutOcmf));
+      expect(tx.chargeSession.findFirst).not.toHaveBeenCalled();
+      expect(tx.chargeSession.update).not.toHaveBeenCalled();
+    });
   });
 });
