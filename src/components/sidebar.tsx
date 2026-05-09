@@ -28,6 +28,8 @@ import {
   Receipt,
   FileText,
   KeyRound,
+  Activity,
+  Fingerprint,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -94,6 +96,18 @@ const nav: NavItem[] = [
         href: "/chargers",
         label: { is: "Chargers", en: "Chargers" },
         icon: Zap,
+      },
+      {
+        kind: "leaf",
+        href: "/charge-log",
+        label: { is: "Charge log", en: "Charge log" },
+        icon: Activity,
+      },
+      {
+        kind: "leaf",
+        href: "/vehicle-ids",
+        label: { is: "Vehicle IDs", en: "Vehicle IDs" },
+        icon: Fingerprint,
       },
     ],
   },
