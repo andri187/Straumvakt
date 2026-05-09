@@ -56,6 +56,7 @@ export type AuthorizeReason =
   | "expired_status"
   | "expiry_passed"
   | "scope_mismatch"
+  | "no_contract"
   | "unknown_status";
 
 internalOcppAuthorize.post("/", async (c) => {
@@ -178,6 +179,44 @@ export async function resolveAuthorize(
     }
   }
 
+  // ADR 0019 milestone A.11 — fold the agreement-membership check into
+  // OCPP Authorize. A driver may charge at this installation only if
+  // they hold an active DriverGroupMembership under an installation-type
+  // Agreement anchored at the charger's installation.
+  //
+  // OCPP 1.6 has no richer status than Blocked, so 'no_contract' is the
+  // internal reason; the wire-level verdict is Blocked.
+  //
+  // We only enforce when we have an installationId to check against.
+  // A charger whose ocpp_identity has no installation chain can't be
+  // resolved here; preserving Accept matches the existing scope-check
+  // semantics and keeps shadow-mode (enforceAuthorize=false) safe for
+  // partially-wired installs.
+  if (installationId) {
+    const now = new Date();
+    const membership = await db.driverGroupMembership.findFirst({
+      where: {
+        userId: token.userId,
+        driverGroup: {
+          agreement: {
+            agreementType: "installation",
+            installationId,
+            status: "active",
+            effectiveFrom: { lte: now },
+            OR: [
+              { effectiveUntil: null },
+              { effectiveUntil: { gt: now } },
+            ],
+          },
+        },
+      },
+      select: { id: true },
+    });
+    if (!membership) {
+      return { verdict: "Blocked", reason: "no_contract", idTokenId: token.id, enforceAuthorize };
+    }
+  }
+
   return {
     verdict: "Accepted",
     reason: "ok",
@@ -227,5 +266,16 @@ export interface PrismaLike {
         installation: { enforceAuthorize: boolean } | null;
       } | null;
     } | null>;
+  };
+  driverGroupMembership: {
+    findFirst: (args: {
+      where: {
+        userId: string;
+        driverGroup: {
+          agreement: Record<string, unknown>;
+        };
+      };
+      select: { id: true };
+    }) => Promise<{ id: string } | null>;
   };
 }
