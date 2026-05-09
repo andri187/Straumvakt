@@ -50,6 +50,32 @@ export interface ListenerStats {
 const MAX_RECONNECT_BACKOFF_MS = 5 * 60 * 1000;
 const INITIAL_RECONNECT_BACKOFF_MS = 5 * 1000;
 
+// Sprint 9 Phase 3 hardening — silent-connection watchdog.
+//
+// Failure mode: the Service Bus SDK can stay in "connected" state but
+// stop delivering messages (silent token expiry, stale TCP, server-side
+// subscription glitch). The /health endpoint reports OK, the process
+// is alive, but no observations land. Without this watchdog, the
+// consumer would sit silently forever and we'd notice only when an
+// operator wonders "why are we not capturing anything?"
+//
+// The watchdog runs at 60s intervals. If the listener reports
+// state === "connected" AND lastMessageAt is either null OR older than
+// WATCHDOG_SILENT_MS, we force a reconnect by closing the current
+// receiver — the existing reconnect loop in connectLoop catches the
+// resulting subscription-closed event and re-establishes from scratch
+// (which re-fetches the SAS token via Zaptec API, dropping any stale
+// state). False positives during legitimately quiet periods (Dalvegur
+// at 4am with no plug-ins) are cheap — a 1-2s reconnect with no data
+// loss because messages are receiveAndDelete and chargers re-publish
+// on next state change.
+//
+// Tunable via env var. Default 30 minutes — tight enough to recover
+// quickly from a stuck connection, loose enough to skip past genuine
+// idle periods without churn.
+const WATCHDOG_SILENT_MS = Number(process.env.WATCHDOG_SILENT_MS ?? "") || 30 * 60 * 1000;
+const WATCHDOG_INTERVAL_MS = 60 * 1000;
+
 /**
  * Per-installation subscriber. Returns a stats object that gets
  * mutated as messages arrive — so the /health endpoint can read it
@@ -74,6 +100,10 @@ export function startListener(config: ListenerConfig): {
   let currentClient: ServiceBusClient | null = null;
   let currentReceiver: ServiceBusReceiver | null = null;
   let backoffMs = INITIAL_RECONNECT_BACKOFF_MS;
+  // Sprint 9 Phase 3 — set by the watchdog to break the inner wait loop
+  // and force the connectLoop to re-establish. Reset to false after
+  // each successful (re)connect.
+  let forceReconnect = false;
 
   const onMessage = async (msg: ServiceBusReceivedMessage): Promise<void> => {
     stats.messagesReceived++;
@@ -181,18 +211,29 @@ export function startListener(config: ListenerConfig): {
           { autoCompleteMessages: false },
         );
 
-        // Wait until either stopped or the subscription closes (which
+        // Wait until either stopped, the subscription closes (which
         // happens on transient errors despite the SDK's reconnect
         // logic — re-creating the receiver is cleaner than relying
-        // on its internals).
+        // on its internals), OR the silent-connection watchdog flips
+        // forceReconnect to true.
         await new Promise<void>((resolve) => {
           const interval = setInterval(() => {
-            if (stopped) {
+            if (stopped || forceReconnect) {
               clearInterval(interval);
               resolve();
             }
           }, 1000);
         });
+
+        if (forceReconnect) {
+          log.warn("zaptec_amqp_force_reconnect", {
+            installationId: config.installationId,
+            reason: "silent_connection_watchdog",
+            lastMessageAt: stats.lastMessageAt?.toISOString() ?? null,
+            connectedAt: stats.connectedAt?.toISOString() ?? null,
+          });
+          forceReconnect = false;
+        }
 
         await subscription.close().catch(() => undefined);
       } catch (err) {
@@ -226,10 +267,32 @@ export function startListener(config: ListenerConfig): {
   // Start the loop in the background; caller owns the lifetime via stop().
   void connectLoop();
 
+  // Sprint 9 Phase 3 — silent-connection watchdog. Runs in the
+  // background as a setInterval (not part of the connectLoop). Triggers
+  // forceReconnect when state==="connected" but no message has arrived
+  // for WATCHDOG_SILENT_MS. Cleared in stop().
+  const watchdog = setInterval(() => {
+    if (stats.state !== "connected") return; // not our problem; the connectLoop is reconnecting
+    const reference = stats.lastMessageAt ?? stats.connectedAt;
+    if (!reference) return;
+    const silentMs = Date.now() - reference.getTime();
+    if (silentMs >= WATCHDOG_SILENT_MS) {
+      log.warn("zaptec_amqp_silent_watchdog_trip", {
+        installationId: config.installationId,
+        silentMs,
+        thresholdMs: WATCHDOG_SILENT_MS,
+        lastMessageAt: stats.lastMessageAt?.toISOString() ?? null,
+        connectedAt: stats.connectedAt?.toISOString() ?? null,
+      });
+      forceReconnect = true;
+    }
+  }, WATCHDOG_INTERVAL_MS);
+
   return {
     stats,
     stop: async () => {
       stopped = true;
+      clearInterval(watchdog);
       await currentReceiver?.close().catch(() => undefined);
       await currentClient?.close().catch(() => undefined);
     },
