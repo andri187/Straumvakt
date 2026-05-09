@@ -29,6 +29,54 @@ adminVehicles.get(
   },
 );
 
+// GET /api/admin/vehicles/fly-health — operator-triggered probe of
+// the Fly consumer. The click both verifies aliveness AND wakes the
+// machine if it auto-suspended on the free tier — the cold-start
+// path takes 10-15s, so timeouts are generous.
+//
+// Returns:
+//   200 + { alive: true,  health: <Fly response> }
+//   200 + { alive: false, error: "timed_out" | "fly_5xx" | "fetch_failed", detail }
+adminVehicles.get(
+  "/fly-health",
+  requirePermission("member.read"),
+  async (c) => {
+    const FLY_HEALTH_URL =
+      "https://straumvakt-zaptec-consumer-staging.fly.dev/health";
+    const t0 = Date.now();
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 25_000);
+      const res = await fetch(FLY_HEALTH_URL, {
+        method: "GET",
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      const elapsedMs = Date.now() - t0;
+      if (!res.ok) {
+        return c.json({
+          alive: false,
+          error: "fly_5xx",
+          status: res.status,
+          elapsedMs,
+        });
+      }
+      const health = (await res.json().catch(() => null)) as unknown;
+      return c.json({ alive: true, health, elapsedMs });
+    } catch (err) {
+      const elapsedMs = Date.now() - t0;
+      const msg = err instanceof Error ? err.message : String(err);
+      const isAbort = msg.includes("aborted") || msg.includes("AbortError");
+      return c.json({
+        alive: false,
+        error: isAbort ? "timed_out" : "fetch_failed",
+        detail: msg,
+        elapsedMs,
+      });
+    }
+  },
+);
+
 // GET /api/admin/vehicles/:mac — recurrence for a given EV PLC MAC
 adminVehicles.get(
   "/:mac",
