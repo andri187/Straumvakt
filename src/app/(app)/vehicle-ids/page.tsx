@@ -10,6 +10,7 @@ import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
 import { adminSessionConfig, verifyAdminSession } from "@/lib/admin-session";
 import { apiFetchServer } from "@/lib/api-client-server";
+import { WakeFlyButton } from "./wake-fly-button";
 
 export const metadata = { title: "Vehicle IDs" };
 export const dynamic = "force-dynamic";
@@ -90,6 +91,16 @@ export default async function VehicleIdsPage() {
               accent="emerald"
             />
           </dl>
+          <div className="mt-4 border-t border-bg-border/40 pt-4">
+            <div className="mb-2 text-[11px] uppercase tracking-wide text-ink-500">
+              AMQP consumer (Fly)
+            </div>
+            <WakeFlyButton />
+            <p className="mt-2 text-[10px] text-ink-500">
+              Fly free tier may auto-suspend the consumer after idle. Click before a
+              plug-in test to wake it and confirm the AMQP path is alive.
+            </p>
+          </div>
         </section>
 
         {/* Sessions list */}
