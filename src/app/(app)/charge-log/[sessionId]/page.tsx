@@ -357,7 +357,18 @@ export default async function SessionDetailPage({
           {session.vehicleIdentity.link.plcMac ? (
             <>
               <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm md:grid-cols-2">
-                <KV label="EV PLC MAC" value={session.vehicleIdentity.link.plcMac} />
+                <div>
+                  <dt className="text-xs uppercase tracking-wide text-ink-500">EV PLC MAC</dt>
+                  <dd className="mt-0.5">
+                    <Link
+                      href={`/vehicles/${encodeURIComponent(session.vehicleIdentity.link.plcMac)}` as Parameters<typeof Link>[0]["href"]}
+                      className="break-all font-mono text-ink-200 hover:text-sv-sky"
+                      title="Open vehicle-recurrence view (every session this MAC has touched)"
+                    >
+                      {session.vehicleIdentity.link.plcMac}
+                    </Link>
+                  </dd>
+                </div>
                 <div>
                   <dt className="text-xs uppercase tracking-wide text-ink-500">Vendor (OUI)</dt>
                   <dd className="mt-0.5">
