@@ -25,6 +25,7 @@ import { z } from "zod";
 import { makePrisma } from "../../lib/prisma";
 import { verifyIngest } from "../../lib/ocpp-internal-auth";
 import { parseOcmf, type OcmfParsed } from "../../lib/ocmf";
+import { formatMac, lookupOuiVendor } from "../../lib/oui/lookup";
 import type { Env } from "../../bindings";
 
 export const internalZaptecStateEvent = new Hono<{ Bindings: Env }>();
@@ -59,12 +60,26 @@ internalZaptecStateEvent.post("/", async (c) => {
   // 553 — TotalChargePowerSession (live energy + samples)
   // 722 — ChargerCurrentUserUuid (real-time driver enrichment)
   // 723 — CompletedSession (full session JSON + OCMF SignedSession at session-end)
+  //
+  // ADR 0021 Autocharge — Step B additions (vehicle identity capture):
+  // 953 — MacPlcModuleEv (link-layer EV PLC modem MAC; the gold signal)
+  // 716 — DetectedCar (plug/unplug event)
+  // 714 — CableType (Mode 3 / Type 2 / etc.)
+  // 921 — PlcPibVersionEV (vehicle's PLC firmware)
+  // 724 — PlugAndChargeAuthorizeRequest (PnC attempt)
+  // 725 — RejectedUserUuid (PnC denied)
   if (
     stateId !== 710 &&
     stateId !== 513 &&
     stateId !== 553 &&
     stateId !== 722 &&
-    stateId !== 723
+    stateId !== 723 &&
+    stateId !== 953 &&
+    stateId !== 716 &&
+    stateId !== 714 &&
+    stateId !== 921 &&
+    stateId !== 724 &&
+    stateId !== 725
   ) {
     return c.json({ ok: true, action: "ignored" });
   }
@@ -420,6 +435,133 @@ internalZaptecStateEvent.post("/", async (c) => {
       externalId: externalId ?? null,
       ocmfReadings: ocmf?.readings.length ?? 0,
     });
+  }
+
+  // ── ADR 0021 Autocharge — Step B handlers ─────────────────────────
+  //
+  // These StateIds populate the vehicle-identity columns added in
+  // Step A. All resolve the active charging.sessions row via the
+  // most-recent in_progress session for this charger. If no session
+  // row exists yet (rare race — observation arrived before the OCPP
+  // session.started projection ran), we ack and skip; the next
+  // observation in the same session window catches us up.
+
+  // Helper: resolve the in-progress charging.sessions row for this charger.
+  async function resolveActiveSession(): Promise<{ id: string } | null> {
+    return db.chargeSession.findFirst({
+      where: {
+        chargingStationId: identity!.chargingStationId,
+        status: "in_progress",
+      },
+      orderBy: { startedAt: "desc" },
+      select: { id: true },
+    });
+  }
+
+  // StateId 953 — MacPlcModuleEv. The gold signal: link-layer EV PLC
+  // modem MAC, exchanged during HomePlug GreenPHY pairing. Persistent
+  // per-vehicle, OUI-prefix → vendor name. Captured regardless of
+  // formal PnC success.
+  if (stateId === 953) {
+    const mac = formatMac(value);
+    if (!mac) return c.json({ ok: true, action: "value_unparseable" });
+    const oui = lookupOuiVendor(mac);
+    const session = await resolveActiveSession();
+    console.log("[autocharge] ev_plc_mac_observed", {
+      chargingStationId: identity.chargingStationId,
+      mac,
+      vendor: oui.vendor,
+      sessionId: session?.id ?? null,
+    });
+    if (!session) {
+      return c.json({ ok: true, action: "no_active_session", mac, vendor: oui.vendor });
+    }
+    await db.chargeSession.update({
+      where: { id: session.id },
+      data: {
+        evPlcMac: mac,
+        evPlcMacOuiVendor: oui.vendor,
+      },
+    });
+    return c.json({ ok: true, action: "ev_plc_mac_captured", sessionId: session.id, mac, vendor: oui.vendor });
+  }
+
+  // StateId 921 — PlcPibVersionEV. The EV-side PLC firmware version.
+  // Useful for fleet diagnostics ("all 2024 Tesla M3s on PIB v1.3 are
+  // showing X behaviour").
+  if (stateId === 921) {
+    const session = await resolveActiveSession();
+    if (!session) return c.json({ ok: true, action: "no_active_session" });
+    await db.chargeSession.update({
+      where: { id: session.id },
+      data: { evPlcPibVersion: value ?? null },
+    });
+    return c.json({ ok: true, action: "ev_plc_pib_version_captured", sessionId: session.id, version: value });
+  }
+
+  // StateId 714 — CableType. Connector cable identification.
+  if (stateId === 714) {
+    const session = await resolveActiveSession();
+    if (!session) return c.json({ ok: true, action: "no_active_session" });
+    await db.chargeSession.update({
+      where: { id: session.id },
+      data: { cableType: value ?? null },
+    });
+    return c.json({ ok: true, action: "cable_type_captured", sessionId: session.id, cableType: value });
+  }
+
+  // StateId 716 — DetectedCar. Cable plug-in / unplug event. Doesn't
+  // populate a session-level field on its own; logged for observability
+  // (and we bump live_sessions.lastObservedAt so the operator UI shows
+  // the charger as active).
+  if (stateId === 716) {
+    console.log("[autocharge] detected_car_observed", {
+      chargingStationId: identity.chargingStationId,
+      value,
+    });
+    await db.liveSession
+      .update({
+        where: { chargingStationId: identity.chargingStationId },
+        data: { lastObservedAt: observedAt },
+      })
+      .catch(() => null);
+    return c.json({ ok: true, action: "detected_car_observed", value });
+  }
+
+  // StateId 724 — PlugAndChargeAuthorizeRequest. Vehicle initiated
+  // ISO 15118 PnC. Set the boolean flag on the active session.
+  if (stateId === 724) {
+    const session = await resolveActiveSession();
+    if (!session) return c.json({ ok: true, action: "no_active_session" });
+    await db.chargeSession.update({
+      where: { id: session.id },
+      data: { pncAttempted: true },
+    });
+    console.log("[autocharge] pnc_attempt", {
+      sessionId: session.id,
+      chargingStationId: identity.chargingStationId,
+    });
+    return c.json({ ok: true, action: "pnc_attempted_marked", sessionId: session.id });
+  }
+
+  // StateId 725 — RejectedUserUuid. PnC was attempted and rejected.
+  // Mark pnc_succeeded=false + capture the rejected UUID for forensics.
+  if (stateId === 725) {
+    const session = await resolveActiveSession();
+    if (!session) return c.json({ ok: true, action: "no_active_session" });
+    await db.chargeSession.update({
+      where: { id: session.id },
+      data: {
+        pncSucceeded: false,
+        pncRejectedUuid: value ?? null,
+      },
+    });
+    console.log("[autocharge] pnc_rejected", {
+      sessionId: session.id,
+      chargingStationId: identity.chargingStationId,
+      rejectedUuid: value,
+    });
+    return c.json({ ok: true, action: "pnc_rejected_captured", sessionId: session.id, rejectedUuid: value });
   }
 
   return c.json({ ok: true, action: "noop" });
