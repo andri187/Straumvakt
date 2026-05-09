@@ -32,6 +32,8 @@ import {
   resolveTariffChainForSession,
   TariffResolutionError,
 } from "../tariff/resolve-tariff-chain";
+import { parseOcmf } from "../ocmf";
+import { lookupOuiVendor, formatMac } from "../oui/lookup";
 
 // Re-export the handler type so other modules can declare their own
 // without depending on the internals of the events repository.
@@ -447,6 +449,161 @@ const onSessionStopped: ProjectionHandler = async (tx, event) => {
   });
 };
 
+/**
+ * ocpp.raw.MeterValues — Sprint 9 / ADR 0021 Autocharge Step C.
+ *
+ * MeterValues frames can carry OCMF blobs in their `signedMeterData`
+ * field (OCPP 1.6 SignedMeterValue extension; format="SignedData").
+ * The blob is byte-for-byte identical to what AMQP StateId 723
+ * delivers post-session, but MeterValues fires DURING the session at
+ * the configured sample interval — earlier visibility, plus a
+ * transport-symmetric capture path (closes the gap I flagged in
+ * ADR 0021 §4).
+ *
+ * Resolution strategy: the gateway sets aggregateId = identity_id on
+ * every raw frame. We find the in-progress ChargeSession for that
+ * identity and write the OCMF block onto it.
+ *
+ * Idempotent: if the session already has ocmf_signed_session
+ * populated (e.g. AMQP 723 fired first, or a prior MeterValues frame
+ * already projected), we skip. First-arrival wins. Both paths carry
+ * the same byte-for-byte OCMF so this is a safe heuristic.
+ *
+ * When the parsed OCMF identity has type=EVCCID, we ALSO populate
+ * ev_plc_mac + ev_plc_mac_oui_vendor (the link-layer columns from
+ * ADR 0021 §2). EVCCID per OCMF spec is the EV's PLC modem MAC.
+ *
+ * Note: the gateway DO emits ocpp.raw.X (raw protocol frame name) —
+ * not the translated session.X / charger.X domain event names that
+ * the older projection handlers register against. Per ADR 0021 §4
+ * we register on the raw name directly, which is the live wire format
+ * Dalvegur produces.
+ */
+const onOcppRawMeterValues: ProjectionHandler = async (tx, event) => {
+  // Pull the array of meterValue groups from the OCPP 1.6 payload.
+  // Shape: { transactionId?, connectorId?, meterValue: [{timestamp, sampledValue: [{value, format, measurand, ...}]}] }
+  const request = (event.payload as { request?: unknown }).request;
+  if (!request || typeof request !== "object") return;
+  const meterValueArr = arrayField(request, "meterValue");
+  if (!meterValueArr) return;
+
+  // Hunt for an OCMF-bearing signedMeterData entry. Vendors emit zero
+  // or one per MeterValues frame typically; scan all to be safe.
+  let ocmfBlob: string | null = null;
+  for (const mv of meterValueArr) {
+    if (!mv || typeof mv !== "object") continue;
+    const sampledValue = arrayField(mv as Record<string, unknown>, "sampledValue");
+    if (!sampledValue) continue;
+    for (const sv of sampledValue) {
+      if (!sv || typeof sv !== "object") continue;
+      const svObj = sv as Record<string, unknown>;
+      const format = stringField(svObj, "format");
+      const value = stringField(svObj, "value");
+      if (format === "SignedData" && value && value.startsWith("OCMF|")) {
+        ocmfBlob = value;
+        break;
+      }
+    }
+    if (ocmfBlob) break;
+  }
+  if (!ocmfBlob) return;
+
+  // Parse the OCMF envelope.
+  const parsed = parseOcmf(ocmfBlob);
+  if (!parsed) return;
+
+  // Resolve the in-progress session for this charger. aggregateId is
+  // the identity_id (gateway sets it on every raw frame). If no
+  // in-progress session is found, log + skip — MeterValues outside an
+  // active session is a vendor quirk we don't need to project.
+  const session = await tx.chargeSession.findFirst({
+    where: {
+      ocppIdentityId: event.aggregateId,
+      status: "in_progress",
+    },
+    orderBy: { startedAt: "desc" },
+    select: {
+      id: true,
+      ocmfSignedSession: true,
+    },
+  });
+  if (!session) {
+    console.warn("[ocpp.raw.MeterValues] no in-progress session for identity, skipping OCMF projection", {
+      identityId: event.aggregateId,
+    });
+    return;
+  }
+
+  // Idempotent: if OCMF blob is already on the session, skip. Both
+  // AMQP 723 and OCPP MeterValues carry byte-for-byte identical OCMF
+  // so first-arrival wins; we don't overwrite.
+  if (session.ocmfSignedSession) return;
+
+  // Derive link-layer fields when OCMF identity is EVCCID — per OCMF
+  // spec EVCCID is the EV's PLC modem MAC.
+  let evPlcMac: string | null = null;
+  let evPlcMacOuiVendor: string | null = null;
+  if (parsed.identity?.idType === "EVCCID" && parsed.identity.idValue) {
+    const formatted = formatMac(parsed.identity.idValue);
+    if (formatted) {
+      evPlcMac = formatted;
+      const oui = lookupOuiVendor(formatted);
+      evPlcMacOuiVendor = oui.vendor;
+    }
+  }
+
+  await tx.chargeSession.update({
+    where: { id: session.id },
+    data: {
+      // OCMF gateway block
+      ocmfSignedSession: ocmfBlob,
+      ocmfFormatVersion: parsed.formatVersion,
+      ocmfGatewayId: parsed.gatewayId,
+      ocmfGatewaySerial: parsed.gatewaySerial,
+      ocmfGatewayVersion: parsed.gatewayVersion,
+      // first/last/signed kWh derived from OCMF readings
+      ocmfFirstReadingKwh:
+        parsed.readings[0]?.cumulativeKwh != null
+          ? parsed.readings[0].cumulativeKwh.toFixed(4)
+          : null,
+      ocmfLastReadingKwh:
+        parsed.readings[parsed.readings.length - 1]?.cumulativeKwh != null
+          ? parsed.readings[parsed.readings.length - 1]!.cumulativeKwh.toFixed(4)
+          : null,
+      ocmfSignedSessionKwh:
+        parsed.readings.length >= 2
+          ? (
+              parsed.readings[parsed.readings.length - 1]!.cumulativeKwh -
+              parsed.readings[0]!.cumulativeKwh
+            ).toFixed(4)
+          : null,
+      // OCMF identity block
+      authIdStatus: parsed.identity?.identified ?? null,
+      authIdLevel: parsed.identity?.level ?? null,
+      authIdType: parsed.identity?.idType ?? null,
+      authIdValue: parsed.identity?.idValue ?? null,
+      authIdFlags: parsed.identity?.flags ?? [],
+      // Synthetic seen-at — distinguishable from AMQP 723 path because
+      // completedSessionRawJson stays null (only the AMQP handler
+      // writes that). The provenance discriminator on the page reads
+      // raw_json IS NULL ? "backfilled or OCPP-projected" : "AMQP-live".
+      completedSessionSeenAt: new Date(event.occurredAt),
+      // Link-layer columns when identity is EVCCID
+      evPlcMac,
+      evPlcMacOuiVendor,
+    },
+  });
+
+  console.log("[ocpp.raw.MeterValues] OCMF projected", {
+    sessionId: session.id,
+    identityId: event.aggregateId,
+    gatewaySerial: parsed.gatewaySerial,
+    identityType: parsed.identity?.idType ?? null,
+    evPlcMacCaptured: evPlcMac !== null,
+    vendor: evPlcMacOuiVendor,
+  });
+};
+
 // Re-export so callers can catch the resolver's typed errors at
 // the queue-consumer boundary if they want.
 export { TariffResolutionError };
@@ -473,6 +630,11 @@ export function registerAllProjections(): void {
   registerProjection("session.meter_value_recorded", onSessionMeterValueRecorded);
   registerProjection("session.stopped", onSessionStopped);
   registerProjection("ocpp.command_result", onCommandResult);
+  // ADR 0021 Autocharge Step C — projection on the raw MeterValues
+  // frame to capture OCMF signedMeterData when the firmware embeds
+  // it. Closes the OCPP-side OCMF capture gap (AMQP 723 was the only
+  // path before this).
+  registerProjection("ocpp.raw.MeterValues", onOcppRawMeterValues);
   // card.authorize_requested intentionally has no projection handler —
   // Sprint 2 wires it through the OCPI token resolver.
   // ocpp.unknown_message intentionally has no projection — logged only.
