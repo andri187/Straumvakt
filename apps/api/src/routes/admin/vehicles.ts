@@ -9,11 +9,25 @@ import { makePrisma } from "../../lib/prisma";
 import { requireAdmin, type AuthVars } from "../../lib/auth-middleware";
 import { requirePermission } from "../../lib/auth/require-permission";
 import { getVehicleRecurrence } from "../../repositories/vehicle-recurrence";
+import { listVehicleIdSessions } from "../../repositories/vehicle-id-sessions";
 import type { Env } from "../../bindings";
 
 export const adminVehicles = new Hono<{ Bindings: Env; Variables: AuthVars }>();
 
 adminVehicles.use("*", requireAdmin);
+
+// GET /api/admin/vehicles — sessions that captured ANY vehicle-identity
+// signal (link / protocol / application). Powers the /vehicle-ids
+// landing page in the operator UI.
+adminVehicles.get(
+  "/",
+  requirePermission("member.read"),
+  async (c) => {
+    const db = makePrisma(c.env);
+    const sessions = await listVehicleIdSessions(db, { limit: 200 });
+    return c.json({ sessions });
+  },
+);
 
 // GET /api/admin/vehicles/:mac — recurrence for a given EV PLC MAC
 adminVehicles.get(
