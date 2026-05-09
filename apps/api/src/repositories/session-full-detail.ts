@@ -14,6 +14,12 @@
 
 import type { PrismaClient } from "../generated/prisma/client";
 import { parseOcmf, deriveIntervals, type PowerInterval } from "../lib/ocmf";
+import {
+  classifyIdTagFormat,
+  idTagKindLabel,
+  type IdTagKind,
+  type Confidence,
+} from "../lib/idtag-classifier";
 
 export interface SessionTelemetrySample {
   observedAt: string;
@@ -72,6 +78,39 @@ export interface SessionFullDetail {
     flags: string[];
     status: boolean | null;           // OCMF IS — was it identified
   } | null;
+
+  // ── Sprint 9 / ADR 0021 — Vehicle identity (Autocharge) ──
+  // Three confidence tiers stored alongside OCMF identity above
+  // (which is the application-layer tier). When AMQP is alive AND
+  // the firmware populates these, all three layers light up; when
+  // either is missing, only the populated layer shows.
+  vehicleIdentity: {
+    /** Convenience label: "link" / "link+protocol" / "link+protocol+application" / "none" */
+    confidenceTier: "none" | "link" | "link+protocol" | "link+protocol+application" | "protocol" | "application" | "link+application" | "protocol+application";
+    /** Link layer: EV PLC modem MAC (StateId 953 MacPlcModuleEv) — populated by AMQP capture in Step B once Fly is alive, OR by Step C OCMF projection when OCMF identity is EVCCID. */
+    link: {
+      plcMac: string | null;          // canonical lowercase colon-separated form
+      plcMacOuiVendor: string | null; // "Tesla" / "Volkswagen" / etc — derived via OUI lookup
+      plcPibVersion: string | null;   // EV PLC firmware version (StateId 921)
+      cableType: string | null;       // StateId 714
+    };
+    /** Protocol layer: ISO 15118 PnC negotiation events (StateId 724/725). */
+    protocol: {
+      pncAttempted: boolean | null;
+      pncSucceeded: boolean | null;   // null = not attempted
+      pncRejectedUuid: string | null;
+    };
+    /** Application layer: idTag format detection. The OCMF auth_id_*
+     *  fields live in the `identity` block above; this surfaces what
+     *  the plain idTag string looks like, which catches cases where
+     *  PnC values are embedded in idTag without OCMF support. */
+    idTagClassification: {
+      detectedKind: IdTagKind;
+      detectedKindLabel: string;
+      confidence: Confidence;
+      vendor: string | null;          // populated when detectedKind=evccid_mac and OUI matches
+    };
+  };
 
   // OCMF gateway + meter readings
   ocmf: {
@@ -142,6 +181,15 @@ export async function getSessionFullDetail(
       ocmfLastReadingKwh: true,
       ocmfSignedSessionKwh: true,
       completedSessionSeenAt: true,
+
+      // Sprint 9 / ADR 0021 — Autocharge vehicle identity columns
+      evPlcMac: true,
+      evPlcMacOuiVendor: true,
+      evPlcPibVersion: true,
+      cableType: true,
+      pncAttempted: true,
+      pncSucceeded: true,
+      pncRejectedUuid: true,
 
       organization: { select: { displayName: true } },
       site: { select: { displayName: true } },
@@ -365,6 +413,19 @@ export async function getSessionFullDetail(
     stopReason: session.stopReason,
     identity,
     ocmf,
+    vehicleIdentity: buildVehicleIdentity(
+      {
+        evPlcMac: session.evPlcMac ?? null,
+        evPlcMacOuiVendor: session.evPlcMacOuiVendor ?? null,
+        evPlcPibVersion: session.evPlcPibVersion ?? null,
+        cableType: session.cableType ?? null,
+        pncAttempted: session.pncAttempted ?? null,
+        pncSucceeded: session.pncSucceeded ?? null,
+        pncRejectedUuid: session.pncRejectedUuid ?? null,
+      },
+      identity,
+      session.idTag,
+    ),
     timeSeriesSource,
     intervals,
     samples: samples.map((s) => ({
@@ -444,4 +505,66 @@ function formatIsk(minor: bigint | number): string {
   const n = typeof minor === "bigint" ? Number(minor) : minor;
   const major = n / 100;
   return `${major.toLocaleString("is-IS", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kr`;
+}
+
+/**
+ * Build the vehicleIdentity response block from the raw column values
+ * + the parsed OCMF identity. Computes the confidence tier as a
+ * convenience for the UI — ordered combination of which layers
+ * actually have data.
+ *
+ * Per ADR 0021 §1, the three layers are independent — a session may
+ * light up zero, one, two, or all three.
+ */
+function buildVehicleIdentity(
+  cols: {
+    evPlcMac: string | null;
+    evPlcMacOuiVendor: string | null;
+    evPlcPibVersion: string | null;
+    cableType: string | null;
+    pncAttempted: boolean | null;
+    pncSucceeded: boolean | null;
+    pncRejectedUuid: string | null;
+  },
+  identity: SessionFullDetail["identity"],
+  idTag: string | null,
+): SessionFullDetail["vehicleIdentity"] {
+  const hasLink = cols.evPlcMac !== null;
+  const hasProtocol =
+    cols.pncAttempted !== null ||
+    cols.pncSucceeded !== null ||
+    cols.pncRejectedUuid !== null;
+  const hasApplication = identity !== null;
+
+  const tierParts: string[] = [];
+  if (hasLink) tierParts.push("link");
+  if (hasProtocol) tierParts.push("protocol");
+  if (hasApplication) tierParts.push("application");
+  const confidenceTier =
+    tierParts.length === 0
+      ? "none"
+      : (tierParts.join("+") as SessionFullDetail["vehicleIdentity"]["confidenceTier"]);
+
+  const classified = classifyIdTagFormat(idTag);
+
+  return {
+    confidenceTier,
+    link: {
+      plcMac: cols.evPlcMac,
+      plcMacOuiVendor: cols.evPlcMacOuiVendor,
+      plcPibVersion: cols.evPlcPibVersion,
+      cableType: cols.cableType,
+    },
+    protocol: {
+      pncAttempted: cols.pncAttempted,
+      pncSucceeded: cols.pncSucceeded,
+      pncRejectedUuid: cols.pncRejectedUuid,
+    },
+    idTagClassification: {
+      detectedKind: classified.detectedKind,
+      detectedKindLabel: idTagKindLabel(classified.detectedKind),
+      confidence: classified.confidence,
+      vendor: typeof classified.meta?.vendor === "string" ? classified.meta.vendor : null,
+    },
+  };
 }

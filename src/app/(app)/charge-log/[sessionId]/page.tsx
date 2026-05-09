@@ -76,6 +76,40 @@ interface SessionFullDetail {
     capturedAt: string | null;
     provenance: "live" | "backfilled" | null;
   } | null;
+  vehicleIdentity: {
+    confidenceTier:
+      | "none"
+      | "link"
+      | "protocol"
+      | "application"
+      | "link+protocol"
+      | "link+application"
+      | "protocol+application"
+      | "link+protocol+application";
+    link: {
+      plcMac: string | null;
+      plcMacOuiVendor: string | null;
+      plcPibVersion: string | null;
+      cableType: string | null;
+    };
+    protocol: {
+      pncAttempted: boolean | null;
+      pncSucceeded: boolean | null;
+      pncRejectedUuid: string | null;
+    };
+    idTagClassification: {
+      detectedKind:
+        | "iso14443_4byte"
+        | "iso14443_7byte"
+        | "evccid_mac"
+        | "emaid"
+        | "key_code"
+        | "unknown";
+      detectedKindLabel: string;
+      confidence: "high" | "medium" | "low";
+      vendor: string | null;
+    };
+  };
   timeSeriesSource: "ocmf" | "energyDetails" | null;
   intervals: PowerInterval[];
   samples: SessionTelemetrySample[];
@@ -303,6 +337,161 @@ export default async function SessionDetailPage({
         </div>
       </section>
 
+      {/* VEHICLE IDENTITY (ADR 0021 Autocharge) */}
+      <section className="mb-6 rounded-lg border border-bg-border bg-bg-base/30 p-5">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-400">
+            Vehicle identity
+          </h2>
+          <ConfidenceTierPill tier={session.vehicleIdentity.confidenceTier} />
+        </div>
+
+        {/* LINK LAYER — EV PLC modem MAC */}
+        <div className="mb-4 rounded border border-bg-border/40 bg-bg-base/30 p-4">
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <span className="text-[11px] font-semibold uppercase tracking-brand text-ink-500">
+              Link layer
+            </span>
+            <span className="text-[10px] text-ink-500">StateId 953 / 921 / 714 / 716</span>
+          </div>
+          {session.vehicleIdentity.link.plcMac ? (
+            <>
+              <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm md:grid-cols-2">
+                <KV label="EV PLC MAC" value={session.vehicleIdentity.link.plcMac} />
+                <div>
+                  <dt className="text-xs uppercase tracking-wide text-ink-500">Vendor (OUI)</dt>
+                  <dd className="mt-0.5">
+                    {session.vehicleIdentity.link.plcMacOuiVendor ? (
+                      <span className="rounded-full bg-purple-400/15 px-2 py-0.5 text-xs font-semibold text-purple-300 ring-1 ring-inset ring-purple-400/30">
+                        {session.vehicleIdentity.link.plcMacOuiVendor}
+                      </span>
+                    ) : (
+                      <span className="text-xs italic text-ink-500">unknown OUI</span>
+                    )}
+                  </dd>
+                </div>
+                <KV
+                  label="EV PLC firmware"
+                  value={session.vehicleIdentity.link.plcPibVersion ?? placeholder}
+                />
+                <KV
+                  label="Cable type"
+                  value={session.vehicleIdentity.link.cableType ?? placeholder}
+                />
+              </dl>
+            </>
+          ) : (
+            <p className="text-xs italic text-ink-500">
+              No PLC pairing observed. Either the EV has no HomePlug GreenPHY modem (basic
+              Mode-3-only EV), or the AMQP feed was silent during this session window. The
+              link-layer capture (StateId 953 MacPlcModuleEv) populates here automatically
+              once the Fly consumer is alive and the next session fires.
+            </p>
+          )}
+        </div>
+
+        {/* PROTOCOL LAYER — ISO 15118 PnC */}
+        <div className="mb-4 rounded border border-bg-border/40 bg-bg-base/30 p-4">
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <span className="text-[11px] font-semibold uppercase tracking-brand text-ink-500">
+              Protocol layer
+            </span>
+            <span className="text-[10px] text-ink-500">StateId 724 / 725 — ISO 15118 PnC</span>
+          </div>
+          {session.vehicleIdentity.protocol.pncAttempted !== null ||
+          session.vehicleIdentity.protocol.pncSucceeded !== null ? (
+            <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm md:grid-cols-2">
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-ink-500">PnC attempted</dt>
+                <dd className="mt-0.5 font-mono text-ink-200">
+                  {session.vehicleIdentity.protocol.pncAttempted === true
+                    ? "Yes"
+                    : session.vehicleIdentity.protocol.pncAttempted === false
+                      ? "No"
+                      : placeholder}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-ink-500">PnC succeeded</dt>
+                <dd className="mt-0.5">
+                  {session.vehicleIdentity.protocol.pncSucceeded === true ? (
+                    <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-xs font-medium text-emerald-300 ring-1 ring-inset ring-emerald-500/30">
+                      Accepted
+                    </span>
+                  ) : session.vehicleIdentity.protocol.pncSucceeded === false ? (
+                    <span className="rounded bg-rose-500/15 px-1.5 py-0.5 text-xs font-medium text-rose-300 ring-1 ring-inset ring-rose-500/30">
+                      Rejected
+                    </span>
+                  ) : (
+                    <span className="text-xs italic text-ink-500">{placeholder}</span>
+                  )}
+                </dd>
+              </div>
+              {session.vehicleIdentity.protocol.pncRejectedUuid && (
+                <KV
+                  label="Rejected UUID"
+                  value={session.vehicleIdentity.protocol.pncRejectedUuid}
+                />
+              )}
+            </dl>
+          ) : (
+            <p className="text-xs italic text-ink-500">
+              No ISO 15118 PnC attempt observed during this session. Either the EV doesn&apos;t
+              support PnC, or the firmware doesn&apos;t fire StateId 724 yet on this Zaptec
+              version.
+            </p>
+          )}
+        </div>
+
+        {/* APPLICATION LAYER — idTag + OCMF identity (cross-references existing block above) */}
+        <div className="rounded border border-bg-border/40 bg-bg-base/30 p-4">
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <span className="text-[11px] font-semibold uppercase tracking-brand text-ink-500">
+              Application layer
+            </span>
+            <span className="text-[10px] text-ink-500">
+              idTag format detection · OCMF identity above
+            </span>
+          </div>
+          <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm md:grid-cols-2">
+            <KV label="Session idTag" value={session.driverIdTag ?? placeholder} />
+            <div>
+              <dt className="text-xs uppercase tracking-wide text-ink-500">
+                Detected format
+              </dt>
+              <dd className="mt-0.5 flex flex-wrap items-center gap-2">
+                <span
+                  className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${idTagKindBadgeColor(session.vehicleIdentity.idTagClassification.detectedKind)}`}
+                >
+                  {session.vehicleIdentity.idTagClassification.detectedKindLabel}
+                </span>
+                <span
+                  className={`text-[10px] ${confidenceColor(session.vehicleIdentity.idTagClassification.confidence)}`}
+                >
+                  {session.vehicleIdentity.idTagClassification.confidence} confidence
+                </span>
+                {session.vehicleIdentity.idTagClassification.vendor && (
+                  <span className="rounded-full bg-purple-400/15 px-2 py-0.5 text-[10px] font-semibold text-purple-300 ring-1 ring-inset ring-purple-400/30">
+                    {session.vehicleIdentity.idTagClassification.vendor}
+                  </span>
+                )}
+              </dd>
+            </div>
+          </dl>
+          {session.identity ? (
+            <p className="mt-3 text-[11px] text-ink-500">
+              OCMF identity ({session.identity.typeLabel}) shown in the Identification section
+              above.
+            </p>
+          ) : (
+            <p className="mt-3 text-[11px] italic text-ink-500">
+              No OCMF identity captured. Application-layer EVCCID/EMAID requires firmware
+              that ships ISO 15118 PnC support.
+            </p>
+          )}
+        </div>
+      </section>
+
       {/* POWER OVER TIME (OCMF intervals) */}
       <section className="mb-6 rounded-lg border border-bg-border bg-bg-base/30 p-5">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-ink-400">
@@ -452,6 +641,55 @@ export default async function SessionDetailPage({
       ) : null}
     </div>
   );
+}
+
+function ConfidenceTierPill({
+  tier,
+}: {
+  tier: SessionFullDetail["vehicleIdentity"]["confidenceTier"];
+}) {
+  const tone =
+    tier === "none"
+      ? "bg-bg-raised/60 text-ink-400 ring-bg-border"
+      : tier === "link+protocol+application"
+        ? "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30"
+        : tier === "link+protocol" || tier === "link+application" || tier === "protocol+application"
+          ? "bg-sv-sky/15 text-sv-sky ring-sv-sky/30"
+          : "bg-amber-500/15 text-amber-300 ring-amber-500/30";
+  const label =
+    tier === "none"
+      ? "no identity"
+      : `confidence: ${tier}`;
+  return (
+    <span
+      className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-brand ring-1 ring-inset ${tone}`}
+    >
+      {label}
+    </span>
+  );
+}
+
+function idTagKindBadgeColor(
+  kind: SessionFullDetail["vehicleIdentity"]["idTagClassification"]["detectedKind"],
+): string {
+  switch (kind) {
+    case "evccid_mac":
+      return "bg-purple-400/15 text-purple-300 ring-purple-400/30";
+    case "emaid":
+      return "bg-emerald-400/15 text-emerald-300 ring-emerald-400/30";
+    case "iso14443_4byte":
+    case "iso14443_7byte":
+      return "bg-sv-sky/15 text-sv-sky ring-sv-sky/30";
+    case "key_code":
+      return "bg-amber-400/15 text-amber-300 ring-amber-400/30";
+    case "unknown":
+    default:
+      return "bg-bg-raised/60 text-ink-300 ring-bg-border";
+  }
+}
+
+function confidenceColor(c: "high" | "medium" | "low"): string {
+  return c === "high" ? "text-emerald-300" : c === "medium" ? "text-amber-300" : "text-ink-500";
 }
 
 function StatusPill({ status }: { status: string }) {
