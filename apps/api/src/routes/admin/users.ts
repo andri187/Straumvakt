@@ -1,8 +1,10 @@
 import { Hono } from "hono";
+import { z } from "zod";
 import { UserCreateInput, UserUpdateInput } from "@straumvakt/shared/inputs/users";
 import { makePrisma } from "../../lib/prisma";
 import { requireAdmin, type AuthVars } from "../../lib/auth-middleware";
 import { requirePermission } from "../../lib/auth/require-permission";
+import { hashPassword } from "../../lib/password";
 import {
   createUser,
   getUserById,
@@ -89,6 +91,60 @@ adminUsers.patch("/:id", requirePermission("member.write"), async (c) => {
   const user = await updateUser(db, c.req.param("id"), parsed.data);
   return c.json({ user });
 });
+
+// ── Password management (Sprint 9 — admin-driven set / clear) ────────
+//
+// Surfaces the existing UserCredential model. Login already validates
+// against UserCredential.passwordHash (Path B in admin/auth.ts); this
+// endpoint is the missing operator-facing way to seed or rotate it.
+//
+// PUT    /api/admin/users/:id/password   { password: string }  → 200 { ok: true }
+// DELETE /api/admin/users/:id/password                          → 200 { ok: true }
+//
+// No "current password" challenge — admin-side reset, not user-side.
+// The user's old session is not invalidated by this endpoint; that's a
+// separate concern.
+
+const passwordSchema = z.object({ password: z.string().min(8).max(200) });
+
+adminUsers.put(
+  "/:id/password",
+  requirePermission("member.write"),
+  async (c) => {
+    const raw = (await c.req.json().catch(() => null)) as unknown;
+    const parsed = passwordSchema.safeParse(raw);
+    if (!parsed.success) {
+      return c.json({ error: "validation", issues: parsed.error.issues }, 400);
+    }
+    const db = makePrisma(c.env);
+    const userId = c.req.param("id");
+    const exists = await db.user.findUnique({ where: { id: userId }, select: { id: true } });
+    if (!exists) return c.json({ error: "not_found" }, 404);
+
+    const passwordHash = await hashPassword(parsed.data.password);
+    await db.userCredential.upsert({
+      where: { userId },
+      create: { userId, passwordHash },
+      update: { passwordHash },
+    });
+    return c.json({ ok: true });
+  },
+);
+
+adminUsers.delete(
+  "/:id/password",
+  requirePermission("member.write"),
+  async (c) => {
+    const db = makePrisma(c.env);
+    const userId = c.req.param("id");
+    // Idempotent — if the row doesn't exist, treat as success.
+    await db.userCredential.updateMany({
+      where: { userId },
+      data: { passwordHash: null },
+    });
+    return c.json({ ok: true });
+  },
+);
 
 // ── RFID / IdToken sub-resource ──────────────────────────────────────
 //
