@@ -14,6 +14,7 @@ import type { OrgSummary } from "@straumvakt/shared/domain/orgs";
 import { UserEditPanel } from "./edit-panel";
 import { MembershipsPanel } from "./memberships-panel";
 import { TokensPanel } from "./tokens-panel";
+import { PasswordPanel } from "./password-panel";
 
 export const metadata = { title: "User detail" };
 
@@ -325,6 +326,16 @@ export default async function UserDetailPage({
 
           {tab === "profile" && (
           <>
+          <section className="rounded-lg border border-bg-border bg-bg-surface/70 shadow-card backdrop-blur">
+            <h2 className="border-b border-bg-border/60 px-5 py-2 text-[11px] font-semibold uppercase tracking-brand text-ink-300">
+              Sign-in password
+              <span className="ml-2 text-ink-500">
+                {user.hasCredentials ? "· set" : "· not set"}
+              </span>
+            </h2>
+            <PasswordPanel userId={user.id} hasCredentials={user.hasCredentials} />
+          </section>
+
           <section className="rounded-lg border border-bg-border bg-bg-surface/70 shadow-card backdrop-blur">
             <h2 className="border-b border-bg-border/60 px-5 py-2 text-[11px] font-semibold uppercase tracking-brand text-ink-300">
               Memberships <span className="text-ink-500">· {memberships.length}</span>
