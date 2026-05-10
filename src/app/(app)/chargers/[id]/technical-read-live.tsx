@@ -93,7 +93,11 @@ export function TechnicalReadPillsLive({
   return <TechnicalReadPills read={read} firmwareFromBoot={firmwareFromBoot} />;
 }
 
-export function TechnicalReadDetailLive() {
+export function TechnicalReadDetailLive({
+  ocppIdentityId,
+}: {
+  ocppIdentityId: string | null;
+}) {
   const read = useContext(Ctx);
-  return <TechnicalReadDetail read={read} />;
+  return <TechnicalReadDetail read={read} ocppIdentityId={ocppIdentityId} />;
 }

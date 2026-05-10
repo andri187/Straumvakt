@@ -1,4 +1,6 @@
 "use client";
+import { useState } from "react";
+import { apiFetch } from "@/lib/api-client";
 import {
   signalIconClass as signalIconClassShared,
   formatSignal as formatSignalShared,
@@ -159,7 +161,16 @@ function Pill({
   );
 }
 
-export function TechnicalReadDetail({ read }: { read: ChargerTechnicalRead | null }) {
+export function TechnicalReadDetail({
+  read,
+  ocppIdentityId,
+}: {
+  read: ChargerTechnicalRead | null;
+  /** OCPP identity uuid — the SendLocalList push endpoint is keyed
+   *  off this. Null when the charger has no OCPP identity attached
+   *  yet, in which case the push button renders disabled. */
+  ocppIdentityId: string | null;
+}) {
   if (!read) return null;
 
   const phasesActive = read.phases.some(
@@ -297,13 +308,22 @@ export function TechnicalReadDetail({ read }: { read: ChargerTechnicalRead | nul
           <Row label="Routing ID" value={read.routingId ?? DASH} mono />
         </Card>
 
-        <LocalAuthRosterCard roster={read.localAuthRoster} />
+        <LocalAuthRosterCard
+          roster={read.localAuthRoster}
+          ocppIdentityId={ocppIdentityId}
+        />
       </div>
     </section>
   );
 }
 
-function LocalAuthRosterCard({ roster }: { roster: LocalAuthRoster | null }) {
+function LocalAuthRosterCard({
+  roster,
+  ocppIdentityId,
+}: {
+  roster: LocalAuthRoster | null;
+  ocppIdentityId: string | null;
+}) {
   if (!roster) return null;
   const hint =
     `${roster.count} entries · ${roster.effectiveCount} would authorize` +
@@ -334,8 +354,12 @@ function LocalAuthRosterCard({ roster }: { roster: LocalAuthRoster | null }) {
       ) : (
         <>
           <p className="mb-2 text-[10px] text-ink-500">
-            CSMS-side view. Not pushed to the charger today —{" "}
-            <span className="font-mono">SendLocalList</span> is not wired.
+            CSMS-side view. Use{" "}
+            <span className="font-mono">Push</span> to send a single
+            entry via OCPP <span className="font-mono">SendLocalList</span>{" "}
+            (Differential). Pushes propagate to this charger only —
+            other chargers in the same installation will drift until
+            you push to them too.
           </p>
           <div className="overflow-x-auto">
             <table className="w-full text-[11px]">
@@ -346,11 +370,16 @@ function LocalAuthRosterCard({ roster }: { roster: LocalAuthRoster | null }) {
                   <th className="py-1 text-left font-medium">Kind</th>
                   <th className="py-1 text-left font-medium">Scope</th>
                   <th className="py-1 text-left font-medium">Verdict</th>
+                  <th className="py-1 text-right font-medium">Action</th>
                 </tr>
               </thead>
               <tbody>
                 {roster.entries.map((e) => (
-                  <RosterRowCompact key={e.id} entry={e} />
+                  <RosterRowCompact
+                    key={e.id}
+                    entry={e}
+                    ocppIdentityId={ocppIdentityId}
+                  />
                 ))}
               </tbody>
             </table>
@@ -361,7 +390,13 @@ function LocalAuthRosterCard({ roster }: { roster: LocalAuthRoster | null }) {
   );
 }
 
-function RosterRowCompact({ entry }: { entry: LocalAuthRosterEntry }) {
+function RosterRowCompact({
+  entry,
+  ocppIdentityId,
+}: {
+  entry: LocalAuthRosterEntry;
+  ocppIdentityId: string | null;
+}) {
   const verdictText =
     entry.effectiveVerdict === "would_authorize"
       ? "would authorize"
@@ -376,6 +411,53 @@ function RosterRowCompact({ entry }: { entry: LocalAuthRosterEntry }) {
     entry.effectiveVerdict === "would_authorize"
       ? "text-sv-green"
       : "text-ink-500";
+
+  const [busy, setBusy] = useState(false);
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const [feedbackTone, setFeedbackTone] = useState<"ok" | "warn" | null>(null);
+
+  // Refuse to push revoked tokens client-side (the API enforces too,
+  // but this avoids a round-trip and matches Rule 5's "don't surprise-
+  // re-authorize at the charger" hygiene).
+  const pushable =
+    !!ocppIdentityId &&
+    entry.effectiveVerdict !== "blocked_revoked" &&
+    entry.status !== "revoked";
+
+  async function onPush() {
+    if (!ocppIdentityId || busy) return;
+    setBusy(true);
+    setFeedback(null);
+    setFeedbackTone(null);
+    try {
+      const res = await apiFetch(
+        `/api/admin/chargers/${ocppIdentityId}/local-auth-list/push`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ idTokenId: entry.id }),
+        },
+      );
+      if (res.status === 202) {
+        const body = (await res.json()) as { listVersion: number };
+        setFeedback(`queued · v${body.listVersion}`);
+        setFeedbackTone("ok");
+      } else {
+        const body = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          message?: string;
+        };
+        setFeedback(body.message ?? body.error ?? `HTTP ${res.status}`);
+        setFeedbackTone("warn");
+      }
+    } catch (err) {
+      setFeedback(err instanceof Error ? err.message : String(err));
+      setFeedbackTone("warn");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <tr className="border-t border-bg-border/30">
       <td className="py-1 text-ink-100">{entry.userDisplay}</td>
@@ -383,6 +465,39 @@ function RosterRowCompact({ entry }: { entry: LocalAuthRosterEntry }) {
       <td className="py-1 text-ink-300">{entry.kind}</td>
       <td className="py-1 text-ink-300">{entry.scope}</td>
       <td className={"py-1 " + verdictTone}>{verdictText}</td>
+      <td className="py-1 text-right">
+        {feedback ? (
+          <span
+            className={
+              "text-[10px] " +
+              (feedbackTone === "ok" ? "text-sv-green" : "text-amber-300")
+            }
+          >
+            {feedback}
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={onPush}
+            disabled={!pushable || busy}
+            className={
+              "rounded border px-2 py-0.5 text-[10px] font-medium " +
+              (pushable
+                ? "border-bg-border bg-bg-base/40 text-ink-100 hover:border-sv-sky hover:text-sv-sky"
+                : "border-bg-border/30 bg-bg-base/20 text-ink-600 cursor-not-allowed")
+            }
+            title={
+              !ocppIdentityId
+                ? "Charger has no OCPP identity yet"
+                : !pushable
+                  ? "Cannot push a revoked token"
+                  : "Send via OCPP SendLocalList (Differential)"
+            }
+          >
+            {busy ? "…" : "Push"}
+          </button>
+        )}
+      </td>
     </tr>
   );
 }
