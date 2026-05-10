@@ -2,11 +2,15 @@ import 'package:flutter/material.dart';
 import '../api/auth_storage.dart';
 import '../api/client.dart';
 import '../api/types.dart';
+import 'dart:async';
+import 'package:flutter/foundation.dart' show kDebugMode;
+import '../ble/scanner.dart';
 import '../theme/logo.dart';
 import '../theme/palette.dart';
 import 'charger_detail_sheet.dart';
 import 'hero_image.dart';
 import 'menu_drawer.dart';
+import 'nearby_card.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, required this.driver});
@@ -23,10 +27,17 @@ class _HomeScreenState extends State<HomeScreen> {
   final _api = StraumvaktApi();
   final _storage = AuthStorage();
   final _searchController = TextEditingController();
+  final _scanner = BleScanner.instance();
+  StreamSubscription<NearbyCharger>? _scanSub;
 
   late Future<List<DriverCharger>> _futureChargers;
   String _query = '';
   _Filter _filter = _Filter.all;
+
+  // Currently-detected nearby charger. Cleared after 8s without a
+  // refresh from the scanner (the device walked away).
+  NearbyCharger? _nearby;
+  Timer? _nearbyExpiryTimer;
 
   @override
   void initState() {
@@ -35,12 +46,41 @@ class _HomeScreenState extends State<HomeScreen> {
     _searchController.addListener(() {
       setState(() => _query = _searchController.text.trim().toLowerCase());
     });
+    _futureChargers.then(_startScanning).catchError((_) {});
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _scanSub?.cancel();
+    _nearbyExpiryTimer?.cancel();
+    _scanner.stop();
     super.dispose();
+  }
+
+  Future<void> _startScanning(List<DriverCharger> chargers) async {
+    final ok = await _scanner.start(known: chargers);
+    if (!ok) return;
+    _scanSub = _scanner.nearbyStream.listen((nearby) {
+      if (!mounted) return;
+      setState(() => _nearby = nearby);
+      _nearbyExpiryTimer?.cancel();
+      _nearbyExpiryTimer = Timer(const Duration(seconds: 8), () {
+        if (!mounted) return;
+        setState(() => _nearby = null);
+      });
+    });
+  }
+
+  /// Debug-only — pretend a charger is nearby. Lets emulator users
+  /// test the nearby flow without real BLE hardware.
+  void _fakeNearbyForDebug(List<DriverCharger> chargers) {
+    if (!kDebugMode) return;
+    final available = chargers.firstWhere(
+      (c) => c.status.canStart,
+      orElse: () => chargers.first,
+    );
+    _scanner.fakeNearby(available);
   }
 
   Future<List<DriverCharger>> _loadChargers() async {
@@ -171,6 +211,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
                     sliver: SliverList(
                       delegate: SliverChildListDelegate.fixed([
+                        if (_nearby != null) NearbyCard(nearby: _nearby!),
+                        if (kDebugMode && _nearby == null)
+                          _FakeNearbyDebugButton(
+                            onTap: () => _fakeNearbyForDebug(all),
+                          ),
                         _SearchField(controller: _searchController),
                         const SizedBox(height: 10),
                         _FilterChips(
@@ -543,6 +588,44 @@ class _NoMatches extends StatelessWidget {
             style: TextStyle(color: BrandPalette.muted, fontSize: 12),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// Debug-only — emulator has no BLE radio, so this fakes a "nearby"
+// detection so we can test the NearbyCard flow without real hardware.
+// Stripped from release builds via the kDebugMode gate at the call
+// site.
+class _FakeNearbyDebugButton extends StatelessWidget {
+  const _FakeNearbyDebugButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: OutlinedButton.icon(
+        onPressed: onTap,
+        style: OutlinedButton.styleFrom(
+          side: BorderSide(color: BrandPalette.cyan.withValues(alpha: 0.4)),
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+        icon: const Icon(Icons.bluetooth_searching_rounded,
+            color: BrandPalette.cyan, size: 16),
+        label: const Text(
+          'DEV · simulate nearby charger',
+          style: TextStyle(
+            color: BrandPalette.cyan,
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.6,
+          ),
+        ),
       ),
     );
   }

@@ -916,6 +916,12 @@ model ChargingStation {
   ipRating         String?       @map("ip_rating")                // IP54, IP65, …
   breakerAmps      Int?          @map("breaker_amps")             // upstream breaker
 
+  // ── BLE tap-and-access (Sprint 9 / 2026-05-10) ───────────────────
+  // What the charger broadcasts over BLE so the Flutter driver app
+  // can detect proximity. kind='zaptec_serial' | 'ibeacon_uuid' | 'mac'.
+  bleAdvertisingId   String?     @map("ble_advertising_id")
+  bleAdvertisingKind String?     @map("ble_advertising_kind")
+
   // ── Lifetime kWh cache (Sprint 3 / ADR 0013) ──────────────────────
   // Persisted snapshot of Zaptec SignedMeterValueKwh (the OCMF-signed
   // cumulative meter reading). Updated write-through on every successful

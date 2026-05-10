@@ -258,6 +258,8 @@ publicDriver.get("/chargers", requireDriver, async (c) => {
     where: { installationId: { in: installationIds } },
     select: {
       siteAssetId: true,
+      bleAdvertisingId: true,
+      bleAdvertisingKind: true,
       siteAsset: { select: { displayName: true } },
       installation: { select: { displayName: true } },
       evses: {
@@ -288,6 +290,8 @@ publicDriver.get("/chargers", requireDriver, async (c) => {
     locationName: string;
     status: string;
     maxPowerKw: number;
+    bleAdvertisingId: string | null;
+    bleAdvertisingKind: string | null;
   }> = [];
 
   for (const s of stations) {
@@ -304,6 +308,8 @@ publicDriver.get("/chargers", requireDriver, async (c) => {
           locationName,
           status: mapConnectorStatus(conn.status),
           maxPowerKw: Math.round(maxPowerKw * 10) / 10,
+          bleAdvertisingId: s.bleAdvertisingId,
+          bleAdvertisingKind: s.bleAdvertisingKind,
         });
       }
     }

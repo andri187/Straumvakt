@@ -162,6 +162,8 @@ class DriverCharger {
     required this.status,
     required this.maxPowerKw,
     this.priceLabel,
+    this.bleAdvertisingId,
+    this.bleAdvertisingKind,
   });
 
   final String chargerId;
@@ -172,6 +174,13 @@ class DriverCharger {
   final double maxPowerKw;
   final String? priceLabel;
 
+  // BLE tap-and-access (Sprint 9 / 2026-05-10)
+  // bleAdvertisingId is what the charger broadcasts; the Flutter
+  // scanner matches BLE devices by id and surfaces nearby chargers.
+  // bleAdvertisingKind discriminates: 'zaptec_serial' | 'ibeacon_uuid' | 'mac'.
+  final String? bleAdvertisingId;
+  final String? bleAdvertisingKind;
+
   factory DriverCharger.fromJson(Map<String, dynamic> json) {
     return DriverCharger(
       chargerId: json['chargerId'] as String,
@@ -181,6 +190,8 @@ class DriverCharger {
       status: ConnectorStatus.fromString(json['status'] as String?),
       maxPowerKw: (json['maxPowerKw'] as num).toDouble(),
       priceLabel: json['priceLabel'] as String?,
+      bleAdvertisingId: json['bleAdvertisingId'] as String?,
+      bleAdvertisingKind: json['bleAdvertisingKind'] as String?,
     );
   }
 }
