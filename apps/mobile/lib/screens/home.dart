@@ -135,37 +135,44 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.fromLTRB(20, 12, 12, 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Row(
-            children: [
-              const LogoMark(size: 36, borderRadius: 12),
-              const SizedBox(width: 12),
-              const Expanded(child: LogoWordmark(height: 22)),
-              IconButton(
-                onPressed: onLogout,
-                icon: const Icon(Icons.logout_rounded,
-                    color: BrandPalette.muted),
-                tooltip: 'Sign out',
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          Text(
-            'Hello, ${driver.displayName}',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.3,
+          const LogoMark(size: 40, borderRadius: 12),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Hello, ${driver.displayName}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.2,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  driver.organizationName ?? driver.email,
+                  style: const TextStyle(
+                    color: BrandPalette.muted,
+                    fontSize: 12,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            driver.organizationName ?? driver.email,
-            style: const TextStyle(color: BrandPalette.muted, fontSize: 13),
+          IconButton(
+            onPressed: onLogout,
+            icon: const Icon(Icons.logout_rounded, color: BrandPalette.muted),
+            tooltip: 'Sign out',
           ),
         ],
       ),
