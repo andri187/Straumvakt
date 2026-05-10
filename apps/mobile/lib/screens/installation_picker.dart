@@ -156,8 +156,11 @@ class InstallationContextChip extends StatelessWidget {
       sourceColor = BrandPalette.muted;
     }
 
+    // Width matches the charger-row cards: parent SliverPadding gives
+    // 20px horizontal already, so the chip itself only adds bottom
+    // spacing. No internal horizontal padding wrapper.
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+      padding: const EdgeInsets.only(bottom: 10),
       child: Material(
         color: BrandPalette.surface,
         borderRadius: BorderRadius.circular(14),
@@ -165,7 +168,7 @@ class InstallationContextChip extends StatelessWidget {
           onTap: onTap,
           borderRadius: BorderRadius.circular(14),
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            padding: const EdgeInsets.fromLTRB(12, 8, 10, 8),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(14),
               border: Border.all(color: BrandPalette.border),
@@ -173,21 +176,21 @@ class InstallationContextChip extends StatelessWidget {
             child: Row(
               children: [
                 Container(
-                  width: 32,
-                  height: 32,
+                  width: 26,
+                  height: 26,
                   decoration: BoxDecoration(
                     color: sourceColor.withValues(alpha: 0.18),
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(
                     bleNearby != null
                         ? Icons.bluetooth_searching_rounded
                         : Icons.place_rounded,
                     color: sourceColor,
-                    size: 18,
+                    size: 15,
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -197,29 +200,31 @@ class InstallationContextChip extends StatelessWidget {
                         source,
                         style: TextStyle(
                           color: sourceColor,
-                          fontSize: 9,
-                          letterSpacing: 1.2,
+                          fontSize: 8.5,
+                          letterSpacing: 1.1,
                           fontWeight: FontWeight.w700,
+                          height: 1.1,
                         ),
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 1),
                       Text(
                         label,
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 14,
+                          fontSize: 13.5,
                           fontWeight: FontWeight.w600,
                           letterSpacing: -0.1,
+                          height: 1.2,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 1),
                       Text(
                         meta,
                         style: const TextStyle(
                           color: BrandPalette.muted,
-                          fontSize: 11,
+                          fontSize: 10.5,
+                          height: 1.2,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -230,7 +235,7 @@ class InstallationContextChip extends StatelessWidget {
                 const Icon(
                   Icons.expand_more_rounded,
                   color: BrandPalette.muted,
-                  size: 20,
+                  size: 18,
                 ),
               ],
             ),

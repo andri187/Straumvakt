@@ -21,8 +21,6 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-enum _Filter { all, available, busy, offline }
-
 class _HomeScreenState extends State<HomeScreen> {
   final _api = StraumvaktApi();
   final _storage = AuthStorage();
@@ -30,7 +28,6 @@ class _HomeScreenState extends State<HomeScreen> {
   StreamSubscription<NearbyCharger>? _scanSub;
 
   late Future<List<DriverCharger>> _futureChargers;
-  _Filter _filter = _Filter.all;
 
   // Sprint 9 / 2026-05-10 — installation picker state.
   // null = "All locations" (no filter active). When set, the home
@@ -132,57 +129,9 @@ class _HomeScreenState extends State<HomeScreen> {
     await _futureChargers.catchError((_) => <DriverCharger>[]);
   }
 
-  List<DriverCharger> _applyFilters(List<DriverCharger> chargers) {
-    return chargers.where((c) {
-      // Status filter
-      switch (_filter) {
-        case _Filter.all:
-          break;
-        case _Filter.available:
-          if (c.status != ConnectorStatus.available) return false;
-          break;
-        case _Filter.busy:
-          if (c.status != ConnectorStatus.charging &&
-              c.status != ConnectorStatus.preparing &&
-              c.status != ConnectorStatus.finishing &&
-              c.status != ConnectorStatus.suspendedEv &&
-              c.status != ConnectorStatus.suspendedEvse) {
-            return false;
-          }
-          break;
-        case _Filter.offline:
-          if (c.status != ConnectorStatus.offline &&
-              c.status != ConnectorStatus.unavailable &&
-              c.status != ConnectorStatus.faulted) {
-            return false;
-          }
-          break;
-      }
-      return true;
-    }).toList();
-  }
-
-  int _count(List<DriverCharger> chargers, _Filter f) {
-    if (f == _Filter.all) return chargers.length;
-    return chargers.where((c) {
-      switch (f) {
-        case _Filter.available:
-          return c.status == ConnectorStatus.available;
-        case _Filter.busy:
-          return c.status == ConnectorStatus.charging ||
-              c.status == ConnectorStatus.preparing ||
-              c.status == ConnectorStatus.finishing ||
-              c.status == ConnectorStatus.suspendedEv ||
-              c.status == ConnectorStatus.suspendedEvse;
-        case _Filter.offline:
-          return c.status == ConnectorStatus.offline ||
-              c.status == ConnectorStatus.unavailable ||
-              c.status == ConnectorStatus.faulted;
-        default:
-          return false;
-      }
-    }).length;
-  }
+  // Status filter dropped 2026-05-10 — the filter-chip row was removed
+  // from the home layout. Drivers see every accessible charger in full,
+  // grouped by location header. The location chip is the only filter.
 
   @override
   Widget build(BuildContext context) {
@@ -260,10 +209,10 @@ class _HomeScreenState extends State<HomeScreen> {
                       : all
                           .where((c) => c.locationName == _selectedLocation)
                           .toList();
-                  final filtered = _applyFilters(inLocation);
-
+                  // No status filter — driver sees the whole list under
+                  // the active location context.
                   final byLocation = <String, List<DriverCharger>>{};
-                  for (final c in filtered) {
+                  for (final c in inLocation) {
                     byLocation
                         .putIfAbsent(c.locationName, () => [])
                         .add(c);
@@ -306,20 +255,8 @@ class _HomeScreenState extends State<HomeScreen> {
                               },
                             ),
                           ),
-                        _FilterChips(
-                          selected: _filter,
-                          counts: {
-                            _Filter.all: _count(inLocation, _Filter.all),
-                            _Filter.available:
-                                _count(inLocation, _Filter.available),
-                            _Filter.busy: _count(inLocation, _Filter.busy),
-                            _Filter.offline:
-                                _count(inLocation, _Filter.offline),
-                          },
-                          onSelect: (f) => setState(() => _filter = f),
-                        ),
-                        const SizedBox(height: 14),
-                        if (filtered.isEmpty)
+                        const SizedBox(height: 6),
+                        if (inLocation.isEmpty)
                           const _NoMatches()
                         else
                           for (final entry in byLocation.entries) ...[
@@ -401,126 +338,6 @@ class _Header extends StatelessWidget {
   }
 }
 
-
-class _FilterChips extends StatelessWidget {
-  const _FilterChips({
-    required this.selected,
-    required this.counts,
-    required this.onSelect,
-  });
-
-  final _Filter selected;
-  final Map<_Filter, int> counts;
-  final ValueChanged<_Filter> onSelect;
-
-  @override
-  Widget build(BuildContext context) {
-    final entries = [
-      (_Filter.all, 'All', null),
-      (_Filter.available, 'Available', BrandPalette.mint),
-      (_Filter.busy, 'In use', BrandPalette.cyan),
-      (_Filter.offline, 'Offline', BrandPalette.danger),
-    ];
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: [
-          for (final (filter, label, accent) in entries) ...[
-            _Chip(
-              label: label,
-              count: counts[filter] ?? 0,
-              accent: accent,
-              selected: selected == filter,
-              onTap: () => onSelect(filter),
-            ),
-            const SizedBox(width: 8),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _Chip extends StatelessWidget {
-  const _Chip({
-    required this.label,
-    required this.count,
-    required this.selected,
-    required this.onTap,
-    this.accent,
-  });
-
-  final String label;
-  final int count;
-  final bool selected;
-  final VoidCallback onTap;
-  final Color? accent;
-
-  @override
-  Widget build(BuildContext context) {
-    final tint = accent ?? BrandPalette.cyan;
-    final bg = selected
-        ? tint.withValues(alpha: 0.18)
-        : BrandPalette.surface;
-    final border = selected ? tint : BrandPalette.border;
-    final fg = selected ? tint : BrandPalette.muted;
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: border),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (accent != null && !selected) ...[
-              Container(
-                width: 6,
-                height: 6,
-                decoration: BoxDecoration(
-                  color: accent,
-                  shape: BoxShape.circle,
-                ),
-              ),
-              const SizedBox(width: 6),
-            ],
-            Text(
-              label,
-              style: TextStyle(
-                color: fg,
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(width: 6),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-              decoration: BoxDecoration(
-                color: selected
-                    ? tint.withValues(alpha: 0.25)
-                    : BrandPalette.deepNavy,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                '$count',
-                style: TextStyle(
-                  color: fg,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 // Compact charger row — pattern lifted from ChargePoint / Octopus
 // Electroverse / Tesla detail list. ~64px tall, status dot + name +
