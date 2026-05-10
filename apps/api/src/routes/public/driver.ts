@@ -255,11 +255,23 @@ publicDriver.get("/chargers", requireDriver, async (c) => {
   // is authoritative (Decimal), falls back to EVSE.maxPowerKw if the
   // connector row hasn't been enriched.
   const stations = await prisma.chargingStation.findMany({
-    where: { installationId: { in: installationIds } },
+    where: {
+      installationId: { in: installationIds },
+      // Filter out truly-stale rows: imported once but never came
+      // online and never produced telemetry. These are dupes / ghost
+      // rows from the import. Operator can clean them up server-side
+      // separately; we hide them from drivers regardless.
+      OR: [
+        { onlineSinceAt: { not: null } },
+        { lastTelemetryAt: { not: null } },
+      ],
+    },
     select: {
       siteAssetId: true,
       bleAdvertisingId: true,
       bleAdvertisingKind: true,
+      onlineSinceAt: true,
+      lastTelemetryAt: true,
       siteAsset: { select: { displayName: true } },
       installation: { select: { displayName: true } },
       evses: {
@@ -294,19 +306,55 @@ publicDriver.get("/chargers", requireDriver, async (c) => {
     bleAdvertisingKind: string | null;
   }> = [];
 
+  const nowMs = Date.now();
+  const TELEMETRY_FRESH_MS = 6 * 60 * 60 * 1000; // 6h
+  const ONLINE_RECENT_MS = 7 * 24 * 60 * 60 * 1000; // 7d
+
+  function stationStatus(s: {
+    onlineSinceAt: Date | null;
+    lastTelemetryAt: Date | null;
+  }): string {
+    // If we got telemetry recently, the charger is talking → Available.
+    // (Charging / Preparing / etc. require a real connector status
+    // projection that doesn't exist yet; for pilot, telemetry-recent
+    // is the strongest signal we have.)
+    if (
+      s.lastTelemetryAt &&
+      nowMs - s.lastTelemetryAt.getTime() < TELEMETRY_FRESH_MS
+    ) {
+      return "Available";
+    }
+    // Telemetry is stale or absent. If the charger booted (BootNotification
+    // landed) within the last 7 days, treat as Available — silence may
+    // mean idle, not offline. Outside that window → Offline.
+    if (
+      s.onlineSinceAt &&
+      nowMs - s.onlineSinceAt.getTime() < ONLINE_RECENT_MS
+    ) {
+      return "Available";
+    }
+    return "Offline";
+  }
+
   for (const s of stations) {
     const chargerName = s.siteAsset?.displayName ?? "Charger";
     const locationName = s.installation?.displayName ?? "";
+    const stationLevel = stationStatus(s);
     for (const evse of s.evses) {
       for (const conn of evse.connectors) {
         const kw = conn.maxPowerKw ?? evse.maxPowerKw ?? null;
         const maxPowerKw = kw ? Number(kw) : 0;
+        // Connector-level status takes precedence when it's a meaningful
+        // value (Charging / Preparing / Faulted etc.). When it's the
+        // default 'unknown', fall back to the station-level heuristic.
+        const connStatus = mapConnectorStatus(conn.status);
+        const status = connStatus === "Available" ? stationLevel : connStatus;
         rows.push({
           chargerId: s.siteAssetId,
           connectorId: conn.id,
           displayName: chargerName,
           locationName,
-          status: mapConnectorStatus(conn.status),
+          status,
           maxPowerKw: Math.round(maxPowerKw * 10) / 10,
           bleAdvertisingId: s.bleAdvertisingId,
           bleAdvertisingKind: s.bleAdvertisingKind,
