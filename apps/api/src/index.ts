@@ -35,6 +35,7 @@ import { adminBilling } from "./routes/admin/billing";
 import { adminContracts } from "./routes/admin/contracts";
 import { adminAgreementsDebug } from "./routes/admin/agreements-debug";
 import { adminAgreementsResolve } from "./routes/admin/agreements-resolve";
+import { publicDriver } from "./routes/public/driver";
 import { publicInvites } from "./routes/public/invites";
 import { internalOcppAuth } from "./routes/internal/ocpp-auth";
 import { internalOcppAuthorize } from "./routes/internal/ocpp-authorize";
@@ -152,6 +153,16 @@ app.route("/api/admin/agreements/sessions", adminAgreementsResolve);
 //   GET  /api/public/invites/peek?token=<plaintext>
 //   POST /api/public/invites/consume
 app.route("/api/public/invites", publicInvites);
+
+// Sprint 9 / 2026-05-10 — Driver-app public API (Flutter mobile).
+// Implements the driver-app-api OpenAPI contract natively in
+// Straumvakt; bearer-token auth, no cookies, CORS allowlist on the
+// route group.
+//   POST /api/driver/login
+//   GET  /api/driver/me
+//   GET  /api/driver/chargers
+//   GET  /api/driver/health
+app.route("/api/driver", publicDriver);
 
 // Internal — gateway → API auth lookup. Gated by OCPP_INGEST_SECRET
 // header (ADR 0004), not the admin session middleware.
