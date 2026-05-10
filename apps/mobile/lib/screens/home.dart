@@ -245,7 +245,16 @@ class _HomeScreenState extends State<HomeScreen> {
                   //    installations — single-install drivers see the
                   //    pre-picker layout unchanged.
                   final locationSummaries = summarizeLocations(all);
-                  final showPicker = locationSummaries.length >= 2;
+                  // Always show the picker when the driver has at least
+                  // one accessible location. Originally gated to >=2 so
+                  // single-install drivers wouldn't see a redundant chip,
+                  // but in practice operators want to verify their access
+                  // is correctly scoped even when only one location's
+                  // chargers are currently visible — e.g. a freshly-
+                  // provisioned install whose charger hasn't booted yet
+                  // and is filtered out by the driver-feed ghost-row
+                  // guard, leaving access ≥2 but visible-locations = 1.
+                  final showPicker = locationSummaries.isNotEmpty;
                   final inLocation = _selectedLocation == null
                       ? all
                       : all
