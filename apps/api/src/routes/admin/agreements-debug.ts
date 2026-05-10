@@ -21,10 +21,32 @@ import { makePrisma } from "../../lib/prisma";
 import { requireAdmin, type AuthVars } from "../../lib/auth-middleware";
 import { resolveBillingLines } from "../../lib/agreement/resolve";
 import { loadAgreementContext } from "../../lib/agreement/persist";
+import { listAgreements, getAgreementDetail } from "../../repositories/agreements";
 import type { Env } from "../../bindings";
 
 export const adminAgreementsDebug = new Hono<{ Bindings: Env; Variables: AuthVars }>();
 adminAgreementsDebug.use("*", requireAdmin);
+
+// ── Sprint 9 / ADR 0019 milestone A.8 — list + detail (operator UI) ──
+
+// GET /api/admin/agreements — list (filtered to pilot types: service_cpo + installation)
+adminAgreementsDebug.get("/", async (c) => {
+  const prisma = makePrisma(c.env);
+  const agreements = await listAgreements(prisma);
+  return c.json({ agreements });
+});
+
+// GET /api/admin/agreements/:id — detail with clauses, driver groups, memberships, bearer rules
+adminAgreementsDebug.get("/:id", async (c) => {
+  const id = c.req.param("id");
+  const uuidLike = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!uuidLike.test(id)) return c.json({ error: "invalid_id" }, 400);
+
+  const prisma = makePrisma(c.env);
+  const agreement = await getAgreementDetail(prisma, id);
+  if (!agreement) return c.json({ error: "not_found" }, 404);
+  return c.json({ agreement });
+});
 
 const debugResolveSchema = z.object({
   userId: z.string().uuid(),

@@ -30,6 +30,7 @@ import {
   KeyRound,
   Activity,
   Fingerprint,
+  Handshake,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -171,8 +172,14 @@ const nav: NavItem[] = [
       },
       {
         kind: "leaf",
+        href: "/agreements",
+        label: { is: "Agreements", en: "Agreements" },
+        icon: Handshake,
+      },
+      {
+        kind: "leaf",
         href: "/billing/contracts",
-        label: { is: "Contracts", en: "Contracts" },
+        label: { is: "Contracts (legacy)", en: "Contracts (legacy)" },
         icon: FileText,
       },
       {

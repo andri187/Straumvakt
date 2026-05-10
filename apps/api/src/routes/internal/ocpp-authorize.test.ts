@@ -28,9 +28,14 @@ interface IdentityRow {
 function makeDb({
   token = null,
   identity = null,
+  membership = { id: "membership-default" },
 }: {
   token?: TokenRow | null;
   identity?: IdentityRow | null;
+  /** Membership row returned by driverGroupMembership.findFirst.
+   *  Default is a non-null stub so existing tests pass agreement check
+   *  without explicit setup. Pass `null` to simulate no_contract. */
+  membership?: { id: string } | null;
 } = {}): PrismaLike {
   return {
     idToken: {
@@ -38,6 +43,9 @@ function makeDb({
     },
     ocppIdentity: {
       findUnique: async () => identity,
+    },
+    driverGroupMembership: {
+      findFirst: async () => membership,
     },
   };
 }
@@ -331,6 +339,85 @@ describe("resolveAuthorize — enforceAuthorize flag", () => {
     const result = await resolveAuthorize(db, INPUT);
     expect(result.verdict).toBe("Invalid");
     expect(result.reason).toBe("unknown_id_tag");
+    expect(result.enforceAuthorize).toBe(true);
+  });
+});
+
+// ADR 0019 milestone A.11 — agreement-membership gate at OCPP Authorize.
+describe("resolveAuthorize — agreement membership (A.11)", () => {
+  it("returns Blocked/no_contract when active token has no DriverGroupMembership at this installation", async () => {
+    const db = makeDb({
+      token: {
+        id: "token-c1",
+        userId: "user-1",
+        status: "active",
+        expiresAt: null,
+        scopeInstallationId: null,
+      },
+      identity: id("inst-PROD"),
+      membership: null,
+    });
+    const result = await resolveAuthorize(db, INPUT);
+    expect(result).toEqual({
+      verdict: "Blocked",
+      reason: "no_contract",
+      idTokenId: "token-c1",
+      enforceAuthorize: false,
+    });
+  });
+
+  it("returns Accepted when a matching DriverGroupMembership exists", async () => {
+    const db = makeDb({
+      token: {
+        id: "token-c2",
+        userId: "user-1",
+        status: "active",
+        expiresAt: null,
+        scopeInstallationId: null,
+      },
+      identity: id("inst-PROD"),
+      membership: { id: "m-1" },
+    });
+    const result = await resolveAuthorize(db, INPUT);
+    expect(result.verdict).toBe("Accepted");
+    expect(result.userId).toBe("user-1");
+  });
+
+  it("does NOT enforce membership when the identity has no installation chain (cannot resolve)", async () => {
+    // Defensive — a charger whose ocpp_identity is unattached can't be
+    // checked against an installation Agreement. Preserve Accept rather
+    // than fail closed; shadow-mode (enforceAuthorize=false) keeps the
+    // gateway from honouring this anyway.
+    const db = makeDb({
+      token: {
+        id: "token-c3",
+        userId: "user-1",
+        status: "active",
+        expiresAt: null,
+        scopeInstallationId: null,
+      },
+      identity: null,
+      membership: null,
+    });
+    const result = await resolveAuthorize(db, INPUT);
+    expect(result.verdict).toBe("Accepted");
+  });
+
+  it("returns Blocked/no_contract preserving enforceAuthorize=true when the installation enforces", async () => {
+    const db = makeDb({
+      token: {
+        id: "token-c4",
+        userId: "user-1",
+        status: "active",
+        expiresAt: null,
+        scopeInstallationId: null,
+      },
+      identity: id("inst-PROD", true),
+      membership: null,
+    });
+    const result = await resolveAuthorize(db, INPUT);
+    expect(result.verdict).toBe("Blocked");
+    expect(result.reason).toBe("no_contract");
     expect(result.enforceAuthorize).toBe(true);
   });
 });

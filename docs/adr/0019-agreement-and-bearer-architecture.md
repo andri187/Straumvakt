@@ -476,3 +476,190 @@ repository; the operator builds those rows manually.
   open-question list (always = CPO Agreement; workplace contribution
   recoverable via `rule_id`) stands.
 
+---
+
+## Addendum 2026-05-09 — pilot-scope narrowing (operator UI shape)
+
+Filed after the operator walked through the 5-agreement / 15-factor model
+again and asked to "dumb down" what the operator-facing surface looks like
+for the pilot. **This addendum does not supersede the 2026-05-08 model
+for the schema** — the 5-type, JSONB-allocation, BearerRule-grid model
+remains authoritative on disk. It narrows what the **operator UI**
+exposes, what the **seed** contains, and what factor codes are in scope
+for pilot agreements.
+
+The schema is deliberately more general than the pilot needs. Hiding
+unused capability from the operator costs nothing and reactivating any
+of it later (contractor agreements, workplace mediation, MDU IDL/NET) is
+a UI change, not a migration.
+
+### Pilot transport scope — OCPP 1.6 only
+
+Straumvakt is transport-agnostic in principle (Native vendor portal /
+Webhooks vendor callback / OCPP-as-CSMS), but the pilot operates **only
+the OCPP 1.6 path**. Concretely:
+
+- **In scope:** Dalvegur and follow-on installs configured for OCPP 1.6
+  with Straumvakt as the CSMS. Real-time auth via `Authorize.req`.
+- **Out of scope (this addendum):**
+  - Native-mode installs (vendor portal owns auth; Straumvakt observes
+    via API CDR import + bus enrichment) — no Native-customer in pilot.
+  - Webhooks-mode installs — no vendor-webhook customer in pilot.
+  - OCPP 2.0.1 — not deployed; `GroupIdToken`, expanded
+    `AuthorizationStatus` values (`NoCredit / NotAtThisLocation /
+    NotAtThisTime`) are aspirational, not in scope.
+  - OCPI 2.2.x roaming — no roaming counterparty; Token / Location /
+    Session / CDR / Tariff endpoints not implemented.
+
+Recommendations in this addendum are sized for OCPP 1.6 + single
+transport. Wider transport-agnostic abstractions (a shared
+`canDriverChargeHere(...)` primitive callable from multiple invocation
+points; a `Decision` type that translates to per-transport response
+shapes) are deferred until the second transport actually lands. Wiring
+the membership check directly into the existing `resolveAuthorize()`
+handler is the right size for now.
+
+### Two agreement types in operator UI scope
+
+Out of the five enum values, only two are exposed to the operator for
+pilot:
+
+| Type | Parties | Anchor |
+|---|---|---|
+| `service_cpo` | Straumvakt ↔ Org (the CPO) | counterparty Org |
+| `installation` | CPO ↔ Drivers | Installation |
+
+`service_contractor`, `service_workplace`, and `workplace` remain in the
+DB enum but are filtered out of the operator UI's agreement-type picker
+and not constructable through the authoring API. Documented as
+"deferred — reactivate when the first contractor / workplace tenant
+lands."
+
+### Factor codes in operator UI scope
+
+Out of the 15 factor codes, only six are user-editable in pilot
+agreements. The operator never sees the codes — UI labels read in
+operator-friendly terms:
+
+| Operator label | Factor | Bearer | Notes |
+|---|---|---|---|
+| Driver fee (75 ISK / driver / month) | `USRF` | toggle: `org` or `usr` | Org always remits to Straumvakt; toggle decides whether org recovers from drivers in its own statement. |
+| Installation fee (1190 ISK / install / month) | `INT` | `org` always | No toggle. |
+| DSO per kWh | `DSO` | toggle: `org` or `usr` | From rate reference. |
+| E-meter daily fee | `MTR` | `org` always | No toggle. Iceland DSOs charge a daily standing fee for the meter. |
+| Retailer per kWh | `ELE` | toggle: `org` or `usr` | From rate reference. |
+| Charge-time fee (ISK/min while charging) | `TRF_CHG` (NEW) | `usr` always | Optional. Org-defined surcharge. |
+| Idle-time fee (ISK/min plugged but not drawing) | `TRF_IDLE` (NEW) | `usr` always | Optional. Doubles as the SOC-cap proxy — once a car stops drawing, the idle clock starts. |
+
+`CNR`, `RVN`, `PRM`, `AGN`, `WRK`, `RNT`, `IDL`, `NET`, `SRF` and the
+generic `TRF` umbrella stay in the catalog but are not surfaced as
+clauses in pilot agreement forms.
+
+### Catalog change — split `TRF` into `TRF_CHG` and `TRF_IDLE`
+
+`TRF` (Álag — generic surcharge bucket) is replaced for clause use by
+two narrower factors. The original `TRF` row stays in the catalog
+(unused, status remains `active` for backward-compat — no clauses
+reference it). Future surcharge variants (`TRF_PEAK`, `TRF_WKND`, etc.)
+land as additional factor rows, not as JSONB sub-fields.
+
+Seed delta on `prisma/seed.ts`:
+
+```ts
+{ code: "TRF_CHG",  displayNameIs: "Hleðslutímagjald", displayNameEn: "Charge-time fee",
+  description: "Per-minute fee while the car is actively drawing power. CPO-set." },
+{ code: "TRF_IDLE", displayNameIs: "Biðtímagjald",    displayNameEn: "Idle-time fee",
+  description: "Per-minute fee while the car is plugged in but not drawing. CPO-set. Doubles as the SOC-cap proxy." },
+```
+
+Existing `TRF` row left in place; no migration required.
+
+### Bearer is a bool in the operator UI
+
+Each user-editable clause exposes a single `driver_pays: bool` toggle
+(or no toggle at all when the bearer is fixed). The UI serialises that
+to the existing `allocation_json` shape:
+
+```jsonc
+// driver_pays = true
+{ "passthrough": { "splits": [ { "bearer_type": "USR", "share_pct": 100 } ] }, "markup": null }
+
+// driver_pays = false
+{ "passthrough": { "splits": [ { "bearer_type": "ORG", "share_pct": 100 } ] }, "markup": null }
+```
+
+Multi-bearer splits and markup are not exposed in pilot UI but remain
+expressible in the schema for future operators.
+
+### Rate-reference scope for pilot
+
+Pilot uses `rate_references` with `effective_from` / `effective_until`
+only. Rates are flat per the entire effective window. The operator
+flagged that some Iceland tariffs have time-of-day or seasonal
+variation, but no in-scope tariff currently does — deferred.
+
+Planned extension shape — **match OCPI 2.2.1 `TariffRestrictions`
+verbatim** so that future OCPI export is a direct shape map, not a
+translation step:
+
+```sql
+ALTER TABLE "agreements"."rate_references"
+  ADD COLUMN "pattern_json" JSONB;
+-- shape mirrors OCPI 2.2.1 TariffRestrictions:
+--   start_time     "HH:MM" (local)
+--   end_time       "HH:MM" (local)
+--   start_date     "YYYY-MM-DD"
+--   end_date       "YYYY-MM-DD"
+--   day_of_week    ("MONDAY" | "TUESDAY" | ... | "SUNDAY")[]
+--   min_kwh        number
+--   max_kwh        number
+--   min_power      number (kW)
+--   max_power      number
+--   min_duration   number (seconds)
+--   max_duration   number
+--   reservation    "RESERVATION" | "RESERVATION_EXPIRES"
+```
+
+Resolver picks the rate where `effective_from ≤ T < effective_until`
+**and** `pattern_json` is `NULL` or matches `T`. Adding the column
+later does not break any existing row. Choosing the OCPI shape now
+costs nothing and saves a migration when the first roaming tenant
+lands.
+
+### Access — explicit memberships only (unchanged from earlier addendums)
+
+No public / walk-up access in pilot. The `default_driver_group_id`
+column on `agreements.agreements` remains in the schema but is not
+exposed in the operator UI for pilot installations. Driver onboarding
+flow (email request / QR scan / access request) is a separate sprint.
+
+### Locked decisions (this addendum)
+
+1. **Org is always Straumvakt's counterparty.** When the operator
+   chooses "driver pays the 75 kr," Straumvakt still invoices the org
+   for `N × 75`. The org recovers from drivers in its own monthly
+   statement — Straumvakt has no direct billing relationship with
+   drivers.
+2. **MTR (e-meter daily fee) is always org-paid.** No toggle. Iceland
+   DSOs charge a daily standing fee for the meter; pilot operators
+   absorb it.
+3. **No SOC-based fee.** Idle-time fee (`TRF_IDLE`) is the SOC-cap
+   proxy. If the car/charger reports SOC, that's nice-to-have telemetry
+   on session detail; it does not feed billing.
+4. **No public/walk-up.** Access via approved memberships only. The
+   onboarding flow itself (email/QR/request) is out of scope here.
+
+### Implementation milestones (this addendum)
+
+| # | Scope | Notes |
+|---|---|---|
+| **A.7** | Seed update — add `TRF_CHG` and `TRF_IDLE` rows. | One PR. No schema change. |
+| **A.8** | Operator UI: agreement list + edit forms for `service_cpo` and `installation` only. Hidden enum values filtered at the route level. | Builds on `/agreements/debug` (A.6). |
+| **A.9** | Authoring API + Zod validation: clause writes serialise the `driver_pays` bool to `allocation_json`. Reject `service_contractor` / `service_workplace` / `workplace` types until reactivated. | Same handler used by the UI. |
+| **A.10** | Seed Dalvegur as a real `service_cpo` + `installation` agreement pair. Smoke-test by replaying past sessions through the resolver and comparing against legacy `billing.contracts` totals. | Pilot validation. |
+| **A.11** | Membership check at OCPP Authorize. Inside `resolveAuthorize()` ([apps/api/src/routes/internal/ocpp-authorize.ts](../../apps/api/src/routes/internal/ocpp-authorize.ts)), after the existing token-status checks, look up `DriverGroupMembership` for `(token.userId, driverGroup.agreement.installation_id = chargerInstallationId)`. Missing → return `Blocked` with internal `reason: "no_contract"`. OCPP 1.6 has no richer status — `Blocked` is the wire-level answer. The richer reason is for our logs / debug page. Gated by per-installation `enforceAuthorize` — same shadow-mode safety as the existing token checks. New `AuthorizeReason` value: `no_contract`. | Closes the gap between Gate 1 (Authorize) and Gate 2 (billing-time membership check in `persist.ts`). One additional indexed query per Authorize. |
+
+After A.11 the cutover ADR (separate filing) decides when session-stop
+moves from the legacy resolver to the new one. A.11 is independent of
+cutover — it can ship alongside A.10 without legacy interference.
+
