@@ -1,0 +1,1024 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Straumvakt — Installation picker concept</title>
+  <style>
+    :root {
+      --bg: #070b16;
+      --surface: #0b1220;
+      --raised: #111a2e;
+      --inset: #0e1626;
+      --border: #1e2a44;
+      --ring: #2b3a5e;
+      --text: #f5f7fa;
+      --muted: #97a3b8;
+      --soft: #c8d1e0;
+      --dim: #6e7b94;
+      --green: #3ee9a7;
+      --teal: #2bd3c9;
+      --blue: #2bb6e8;
+      --sky: #6fb8f0;
+      --amber: #f4c95d;
+      --red: #ff6b6b;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      background:
+        radial-gradient(900px 500px at 78% -5%, rgba(43, 182, 232, .16), transparent 64%),
+        radial-gradient(760px 440px at 0% 0%, rgba(62, 233, 167, .1), transparent 62%),
+        var(--bg);
+      padding: 32px 16px 80px;
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin: 0 0 20px;
+    }
+
+    .legend {
+      max-width: 880px;
+      margin: 0 auto 24px;
+      padding: 12px 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 12px;
+      color: var(--soft);
+      line-height: 1.55;
+    }
+    .legend strong { color: var(--text); }
+    .legend code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      background: var(--inset);
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 11px;
+    }
+
+    .scenarios {
+      display: flex;
+      gap: 24px;
+      justify-content: center;
+      flex-wrap: wrap;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    /* ── phone shell ─────────────────────────────────────────── */
+    .phone {
+      width: 393px;
+      height: 852px;
+      border-radius: 44px;
+      background: #000;
+      padding: 12px;
+      box-shadow: 0 30px 80px rgba(0,0,0,.45), 0 0 0 1px rgba(255,255,255,.04);
+      position: relative;
+      flex-shrink: 0;
+    }
+    .phone-label {
+      position: absolute;
+      top: -28px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    .phone-screen {
+      width: 100%;
+      height: 100%;
+      border-radius: 32px;
+      background: var(--bg);
+      overflow: hidden;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+    }
+    .notch {
+      position: absolute;
+      top: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 110px;
+      height: 28px;
+      background: #000;
+      border-radius: 18px;
+      z-index: 30;
+    }
+
+    /* ── status bar ───────────────────────────────────────────── */
+    .status-bar {
+      flex-shrink: 0;
+      height: 44px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 24px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    /* ── content scroll area ──────────────────────────────────── */
+    .content {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding-bottom: 24px;
+    }
+
+    /* ── header ──────────────────────────────────────────────── */
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 4px 16px 8px 20px;
+    }
+    .logo-mark {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--blue), var(--green));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 15px;
+      color: #051022;
+    }
+    .driver-name {
+      flex: 1;
+      min-width: 0;
+    }
+    .driver-name .org {
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .driver-name .name {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+      letter-spacing: -0.01em;
+    }
+    .menu-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--soft);
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+
+    /* ── hero image ───────────────────────────────────────────── */
+    .hero {
+      margin: 4px 16px 12px;
+      height: 120px;
+      border-radius: 14px;
+      background:
+        linear-gradient(180deg, rgba(7,11,22,0) 40%, rgba(7,11,22,.85) 100%),
+        linear-gradient(135deg, #1e3a5f 0%, #0e2540 60%, #061226 100%);
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::before {
+      /* fake mountain silhouette */
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 50%;
+      background: linear-gradient(180deg, transparent, rgba(43,182,232,.12));
+      clip-path: polygon(0 100%, 0 60%, 12% 35%, 28% 55%, 42% 22%, 58% 48%, 74% 30%, 88% 50%, 100% 28%, 100% 100%);
+    }
+    .hero-plate {
+      position: absolute;
+      bottom: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #f5f7fa;
+      color: #1a1a1a;
+      padding: 6px 14px;
+      border-radius: 4px;
+      font-family: ui-monospace, monospace;
+      font-weight: 700;
+      font-size: 13px;
+      letter-spacing: 0.1em;
+      box-shadow: 0 2px 6px rgba(0,0,0,.3);
+    }
+    .hero-plate::before {
+      content: 'IS';
+      display: inline-block;
+      background: #003a8c;
+      color: #fff;
+      padding: 2px 5px;
+      margin-right: 8px;
+      border-radius: 2px;
+      font-size: 9px;
+      letter-spacing: 0.05em;
+      vertical-align: middle;
+    }
+
+    /* ── nearby card ──────────────────────────────────────────── */
+    .nearby-card {
+      margin: 0 16px 12px;
+      background: linear-gradient(180deg, rgba(62,233,167,.12), rgba(62,233,167,.04));
+      border: 1px solid rgba(62,233,167,.35);
+      border-radius: 14px;
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .nearby-card .pulse {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 0 4px rgba(62,233,167,.2);
+      flex-shrink: 0;
+    }
+    .nearby-card .body { flex: 1; min-width: 0; }
+    .nearby-card .label {
+      font-size: 10px;
+      color: var(--green);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      font-weight: 600;
+      margin-bottom: 2px;
+    }
+    .nearby-card .charger {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .nearby-card .sub {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 1px;
+    }
+    .nearby-card .start-cta {
+      background: var(--green);
+      color: #051022;
+      font-weight: 700;
+      font-size: 12px;
+      padding: 8px 14px;
+      border-radius: 8px;
+      letter-spacing: 0.04em;
+    }
+
+    /* ── context chip (the new bit) ───────────────────────────── */
+    .context-chip {
+      margin: 0 16px 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      transition: border-color .12s, background .12s;
+    }
+    .context-chip:hover {
+      border-color: var(--ring);
+      background: var(--raised);
+    }
+    .context-chip .pin {
+      width: 24px;
+      height: 24px;
+      border-radius: 8px;
+      background: rgba(43,182,232,.15);
+      color: var(--blue);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      flex-shrink: 0;
+    }
+    .context-chip .ctx-body { flex: 1; min-width: 0; }
+    .context-chip .ctx-label {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      letter-spacing: -0.01em;
+    }
+    .context-chip .ctx-meta {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 1px;
+    }
+    .context-chip .ctx-meta .dot {
+      display: inline-block;
+      width: 5px; height: 5px; border-radius: 50%;
+      background: var(--green);
+      margin-right: 5px;
+      vertical-align: middle;
+    }
+    .context-chip .chevron {
+      color: var(--dim);
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+    .context-chip-source {
+      font-size: 9px;
+      color: var(--blue);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 2px;
+      font-weight: 600;
+    }
+
+    /* ── filter chips ─────────────────────────────────────────── */
+    .filter-row {
+      display: flex;
+      gap: 6px;
+      padding: 0 16px;
+      margin-bottom: 14px;
+      overflow-x: auto;
+    }
+    .filter-chip {
+      flex-shrink: 0;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--soft);
+    }
+    .filter-chip.active {
+      background: rgba(111,184,240,.15);
+      border-color: rgba(111,184,240,.4);
+      color: var(--sky);
+      font-weight: 600;
+    }
+    .filter-chip .count {
+      color: var(--muted);
+      margin-left: 4px;
+      font-weight: 400;
+    }
+
+    /* ── location header ──────────────────────────────────────── */
+    .loc-header {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      padding: 14px 20px 6px;
+    }
+    .loc-header .name {
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+    .loc-header .count {
+      font-size: 11px;
+      color: var(--dim);
+    }
+
+    /* ── charger row ──────────────────────────────────────────── */
+    .charger-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+    }
+    .charger-row:hover { background: rgba(255,255,255,.02); }
+    .charger-row .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .charger-row .status-dot.green { background: var(--green); }
+    .charger-row .status-dot.amber { background: var(--amber); }
+    .charger-row .status-dot.dim { background: var(--dim); }
+    .charger-row .ch-name {
+      flex: 1;
+      font-size: 14px;
+      color: var(--text);
+      font-weight: 500;
+    }
+    .charger-row .ch-sub {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 1px;
+    }
+    .charger-row .ch-arrow {
+      color: var(--dim);
+      font-size: 14px;
+    }
+
+    /* ── bottom sheet ─────────────────────────────────────────── */
+    .scrim {
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,.55);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .2s;
+      z-index: 40;
+      border-radius: 32px;
+    }
+    .scrim.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .sheet {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: var(--surface);
+      border-top-left-radius: 20px;
+      border-top-right-radius: 20px;
+      transform: translateY(100%);
+      transition: transform .26s cubic-bezier(.2, .9, .2, 1);
+      z-index: 50;
+      max-height: 78%;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 -16px 40px rgba(0,0,0,.45);
+      overflow: hidden;
+    }
+    .sheet.open { transform: translateY(0); }
+    .sheet-handle {
+      width: 36px;
+      height: 4px;
+      background: var(--ring);
+      border-radius: 999px;
+      margin: 8px auto 0;
+      flex-shrink: 0;
+    }
+    .sheet-header {
+      padding: 12px 20px 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .sheet-header h2 {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+    .sheet-close {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--inset);
+      color: var(--soft);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    .sheet-body {
+      flex: 1;
+      overflow-y: auto;
+      padding-bottom: 12px;
+    }
+    .sheet-section-label {
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      font-weight: 600;
+      padding: 14px 20px 6px;
+    }
+    .sheet-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 20px;
+      cursor: pointer;
+      border-bottom: 1px solid var(--border);
+    }
+    .sheet-row:hover { background: var(--raised); }
+    .sheet-row .icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      flex-shrink: 0;
+    }
+    .sheet-row .icon.ble {
+      background: rgba(62,233,167,.15);
+      color: var(--green);
+    }
+    .sheet-row .icon.gps {
+      background: rgba(43,182,232,.15);
+      color: var(--blue);
+    }
+    .sheet-row .icon.recent {
+      background: rgba(244,201,93,.12);
+      color: var(--amber);
+    }
+    .sheet-row .icon.all {
+      background: var(--inset);
+      color: var(--muted);
+    }
+    .sheet-row .icon.offline {
+      background: rgba(255,107,107,.12);
+      color: var(--red);
+    }
+    .sheet-row .row-body { flex: 1; min-width: 0; }
+    .sheet-row .row-title {
+      font-size: 14px;
+      color: var(--text);
+      font-weight: 500;
+    }
+    .sheet-row .row-sub {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 1px;
+    }
+    .sheet-row .row-stats {
+      font-size: 11px;
+      color: var(--soft);
+      text-align: right;
+      flex-shrink: 0;
+    }
+    .sheet-row .row-stats .free {
+      color: var(--green);
+      font-weight: 600;
+    }
+    .sheet-search {
+      flex-shrink: 0;
+      padding: 10px 16px 14px;
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .sheet-search input {
+      width: 100%;
+      background: var(--inset);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      padding: 10px 14px 10px 38px;
+      font-size: 13px;
+      font-family: inherit;
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' fill='none' stroke='%2397a3b8' stroke-width='2' viewBox='0 0 24 24'><circle cx='11' cy='11' r='7'/><path d='m21 21-4.3-4.3'/></svg>");
+      background-repeat: no-repeat;
+      background-position: 12px center;
+      background-size: 16px;
+    }
+
+    /* clear filter pill */
+    .clear-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      margin: 4px 16px 8px;
+      padding: 4px 10px;
+      background: var(--inset);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      font-size: 11px;
+      color: var(--soft);
+      cursor: pointer;
+    }
+
+    .annotation {
+      position: absolute;
+      font-size: 10px;
+      color: var(--blue);
+      background: var(--inset);
+      border: 1px solid var(--border);
+      padding: 4px 8px;
+      border-radius: 6px;
+      letter-spacing: 0.04em;
+      pointer-events: none;
+      white-space: nowrap;
+      box-shadow: 0 4px 12px rgba(0,0,0,.4);
+    }
+    .annotation::after {
+      content: '';
+      position: absolute;
+      width: 8px; height: 8px;
+      background: var(--inset);
+      border: 1px solid var(--border);
+      transform: rotate(45deg);
+    }
+
+    /* footer note */
+    .footnote {
+      max-width: 880px;
+      margin: 32px auto 0;
+      padding: 16px 20px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 12px;
+      line-height: 1.6;
+      color: var(--soft);
+    }
+    .footnote h3 {
+      margin: 0 0 6px;
+      font-size: 12px;
+      color: var(--text);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .footnote ul { margin: 6px 0 0; padding-left: 18px; }
+    .footnote li { margin-bottom: 3px; }
+    .footnote code {
+      font-family: ui-monospace, monospace;
+      background: var(--inset);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-size: 11px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Installation picker — driver app concept</h1>
+
+  <div class="legend">
+    <strong>What you're looking at.</strong> Two phone mocks side by side: <strong>state A</strong> on the left is the existing flat-list-grouped-by-location (no picker, today's pilot UX); <strong>state B</strong> on the right shows the new <em>context chip</em> + bottom-sheet picker. <em>Tap the context chip on phone B</em> to see the picker open. Tap a location row to see the chip update + the list filter to that installation. Single-install drivers (state A) see no chip — UI complexity scales with access scope.
+  </div>
+
+  <div class="scenarios">
+
+    <!-- ───────────────────────────── PHONE A (today) ───────────────────────────── -->
+    <div class="phone">
+      <div class="phone-label">A · today (no picker)</div>
+      <div class="phone-screen">
+        <div class="notch"></div>
+        <div class="status-bar">
+          <span>9:41</span>
+          <span>● ● ●</span>
+        </div>
+        <div class="content">
+          <div class="header">
+            <div class="logo-mark">⚡</div>
+            <div class="driver-name">
+              <div class="org">N1 ehf</div>
+              <div class="name">N1 Drivers</div>
+            </div>
+            <div class="menu-btn">☰</div>
+          </div>
+          <div class="hero">
+            <div class="hero-plate">EV · 187</div>
+          </div>
+
+          <div class="filter-row" style="margin-top:8px">
+            <div class="filter-chip active">All <span class="count">18</span></div>
+            <div class="filter-chip">Available <span class="count">12</span></div>
+            <div class="filter-chip">Busy <span class="count">4</span></div>
+            <div class="filter-chip">Offline <span class="count">2</span></div>
+          </div>
+
+          <div class="loc-header">
+            <span class="name">Dalvegur 10–14</span>
+            <span class="count">· 18</span>
+          </div>
+          <div class="charger-row">
+            <span class="status-dot green"></span>
+            <div style="flex:1">
+              <div class="ch-name">Charger 5</div>
+              <div class="ch-sub">7.4 kW · Type 2 · Available</div>
+            </div>
+            <span class="ch-arrow">›</span>
+          </div>
+          <div class="charger-row">
+            <span class="status-dot green"></span>
+            <div style="flex:1">
+              <div class="ch-name">Charger 7</div>
+              <div class="ch-sub">7.4 kW · Type 2 · Available</div>
+            </div>
+            <span class="ch-arrow">›</span>
+          </div>
+          <div class="charger-row">
+            <span class="status-dot amber"></span>
+            <div style="flex:1">
+              <div class="ch-name">Charger 9</div>
+              <div class="ch-sub">7.4 kW · Type 2 · Charging</div>
+            </div>
+            <span class="ch-arrow">›</span>
+          </div>
+          <div class="charger-row">
+            <span class="status-dot green"></span>
+            <div style="flex:1">
+              <div class="ch-name">Charger 11</div>
+              <div class="ch-sub">7.4 kW · Type 2 · Available</div>
+            </div>
+            <span class="ch-arrow">›</span>
+          </div>
+          <div class="charger-row">
+            <span class="status-dot dim"></span>
+            <div style="flex:1">
+              <div class="ch-name">Charger 14</div>
+              <div class="ch-sub">7.4 kW · Type 2 · Offline</div>
+            </div>
+            <span class="ch-arrow">›</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ───────────────────────────── PHONE B (concept) ───────────────────────────── -->
+    <div class="phone" id="phoneB">
+      <div class="phone-label">B · with context chip + picker</div>
+      <div class="phone-screen">
+        <div class="notch"></div>
+        <div class="status-bar">
+          <span>9:41</span>
+          <span>● ● ●</span>
+        </div>
+        <div class="content">
+          <div class="header">
+            <div class="logo-mark">⚡</div>
+            <div class="driver-name">
+              <div class="org">N1 ehf</div>
+              <div class="name">N1 Drivers</div>
+            </div>
+            <div class="menu-btn">☰</div>
+          </div>
+          <div class="hero">
+            <div class="hero-plate">EV · 187</div>
+          </div>
+
+          <!-- THE NEW BIT -->
+          <div class="context-chip" id="ctxChip" onclick="openSheet()">
+            <div class="pin">📍</div>
+            <div class="ctx-body">
+              <div class="context-chip-source" id="ctxSource">From your last visit</div>
+              <div class="ctx-label" id="ctxLabel">Dalvegur 10–14</div>
+              <div class="ctx-meta">
+                <span class="dot"></span>
+                <span id="ctxMeta">12 of 18 chargers available</span>
+              </div>
+            </div>
+            <div class="chevron">▾</div>
+          </div>
+
+          <div class="filter-row">
+            <div class="filter-chip active">All <span class="count" id="totalCount">18</span></div>
+            <div class="filter-chip">Available <span class="count">12</span></div>
+            <div class="filter-chip">Busy <span class="count">4</span></div>
+            <div class="filter-chip">Offline <span class="count">2</span></div>
+          </div>
+
+          <div id="chargerList">
+            <!-- populated by JS based on active context -->
+          </div>
+        </div>
+
+        <div class="scrim" id="scrim" onclick="closeSheet()"></div>
+        <div class="sheet" id="sheet">
+          <div class="sheet-handle"></div>
+          <div class="sheet-header">
+            <h2>Where do you want to charge?</h2>
+            <div class="sheet-close" onclick="closeSheet()">✕</div>
+          </div>
+          <div class="sheet-body">
+            <div class="sheet-section-label">📡 Right here</div>
+            <div class="sheet-row" onclick="pickContext('ble')">
+              <div class="icon ble">●</div>
+              <div class="row-body">
+                <div class="row-title">Charger 5 — Dalvegur 10–14</div>
+                <div class="row-sub">BLE detected · 1.2 m away</div>
+              </div>
+              <div class="row-stats"><span class="free">Tap to start</span></div>
+            </div>
+
+            <div class="sheet-section-label">📍 Closest</div>
+            <div class="sheet-row" onclick="pickContext('dalvegur')">
+              <div class="icon gps">⌖</div>
+              <div class="row-body">
+                <div class="row-title">Dalvegur 10–14</div>
+                <div class="row-sub">400 m away · GPS</div>
+              </div>
+              <div class="row-stats"><span class="free">12 free</span> / 18</div>
+            </div>
+
+            <div class="sheet-section-label">🕒 Recent</div>
+            <div class="sheet-row" onclick="pickContext('reykjavik')">
+              <div class="icon recent">🕒</div>
+              <div class="row-body">
+                <div class="row-title">Reykjavík Office</div>
+                <div class="row-sub">Last charged · yesterday</div>
+              </div>
+              <div class="row-stats"><span class="free">3 free</span> / 4</div>
+            </div>
+            <div class="sheet-row" onclick="pickContext('hafnarfjordur')">
+              <div class="icon recent">🕒</div>
+              <div class="row-body">
+                <div class="row-title">Hafnarfjörður depot</div>
+                <div class="row-sub">Last charged · 4 days ago</div>
+              </div>
+              <div class="row-stats"><span class="free">2 free</span> / 6</div>
+            </div>
+
+            <div class="sheet-section-label">📁 All locations (5)</div>
+            <div class="sheet-row" onclick="pickContext('akureyri')">
+              <div class="icon offline">⚠</div>
+              <div class="row-body">
+                <div class="row-title">Akureyri service hub</div>
+                <div class="row-sub">All chargers offline</div>
+              </div>
+              <div class="row-stats" style="color:var(--red)">0 / 4</div>
+            </div>
+            <div class="sheet-row" onclick="pickContext('selfoss')">
+              <div class="icon all">📍</div>
+              <div class="row-body">
+                <div class="row-title">Selfoss highway stop</div>
+                <div class="row-sub">Last charged · 3 weeks ago</div>
+              </div>
+              <div class="row-stats"><span class="free">2 free</span> / 2</div>
+            </div>
+            <div class="sheet-row" onclick="pickContext('all')">
+              <div class="icon all">⊞</div>
+              <div class="row-body">
+                <div class="row-title">Show all locations</div>
+                <div class="row-sub">Group by installation</div>
+              </div>
+              <div class="row-stats">31 chargers</div>
+            </div>
+          </div>
+          <div class="sheet-search">
+            <input type="text" placeholder="Search chargers, locations…" />
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <div class="footnote">
+    <h3>Design rationale</h3>
+    <ul>
+      <li><strong>Context chip silently updates</strong> from BLE → GPS → recent → most-frequent. Habitual users never tap it. The chevron and "From your last visit" / "Closest to you" subtext tell them <em>why</em> this location was chosen, so they trust it.</li>
+      <li><strong>Bottom sheet groups by relevance, not alphabet.</strong> Right-here (BLE) → closest (GPS) → recent (behavioural) → all (escape hatch). Search at the foot for when access list grows past ~10 locations.</li>
+      <li><strong>Single-install drivers see no chip.</strong> The current home screen renders unchanged; complexity scales with access scope.</li>
+      <li><strong>BLE remains the hero.</strong> When a charger is in BLE range, the existing NearbyCard renders above the chip with one-tap start — the picker is only relevant when BLE doesn't fire.</li>
+      <li><strong>No "default location" setting.</strong> Defaults are derived from signals, not a user preference toggle. Reduces config burden; matches Apple Maps' Home/Work pattern.</li>
+      <li><strong>Backend cost</strong>: one new endpoint <code>GET /api/driver/locations</code> returning <code>[{ installationId, displayName, lat, lon, freeCount, totalCount, lastUsedAt }]</code> — plus the existing <code>/api/driver/chargers</code> already carries enough to derive these client-side, so the endpoint is an optimisation, not a requirement.</li>
+    </ul>
+  </div>
+
+  <script>
+    const phone = document.getElementById('phoneB');
+    const sheet = document.getElementById('sheet');
+    const scrim = document.getElementById('scrim');
+    const ctxLabel = document.getElementById('ctxLabel');
+    const ctxMeta = document.getElementById('ctxMeta');
+    const ctxSource = document.getElementById('ctxSource');
+    const totalCount = document.getElementById('totalCount');
+    const chargerList = document.getElementById('chargerList');
+
+    // Mock data — chargers per installation
+    const FLEET = {
+      dalvegur: {
+        name: 'Dalvegur 10–14',
+        meta: '12 of 18 chargers available',
+        source: 'Closest to you',
+        total: 18,
+        chargers: [
+          { name: 'Charger 5', sub: '7.4 kW · Type 2 · Available', dot: 'green' },
+          { name: 'Charger 7', sub: '7.4 kW · Type 2 · Available', dot: 'green' },
+          { name: 'Charger 9', sub: '7.4 kW · Type 2 · Charging', dot: 'amber' },
+          { name: 'Charger 11', sub: '7.4 kW · Type 2 · Available', dot: 'green' },
+          { name: 'Charger 14', sub: '7.4 kW · Type 2 · Offline', dot: 'dim' },
+        ],
+      },
+      reykjavik: {
+        name: 'Reykjavík Office',
+        meta: '3 of 4 chargers available',
+        source: 'Recently used',
+        total: 4,
+        chargers: [
+          { name: 'Office bay 1', sub: '11 kW · Type 2 · Available', dot: 'green' },
+          { name: 'Office bay 2', sub: '11 kW · Type 2 · Available', dot: 'green' },
+          { name: 'Office bay 3', sub: '11 kW · Type 2 · Charging', dot: 'amber' },
+          { name: 'Office bay 4', sub: '11 kW · Type 2 · Available', dot: 'green' },
+        ],
+      },
+      hafnarfjordur: {
+        name: 'Hafnarfjörður depot',
+        meta: '2 of 6 chargers available',
+        source: 'Recently used',
+        total: 6,
+        chargers: [
+          { name: 'Depot 1', sub: '22 kW · Type 2 · Charging', dot: 'amber' },
+          { name: 'Depot 2', sub: '22 kW · Type 2 · Charging', dot: 'amber' },
+          { name: 'Depot 3', sub: '22 kW · Type 2 · Available', dot: 'green' },
+          { name: 'Depot 4', sub: '22 kW · Type 2 · Available', dot: 'green' },
+        ],
+      },
+      akureyri: {
+        name: 'Akureyri service hub',
+        meta: 'All chargers offline',
+        source: 'Selected',
+        total: 4,
+        chargers: [
+          { name: 'Hub 1', sub: '22 kW · Offline', dot: 'dim' },
+          { name: 'Hub 2', sub: '22 kW · Offline', dot: 'dim' },
+        ],
+      },
+      selfoss: {
+        name: 'Selfoss highway stop',
+        meta: '2 of 2 chargers available',
+        source: 'Selected',
+        total: 2,
+        chargers: [
+          { name: 'Stop 1', sub: '50 kW DC · Available', dot: 'green' },
+          { name: 'Stop 2', sub: '50 kW DC · Available', dot: 'green' },
+        ],
+      },
+      ble: {
+        name: 'Charger 5 — Dalvegur 10–14',
+        meta: 'BLE detected · ready to charge',
+        source: 'Right next to you',
+        total: 1,
+        chargers: [
+          { name: 'Charger 5 — start charging?', sub: 'BLE · 1.2 m away · 7.4 kW available', dot: 'green' },
+        ],
+      },
+      all: {
+        name: 'All locations',
+        meta: '31 chargers across 5 installations',
+        source: 'All access',
+        total: 31,
+        chargers: [
+          { name: 'Charger 5', sub: 'Dalvegur 10–14 · Available', dot: 'green' },
+          { name: 'Office bay 1', sub: 'Reykjavík Office · Available', dot: 'green' },
+          { name: 'Depot 3', sub: 'Hafnarfjörður depot · Available', dot: 'green' },
+          { name: 'Stop 1', sub: 'Selfoss highway stop · Available', dot: 'green' },
+        ],
+      },
+    };
+
+    function renderList(key) {
+      const f = FLEET[key];
+      chargerList.innerHTML = `
+        <div class="loc-header">
+          <span class="name">${f.name}</span>
+          <span class="count">· ${f.total}</span>
+        </div>
+        ${f.chargers.map(c => `
+          <div class="charger-row">
+            <span class="status-dot ${c.dot}"></span>
+            <div style="flex:1">
+              <div class="ch-name">${c.name}</div>
+              <div class="ch-sub">${c.sub}</div>
+            </div>
+            <span class="ch-arrow">›</span>
+          </div>
+        `).join('')}
+      `;
+      ctxLabel.textContent = f.name;
+      ctxMeta.textContent = f.meta;
+      ctxSource.textContent = f.source;
+      totalCount.textContent = f.total;
+    }
+
+    function openSheet() {
+      sheet.classList.add('open');
+      scrim.classList.add('open');
+    }
+    function closeSheet() {
+      sheet.classList.remove('open');
+      scrim.classList.remove('open');
+    }
+    function pickContext(key) {
+      renderList(key);
+      closeSheet();
+    }
+
+    // initial render = the default context (closest)
+    renderList('dalvegur');
+  </script>
+</body>
+</html>

@@ -8,6 +8,7 @@ import '../theme/logo.dart';
 import '../theme/palette.dart';
 import 'charger_detail_sheet.dart';
 import 'hero_image.dart';
+import 'installation_picker.dart';
 import 'menu_drawer.dart';
 import 'nearby_card.dart';
 
@@ -30,6 +31,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
   late Future<List<DriverCharger>> _futureChargers;
   _Filter _filter = _Filter.all;
+
+  // Sprint 9 / 2026-05-10 — installation picker state.
+  // null = "All locations" (no filter active). When set, the home
+  // screen filters the charger list to that locationName.
+  // Single-install drivers never see the picker UI; the state is
+  // unused but cheap to carry.
+  String? _selectedLocation;
 
   // All currently-detected nearby chargers (keyed by connectorId).
   // Twin-pole / quad-pole installs trigger multiple detections at
@@ -225,13 +233,26 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: _EmptyState(),
                     );
                   }
-                  final filtered = _applyFilters(all);
 
-                  // Group filtered chargers by location. When the
-                  // driver has access at multiple installations, this
-                  // gives them clear sections + per-location counts.
-                  // With only one location, the header is still
-                  // visible — the cost is one row of label.
+                  // Sprint 9 / 2026-05-10 — installation picker.
+                  // 1. Summarize every accessible installation for the
+                  //    chip dropdown (counts are always over the full
+                  //    accessible set so totals are stable).
+                  // 2. If the operator selected a specific location,
+                  //    narrow `all` → `inLocation`. Status filter
+                  //    applies on top of that.
+                  // 3. Render the chip only when there are ≥2
+                  //    installations — single-install drivers see the
+                  //    pre-picker layout unchanged.
+                  final locationSummaries = summarizeLocations(all);
+                  final showPicker = locationSummaries.length >= 2;
+                  final inLocation = _selectedLocation == null
+                      ? all
+                      : all
+                          .where((c) => c.locationName == _selectedLocation)
+                          .toList();
+                  final filtered = _applyFilters(inLocation);
+
                   final byLocation = <String, List<DriverCharger>>{};
                   for (final c in filtered) {
                     byLocation
@@ -250,13 +271,41 @@ class _HomeScreenState extends State<HomeScreen> {
                                 _nearbySorted.skip(1).toList(growable: false),
                             onPickOther: _showNearbyPicker,
                           ),
+                        if (showPicker)
+                          InstallationContextChip(
+                            selectedLocation: _selectedLocation,
+                            locations: locationSummaries,
+                            bleNearby: _nearbySorted.isEmpty
+                                ? null
+                                : _nearbySorted.first,
+                            onTap: () => InstallationPickerSheet.show(
+                              context,
+                              locations: locationSummaries,
+                              selectedLocation: _selectedLocation,
+                              bleNearby: _nearbySorted.isEmpty
+                                  ? null
+                                  : _nearbySorted.first,
+                              onSelect: (loc) =>
+                                  setState(() => _selectedLocation = loc),
+                              onTapBle: () {
+                                final near = _nearbySorted.isEmpty
+                                    ? null
+                                    : _nearbySorted.first;
+                                if (near != null) {
+                                  ChargerDetailSheet.show(context, near.charger);
+                                }
+                              },
+                            ),
+                          ),
                         _FilterChips(
                           selected: _filter,
                           counts: {
-                            _Filter.all: _count(all, _Filter.all),
-                            _Filter.available: _count(all, _Filter.available),
-                            _Filter.busy: _count(all, _Filter.busy),
-                            _Filter.offline: _count(all, _Filter.offline),
+                            _Filter.all: _count(inLocation, _Filter.all),
+                            _Filter.available:
+                                _count(inLocation, _Filter.available),
+                            _Filter.busy: _count(inLocation, _Filter.busy),
+                            _Filter.offline:
+                                _count(inLocation, _Filter.offline),
                           },
                           onSelect: (f) => setState(() => _filter = f),
                         ),
@@ -486,70 +535,122 @@ class _ChargerRow extends StatelessWidget {
       ConnectorStatus.unavailable => BrandPalette.danger,
       _ => BrandPalette.muted,
     };
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        margin: const EdgeInsets.only(bottom: 6),
-        decoration: BoxDecoration(
-          color: BrandPalette.surface,
+    final dimmed = c.status == ConnectorStatus.offline ||
+        c.status == ConnectorStatus.unavailable ||
+        c.status == ConnectorStatus.faulted;
+    final isAvailable = c.status == ConnectorStatus.available;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: BrandPalette.border),
-        ),
-        child: Row(
-          children: [
-            // Status dot
-            Container(
-              width: 10,
-              height: 10,
-              decoration: BoxDecoration(
-                color: tint,
-                shape: BoxShape.circle,
-                boxShadow: c.status == ConnectorStatus.available
-                    ? [
-                        BoxShadow(
-                          color: tint.withValues(alpha: 0.55),
-                          blurRadius: 8,
-                        ),
-                      ]
-                    : null,
+          child: Ink(
+            decoration: BoxDecoration(
+              // Uniform dark card — status reads through accents, not
+              // through a half-tinted body. Keeps a 30+ row list calm.
+              color: BrandPalette.surface,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: isAvailable
+                    ? tint.withValues(alpha: 0.45)
+                    : BrandPalette.border.withValues(alpha: 0.7),
               ),
+              // Soft mint halo on available rows — pulls the eye to the
+              // actionable state without painting the card.
+              boxShadow: isAvailable
+                  ? [
+                      BoxShadow(
+                        color: tint.withValues(alpha: 0.18),
+                        blurRadius: 14,
+                      ),
+                    ]
+                  : null,
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
+            child: IntrinsicHeight(
+              child: Row(
                 children: [
-                  Text(
-                    c.displayName,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -0.1,
+                  // Left accent stripe — colour-coded status, full-row height.
+                  Container(
+                    width: 3,
+                    margin: const EdgeInsets.symmetric(vertical: 10),
+                    decoration: BoxDecoration(
+                      color: tint.withValues(alpha: dimmed ? 0.45 : 1.0),
+                      borderRadius: BorderRadius.circular(2),
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    c.maxPowerKw > 0
-                        ? '${c.status.label} · ${c.maxPowerKw.toStringAsFixed(1)} kW'
-                        : c.status.label,
-                    style: TextStyle(
-                      color: tint.withValues(alpha: 0.85),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
+                  const SizedBox(width: 12),
+                  // Zaptec mark in a tinted square. The silhouette is
+                  // recoloured to the status tint (mint = ready, cyan =
+                  // charging, amber = preparing, red = faulted, grey =
+                  // offline) — the same scheme as Zaptec's physical
+                  // LED ring on the Pro / Go.
+                  Container(
+                    width: 38,
+                    height: 38,
+                    margin: const EdgeInsets.symmetric(vertical: 10),
+                    decoration: BoxDecoration(
+                      color: tint.withValues(alpha: dimmed ? 0.06 : 0.14),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Center(
+                      child: Image.asset(
+                        'assets/images/Zaptec-logo-Black-e1678367286810.webp',
+                        width: 24,
+                        height: 24,
+                        fit: BoxFit.contain,
+                        color: tint.withValues(alpha: dimmed ? 0.5 : 1.0),
+                        colorBlendMode: BlendMode.srcIn,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          c.displayName,
+                          style: TextStyle(
+                            color: dimmed
+                                ? Colors.white.withValues(alpha: 0.55)
+                                : Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.1,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          c.maxPowerKw > 0
+                              ? '${c.status.label} · ${c.maxPowerKw.toStringAsFixed(1)} kW'
+                              : c.status.label,
+                          style: TextStyle(
+                            color: tint.withValues(alpha: dimmed ? 0.6 : 0.95),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(right: 10),
+                    child: Icon(
+                      Icons.chevron_right_rounded,
+                      color: BrandPalette.muted.withValues(
+                          alpha: dimmed ? 0.5 : 1.0),
+                      size: 20,
                     ),
                   ),
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right_rounded,
-                color: BrandPalette.muted, size: 20),
-          ],
+          ),
         ),
       ),
     );
