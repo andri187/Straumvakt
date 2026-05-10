@@ -5,7 +5,7 @@ import '../api/types.dart';
 import '../theme/logo.dart';
 import '../theme/palette.dart';
 import 'hero_image.dart';
-import 'login.dart';
+import 'menu_drawer.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, required this.driver});
@@ -43,19 +43,10 @@ class _HomeScreenState extends State<HomeScreen> {
     await _futureChargers.catchError((_) => <DriverCharger>[]);
   }
 
-  Future<void> _logout() async {
-    await _storage.clear();
-    if (!mounted) return;
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (_) => LoginScreen(prefilledEmail: widget.driver.email),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      drawer: MenuDrawer(driver: widget.driver),
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: _refresh,
@@ -63,7 +54,14 @@ class _HomeScreenState extends State<HomeScreen> {
           backgroundColor: BrandPalette.surface,
           child: CustomScrollView(
             slivers: [
-              SliverToBoxAdapter(child: _Header(driver: widget.driver, onLogout: _logout)),
+              SliverToBoxAdapter(
+                child: Builder(
+                  builder: (ctx) => _Header(
+                    driver: widget.driver,
+                    onMenu: () => Scaffold.of(ctx).openDrawer(),
+                  ),
+                ),
+              ),
               const SliverToBoxAdapter(child: HeroImageBanner()),
               FutureBuilder<List<DriverCharger>>(
                 future: _futureChargers,
@@ -127,10 +125,10 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.driver, required this.onLogout});
+  const _Header({required this.driver, required this.onMenu});
 
   final DriverProfile driver;
-  final VoidCallback onLogout;
+  final VoidCallback onMenu;
 
   @override
   Widget build(BuildContext context) {
@@ -170,9 +168,9 @@ class _Header extends StatelessWidget {
             ),
           ),
           IconButton(
-            onPressed: onLogout,
-            icon: const Icon(Icons.logout_rounded, color: BrandPalette.muted),
-            tooltip: 'Sign out',
+            onPressed: onMenu,
+            icon: const Icon(Icons.menu_rounded, color: BrandPalette.muted),
+            tooltip: 'Menu',
           ),
         ],
       ),
