@@ -136,12 +136,23 @@ class InstallationContextChip extends StatelessWidget {
       label = found.name;
       meta = found.countLabel;
       sourceColor = BrandPalette.blue;
+    } else if (locations.length == 1) {
+      // Single-location pilot. The chip works as a "you have access
+      // here" badge rather than a chooser — the bottom sheet still
+      // opens (operator may want to verify scope), but the label is
+      // the location name itself, not "All locations".
+      final only = locations.first;
+      source = 'YOUR LOCATION';
+      label = only.name;
+      meta = only.countLabel;
+      sourceColor = BrandPalette.blue;
     } else {
       final totalChargers = locations.fold<int>(0, (a, b) => a + b.total);
       final totalAvailable = locations.fold<int>(0, (a, b) => a + b.available);
+      final siteWord = locations.length == 1 ? 'site' : 'sites';
       source = 'ALL ACCESS';
       label = 'All locations';
-      meta = '$totalAvailable of $totalChargers available · ${locations.length} sites';
+      meta = '$totalAvailable of $totalChargers available · ${locations.length} $siteWord';
       sourceColor = BrandPalette.muted;
     }
 
