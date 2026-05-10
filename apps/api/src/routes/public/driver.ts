@@ -32,6 +32,7 @@ import {
   driverSessionConfig,
   type DriverTokenPayload,
 } from "../../lib/driver-session";
+import { enqueueCommand } from "../../repositories/outbound-commands";
 import type { Env } from "../../bindings";
 
 type Vars = { driverPayload: DriverTokenPayload };
@@ -327,6 +328,181 @@ function mapConnectorStatus(raw: string | null | undefined): string {
   if (v.includes("offline")) return "Offline";
   return "Available";
 }
+
+// ── POST /api/driver/start-session ──────────────────────────────────
+//
+// Phase 3 — driver requests RemoteStartTransaction on a connector.
+// The driver's virtual RFID token (the IdToken row owned by them with
+// the right scope) is resolved server-side; the app never sees or
+// chooses an idTag.
+//
+// Flow:
+//   1. Validate connector belongs to a charger covered by an active
+//      DriverGroupMembership for this user.
+//   2. Pick the driver's preferred IdToken (evccid > rfid > manual)
+//      that's installation-scoped or unscoped.
+//   3. Enqueue ocpp.outbound_commands row with controlDomain='remote_start'
+//      and OUTBOUND_QUEUE notification — same path the admin remote-start
+//      endpoint uses, so the dispatcher already knows how to process it.
+//   4. Return 202 with {commandId, status, session: <preparing>}.
+//
+// We DON'T wait for the OCPP gateway to forward and ack — that's
+// async. The mobile app polls /sessions/current (Phase 2) to see the
+// session land in 'Preparing'/'Charging'.
+
+const startSessionSchema = z.object({
+  connectorId: z.string().uuid(),
+});
+
+publicDriver.post("/start-session", requireDriver, async (c) => {
+  const raw = await c.req.json().catch(() => null);
+  const parsed = startSessionSchema.safeParse(raw);
+  if (!parsed.success) {
+    return c.json({ error: "validation", message: "connectorId required (uuid)." }, 400);
+  }
+
+  const { userId } = c.get("driverPayload");
+  const prisma = makePrisma(c.env);
+  const now = new Date();
+
+  // Resolve connector → evse → station → installation + ocpp identity.
+  const connector = await prisma.connector.findUnique({
+    where: { id: parsed.data.connectorId },
+    select: {
+      id: true,
+      connectorIndex: true,
+      evse: {
+        select: {
+          chargingStation: {
+            select: {
+              siteAssetId: true,
+              orgId: true,
+              installationId: true,
+              siteAsset: { select: { displayName: true } },
+              ocppIdentities: {
+                select: { id: true, orgId: true },
+                take: 1,
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!connector) {
+    return c.json(
+      { error: "not_found", message: "Charger not found." },
+      404,
+    );
+  }
+
+  const station = connector.evse.chargingStation;
+  const installationId = station.installationId;
+  const ocppIdentity = station.ocppIdentities[0];
+
+  if (!installationId) {
+    return c.json(
+      { error: "not_configured", message: "Charger isn't placed at an installation yet." },
+      503,
+    );
+  }
+  if (!ocppIdentity) {
+    return c.json(
+      { error: "not_configured", message: "Charger has no OCPP identity. Contact your operator." },
+      503,
+    );
+  }
+
+  // Verify driver has membership at this installation.
+  const membership = await prisma.driverGroupMembership.findFirst({
+    where: {
+      userId,
+      driverGroup: {
+        agreement: {
+          agreementType: "installation",
+          installationId,
+          status: "active",
+          effectiveFrom: { lte: now },
+          OR: [{ effectiveUntil: null }, { effectiveUntil: { gt: now } }],
+        },
+      },
+    },
+    select: { id: true },
+  });
+  if (!membership) {
+    return c.json(
+      { error: "no_access", message: "You don't have access to this charger." },
+      403,
+    );
+  }
+
+  // Pick the driver's idTag — prefer evccid (Autocharge / vehicle ID)
+  // over rfid (physical card) over manual (operator-set static value).
+  const tokens = await prisma.idToken.findMany({
+    where: {
+      userId,
+      status: "active",
+      kind: { in: ["manual", "rfid", "evccid"] },
+      OR: [
+        { scopeInstallationId: null },
+        { scopeInstallationId: installationId },
+      ],
+    },
+    select: { id: true, value: true, kind: true, label: true },
+  });
+
+  if (tokens.length === 0) {
+    return c.json(
+      {
+        error: "no_token",
+        message: "You don't have an active token for this charger. Contact your operator.",
+      },
+      403,
+    );
+  }
+
+  const order: Record<string, number> = { evccid: 0, rfid: 1, manual: 2 };
+  tokens.sort((a, b) => (order[a.kind] ?? 99) - (order[b.kind] ?? 99));
+  const chosen = tokens[0];
+
+  // Enqueue the RemoteStartTransaction. OCPP 1.6 §6.21: connectorId is
+  // the integer connector number (1-based) — NOT our DB uuid. The
+  // dispatcher already knows how to translate this payload via
+  // src/lib/dispatch-targets.ts.
+  const enqueued = await enqueueCommand(prisma, c.env.OUTBOUND_QUEUE, {
+    orgId: ocppIdentity.orgId,
+    identityId: ocppIdentity.id,
+    controlDomain: "remote_start",
+    routedTo: "ocpp",
+    payload: {
+      connectorId: connector.connectorIndex,
+      idTag: chosen.value,
+    },
+    correlationId: crypto.randomUUID(),
+    requestedBy: userId,
+  });
+
+  return c.json(
+    {
+      commandId: enqueued.id,
+      status: "accepted",
+      tokenKind: chosen.kind,
+      tokenLabel: chosen.label,
+      session: {
+        sessionId: enqueued.id,
+        connectorId: parsed.data.connectorId,
+        chargerName: station.siteAsset?.displayName ?? "Charger",
+        status: "Preparing",
+        startedAt: now.toISOString(),
+        powerKw: 0,
+        energyKwh: 0,
+        costIsk: 0,
+      },
+    },
+    202,
+  );
+});
 
 // ── Health ──────────────────────────────────────────────────────────
 publicDriver.get("/health", (c) =>
