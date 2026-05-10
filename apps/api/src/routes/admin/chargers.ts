@@ -30,6 +30,10 @@ import {
   writeChargerZaptecProperty,
 } from "../../repositories/charger-zaptec-config";
 import { enqueueCommand } from "../../repositories/outbound-commands";
+import {
+  pushIdTokenToCharger,
+  PushIdTokenError,
+} from "../../repositories/local-auth-list-push";
 import type { Env } from "../../bindings";
 
 export const adminChargers = new Hono<{ Bindings: Env; Variables: AuthVars }>();
@@ -395,6 +399,43 @@ adminChargers.post(
     requestedBy: null,
   });
   return c.json({ commandId: enqueued.id, status: enqueued.status }, 202);
+  },
+);
+
+// Sprint 9 / 2026-05-10 — Local auth list push (Half B of SendLocalList).
+// Body: { idTokenId: UUID }. Resolves the charger's IdToken roster on
+// the CSMS side, mints a Differential SendLocalList payload with the
+// single entry, bumps pushed_auth_list_version, and enqueues an
+// OutboundCommand. Returns 202 with { commandId, listVersion, idTag }
+// so the UI can poll /commands/:commandId for the charger's verdict.
+adminChargers.post(
+  "/:ocppIdentityId/local-auth-list/push",
+  requirePermission("charger.config"),
+  async (c) => {
+    const raw = (await c.req.json().catch(() => null)) as unknown;
+    if (
+      !raw ||
+      typeof raw !== "object" ||
+      typeof (raw as { idTokenId?: unknown }).idTokenId !== "string"
+    ) {
+      return c.json({ error: "idTokenId required" }, 400);
+    }
+    const idTokenId = (raw as { idTokenId: string }).idTokenId;
+    const db = makePrisma(c.env);
+    try {
+      const result = await pushIdTokenToCharger(db, c.env.OUTBOUND_QUEUE, {
+        ocppIdentityId: c.req.param("ocppIdentityId"),
+        idTokenId,
+        requestedBy: null,
+      });
+      return c.json(result, 202);
+    } catch (err) {
+      if (err instanceof PushIdTokenError) {
+        const status = err.code === "identity_not_found" ? 404 : 400;
+        return c.json({ error: err.code, message: err.message }, status);
+      }
+      throw err;
+    }
   },
 );
 

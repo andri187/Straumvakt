@@ -73,6 +73,7 @@ export class ServiceBindingOcppTarget implements DispatchTarget {
       unlock_connector: "UnlockConnector",
       get_configuration: "GetConfiguration",
       change_configuration: "ChangeConfiguration",
+      send_local_list: "SendLocalList",
     },
   ) {}
 
