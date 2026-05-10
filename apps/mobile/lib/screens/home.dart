@@ -25,12 +25,10 @@ enum _Filter { all, available, busy, offline }
 class _HomeScreenState extends State<HomeScreen> {
   final _api = StraumvaktApi();
   final _storage = AuthStorage();
-  final _searchController = TextEditingController();
   final _scanner = BleScanner.instance();
   StreamSubscription<NearbyCharger>? _scanSub;
 
   late Future<List<DriverCharger>> _futureChargers;
-  String _query = '';
   _Filter _filter = _Filter.all;
 
   // Currently-detected nearby charger. Cleared after 8s without a
@@ -42,15 +40,11 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _futureChargers = _loadChargers();
-    _searchController.addListener(() {
-      setState(() => _query = _searchController.text.trim().toLowerCase());
-    });
     _futureChargers.then(_startScanning).catchError((_) {});
   }
 
   @override
   void dispose() {
-    _searchController.dispose();
     _scanSub?.cancel();
     _nearbyExpiryTimer?.cancel();
     _scanner.stop();
@@ -111,12 +105,6 @@ class _HomeScreenState extends State<HomeScreen> {
             return false;
           }
           break;
-      }
-      // Search filter
-      if (_query.isNotEmpty) {
-        final hay =
-            '${c.displayName} ${c.locationName}'.toLowerCase();
-        if (!hay.contains(_query)) return false;
       }
       return true;
     }).toList();
@@ -200,8 +188,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     sliver: SliverList(
                       delegate: SliverChildListDelegate.fixed([
                         if (_nearby != null) NearbyCard(nearby: _nearby!),
-                        _SearchField(controller: _searchController),
-                        const SizedBox(height: 10),
                         _FilterChips(
                           selected: _filter,
                           counts: {
@@ -288,48 +274,6 @@ class _Header extends StatelessWidget {
   }
 }
 
-class _SearchField extends StatelessWidget {
-  const _SearchField({required this.controller});
-
-  final TextEditingController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    return TextField(
-      controller: controller,
-      style: const TextStyle(color: Colors.white, fontSize: 14),
-      decoration: InputDecoration(
-        hintText: 'Find a charger…',
-        hintStyle: const TextStyle(color: BrandPalette.muted, fontSize: 14),
-        prefixIcon: const Icon(Icons.search_rounded,
-            color: BrandPalette.muted, size: 20),
-        suffixIcon: controller.text.isEmpty
-            ? null
-            : IconButton(
-                icon: const Icon(Icons.close_rounded,
-                    color: BrandPalette.muted, size: 18),
-                onPressed: () => controller.clear(),
-              ),
-        filled: true,
-        fillColor: BrandPalette.surface,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: BrandPalette.border),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: BrandPalette.border),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: BrandPalette.cyan, width: 1.5),
-        ),
-      ),
-    );
-  }
-}
 
 class _FilterChips extends StatelessWidget {
   const _FilterChips({
@@ -568,7 +512,7 @@ class _NoMatches extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           const Text(
-            'Try a different filter or clear the search.',
+            'Try a different filter.',
             style: TextStyle(color: BrandPalette.muted, fontSize: 12),
           ),
         ],
