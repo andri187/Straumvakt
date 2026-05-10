@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api-client";
 import {
   signalIconClass as signalIconClassShared,
@@ -415,6 +415,96 @@ function RosterRowCompact({
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [feedbackTone, setFeedbackTone] = useState<"ok" | "warn" | null>(null);
+  // Inflight tracker — set immediately after a 202 from the push
+  // endpoint. The polling effect below watches this and flips the
+  // feedback text to the charger's eventual verdict (or a timeout
+  // if the dispatcher / gateway hangs).
+  const [inflight, setInflight] = useState<{
+    commandId: string;
+    listVersion: number;
+  } | null>(null);
+
+  // Polling: watch the OutboundCommand status until it reaches a
+  // terminal state. status='acked' means the gateway DO got a
+  // CallResult from the charger; the OCPP verdict lives inside
+  // result.result.status (Accepted | Failed | NotSupported |
+  // VersionMismatch). status='failed' means the dispatcher gave up
+  // (gateway down, no active websocket after retries, etc) and the
+  // OCPP frame likely never reached the charger.
+  //
+  // Cap the poll at ~30s; charger replies are usually <1s, but a
+  // hibernating DO + Cloudflare Queues can add a few seconds. After
+  // the cap we surface "still queued — check ocpp.outbound_commands"
+  // so the operator can investigate the dispatcher pipeline manually.
+  useEffect(() => {
+    if (!inflight) return;
+    const startedAt = Date.now();
+    const TIMEOUT_MS = 30_000;
+    const POLL_MS = 1_500;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const poll = async () => {
+      if (cancelled) return;
+      try {
+        const res = await apiFetch(`/api/admin/chargers/commands/${inflight.commandId}`);
+        if (!res.ok) {
+          // 404 / 5xx — keep trying until timeout. Don't bail on
+          // transient errors.
+          if (Date.now() - startedAt < TIMEOUT_MS) {
+            timer = setTimeout(poll, POLL_MS);
+          }
+          return;
+        }
+        const body = (await res.json()) as {
+          status: "pending" | "acked" | "failed" | "cancelled" | string;
+          result: unknown;
+        };
+        if (body.status === "acked") {
+          // Pull the OCPP verdict out of the result blob. Shape comes
+          // from gateway/identity-do.ts recordCommandResult.
+          const r = body.result as
+            | { result?: { status?: string } }
+            | null;
+          const ocppVerdict = r?.result?.status ?? "Accepted";
+          if (ocppVerdict === "Accepted") {
+            setFeedback(`accepted · v${inflight.listVersion}`);
+            setFeedbackTone("ok");
+          } else {
+            setFeedback(`${ocppVerdict.toLowerCase()} · v${inflight.listVersion}`);
+            setFeedbackTone("warn");
+          }
+          setInflight(null);
+          return;
+        }
+        if (body.status === "failed" || body.status === "cancelled") {
+          const r = body.result as { error?: string } | null;
+          setFeedback(r?.error ? `failed · ${r.error}` : `failed · ${body.status}`);
+          setFeedbackTone("warn");
+          setInflight(null);
+          return;
+        }
+        // Still pending — keep polling until the cap.
+        if (Date.now() - startedAt < TIMEOUT_MS) {
+          timer = setTimeout(poll, POLL_MS);
+        } else {
+          setFeedback(`still queued · v${inflight.listVersion}`);
+          setFeedbackTone("warn");
+          setInflight(null);
+        }
+      } catch {
+        if (Date.now() - startedAt < TIMEOUT_MS) {
+          timer = setTimeout(poll, POLL_MS);
+        }
+      }
+    };
+
+    timer = setTimeout(poll, POLL_MS);
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [inflight]);
 
   // Only `would_authorize` entries are pushable. Anything else, if
   // pushed into the charger's local list, would let it authorize during
@@ -453,9 +543,13 @@ function RosterRowCompact({
         },
       );
       if (res.status === 202) {
-        const body = (await res.json()) as { listVersion: number };
+        const body = (await res.json()) as {
+          commandId: string;
+          listVersion: number;
+        };
         setFeedback(`queued · v${body.listVersion}`);
-        setFeedbackTone("ok");
+        setFeedbackTone(null);
+        setInflight({ commandId: body.commandId, listVersion: body.listVersion });
       } else {
         const body = (await res.json().catch(() => ({}))) as {
           error?: string;
