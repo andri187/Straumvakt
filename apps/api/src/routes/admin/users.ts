@@ -202,6 +202,7 @@ const VALID_KINDS = [
   "zaptec_proxy",
   "ocpi_token",
   "manual",
+  "evccid",
 ] as const;
 type ValidKind = (typeof VALID_KINDS)[number];
 

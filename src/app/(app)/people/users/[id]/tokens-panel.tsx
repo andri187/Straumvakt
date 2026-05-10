@@ -4,6 +4,60 @@ import { useState } from "react";
 import { apiFetch } from "@/lib/api-client";
 import type { IdTokenSummary } from "@straumvakt/shared/domain/users";
 
+// Operator-friendly labels for IdTokenKind. The DB enum is
+// implementation-orientated; this surface the operator names per
+// 2026-05-10. Anything not in this map falls back to the raw enum.
+const KIND_LABELS: Record<string, { short: string; full: string; tone: string }> = {
+  rfid: {
+    short: "RFID card/chip",
+    full: "Physical RFID card or fob (MIFARE Classic / DESFire UID)",
+    tone: "bg-sv-sky/15 text-sv-sky ring-sv-sky/30",
+  },
+  manual: {
+    short: "Virtual RFID",
+    full: "Operator-set static value (e.g. Zaptec portal default tag)",
+    tone: "bg-amber-400/15 text-amber-300 ring-amber-400/30",
+  },
+  evccid: {
+    short: "VID RFID",
+    full: "Vehicle Identifier — value is the car's EVCCID / EV-PLC-MAC (Autocharge)",
+    tone: "bg-purple-400/15 text-purple-300 ring-purple-400/30",
+  },
+  zaptec_proxy: {
+    short: "Vendor (Zaptec)",
+    full: "Mirrored from a Zaptec portal token",
+    tone: "bg-emerald-400/15 text-emerald-300 ring-emerald-400/30",
+  },
+  ocpi_token: {
+    short: "OCPI roaming",
+    full: "Token from a roaming partner via OCPI",
+    tone: "bg-indigo-400/15 text-indigo-300 ring-indigo-400/30",
+  },
+  app_jwt: {
+    short: "App JWT",
+    full: "Mobile-app issued JWT-derived token",
+    tone: "bg-bg-raised/60 text-ink-300 ring-bg-border",
+  },
+  magic_link: {
+    short: "Magic link",
+    full: "One-shot email magic link",
+    tone: "bg-bg-raised/60 text-ink-300 ring-bg-border",
+  },
+};
+
+function kindLabel(kind: string) {
+  return KIND_LABELS[kind] ?? {
+    short: kind,
+    full: kind,
+    tone: "bg-bg-raised/60 text-ink-300 ring-bg-border",
+  };
+}
+
+// Kinds the operator can pick when adding a token. Excludes vendor-
+// mirrored / app / magic-link kinds which arrive via other paths.
+const ADDABLE_KINDS = ["rfid", "manual", "evccid"] as const;
+type AddableKind = (typeof ADDABLE_KINDS)[number];
+
 /**
  * Operator surface for an individual user's RFID/IdToken collection.
  * Closure item 1 from docs/retros/sprint-03.md — gives the previously
@@ -32,6 +86,7 @@ export function TokensPanel({
   const [tokens, setTokens] = useState<IdTokenSummary[]>(initialTokens);
   const [adding, setAdding] = useState(false);
   const [mode, setMode] = useState<"auto" | "manual">("auto");
+  const [kind, setKind] = useState<AddableKind>("rfid");
   const [value, setValue] = useState("");
   const [label, setLabel] = useState("");
   const [busy, setBusy] = useState(false);
@@ -47,6 +102,7 @@ export function TokensPanel({
 
   function resetForm() {
     setMode("auto");
+    setKind("rfid");
     setValue("");
     setLabel("");
     setError(null);
@@ -65,7 +121,7 @@ export function TokensPanel({
     setError(null);
     setBusy(true);
     try {
-      const body: Record<string, string> = { kind: "rfid" };
+      const body: Record<string, string> = { kind };
       if (mode === "manual" && value.trim().length > 0) {
         body.value = value.trim().toUpperCase();
       }
@@ -238,11 +294,12 @@ export function TokensPanel({
         </p>
       ) : (
         <>
-          <div className="hidden md:grid grid-cols-[minmax(0,170px)_minmax(0,1fr)_80px_minmax(0,120px)_auto] gap-x-3 px-1 pb-1 text-[10px] font-semibold uppercase tracking-brand text-ink-500">
+          <div className="hidden md:grid grid-cols-[minmax(0,170px)_minmax(0,1fr)_minmax(0,130px)_80px_minmax(0,90px)_auto] gap-x-3 px-1 pb-1 text-[10px] font-semibold uppercase tracking-brand text-ink-500">
             <span>Value</span>
             <span>Label</span>
+            <span>Type</span>
             <span>Status</span>
-            <span>Kind · added</span>
+            <span>Added</span>
             <span className="text-right">Actions</span>
           </div>
           <ul className="divide-y divide-bg-border/40">
@@ -302,7 +359,7 @@ export function TokensPanel({
                   </div>
                 </form>
               ) : (
-                <div className="grid grid-cols-1 gap-y-1 gap-x-3 md:grid-cols-[minmax(0,170px)_minmax(0,1fr)_80px_minmax(0,120px)_auto] md:items-center">
+                <div className="grid grid-cols-1 gap-y-1 gap-x-3 md:grid-cols-[minmax(0,170px)_minmax(0,1fr)_minmax(0,130px)_80px_minmax(0,90px)_auto] md:items-center">
                   <code
                     className={
                       "select-all justify-self-start rounded bg-bg-base/60 px-2 py-1 font-mono text-sm ring-1 " +
@@ -315,6 +372,15 @@ export function TokensPanel({
                   </code>
                   <span className="truncate text-xs text-ink-300">
                     {t.label ?? <span className="italic text-ink-500">no label</span>}
+                  </span>
+                  <span
+                    className={
+                      "justify-self-start rounded px-1.5 py-0.5 text-[10px] font-medium ring-1 ring-inset whitespace-nowrap " +
+                      kindLabel(t.kind).tone
+                    }
+                    title={kindLabel(t.kind).full}
+                  >
+                    {kindLabel(t.kind).short}
                   </span>
                   <span
                     className={
@@ -331,7 +397,7 @@ export function TokensPanel({
                     {t.status}
                   </span>
                   <span className="text-[10px] text-ink-500">
-                    {t.kind} · {new Date(t.createdAt).toLocaleDateString()}
+                    {new Date(t.createdAt).toLocaleDateString()}
                   </span>
                   <div className="flex flex-wrap items-center gap-2 justify-self-end">
                     <button
@@ -394,15 +460,53 @@ export function TokensPanel({
           onSubmit={submitAdd}
           className="space-y-3 rounded border border-sv-sky/30 bg-bg-base/30 p-3"
         >
+          <div>
+            <span className="block text-[11px] font-semibold uppercase tracking-brand text-ink-400">
+              Token type
+            </span>
+            <div className="mt-1 flex flex-wrap gap-2 text-xs">
+              {ADDABLE_KINDS.map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => {
+                    setKind(k);
+                    // Auto-generate makes no sense for evccid (the
+                    // value IS the EVCCID — must be supplied) or
+                    // virtual-rfid (operator typically has a specific
+                    // string in mind). Default those to manual entry.
+                    if (k === "evccid" || k === "manual") setMode("manual");
+                  }}
+                  title={kindLabel(k).full}
+                  className={
+                    "rounded-md px-3 py-1.5 font-medium ring-1 ring-inset " +
+                    (kind === k
+                      ? kindLabel(k).tone
+                      : "bg-bg-base/40 text-ink-400 ring-bg-border hover:text-ink-200")
+                  }
+                >
+                  {kindLabel(k).short}
+                </button>
+              ))}
+            </div>
+            <span className="mt-1 block text-[10px] text-ink-500">
+              {kindLabel(kind).full}
+            </span>
+          </div>
+
           <div className="flex gap-2 text-xs">
             <button
               type="button"
               onClick={() => setMode("auto")}
+              disabled={kind === "evccid" || kind === "manual"}
               className={
                 "rounded-md px-3 py-1.5 font-medium ring-1 " +
                 (mode === "auto"
                   ? "bg-sv-sky/20 text-sv-sky ring-sv-sky/40"
-                  : "bg-bg-base/40 text-ink-400 ring-bg-border")
+                  : "bg-bg-base/40 text-ink-400 ring-bg-border") +
+                (kind === "evccid" || kind === "manual"
+                  ? " cursor-not-allowed opacity-40"
+                  : "")
               }
             >
               Auto-generate UID
@@ -417,7 +521,7 @@ export function TokensPanel({
                   : "bg-bg-base/40 text-ink-400 ring-bg-border")
               }
             >
-              I have a card UID
+              I have a value
             </button>
           </div>
 

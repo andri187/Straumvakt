@@ -120,6 +120,7 @@ export const IdTokenKindEnum = z.enum([
   "zaptec_proxy",
   "ocpi_token",
   "manual",
+  "evccid",
 ]);
 export type IdTokenKindValue = z.infer<typeof IdTokenKindEnum>;
 

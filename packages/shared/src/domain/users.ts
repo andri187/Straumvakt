@@ -91,7 +91,8 @@ export type IdTokenKind =
   | "magic_link"
   | "zaptec_proxy"
   | "ocpi_token"
-  | "manual";
+  | "manual"
+  | "evccid";
 
 export type IdTokenStatus = "active" | "suspended" | "revoked" | "expired";
 
