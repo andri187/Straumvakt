@@ -971,6 +971,14 @@ model ChargingStation {
   commMode               String?   @map("comm_mode")     // "Wi-Fi" / "LTE" / "PLC" / "Ethernet"
   signalDbm              Int?      @map("signal_dbm")    // negative dBm magnitude
 
+  // Sprint 9 / 2026-05-10 — Local auth list (CSMS-side bookkeeping)
+  // Tracks the listVersion Straumvakt last pushed via OCPP SendLocalList.
+  // Per-charger because OCPP versions are per-charge-point. Defaults to 0
+  // (matches the OCPP convention "no list synced"). Bumped monotonically
+  // on each successful enqueue; on charger VersionMismatch the recovery
+  // flow re-syncs to the charger's reported StateId 751 and retries.
+  pushedAuthListVersion  Int       @default(0) @map("pushed_auth_list_version")
+
   // ── Existing relations ───────────────────────────────────────────
   siteAsset        SiteAsset     @relation(fields: [siteAssetId], references: [id], onDelete: Cascade)
   organization     Organization  @relation("StationOperator", fields: [orgId], references: [id])
