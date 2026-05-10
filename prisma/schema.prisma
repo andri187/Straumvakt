@@ -265,12 +265,13 @@ model IdToken {
 }
 
 enum IdTokenKind {
-  rfid
+  rfid           // physical RFID card / chip (MIFARE / DESFire)
   app_jwt
   magic_link
   zaptec_proxy   // we know about it but Zaptec issues + validates it (today's mirror case)
   ocpi_token     // received from a roaming partner via OCPI
-  manual         // operator-created for testing / break-glass
+  manual         // operator-created static value (e.g. Zaptec portal default tag)
+  evccid         // Vehicle Identifier — value IS the EV's EVCCID / EV-PLC-MAC, Autocharge-derived (ADR 0021)
 
   @@schema("identity")
 }
