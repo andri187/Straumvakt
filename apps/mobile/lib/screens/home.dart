@@ -4,6 +4,7 @@ import '../api/client.dart';
 import '../api/types.dart';
 import '../theme/logo.dart';
 import '../theme/palette.dart';
+import 'hero_image.dart';
 import 'login.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -63,6 +64,7 @@ class _HomeScreenState extends State<HomeScreen> {
           child: CustomScrollView(
             slivers: [
               SliverToBoxAdapter(child: _Header(driver: widget.driver, onLogout: _logout)),
+              const SliverToBoxAdapter(child: HeroImageBanner()),
               FutureBuilder<List<DriverCharger>>(
                 future: _futureChargers,
                 builder: (context, snap) {
