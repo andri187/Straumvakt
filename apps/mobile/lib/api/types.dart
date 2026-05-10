@@ -115,6 +115,44 @@ enum ConnectorStatus {
   bool get canStart => this == ConnectorStatus.available;
 }
 
+class StartSessionResult {
+  const StartSessionResult({
+    required this.commandId,
+    required this.status,
+    this.tokenKind,
+    this.tokenLabel,
+  });
+
+  final String commandId;
+  final String status;
+  // Which IdToken kind the backend used as the OCPP idTag — surfaced
+  // so the UI can show "Started with virtual RFID" / "with VID RFID".
+  final String? tokenKind;
+  final String? tokenLabel;
+
+  factory StartSessionResult.fromJson(Map<String, dynamic> json) {
+    return StartSessionResult(
+      commandId: json['commandId'] as String,
+      status: json['status'] as String,
+      tokenKind: json['tokenKind'] as String?,
+      tokenLabel: json['tokenLabel'] as String?,
+    );
+  }
+
+  String get tokenKindLabel {
+    switch (tokenKind) {
+      case 'evccid':
+        return 'VID RFID';
+      case 'rfid':
+        return 'RFID card';
+      case 'manual':
+        return 'virtual RFID';
+      default:
+        return 'token';
+    }
+  }
+}
+
 class DriverCharger {
   const DriverCharger({
     required this.chargerId,

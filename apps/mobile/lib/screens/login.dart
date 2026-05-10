@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import '../api/client.dart';
 import '../api/auth_storage.dart';
@@ -14,11 +15,20 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
+// Pilot dev shortcut — default credentials in debug builds so the
+// emulator round-trips without fighting Android autofill. Stripped
+// from any release build via the kDebugMode gate.
+const _devDefaultEmail = 'n1@n1.is';
+const _devDefaultPassword = '12345678';
+
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  late final TextEditingController _email =
-      TextEditingController(text: widget.prefilledEmail ?? '');
-  final _password = TextEditingController();
+  late final TextEditingController _email = TextEditingController(
+    text: widget.prefilledEmail ?? (kDebugMode ? _devDefaultEmail : ''),
+  );
+  late final TextEditingController _password = TextEditingController(
+    text: kDebugMode ? _devDefaultPassword : '',
+  );
   final _api = StraumvaktApi();
   final _storage = AuthStorage();
   bool _busy = false;

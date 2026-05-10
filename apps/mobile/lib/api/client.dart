@@ -62,6 +62,27 @@ class StraumvaktApi {
     return DriverProfile.fromJson(body as Map<String, dynamic>);
   }
 
+  Future<StartSessionResult> startSession({
+    required String accessToken,
+    required String connectorId,
+  }) async {
+    final res = await http.post(
+      Uri.parse('$baseUrl/api/driver/start-session'),
+      headers: _authHeaders(accessToken),
+      body: jsonEncode({'connectorId': connectorId}),
+    );
+    final body = _decode(res);
+    if (res.statusCode != 202) {
+      throw ApiException(
+        res.statusCode,
+        (body is Map && body['message'] is String)
+            ? body['message'] as String
+            : 'Start session failed',
+      );
+    }
+    return StartSessionResult.fromJson(body as Map<String, dynamic>);
+  }
+
   Future<List<DriverCharger>> getChargers(String accessToken) async {
     final res = await http.get(
       Uri.parse('$baseUrl/api/driver/chargers'),

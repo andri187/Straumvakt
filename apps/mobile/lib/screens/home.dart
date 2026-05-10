@@ -4,6 +4,7 @@ import '../api/client.dart';
 import '../api/types.dart';
 import '../theme/logo.dart';
 import '../theme/palette.dart';
+import 'charger_detail_sheet.dart';
 import 'hero_image.dart';
 import 'menu_drawer.dart';
 
@@ -16,16 +17,30 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
+enum _Filter { all, available, busy, offline }
+
 class _HomeScreenState extends State<HomeScreen> {
   final _api = StraumvaktApi();
   final _storage = AuthStorage();
+  final _searchController = TextEditingController();
 
   late Future<List<DriverCharger>> _futureChargers;
+  String _query = '';
+  _Filter _filter = _Filter.all;
 
   @override
   void initState() {
     super.initState();
     _futureChargers = _loadChargers();
+    _searchController.addListener(() {
+      setState(() => _query = _searchController.text.trim().toLowerCase());
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<List<DriverCharger>> _loadChargers() async {
@@ -41,6 +56,64 @@ class _HomeScreenState extends State<HomeScreen> {
       _futureChargers = _loadChargers();
     });
     await _futureChargers.catchError((_) => <DriverCharger>[]);
+  }
+
+  List<DriverCharger> _applyFilters(List<DriverCharger> chargers) {
+    return chargers.where((c) {
+      // Status filter
+      switch (_filter) {
+        case _Filter.all:
+          break;
+        case _Filter.available:
+          if (c.status != ConnectorStatus.available) return false;
+          break;
+        case _Filter.busy:
+          if (c.status != ConnectorStatus.charging &&
+              c.status != ConnectorStatus.preparing &&
+              c.status != ConnectorStatus.finishing &&
+              c.status != ConnectorStatus.suspendedEv &&
+              c.status != ConnectorStatus.suspendedEvse) {
+            return false;
+          }
+          break;
+        case _Filter.offline:
+          if (c.status != ConnectorStatus.offline &&
+              c.status != ConnectorStatus.unavailable &&
+              c.status != ConnectorStatus.faulted) {
+            return false;
+          }
+          break;
+      }
+      // Search filter
+      if (_query.isNotEmpty) {
+        final hay =
+            '${c.displayName} ${c.locationName}'.toLowerCase();
+        if (!hay.contains(_query)) return false;
+      }
+      return true;
+    }).toList();
+  }
+
+  int _count(List<DriverCharger> chargers, _Filter f) {
+    if (f == _Filter.all) return chargers.length;
+    return chargers.where((c) {
+      switch (f) {
+        case _Filter.available:
+          return c.status == ConnectorStatus.available;
+        case _Filter.busy:
+          return c.status == ConnectorStatus.charging ||
+              c.status == ConnectorStatus.preparing ||
+              c.status == ConnectorStatus.finishing ||
+              c.status == ConnectorStatus.suspendedEv ||
+              c.status == ConnectorStatus.suspendedEvse;
+        case _Filter.offline:
+          return c.status == ConnectorStatus.offline ||
+              c.status == ConnectorStatus.unavailable ||
+              c.status == ConnectorStatus.faulted;
+        default:
+          return false;
+      }
+    }).length;
   }
 
   @override
@@ -85,33 +158,41 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     );
                   }
-                  final chargers = snap.data ?? const <DriverCharger>[];
-                  if (chargers.isEmpty) {
+                  final all = snap.data ?? const <DriverCharger>[];
+                  if (all.isEmpty) {
                     return const SliverFillRemaining(
                       hasScrollBody: false,
                       child: _EmptyState(),
                     );
                   }
-
-                  // Group by location for visual organization.
-                  final byLocation = <String, List<DriverCharger>>{};
-                  for (final c in chargers) {
-                    byLocation.putIfAbsent(c.locationName, () => []).add(c);
-                  }
+                  final filtered = _applyFilters(all);
 
                   return SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                    padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
                     sliver: SliverList(
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) {
-                          final entry = byLocation.entries.elementAt(index);
-                          return _LocationGroup(
-                            location: entry.key,
-                            chargers: entry.value,
-                          );
-                        },
-                        childCount: byLocation.length,
-                      ),
+                      delegate: SliverChildListDelegate.fixed([
+                        _SearchField(controller: _searchController),
+                        const SizedBox(height: 10),
+                        _FilterChips(
+                          selected: _filter,
+                          counts: {
+                            _Filter.all: _count(all, _Filter.all),
+                            _Filter.available: _count(all, _Filter.available),
+                            _Filter.busy: _count(all, _Filter.busy),
+                            _Filter.offline: _count(all, _Filter.offline),
+                          },
+                          onSelect: (f) => setState(() => _filter = f),
+                        ),
+                        const SizedBox(height: 14),
+                        if (filtered.isEmpty)
+                          const _NoMatches()
+                        else
+                          ...filtered.map((c) => _ChargerRow(
+                                charger: c,
+                                onTap: () =>
+                                    ChargerDetailSheet.show(context, c),
+                              )),
+                      ]),
                     ),
                   );
                 },
@@ -178,177 +259,290 @@ class _Header extends StatelessWidget {
   }
 }
 
-class _LocationGroup extends StatelessWidget {
-  const _LocationGroup({required this.location, required this.chargers});
+class _SearchField extends StatelessWidget {
+  const _SearchField({required this.controller});
 
-  final String location;
-  final List<DriverCharger> chargers;
+  final TextEditingController controller;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(top: 12, bottom: 8, left: 4),
-          child: Row(
-            children: [
-              const Icon(Icons.place_outlined,
-                  size: 16, color: BrandPalette.muted),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  location,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.2,
-                  ),
-                ),
+    return TextField(
+      controller: controller,
+      style: const TextStyle(color: Colors.white, fontSize: 14),
+      decoration: InputDecoration(
+        hintText: 'Find a charger…',
+        hintStyle: const TextStyle(color: BrandPalette.muted, fontSize: 14),
+        prefixIcon: const Icon(Icons.search_rounded,
+            color: BrandPalette.muted, size: 20),
+        suffixIcon: controller.text.isEmpty
+            ? null
+            : IconButton(
+                icon: const Icon(Icons.close_rounded,
+                    color: BrandPalette.muted, size: 18),
+                onPressed: () => controller.clear(),
               ),
-              Text(
-                '${chargers.length}',
-                style: const TextStyle(
-                  color: BrandPalette.muted,
-                  fontSize: 12,
-                ),
-              ),
-            ],
-          ),
+        filled: true,
+        fillColor: BrandPalette.surface,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: BrandPalette.border),
         ),
-        ...chargers.map((c) => _ChargerCard(charger: c)),
-      ],
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: BrandPalette.border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: BrandPalette.cyan, width: 1.5),
+        ),
+      ),
     );
   }
 }
 
-class _ChargerCard extends StatelessWidget {
-  const _ChargerCard({required this.charger});
+class _FilterChips extends StatelessWidget {
+  const _FilterChips({
+    required this.selected,
+    required this.counts,
+    required this.onSelect,
+  });
+
+  final _Filter selected;
+  final Map<_Filter, int> counts;
+  final ValueChanged<_Filter> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final entries = [
+      (_Filter.all, 'All', null),
+      (_Filter.available, 'Available', BrandPalette.mint),
+      (_Filter.busy, 'In use', BrandPalette.cyan),
+      (_Filter.offline, 'Offline', BrandPalette.danger),
+    ];
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (final (filter, label, accent) in entries) ...[
+            _Chip(
+              label: label,
+              count: counts[filter] ?? 0,
+              accent: accent,
+              selected: selected == filter,
+              onTap: () => onSelect(filter),
+            ),
+            const SizedBox(width: 8),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _Chip extends StatelessWidget {
+  const _Chip({
+    required this.label,
+    required this.count,
+    required this.selected,
+    required this.onTap,
+    this.accent,
+  });
+
+  final String label;
+  final int count;
+  final bool selected;
+  final VoidCallback onTap;
+  final Color? accent;
+
+  @override
+  Widget build(BuildContext context) {
+    final tint = accent ?? BrandPalette.cyan;
+    final bg = selected
+        ? tint.withValues(alpha: 0.18)
+        : BrandPalette.surface;
+    final border = selected ? tint : BrandPalette.border;
+    final fg = selected ? tint : BrandPalette.muted;
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: border),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (accent != null && !selected) ...[
+              Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: accent,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 6),
+            ],
+            Text(
+              label,
+              style: TextStyle(
+                color: fg,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+              decoration: BoxDecoration(
+                color: selected
+                    ? tint.withValues(alpha: 0.25)
+                    : BrandPalette.deepNavy,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                '$count',
+                style: TextStyle(
+                  color: fg,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// Compact charger row — pattern lifted from ChargePoint / Octopus
+// Electroverse / Tesla detail list. ~64px tall, status dot + name +
+// meta + chevron. Tap → ChargerDetailSheet (modal bottom sheet) with
+// the prominent Start CTA. Keeps the list scannable at 30+ chargers.
+class _ChargerRow extends StatelessWidget {
+  const _ChargerRow({required this.charger, required this.onTap});
 
   final DriverCharger charger;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = charger;
+    final tint = switch (c.status) {
+      ConnectorStatus.available => BrandPalette.mint,
+      ConnectorStatus.charging => BrandPalette.cyan,
+      ConnectorStatus.preparing ||
+      ConnectorStatus.finishing => BrandPalette.amber,
+      ConnectorStatus.faulted ||
+      ConnectorStatus.unavailable => BrandPalette.danger,
+      _ => BrandPalette.muted,
+    };
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        margin: const EdgeInsets.only(bottom: 6),
+        decoration: BoxDecoration(
+          color: BrandPalette.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: BrandPalette.border),
+        ),
+        child: Row(
+          children: [
+            // Status dot
+            Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(
+                color: tint,
+                shape: BoxShape.circle,
+                boxShadow: c.status == ConnectorStatus.available
+                    ? [
+                        BoxShadow(
+                          color: tint.withValues(alpha: 0.55),
+                          blurRadius: 8,
+                        ),
+                      ]
+                    : null,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    c.displayName,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.1,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    c.maxPowerKw > 0
+                        ? '${c.status.label} · ${c.maxPowerKw.toStringAsFixed(1)} kW'
+                        : c.status.label,
+                    style: TextStyle(
+                      color: tint.withValues(alpha: 0.85),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded,
+                color: BrandPalette.muted, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _NoMatches extends StatelessWidget {
+  const _NoMatches();
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Card(
-        child: InkWell(
-          borderRadius: BorderRadius.circular(18),
-          onTap: () {
-            // Phase 3 hook — start session flow.
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  'Start ${charger.displayName} — coming in Phase 3',
-                ),
-                backgroundColor: BrandPalette.surface,
-              ),
-            );
-          },
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: BrandPalette.deepNavy,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: BrandPalette.border),
-                  ),
-                  child: Icon(
-                    Icons.bolt_rounded,
-                    color: charger.status.canStart
-                        ? BrandPalette.mint
-                        : BrandPalette.muted,
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        charger.displayName,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Row(
-                        children: [
-                          _StatusPill(status: charger.status),
-                          if (charger.maxPowerKw > 0) ...[
-                            const SizedBox(width: 8),
-                            Text(
-                              '${charger.maxPowerKw.toStringAsFixed(1)} kW',
-                              style: const TextStyle(
-                                color: BrandPalette.muted,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const Icon(Icons.chevron_right_rounded,
-                    color: BrandPalette.muted),
-              ],
+      padding: const EdgeInsets.symmetric(vertical: 32),
+      child: Column(
+        children: [
+          Icon(
+            Icons.search_off_rounded,
+            size: 36,
+            color: BrandPalette.muted.withValues(alpha: 0.6),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'No chargers match',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _StatusPill extends StatelessWidget {
-  const _StatusPill({required this.status});
-
-  final ConnectorStatus status;
-
-  @override
-  Widget build(BuildContext context) {
-    final (Color bg, Color fg) = switch (status) {
-      ConnectorStatus.available => (
-          BrandPalette.mint.withValues(alpha: 0.14),
-          BrandPalette.mint
-        ),
-      ConnectorStatus.charging => (
-          BrandPalette.cyan.withValues(alpha: 0.14),
-          BrandPalette.cyan
-        ),
-      ConnectorStatus.preparing ||
-      ConnectorStatus.finishing =>
-        (BrandPalette.amber.withValues(alpha: 0.14), BrandPalette.amber),
-      ConnectorStatus.faulted ||
-      ConnectorStatus.unavailable =>
-        (BrandPalette.danger.withValues(alpha: 0.14), BrandPalette.danger),
-      _ => (
-          BrandPalette.muted.withValues(alpha: 0.14),
-          BrandPalette.muted
-        ),
-    };
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(
-        status.label,
-        style: TextStyle(
-          color: fg,
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-        ),
+          const SizedBox(height: 4),
+          const Text(
+            'Try a different filter or clear the search.',
+            style: TextStyle(color: BrandPalette.muted, fontSize: 12),
+          ),
+        ],
       ),
     );
   }
