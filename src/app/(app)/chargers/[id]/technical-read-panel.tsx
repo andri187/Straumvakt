@@ -18,7 +18,11 @@ import {
 // consistent regardless of which subset of fields Zaptec returned.
 
 import { Signal, Radio, ShieldCheck, Thermometer, Zap, Cpu } from "lucide-react";
-import type { ChargerTechnicalRead } from "@straumvakt/shared/domain/charger-technical-read";
+import type {
+  ChargerTechnicalRead,
+  LocalAuthRoster,
+  LocalAuthRosterEntry,
+} from "@straumvakt/shared/domain/charger-technical-read";
 
 const DASH = "—";
 
@@ -292,8 +296,94 @@ export function TechnicalReadDetail({ read }: { read: ChargerTechnicalRead | nul
           <Row label="Enabled NFC tech" value={read.enabledNfcTechnologies ?? DASH} mono />
           <Row label="Routing ID" value={read.routingId ?? DASH} mono />
         </Card>
+
+        <LocalAuthRosterCard roster={read.localAuthRoster} />
       </div>
     </section>
+  );
+}
+
+function LocalAuthRosterCard({ roster }: { roster: LocalAuthRoster | null }) {
+  if (!roster) return null;
+  const hint =
+    `${roster.count} entries · ${roster.effectiveCount} would authorize` +
+    (roster.chargerListVersion != null
+      ? ` · charger v${roster.chargerListVersion}`
+      : "");
+
+  return (
+    <div className="rounded-lg border border-bg-border bg-bg-base/30 p-3 lg:col-span-2">
+      <header className="mb-2 flex items-baseline justify-between">
+        <h3 className="text-xs font-semibold text-ink-100">Local auth list (CSMS roster)</h3>
+        <span className="text-[10px] text-ink-500">{hint}</span>
+      </header>
+      {roster.note === "no_installation" ? (
+        <p className="text-[11px] italic text-ink-500">
+          Charger not linked to a Straumvakt Installation row.
+        </p>
+      ) : roster.note === "native_zaptec_managed" ? (
+        <p className="text-[11px] italic text-ink-500">
+          Installation is on{" "}
+          <span className="font-mono">AuthenticationType=0</span> (Native) —
+          Zaptec Portal owns the auth list. CSMS roster does not apply.
+        </p>
+      ) : roster.entries.length === 0 ? (
+        <p className="text-[11px] italic text-ink-500">
+          No IdTokens scoped to this installation (or globally) yet.
+        </p>
+      ) : (
+        <>
+          <p className="mb-2 text-[10px] text-ink-500">
+            CSMS-side view. Not pushed to the charger today —{" "}
+            <span className="font-mono">SendLocalList</span> is not wired.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[11px]">
+              <thead className="text-[10px] uppercase tracking-brand text-ink-500">
+                <tr>
+                  <th className="py-1 text-left font-medium">User</th>
+                  <th className="py-1 text-left font-medium">idTag</th>
+                  <th className="py-1 text-left font-medium">Kind</th>
+                  <th className="py-1 text-left font-medium">Scope</th>
+                  <th className="py-1 text-left font-medium">Verdict</th>
+                </tr>
+              </thead>
+              <tbody>
+                {roster.entries.map((e) => (
+                  <RosterRowCompact key={e.id} entry={e} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function RosterRowCompact({ entry }: { entry: LocalAuthRosterEntry }) {
+  const verdictText =
+    entry.effectiveVerdict === "would_authorize"
+      ? "would authorize"
+      : entry.effectiveVerdict === "blocked_revoked"
+        ? "blocked (revoked)"
+        : entry.effectiveVerdict === "blocked_suspended"
+          ? "blocked (suspended)"
+          : entry.effectiveVerdict === "blocked_no_contract"
+            ? "blocked (no contract)"
+            : "expired";
+  const verdictTone =
+    entry.effectiveVerdict === "would_authorize"
+      ? "text-sv-green"
+      : "text-ink-500";
+  return (
+    <tr className="border-t border-bg-border/30">
+      <td className="py-1 text-ink-100">{entry.userDisplay}</td>
+      <td className="py-1 font-mono text-ink-100">{entry.value}</td>
+      <td className="py-1 text-ink-300">{entry.kind}</td>
+      <td className="py-1 text-ink-300">{entry.scope}</td>
+      <td className={"py-1 " + verdictTone}>{verdictText}</td>
+    </tr>
   );
 }
 

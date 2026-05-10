@@ -33,7 +33,11 @@ import {
   formatSignal as fmtSignal,
 } from "@/lib/signal-quality";
 import type { ChargerDetail } from "@straumvakt/shared/domain/chargers";
-import type { ChargerTechnicalRead } from "@straumvakt/shared/domain/charger-technical-read";
+import type {
+  ChargerTechnicalRead,
+  LocalAuthRoster,
+  LocalAuthRosterEntry,
+} from "@straumvakt/shared/domain/charger-technical-read";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Technical Read · charger" };
@@ -377,6 +381,11 @@ export default async function ChargerTechnicalReadPage({
             />
           </TechSection>
         </div>
+
+        {/* Local auth roster — CSMS-side IdToken view.
+            Read-only for now; SendLocalList propagation is not wired,
+            so edits to the IdToken table do not reach the charger. */}
+        <LocalAuthRosterSection roster={t?.localAuthRoster ?? null} className="mt-5" />
 
         {/* Network + Eco/Schedule */}
         <div className="mt-5 grid gap-5 lg:grid-cols-2">
@@ -730,6 +739,130 @@ function SectionDivider({
       </div>
       <div className="h-px flex-1 bg-bg-border/50" />
     </div>
+  );
+}
+
+function LocalAuthRosterSection({
+  roster,
+  className,
+}: {
+  roster: LocalAuthRoster | null;
+  className?: string;
+}) {
+  if (!roster) {
+    return (
+      <TechSection
+        title="Local auth list (CSMS roster)"
+        source="api"
+        hint="IdToken table"
+        className={className}
+      >
+        <p className="text-[11px] italic text-ink-500">{DASH}</p>
+      </TechSection>
+    );
+  }
+
+  const versionMatch =
+    roster.pushedListVersion != null &&
+    roster.chargerListVersion != null &&
+    roster.pushedListVersion === roster.chargerListVersion;
+  const hint =
+    `roster: ${roster.count} · would-authorize: ${roster.effectiveCount}` +
+    (roster.chargerListVersion != null
+      ? ` · charger v${roster.chargerListVersion}`
+      : "");
+
+  return (
+    <TechSection
+      title="Local auth list (CSMS roster)"
+      source="api"
+      hint={hint}
+      className={className}
+    >
+      {roster.note === "no_installation" ? (
+        <p className="text-[11px] italic text-ink-500">
+          This charger is not linked to a Straumvakt Installation row, so
+          there is no CSMS roster to display.
+        </p>
+      ) : roster.note === "native_zaptec_managed" ? (
+        <p className="text-[11px] italic text-ink-500">
+          Installation runs <span className="font-mono">AuthenticationType=0</span>{" "}
+          (Native) — the Zaptec Portal owns the auth list. The Straumvakt
+          IdToken table does not mirror it.
+        </p>
+      ) : roster.entries.length === 0 ? (
+        <p className="text-[11px] italic text-ink-500">
+          No IdTokens scoped to this installation (or globally) yet.
+        </p>
+      ) : (
+        <>
+          <p className="mb-2 text-[10px] text-ink-500">
+            CSMS-side view of what would be pushed to the charger if{" "}
+            <span className="font-mono">SendLocalList</span> were wired.
+            Does not reflect the charger&apos;s actual local list (unreadable
+            via OCPP/REST). Charger reports list version{" "}
+            <span className="font-mono text-ink-300">
+              {roster.chargerListVersion ?? DASH}
+            </span>
+            ; CSMS pushed version{" "}
+            <span className="font-mono text-ink-300">
+              {roster.pushedListVersion ?? DASH}
+            </span>
+            {versionMatch ? " (match)" : ""}.
+          </p>
+          <div className="overflow-x-auto rounded border border-bg-border/40">
+            <table className="w-full text-[11px]">
+              <thead className="bg-bg-base/40 text-[10px] uppercase tracking-brand text-ink-500">
+                <tr>
+                  <th className="px-2 py-1 text-left font-medium">User</th>
+                  <th className="px-2 py-1 text-left font-medium">idTag</th>
+                  <th className="px-2 py-1 text-left font-medium">Kind</th>
+                  <th className="px-2 py-1 text-left font-medium">Scope</th>
+                  <th className="px-2 py-1 text-left font-medium">Status</th>
+                  <th className="px-2 py-1 text-left font-medium">Verdict</th>
+                  <th className="px-2 py-1 text-left font-medium">Expires</th>
+                  <th className="px-2 py-1 text-left font-medium">Last used</th>
+                </tr>
+              </thead>
+              <tbody>
+                {roster.entries.map((e) => (
+                  <RosterRow key={e.id} entry={e} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </TechSection>
+  );
+}
+
+function RosterRow({ entry }: { entry: LocalAuthRosterEntry }) {
+  const verdictText =
+    entry.effectiveVerdict === "would_authorize"
+      ? "would authorize"
+      : entry.effectiveVerdict === "blocked_revoked"
+        ? "blocked (revoked)"
+        : entry.effectiveVerdict === "blocked_suspended"
+          ? "blocked (suspended)"
+          : entry.effectiveVerdict === "blocked_no_contract"
+            ? "blocked (no contract)"
+            : "expired";
+  const verdictTone =
+    entry.effectiveVerdict === "would_authorize"
+      ? "text-sv-green"
+      : "text-ink-500";
+  return (
+    <tr className="border-t border-bg-border/30">
+      <td className="px-2 py-1 text-ink-100">{entry.userDisplay}</td>
+      <td className="px-2 py-1 font-mono text-ink-100">{entry.value}</td>
+      <td className="px-2 py-1 text-ink-300">{entry.kind}</td>
+      <td className="px-2 py-1 text-ink-300">{entry.scope}</td>
+      <td className="px-2 py-1 text-ink-300">{entry.status}</td>
+      <td className={"px-2 py-1 " + verdictTone}>{verdictText}</td>
+      <td className="px-2 py-1 text-ink-400">{fmtDate(entry.expiresAt)}</td>
+      <td className="px-2 py-1 text-ink-400">{fmtDate(entry.lastUsedAt)}</td>
+    </tr>
   );
 }
 
