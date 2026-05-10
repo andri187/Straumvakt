@@ -17,6 +17,22 @@ import { TokensPanel } from "./tokens-panel";
 
 export const metadata = { title: "User detail" };
 
+interface AgreementMembershipRow {
+  membershipId: string;
+  driverGroupId: string;
+  driverGroupDisplayName: string;
+  agreementId: string;
+  agreementType: "service_cpo" | "installation";
+  agreementDisplayName: string;
+  agreementStatus: "draft" | "active" | "expired";
+  installationId: string | null;
+  installationDisplayName: string | null;
+  counterpartyOrgDisplayName: string;
+  effectiveFrom: string;
+  effectiveUntil: string | null;
+  addedAt: string;
+}
+
 function StatusPill({ status }: { status: string }) {
   const tone =
     status === "active"
@@ -119,9 +135,11 @@ export default async function UserDetailPage({
     user: UserSummary;
     memberships: UserMembershipSummary[];
     idTokens?: IdTokenSummary[];
+    agreementMemberships?: AgreementMembershipRow[];
   };
   const { user, memberships } = detail;
   const idTokens = detail.idTokens ?? [];
+  const agreementMemberships = detail.agreementMemberships ?? [];
   const { orgs } = await apiFetchServerJson<{ orgs: OrgSummary[] }>(
     "/api/admin/orgs",
   );
@@ -153,6 +171,16 @@ export default async function UserDetailPage({
               </div>
               <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
                 <StatusPill status={user.status} />
+                <CountPill
+                  label="agreements"
+                  count={agreementMemberships.filter((m) => m.agreementStatus === "active").length}
+                  muted={
+                    agreementMemberships.length >
+                    agreementMemberships.filter((m) => m.agreementStatus === "active").length
+                      ? `${agreementMemberships.length} total`
+                      : null
+                  }
+                />
                 <CountPill label="memberships" count={memberships.length} />
                 <CountPill
                   label="RFIDs"
@@ -195,6 +223,79 @@ export default async function UserDetailPage({
                 />
               </div>
             </details>
+          </section>
+
+          {/* ADR 0019 A.8 — agreement memberships (driver-side access)
+              Distinct from "Memberships" below which is OrgMembership
+              (admin role within an Org). This section shows the
+              installations / CPOs the driver actually has charging
+              access at, via DriverGroup → Agreement. */}
+          <section className="rounded-lg border border-bg-border bg-bg-surface/70 shadow-card backdrop-blur">
+            <h2 className="border-b border-bg-border/60 px-5 py-2 text-[11px] font-semibold uppercase tracking-brand text-ink-300">
+              Agreement access{" "}
+              <span className="text-ink-500">· {agreementMemberships.length}</span>
+            </h2>
+            {agreementMemberships.length === 0 ? (
+              <p className="px-5 py-6 text-center text-xs italic text-ink-500">
+                No agreement memberships — this driver cannot charge anywhere
+                under the new agreements model. Add them to a DriverGroup via
+                the agreement detail page (or via the seed scripts during
+                pilot).
+              </p>
+            ) : (
+              <ul className="divide-y divide-bg-border/40">
+                {agreementMemberships.map((m) => (
+                  <li key={m.membershipId} className="px-5 py-3 hover:bg-bg-raised/30">
+                    <div className="flex flex-wrap items-baseline justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <Link
+                          href={`/agreements/${m.agreementId}` as Parameters<typeof Link>[0]["href"]}
+                          className="text-sm font-medium text-ink-100 hover:text-sv-sky"
+                        >
+                          {m.agreementDisplayName}
+                        </Link>
+                        <p className="mt-0.5 text-[11px] text-ink-400">
+                          <span
+                            className={
+                              "rounded px-1.5 py-0.5 font-mono text-[10px] font-medium ring-1 ring-inset " +
+                              (m.agreementType === "service_cpo"
+                                ? "bg-sv-sky/15 text-sv-sky ring-sv-sky/30"
+                                : "bg-emerald-400/15 text-emerald-300 ring-emerald-400/30")
+                            }
+                          >
+                            {m.agreementType}
+                          </span>
+                          <span className="ml-2">{m.counterpartyOrgDisplayName}</span>
+                          {m.installationDisplayName && (
+                            <span className="ml-2 text-ink-500">· {m.installationDisplayName}</span>
+                          )}
+                        </p>
+                        <p className="mt-0.5 text-[10px] text-ink-500">
+                          Group: <span className="text-ink-400">{m.driverGroupDisplayName}</span>
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <span
+                          className={
+                            "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-brand ring-1 ring-inset " +
+                            (m.agreementStatus === "active"
+                              ? "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30"
+                              : m.agreementStatus === "draft"
+                                ? "bg-amber-500/15 text-amber-300 ring-amber-500/30"
+                                : "bg-bg-raised/60 text-ink-400 ring-bg-border")
+                          }
+                        >
+                          {m.agreementStatus}
+                        </span>
+                        <p className="mt-1 text-[10px] text-ink-500">
+                          since {new Date(m.addedAt).toLocaleDateString("is-IS")}
+                        </p>
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
 
           <section className="rounded-lg border border-bg-border bg-bg-surface/70 shadow-card backdrop-blur">

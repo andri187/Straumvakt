@@ -14,6 +14,7 @@ import {
   createIdToken,
   listIdTokensForUser,
 } from "../../repositories/id-tokens";
+import { listAgreementMembershipsForUser } from "../../repositories/agreements";
 import type { Env } from "../../bindings";
 
 export const adminUsers = new Hono<{ Bindings: Env; Variables: AuthVars }>();
@@ -55,8 +56,10 @@ adminUsers.get("/:id", requirePermission("member.read"), async (c) => {
   // exist" — and Promise.all would 500 the entire user-detail GET, which
   // would break the user-detail page even though the user / memberships
   // data is fine. Degrade to idTokens=[] on failure and log loudly so the
-  // operator notices and runs migrate deploy.
-  const [user, memberships, idTokens] = await Promise.all([
+  // operator notices and runs migrate deploy. Same defensive treatment
+  // for agreement memberships (added per ADR 0019 A.8 — degrade if the
+  // agreements schema isn't deployed yet).
+  const [user, memberships, idTokens, agreementMemberships] = await Promise.all([
     getUserById(db, c.req.param("id")),
     listUserMemberships(db, c.req.param("id")),
     listIdTokensForUser(db, c.req.param("id")).catch((err) => {
@@ -66,9 +69,16 @@ adminUsers.get("/:id", requirePermission("member.read"), async (c) => {
       });
       return [];
     }),
+    listAgreementMembershipsForUser(db, c.req.param("id")).catch((err) => {
+      console.error("[admin/users] listAgreementMembershipsForUser failed; degrading to []", {
+        userId: c.req.param("id"),
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return [];
+    }),
   ]);
   if (!user) return c.json({ error: "not_found" }, 404);
-  return c.json({ user, memberships, idTokens });
+  return c.json({ user, memberships, idTokens, agreementMemberships });
 });
 
 adminUsers.patch("/:id", requirePermission("member.write"), async (c) => {
