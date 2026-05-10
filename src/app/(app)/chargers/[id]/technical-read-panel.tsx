@@ -1,6 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { apiFetch } from "@/lib/api-client";
 import {
   signalIconClass as signalIconClassShared,
@@ -387,229 +386,7 @@ function LocalAuthRosterCard({
           </div>
         </>
       )}
-      {/* Add-idTag form. Only meaningful when we have an installation
-          to scope to. Hidden in the no_installation / native_zaptec_managed
-          branches above (those return early before this point). */}
-      {(roster.note === "show_csms_roster" || roster.entries.length === 0) &&
-        roster.installationId && (
-          <AddIdTagForm installationId={roster.installationId} />
-        )}
     </div>
-  );
-}
-
-interface UserPick {
-  id: string;
-  email: string;
-  displayName: string | null;
-}
-
-function AddIdTagForm({ installationId }: { installationId: string }) {
-  const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const [users, setUsers] = useState<UserPick[] | null>(null);
-  const [loadingUsers, setLoadingUsers] = useState(false);
-  const [userId, setUserId] = useState<string>("");
-  const [value, setValue] = useState("");
-  const [label, setLabel] = useState("");
-  const [expiresAt, setExpiresAt] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [feedback, setFeedback] = useState<string | null>(null);
-  const [feedbackTone, setFeedbackTone] = useState<"ok" | "warn" | null>(null);
-
-  // Lazy-load users on first open. Cross-tenant list — platform staff
-  // permission scope, so the call may 403 for non-platform admins. We
-  // surface that as "no users available" instead of erroring loudly.
-  useEffect(() => {
-    if (!open || users !== null || loadingUsers) return;
-    setLoadingUsers(true);
-    apiFetch("/api/admin/users")
-      .then(async (r) => {
-        if (!r.ok) {
-          setUsers([]);
-          return;
-        }
-        const body = (await r.json()) as { users: UserPick[] };
-        setUsers(body.users);
-        if (body.users[0]) setUserId(body.users[0].id);
-      })
-      .catch(() => setUsers([]))
-      .finally(() => setLoadingUsers(false));
-  }, [open, users, loadingUsers]);
-
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!userId || busy) return;
-    setBusy(true);
-    setFeedback(null);
-    setFeedbackTone(null);
-    try {
-      const body: Record<string, unknown> = {
-        kind: "rfid",
-        scopeInstallationId: installationId,
-      };
-      if (value.trim().length > 0) body.value = value.trim().toUpperCase();
-      if (label.trim().length > 0) body.label = label.trim();
-      if (expiresAt.trim().length > 0) {
-        // datetime-local → ISO. Browser produces "YYYY-MM-DDTHH:MM"; new
-        // Date() interprets that as local time which is what we want.
-        body.expiresAt = new Date(expiresAt).toISOString();
-      }
-      const res = await apiFetch(`/api/admin/users/${userId}/tokens`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (res.status === 201) {
-        const created = (await res.json()) as {
-          token: { value: string };
-        };
-        setFeedback(`created · ${created.token.value}`);
-        setFeedbackTone("ok");
-        setValue("");
-        setLabel("");
-        setExpiresAt("");
-        // Refresh the server component so the new row appears in the
-        // roster table on the next render. Not auto-pushed — the
-        // operator clicks Push on the new row when ready.
-        router.refresh();
-      } else {
-        const errBody = (await res.json().catch(() => ({}))) as {
-          error?: string;
-          message?: string;
-        };
-        setFeedback(
-          errBody.message ?? errBody.error ?? `HTTP ${res.status}`,
-        );
-        setFeedbackTone("warn");
-      }
-    } catch (err) {
-      setFeedback(err instanceof Error ? err.message : String(err));
-      setFeedbackTone("warn");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="mt-3 rounded border border-bg-border bg-bg-base/40 px-3 py-1 text-[11px] text-ink-100 hover:border-sv-sky hover:text-sv-sky"
-      >
-        + Add idTag to this installation
-      </button>
-    );
-  }
-
-  return (
-    <form onSubmit={onSubmit} className="mt-3 space-y-2 rounded border border-bg-border/40 bg-bg-base/20 p-3">
-      <div className="flex items-baseline justify-between">
-        <h4 className="text-[11px] font-semibold text-ink-100">Add idTag</h4>
-        <button
-          type="button"
-          onClick={() => setOpen(false)}
-          className="text-[10px] text-ink-500 hover:text-ink-300"
-        >
-          cancel
-        </button>
-      </div>
-      <p className="text-[10px] text-ink-500">
-        Creates an IdToken on the Straumvakt side, scoped to this
-        installation. Does not push to any charger — click Push on the
-        new row to propagate via{" "}
-        <span className="font-mono">SendLocalList</span>.
-      </p>
-      <div className="grid grid-cols-2 gap-2 text-[11px]">
-        <label className="flex flex-col gap-0.5">
-          <span className="text-[10px] uppercase tracking-brand text-ink-500">
-            User
-          </span>
-          {loadingUsers ? (
-            <span className="text-ink-500 italic">loading…</span>
-          ) : users && users.length > 0 ? (
-            <select
-              value={userId}
-              onChange={(e) => setUserId(e.target.value)}
-              className="rounded border border-bg-border bg-bg-base/40 px-2 py-1 text-ink-100"
-              required
-            >
-              {users.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.displayName ?? u.email}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <span className="text-amber-300 italic">
-              no users — create one under /users first
-            </span>
-          )}
-        </label>
-        <label className="flex flex-col gap-0.5">
-          <span className="text-[10px] uppercase tracking-brand text-ink-500">
-            idTag value <span className="text-ink-600">(blank = auto-mint)</span>
-          </span>
-          <input
-            type="text"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            placeholder="e.g. EE43C609263CC7"
-            className="rounded border border-bg-border bg-bg-base/40 px-2 py-1 font-mono text-ink-100"
-          />
-        </label>
-        <label className="flex flex-col gap-0.5">
-          <span className="text-[10px] uppercase tracking-brand text-ink-500">
-            Label <span className="text-ink-600">(optional)</span>
-          </span>
-          <input
-            type="text"
-            value={label}
-            onChange={(e) => setLabel(e.target.value)}
-            placeholder="e.g. Andri black tag"
-            className="rounded border border-bg-border bg-bg-base/40 px-2 py-1 text-ink-100"
-          />
-        </label>
-        <label className="flex flex-col gap-0.5">
-          <span className="text-[10px] uppercase tracking-brand text-ink-500">
-            Expires <span className="text-ink-600">(optional)</span>
-          </span>
-          <input
-            type="datetime-local"
-            value={expiresAt}
-            onChange={(e) => setExpiresAt(e.target.value)}
-            className="rounded border border-bg-border bg-bg-base/40 px-2 py-1 text-ink-100"
-          />
-        </label>
-      </div>
-      <div className="flex items-center justify-between gap-2">
-        {feedback ? (
-          <span
-            className={
-              "text-[10px] " +
-              (feedbackTone === "ok" ? "text-sv-green" : "text-amber-300")
-            }
-          >
-            {feedback}
-          </span>
-        ) : (
-          <span />
-        )}
-        <button
-          type="submit"
-          disabled={!userId || busy}
-          className={
-            "rounded border px-3 py-1 text-[11px] font-medium " +
-            (userId && !busy
-              ? "border-sv-sky bg-sv-sky/10 text-sv-sky hover:bg-sv-sky/20"
-              : "border-bg-border/30 bg-bg-base/20 text-ink-600 cursor-not-allowed")
-          }
-        >
-          {busy ? "creating…" : "Create idTag"}
-        </button>
-      </div>
-    </form>
   );
 }
 
@@ -639,13 +416,27 @@ function RosterRowCompact({
   const [feedback, setFeedback] = useState<string | null>(null);
   const [feedbackTone, setFeedbackTone] = useState<"ok" | "warn" | null>(null);
 
-  // Refuse to push revoked tokens client-side (the API enforces too,
-  // but this avoids a round-trip and matches Rule 5's "don't surprise-
-  // re-authorize at the charger" hygiene).
+  // Only `would_authorize` entries are pushable. Anything else, if
+  // pushed into the charger's local list, would let it authorize during
+  // an offline window (LocalAuthorizeOffline=true on Zaptec defaults) —
+  // bypassing the contract gate that lives in ocpp-authorize.ts. That's
+  // a Rule 5 access-grant violation: a revoked / suspended / expired /
+  // no-contract user should never authorize at the charger, online or
+  // offline.
   const pushable =
-    !!ocppIdentityId &&
-    entry.effectiveVerdict !== "blocked_revoked" &&
-    entry.status !== "revoked";
+    !!ocppIdentityId && entry.effectiveVerdict === "would_authorize";
+
+  const disabledReason = !ocppIdentityId
+    ? "Charger has no OCPP identity yet"
+    : entry.effectiveVerdict === "blocked_revoked"
+      ? "Token is revoked — pushing would re-authorize at the charger"
+      : entry.effectiveVerdict === "blocked_suspended"
+        ? "Token is suspended"
+        : entry.effectiveVerdict === "blocked_no_contract"
+          ? "User has no active contract at this installation. Pushing would authorize them during offline windows, bypassing the contract gate."
+          : entry.effectiveVerdict === "expired"
+            ? "Token has expired"
+            : "Send via OCPP SendLocalList (Differential)";
 
   async function onPush() {
     if (!ocppIdentityId || busy) return;
@@ -709,13 +500,7 @@ function RosterRowCompact({
                 ? "border-bg-border bg-bg-base/40 text-ink-100 hover:border-sv-sky hover:text-sv-sky"
                 : "border-bg-border/30 bg-bg-base/20 text-ink-600 cursor-not-allowed")
             }
-            title={
-              !ocppIdentityId
-                ? "Charger has no OCPP identity yet"
-                : !pushable
-                  ? "Cannot push a revoked token"
-                  : "Send via OCPP SendLocalList (Differential)"
-            }
+            title={disabledReason}
           >
             {busy ? "…" : "Push"}
           </button>

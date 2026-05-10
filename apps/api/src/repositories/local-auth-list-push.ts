@@ -60,7 +60,10 @@ export class PushIdTokenError extends Error {
       | "identity_not_found"
       | "id_token_not_found"
       | "id_token_revoked"
-      | "scope_mismatch",
+      | "id_token_suspended"
+      | "id_token_expired"
+      | "scope_mismatch"
+      | "no_contract",
     message: string,
   ) {
     super(message);
@@ -99,6 +102,7 @@ export async function pushIdTokenToCharger(
     where: { id: input.idTokenId },
     select: {
       id: true,
+      userId: true,
       value: true,
       status: true,
       expiresAt: true,
@@ -111,10 +115,32 @@ export async function pushIdTokenToCharger(
       `IdToken ${input.idTokenId} not found`,
     );
   }
+  // Status guards. Pushing any non-active token would put it in the
+  // charger's local list, where it authorizes during offline windows
+  // (LocalAuthorizeOffline=true on Zaptec defaults) — bypassing the
+  // online status check that lives in ocpp-authorize.ts.
   if (token.status === "revoked") {
     throw new PushIdTokenError(
       "id_token_revoked",
       "Refusing to push a revoked IdToken — would re-authorize at the charger.",
+    );
+  }
+  if (token.status === "suspended") {
+    throw new PushIdTokenError(
+      "id_token_suspended",
+      "IdToken is suspended.",
+    );
+  }
+  if (token.status === "expired") {
+    throw new PushIdTokenError(
+      "id_token_expired",
+      "IdToken status is expired.",
+    );
+  }
+  if (token.expiresAt && token.expiresAt.getTime() <= Date.now()) {
+    throw new PushIdTokenError(
+      "id_token_expired",
+      "IdToken's expiresAt is in the past.",
     );
   }
   // Scope guard. If the IdToken is scoped to a specific installation,
@@ -129,6 +155,36 @@ export async function pushIdTokenToCharger(
       "scope_mismatch",
       "IdToken is scoped to a different installation than this charger.",
     );
+  }
+  // Contract gate (ADR 0019). The same check ocpp-authorize.ts runs
+  // online: the user must hold an active DriverGroupMembership under
+  // an active installation-type Agreement at the charger's installation.
+  // Without this, pushing a no-contract token would let it authorize
+  // during the next CSMS-outage tap — bypassing the contract layer
+  // that gates online auth.
+  if (identity.chargingStation.installationId) {
+    const now = new Date();
+    const membership = await db.driverGroupMembership.findFirst({
+      where: {
+        userId: token.userId,
+        driverGroup: {
+          agreement: {
+            agreementType: "installation",
+            installationId: identity.chargingStation.installationId,
+            status: "active",
+            effectiveFrom: { lte: now },
+            OR: [{ effectiveUntil: null }, { effectiveUntil: { gt: now } }],
+          },
+        },
+      },
+      select: { id: true },
+    });
+    if (!membership) {
+      throw new PushIdTokenError(
+        "no_contract",
+        "User has no active contract at this installation. Pushing would authorize them during offline windows.",
+      );
+    }
   }
 
   // OCPP idTagInfo for an "add this entry" Differential push. We pass
