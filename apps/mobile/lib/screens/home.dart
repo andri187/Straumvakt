@@ -183,6 +183,18 @@ class _HomeScreenState extends State<HomeScreen> {
                   }
                   final filtered = _applyFilters(all);
 
+                  // Group filtered chargers by location. When the
+                  // driver has access at multiple installations, this
+                  // gives them clear sections + per-location counts.
+                  // With only one location, the header is still
+                  // visible — the cost is one row of label.
+                  final byLocation = <String, List<DriverCharger>>{};
+                  for (final c in filtered) {
+                    byLocation
+                        .putIfAbsent(c.locationName, () => [])
+                        .add(c);
+                  }
+
                   return SliverPadding(
                     padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
                     sliver: SliverList(
@@ -202,11 +214,18 @@ class _HomeScreenState extends State<HomeScreen> {
                         if (filtered.isEmpty)
                           const _NoMatches()
                         else
-                          ...filtered.map((c) => _ChargerRow(
-                                charger: c,
-                                onTap: () =>
-                                    ChargerDetailSheet.show(context, c),
-                              )),
+                          for (final entry in byLocation.entries) ...[
+                            _LocationHeader(
+                              location: entry.key,
+                              count: entry.value.length,
+                            ),
+                            ...entry.value.map((c) => _ChargerRow(
+                                  charger: c,
+                                  onTap: () =>
+                                      ChargerDetailSheet.show(context, c),
+                                )),
+                            const SizedBox(height: 8),
+                          ],
                       ]),
                     ),
                   );
@@ -482,6 +501,49 @@ class _ChargerRow extends StatelessWidget {
                 color: BrandPalette.muted, size: 20),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _LocationHeader extends StatelessWidget {
+  const _LocationHeader({required this.location, required this.count});
+
+  final String location;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(2, 4, 2, 6),
+      child: Row(
+        children: [
+          const Icon(Icons.place_rounded,
+              size: 16, color: BrandPalette.muted),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              location,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.2,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          Text(
+            '$count',
+            style: const TextStyle(
+              color: BrandPalette.muted,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              fontFeatures: [FontFeature.tabularFigures()],
+            ),
+          ),
+        ],
       ),
     );
   }
