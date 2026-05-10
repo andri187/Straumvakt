@@ -31,10 +31,12 @@ class _HomeScreenState extends State<HomeScreen> {
   late Future<List<DriverCharger>> _futureChargers;
   _Filter _filter = _Filter.all;
 
-  // Currently-detected nearby charger. Cleared after 8s without a
-  // refresh from the scanner (the device walked away).
-  NearbyCharger? _nearby;
-  Timer? _nearbyExpiryTimer;
+  // All currently-detected nearby chargers (keyed by connectorId).
+  // Twin-pole / quad-pole installs trigger multiple detections at
+  // similar RSSI; we keep them all and let the driver pick.
+  // Entries expire 8s after their last detection (driver walked away).
+  final Map<String, NearbyCharger> _nearbyMap = {};
+  Timer? _nearbyCleanupTimer;
 
   @override
   void initState() {
@@ -46,7 +48,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     _scanSub?.cancel();
-    _nearbyExpiryTimer?.cancel();
+    _nearbyCleanupTimer?.cancel();
     _scanner.stop();
     super.dispose();
   }
@@ -54,15 +56,57 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _startScanning(List<DriverCharger> chargers) async {
     final ok = await _scanner.start(known: chargers);
     if (!ok) return;
-    _scanSub = _scanner.nearbyStream.listen((nearby) {
+
+    // Re-scan the map every 2s and drop entries older than 8s. Cheap
+    // periodic GC instead of one Timer per detection (which got messy
+    // with twin-pole installs constantly re-firing).
+    _nearbyCleanupTimer = Timer.periodic(const Duration(seconds: 2), (_) {
       if (!mounted) return;
-      setState(() => _nearby = nearby);
-      _nearbyExpiryTimer?.cancel();
-      _nearbyExpiryTimer = Timer(const Duration(seconds: 8), () {
-        if (!mounted) return;
-        setState(() => _nearby = null);
+      final cutoff = DateTime.now().subtract(const Duration(seconds: 8));
+      final stale = _nearbyMap.entries
+          .where((e) => e.value.detectedAt.isBefore(cutoff))
+          .map((e) => e.key)
+          .toList();
+      if (stale.isEmpty) return;
+      setState(() {
+        for (final k in stale) {
+          _nearbyMap.remove(k);
+        }
       });
     });
+
+    _scanSub = _scanner.nearbyStream.listen((nearby) {
+      if (!mounted) return;
+      setState(() {
+        _nearbyMap[nearby.charger.connectorId] = nearby;
+      });
+    });
+  }
+
+  /// Currently-nearby chargers sorted strongest-first (highest RSSI).
+  /// Twin-pole installs may have 2-4 within range simultaneously; the
+  /// driver picks which one they actually want.
+  List<NearbyCharger> get _nearbySorted {
+    final list = _nearbyMap.values.toList();
+    list.sort((a, b) => b.rssi.compareTo(a.rssi));
+    return list;
+  }
+
+  /// Opens a bottom sheet listing all currently-nearby chargers so the
+  /// driver can disambiguate when several are on the same pole.
+  void _showNearbyPicker() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => _NearbyPickerSheet(
+        nearby: _nearbySorted,
+        onPick: (n) {
+          Navigator.of(context).pop();
+          ChargerDetailSheet.show(context, n.charger);
+        },
+      ),
+    );
   }
 
   Future<List<DriverCharger>> _loadChargers() async {
@@ -199,7 +243,13 @@ class _HomeScreenState extends State<HomeScreen> {
                     padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
                     sliver: SliverList(
                       delegate: SliverChildListDelegate.fixed([
-                        if (_nearby != null) NearbyCard(nearby: _nearby!),
+                        if (_nearbySorted.isNotEmpty)
+                          NearbyCard(
+                            nearby: _nearbySorted.first,
+                            othersNearby:
+                                _nearbySorted.skip(1).toList(growable: false),
+                            onPickOther: _showNearbyPicker,
+                          ),
                         _FilterChips(
                           selected: _filter,
                           counts: {
@@ -500,6 +550,131 @@ class _ChargerRow extends StatelessWidget {
             const Icon(Icons.chevron_right_rounded,
                 color: BrandPalette.muted, size: 20),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// Modal sheet that lists every currently-nearby charger sorted by
+// RSSI. Used when twin-pole / quad-pole installs put several Zaptecs
+// within tap range simultaneously and the driver needs to pick.
+class _NearbyPickerSheet extends StatelessWidget {
+  const _NearbyPickerSheet({required this.nearby, required this.onPick});
+
+  final List<NearbyCharger> nearby;
+  final ValueChanged<NearbyCharger> onPick;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: BrandPalette.surface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        border: Border(
+          top: BorderSide(color: BrandPalette.border),
+          left: BorderSide(color: BrandPalette.border),
+          right: BorderSide(color: BrandPalette.border),
+        ),
+      ),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 14),
+              decoration: BoxDecoration(
+                color: BrandPalette.muted.withValues(alpha: 0.4),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const Text(
+            'Pick the charger',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+              letterSpacing: -0.3,
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Multiple Zaptecs are within BLE range — common when '
+            'they\'re mounted on the same pole. Sorted by signal '
+            'strength (closest first).',
+            style: TextStyle(color: BrandPalette.muted, fontSize: 12),
+          ),
+          const SizedBox(height: 14),
+          ...nearby.map((n) => _NearbyPickRow(
+                nearby: n,
+                onTap: () => onPick(n),
+              )),
+        ],
+      ),
+    );
+  }
+}
+
+class _NearbyPickRow extends StatelessWidget {
+  const _NearbyPickRow({required this.nearby, required this.onTap});
+
+  final NearbyCharger nearby;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = nearby.charger;
+    final cm = (nearby.approxMetres * 100).round();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: BrandPalette.deepNavy,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: BrandPalette.border),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.bluetooth_rounded,
+                  color: BrandPalette.cyan, size: 18),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      c.displayName,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      cm < 100 ? '$cm cm · ${nearby.rssi} dBm' : '~${nearby.approxMetres.toStringAsFixed(1)} m · ${nearby.rssi} dBm',
+                      style: const TextStyle(
+                        color: BrandPalette.muted,
+                        fontSize: 11,
+                        fontFeatures: [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded,
+                  color: BrandPalette.muted, size: 20),
+            ],
+          ),
         ),
       ),
     );

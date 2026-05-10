@@ -12,9 +12,24 @@ import '../theme/palette.dart';
 import 'charger_detail_sheet.dart';
 
 class NearbyCard extends StatelessWidget {
-  const NearbyCard({super.key, required this.nearby});
+  const NearbyCard({
+    super.key,
+    required this.nearby,
+    this.othersNearby = const [],
+    this.onPickOther,
+  });
 
   final NearbyCharger nearby;
+
+  /// Other chargers also detected in BLE range (sorted strongest-first).
+  /// Twin-pole / quad-pole installs commonly produce 2-4 simultaneous
+  /// detections at similar RSSI. We surface the strongest as the
+  /// primary card; this list drives the "+N more nearby" affordance.
+  final List<NearbyCharger> othersNearby;
+
+  /// Tapped when the driver wants to pick a different one of the
+  /// nearby chargers (e.g. they're between two on a twin pole).
+  final VoidCallback? onPickOther;
 
   @override
   Widget build(BuildContext context) {
@@ -91,6 +106,31 @@ class NearbyCard extends StatelessWidget {
                         fontSize: 12,
                       ),
                     ),
+                    if (othersNearby.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      GestureDetector(
+                        onTap: onPickOther,
+                        behavior: HitTestBehavior.opaque,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.layers_rounded,
+                                size: 12, color: BrandPalette.cyan),
+                            const SizedBox(width: 4),
+                            Text(
+                              '+${othersNearby.length} more on this pole',
+                              style: const TextStyle(
+                                color: BrandPalette.cyan,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                decoration: TextDecoration.underline,
+                                decorationColor: BrandPalette.cyan,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -125,14 +165,21 @@ class NearbyCard extends StatelessWidget {
   }
 
   String _distanceLabel(double m) {
-    // Tuned for Zaptec's "tap" UX feel — phone effectively touching
-    // the charger. The log-distance model in scanner.dart maps:
-    //   ~0.3m  ≈  -47 dBm   (phone in hand on the charger)
-    //   ~1.0m  ≈  -59 dBm   (arm's length)
-    //   ~2.5m  ≈  -69 dBm   (next station over)
-    if (m < 0.3) return 'tap range';
-    if (m < 1.0) return 'right here';
-    if (m < 2.5) return 'within reach';
+    // Centimetres for the tap-and-auth feel — drivers expect precise
+    // proximity feedback when the phone is on/near the charger, not
+    // a vague '0.3 m'. Switches to metres only when out of tap range.
+    //
+    // RSSI-to-distance reference (log-distance, n=2.5):
+    //   ~10 cm ≈ -42 dBm   (phone touching the charger)
+    //   ~30 cm ≈ -47 dBm
+    //   ~70 cm ≈ -55 dBm   (arm's length)
+    //   ~1 m   ≈ -59 dBm
+    if (m < 1.0) {
+      final cm = (m * 100).round().clamp(1, 99);
+      if (cm <= 25) return 'tap · $cm cm';
+      return '$cm cm · close';
+    }
+    if (m < 2.5) return '~${(m * 100).round()} cm';
     return '~${m.round()} m';
   }
 }
