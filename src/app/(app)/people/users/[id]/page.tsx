@@ -116,16 +116,22 @@ function addressInitial(raw: unknown): {
   };
 }
 
+type TabKey = "profile" | "agreements";
+
 export default async function UserDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ tab?: string }>;
 }) {
   const jar = await cookies();
   const token = jar.get(adminSessionConfig.SESSION_COOKIE_NAME)?.value;
   const session = await verifyAdminSession(token);
 
   const { id } = await params;
+  const sp = await searchParams;
+  const tab: TabKey = sp.tab === "agreements" ? "agreements" : "profile";
   const detailRes = await apiFetchServer(`/api/admin/users/${id}`);
   if (detailRes.status === 404) notFound();
   if (!detailRes.ok) throw new Error(`HTTP ${detailRes.status}`);
@@ -225,11 +231,29 @@ export default async function UserDetailPage({
             </details>
           </section>
 
+          {/* Tab nav — switches the panes below. Header card above
+              stays visible on both tabs as the "identity card". */}
+          <nav className="flex items-stretch gap-1 border-b border-bg-border">
+            <TabLink
+              href={`/people/users/${user.id}` as Parameters<typeof Link>[0]["href"]}
+              label="Profile"
+              count={memberships.length + idTokens.filter((t) => t.status === "active").length}
+              active={tab === "profile"}
+            />
+            <TabLink
+              href={`/people/users/${user.id}?tab=agreements` as Parameters<typeof Link>[0]["href"]}
+              label="Agreements"
+              count={agreementMemberships.filter((m) => m.agreementStatus === "active").length}
+              active={tab === "agreements"}
+            />
+          </nav>
+
           {/* ADR 0019 A.8 — agreement memberships (driver-side access)
-              Distinct from "Memberships" below which is OrgMembership
-              (admin role within an Org). This section shows the
-              installations / CPOs the driver actually has charging
-              access at, via DriverGroup → Agreement. */}
+              Distinct from "Memberships" panel (OrgMembership / admin
+              role within an Org). This section shows the installations
+              / CPOs the driver actually has charging access at, via
+              DriverGroup → Agreement. */}
+          {tab === "agreements" && (
           <section className="rounded-lg border border-bg-border bg-bg-surface/70 shadow-card backdrop-blur">
             <h2 className="border-b border-bg-border/60 px-5 py-2 text-[11px] font-semibold uppercase tracking-brand text-ink-300">
               Agreement access{" "}
@@ -297,7 +321,10 @@ export default async function UserDetailPage({
               </ul>
             )}
           </section>
+          )}
 
+          {tab === "profile" && (
+          <>
           <section className="rounded-lg border border-bg-border bg-bg-surface/70 shadow-card backdrop-blur">
             <h2 className="border-b border-bg-border/60 px-5 py-2 text-[11px] font-semibold uppercase tracking-brand text-ink-300">
               Memberships <span className="text-ink-500">· {memberships.length}</span>
@@ -324,8 +351,40 @@ export default async function UserDetailPage({
             </h2>
             <TokensPanel userId={user.id} initialTokens={idTokens} />
           </section>
+          </>
+          )}
         </div>
       </PageShell>
     </>
+  );
+}
+
+function TabLink({
+  href,
+  label,
+  count,
+  active,
+}: {
+  href: Parameters<typeof Link>[0]["href"];
+  label: string;
+  count: number;
+  active: boolean;
+}) {
+  const base = "px-4 py-2 text-sm border-b-2 -mb-px transition-colors";
+  const cls = active
+    ? "border-sv-sky text-sv-sky font-semibold"
+    : "border-transparent text-ink-400 hover:text-ink-100 hover:border-bg-border";
+  return (
+    <Link href={href} className={`${base} ${cls}`}>
+      {label}
+      <span
+        className={
+          "ml-2 rounded px-1.5 py-0.5 font-mono text-[10px] " +
+          (active ? "bg-sv-sky/15 text-sv-sky" : "bg-bg-base/60 text-ink-500")
+        }
+      >
+        {count}
+      </span>
+    </Link>
   );
 }
