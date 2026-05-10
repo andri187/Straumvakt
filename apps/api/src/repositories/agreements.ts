@@ -89,6 +89,67 @@ export interface BearerRuleRow {
   effectiveUntil: string | null;
 }
 
+// ── Per-user agreement memberships (for user detail page) ───────────
+
+export interface UserAgreementMembership {
+  membershipId: string;
+  driverGroupId: string;
+  driverGroupDisplayName: string;
+  agreementId: string;
+  agreementType: PilotAgreementType;
+  agreementDisplayName: string;
+  agreementStatus: "draft" | "active" | "expired";
+  installationId: string | null;
+  installationDisplayName: string | null;
+  counterpartyOrgDisplayName: string;
+  effectiveFrom: string;
+  effectiveUntil: string | null;
+  addedAt: string;
+}
+
+export async function listAgreementMembershipsForUser(
+  prisma: PrismaClient,
+  userId: string,
+): Promise<UserAgreementMembership[]> {
+  const memberships = await prisma.driverGroupMembership.findMany({
+    where: {
+      userId,
+      driverGroup: {
+        agreement: { agreementType: { in: ["service_cpo", "installation"] } },
+      },
+    },
+    include: {
+      driverGroup: {
+        include: {
+          agreement: {
+            include: {
+              counterpartyOrg: { select: { displayName: true } },
+              installation: { select: { id: true, displayName: true } },
+            },
+          },
+        },
+      },
+    },
+    orderBy: { addedAt: "desc" },
+  });
+
+  return memberships.map((m): UserAgreementMembership => ({
+    membershipId: m.id,
+    driverGroupId: m.driverGroup.id,
+    driverGroupDisplayName: m.driverGroup.displayName,
+    agreementId: m.driverGroup.agreement.id,
+    agreementType: m.driverGroup.agreement.agreementType as PilotAgreementType,
+    agreementDisplayName: m.driverGroup.agreement.displayName,
+    agreementStatus: m.driverGroup.agreement.status as UserAgreementMembership["agreementStatus"],
+    installationId: m.driverGroup.agreement.installation?.id ?? null,
+    installationDisplayName: m.driverGroup.agreement.installation?.displayName ?? null,
+    counterpartyOrgDisplayName: m.driverGroup.agreement.counterpartyOrg.displayName,
+    effectiveFrom: m.driverGroup.agreement.effectiveFrom.toISOString(),
+    effectiveUntil: m.driverGroup.agreement.effectiveUntil?.toISOString() ?? null,
+    addedAt: m.addedAt.toISOString(),
+  }));
+}
+
 // ── List (operator-facing, pilot types only) ─────────────────────────
 
 export async function listAgreements(
