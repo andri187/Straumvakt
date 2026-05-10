@@ -165,21 +165,22 @@ class NearbyCard extends StatelessWidget {
   }
 
   String _distanceLabel(double m) {
-    // Centimetres for the tap-and-auth feel — drivers expect precise
-    // proximity feedback when the phone is on/near the charger, not
-    // a vague '0.3 m'. Switches to metres only when out of tap range.
+    // Centimetres for the tap-and-auth feel. True 'tap' means the
+    // phone is physically touching the charger casing — under 5 cm.
+    // Above that, cm precision in the close-range, metres only for
+    // "you're walking up" awareness.
     //
     // RSSI-to-distance reference (log-distance, n=2.5):
-    //   ~10 cm ≈ -42 dBm   (phone touching the charger)
+    //   ~3  cm ≈ -19 dBm   (phone pressed against the charger)
+    //   ~5  cm ≈ -27 dBm   ('tap' boundary)
+    //   ~10 cm ≈ -34 dBm
     //   ~30 cm ≈ -47 dBm
     //   ~70 cm ≈ -55 dBm   (arm's length)
     //   ~1 m   ≈ -59 dBm
-    if (m < 1.0) {
-      final cm = (m * 100).round().clamp(1, 99);
-      if (cm <= 25) return 'tap · $cm cm';
-      return '$cm cm · close';
-    }
-    if (m < 2.5) return '~${(m * 100).round()} cm';
+    final cm = (m * 100).round();
+    if (cm < 5) return 'tap · $cm cm';
+    if (cm < 100) return '$cm cm · close';
+    if (m < 2.5) return '~$cm cm';
     return '~${m.round()} m';
   }
 }
