@@ -13,10 +13,19 @@
 // downstream UI flow without real hardware.
 
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../api/types.dart';
+
+// Threshold for surfacing a charger as "nearby" — tuned for Zaptec
+// advertising at typical EV-station mounting heights, driver
+// standing next to the charger. -71 dBm corresponds to roughly 3m
+// indoors with n=2.5; further than that the driver isn't intentionally
+// near *this* charger and we'd just spam NearbyCard pop-ins as they
+// walk past the row.
+const int kNearbyRssiThreshold = -71;
 
 class NearbyCharger {
   const NearbyCharger({
@@ -29,14 +38,23 @@ class NearbyCharger {
   final int rssi;
   final DateTime detectedAt;
 
-  /// Rough distance in metres derived from RSSI. Coarse — for "very
-  /// close / close / nearby" classification, not navigation.
+  /// Rough distance in metres derived from RSSI using the log-distance
+  /// path-loss model:
+  ///
+  ///   d = 10 ^ ((measured - rssi) / (10 * n))
+  ///
+  /// measured = -59 dBm (typical BLE peripheral RSSI at 1m)
+  /// n = 2.5 (indoor path-loss exponent, accounts for walls / metal
+  /// charger enclosure)
+  ///
+  /// Coarse — for "right here / within reach / a few steps" UX
+  /// classification, not navigation.
   double get approxMetres {
-    // RSSI → distance: d = 10 ^ ((measured - rssi) / (10 * n))
-    // measured = -59 dBm at 1m (typical), n = 2 (free-space-ish).
     if (rssi >= 0) return 999;
-    final ratio = (-59 - rssi) / 20;
-    final d = (1 * (1 << ratio.clamp(0, 6).toInt())).toDouble();
+    const measuredAt1m = -59.0;
+    const pathLossExp = 2.5;
+    final ratio = (measuredAt1m - rssi) / (10 * pathLossExp);
+    final d = math.pow(10, ratio).toDouble();
     return d.clamp(0.1, 100);
   }
 }
@@ -113,6 +131,12 @@ class _RealBleScanner implements BleScanner {
   void _onScanResults(List<ScanResult> results) {
     final now = DateTime.now();
     for (final r in results) {
+      // Filter weak signals — driver isn't actually close to this
+      // charger. Threshold tuned for Zaptec advertising at typical
+      // mounting height; weaker than -78 dBm is "across the parking
+      // lot" not "tap range".
+      if (r.rssi < kNearbyRssiThreshold) continue;
+
       DriverCharger? hit;
       // Zaptec advertises serial in localName
       final localName = r.advertisementData.advName.toUpperCase();

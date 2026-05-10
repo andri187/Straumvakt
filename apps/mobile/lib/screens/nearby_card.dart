@@ -125,11 +125,15 @@ class NearbyCard extends StatelessWidget {
   }
 
   String _distanceLabel(double m) {
-    if (m < 1.5) return 'right here';
-    if (m < 3) return 'within reach';
-    if (m < 8) return 'a few steps';
-    if (m < 30) return '~${m.round()} m';
-    return 'in BLE range';
+    // Tuned for Zaptec's "tap" UX feel — phone effectively touching
+    // the charger. The log-distance model in scanner.dart maps:
+    //   ~0.3m  ≈  -47 dBm   (phone in hand on the charger)
+    //   ~1.0m  ≈  -59 dBm   (arm's length)
+    //   ~2.5m  ≈  -69 dBm   (next station over)
+    if (m < 0.3) return 'tap range';
+    if (m < 1.0) return 'right here';
+    if (m < 2.5) return 'within reach';
+    return '~${m.round()} m';
   }
 }
 
