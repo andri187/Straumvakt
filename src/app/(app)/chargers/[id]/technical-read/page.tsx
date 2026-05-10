@@ -356,6 +356,21 @@ export default async function ChargerTechnicalReadPage({
               mono
             />
             <InfoRow
+              label="Current user UUID (722)"
+              info={t?.currentUserUuid ?? DASH}
+              mono
+            />
+            <InfoRow
+              label="Last rejected UUID (725)"
+              info={t?.lastRejectedUserUuid ?? DASH}
+              mono
+            />
+            <InfoRow
+              label="Enabled NFC tech (752)"
+              info={t?.enabledNfcTechnologies ?? DASH}
+              mono
+            />
+            <InfoRow
               label="Default idTag"
               info={t?.ocppDefaultIdTag ?? DASH}
               mono

@@ -69,6 +69,14 @@ export interface ChargerTechnicalRead {
   ocppDefaultIdTag: string | null;          // PropertyOcppDefaultIdTag — fallback for StartTransaction
   ocppCloudUrlVersion: number | null;       // 0=Legacy, 1=OCPP 1.6 compliant
   authListVersion: number | null;           // StateId 751 — Zaptec local auth list version
+  // Auth-list metadata that the charger exposes alongside the version
+  // counter. The list contents themselves are not readable (neither
+  // OCPP `GetLocalListVersion` nor the Zaptec REST surface returns the
+  // roster) — these are the per-tap event mirrors plus the reader
+  // capability flags. Source of truth for the roster remains the CSMS.
+  currentUserUuid: string | null;           // StateId 722 — UUID currently authorized for the active session
+  lastRejectedUserUuid: string | null;      // StateId 725 — UUID of the most recently rejected card
+  enabledNfcTechnologies: string | null;    // StateId 752 — bitmask/label of enabled NFC stacks
   routingId: string | null;                 // StateId 801 — DLB routing key
   installationId: string | null;            // StateId 800 — Zaptec installation UUID
 

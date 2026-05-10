@@ -287,6 +287,9 @@ export function TechnicalReadDetail({ read }: { read: ChargerTechnicalRead | nul
             }
             mono
           />
+          <Row label="Current user UUID" value={read.currentUserUuid ?? DASH} mono />
+          <Row label="Last rejected UUID" value={read.lastRejectedUserUuid ?? DASH} mono />
+          <Row label="Enabled NFC tech" value={read.enabledNfcTechnologies ?? DASH} mono />
           <Row label="Routing ID" value={read.routingId ?? DASH} mono />
         </Card>
       </div>
