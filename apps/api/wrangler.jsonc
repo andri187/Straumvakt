@@ -89,13 +89,7 @@
           {
             "queue": "straumvakt-ocpp-events-staging",
             "max_batch_size": 100,
-            // 2026-05-12 — bumped from 1s → 30s so batches accumulate
-            // and the heartbeat fast-path commits in ~100-event batches
-            // instead of singles. Lets Neon compute breathe between
-            // batches, dropping CU-hour spend ~50-70% on staging.
-            // Trade-off: lastSeenAt latency increases by up to 30s,
-            // which is well inside the 5-min "online" detection window.
-            "max_batch_timeout": 30,
+            "max_batch_timeout": 1,
             "max_retries": 3,
             "dead_letter_queue": "straumvakt-ocpp-events-dlq-staging"
           },
