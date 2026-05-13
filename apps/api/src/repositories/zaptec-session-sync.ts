@@ -234,31 +234,86 @@ async function importOne(
     chain,
   );
 
-  // Synthesise the ChargeSession.
-  const sessionId = crypto.randomUUID();
-  await tx.chargeSession.create({
-    data: {
-      id: sessionId,
-      orgId: identity.orgId,
-      siteId: siteAsset.siteId,
+  // 2026-05-12 — CDR-matches-OCPP reconciliation. If the OCPP raw-
+  // frame projection handlers (apps/api/src/lib/ocpp/projections.ts
+  // onOcppRawStartTransaction) already created a row for this physical
+  // session — same station, startedAt within ±60s of the CDR's start
+  // — overlay this CDR's enrichment onto that row instead of creating
+  // a duplicate. Prevents double-row + double-ledger writes when both
+  // paths run for the same plug-in event.
+  //
+  // Match precedence (descending strength):
+  //   1. Same `charging_station_id`
+  //   2. `started_at` within ±60s of the CDR's startedAt
+  // Tighter exact-match (OCPP transactionId) would need a schema
+  // column we haven't added; 60s window is unambiguous for AC sessions
+  // because consecutive sessions on the same connector require unplug+
+  // replug latency well above that.
+  //
+  // When matching: preserve OCPP-side fields (connectorId, ocppIdentityId,
+  // idTag, userId-if-already-resolved). Only overlay finalisation data:
+  // endedAt, energyWh, stopReason, status, cost.
+  const existingRow = await tx.chargeSession.findFirst({
+    where: {
       chargingStationId: identity.chargingStationId,
-      evseId: evse.id,
-      ocppIdentityId: identity.id,
-      connectorId: null,
-      userId: driverUserId,
-      idTag: driverLabel,
-      startedAt,
-      endedAt: stoppedAt,
-      energyWh,
-      stopReason,
-      status: "completed",
-      // Sprint 8.14.3 — pre-populate the rolled-up cost columns
-      // so the per-session UI doesn't need to join session_ledger
-      // for the cost summary.
-      costExVatMinor: breakdown.subtotalExVatMinor,
-      costIncVatMinor: breakdown.totalIncVatMinor,
+      startedAt: {
+        gte: new Date(startedAt.getTime() - 60_000),
+        lte: new Date(startedAt.getTime() + 60_000),
+      },
     },
+    orderBy: { startedAt: "asc" },
+    select: { id: true, userId: true },
   });
+
+  let sessionId: string;
+  if (existingRow) {
+    // Match — overlay CDR enrichment onto the OCPP-created row.
+    sessionId = existingRow.id;
+    await tx.chargeSession.update({
+      where: { id: sessionId },
+      data: {
+        endedAt: stoppedAt,
+        energyWh,
+        stopReason,
+        status: "completed",
+        costExVatMinor: breakdown.subtotalExVatMinor,
+        costIncVatMinor: breakdown.totalIncVatMinor,
+        // Only resolve user when it wasn't already pinned by the OCPP
+        // path. OCPP's idTag-driven resolution (EE43C609263CC7 → N1
+        // Drivers User at Dalvegur) is more reliable than CDR's
+        // UserFullName chain for default-tag installations.
+        ...(existingRow.userId == null && driverUserId
+          ? { userId: driverUserId }
+          : {}),
+      },
+    });
+  } else {
+    // No match — synthesise the row (legacy single-writer path).
+    sessionId = crypto.randomUUID();
+    await tx.chargeSession.create({
+      data: {
+        id: sessionId,
+        orgId: identity.orgId,
+        siteId: siteAsset.siteId,
+        chargingStationId: identity.chargingStationId,
+        evseId: evse.id,
+        ocppIdentityId: identity.id,
+        connectorId: null,
+        userId: driverUserId,
+        idTag: driverLabel,
+        startedAt,
+        endedAt: stoppedAt,
+        energyWh,
+        stopReason,
+        status: "completed",
+        // Sprint 8.14.3 — pre-populate the rolled-up cost columns
+        // so the per-session UI doesn't need to join session_ledger
+        // for the cost summary.
+        costExVatMinor: breakdown.subtotalExVatMinor,
+        costIncVatMinor: breakdown.totalIncVatMinor,
+      },
+    });
+  }
 
   // Sprint 8.14.3 — write-through enrichment to ChargingStation
   // when Zaptec gave us fresher profile fields. Best-effort; failures
