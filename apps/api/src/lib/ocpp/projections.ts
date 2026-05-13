@@ -604,6 +604,379 @@ const onOcppRawMeterValues: ProjectionHandler = async (tx, event) => {
   });
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Raw-frame handlers (Sprint 9 / 2026-05-11 — projection-gap fix)
+//
+// The gateway DO emits ocpp.raw.<Action> envelopes with the OCPP
+// request payload nested under event.payload.request. The legacy
+// domain-event handlers above (charger.booted, connector.status_updated,
+// session.started, session.stopped) were never reached because no
+// translator emits those domain events — only ocpp.raw.MeterValues
+// had a raw handler before this commit.
+//
+// These four raw handlers close the gap directly: read from
+// event.payload.request, resolve UUIDs via OcppIdentity → station
+// chain, write the operational tables. Symptom that motivated the
+// fix: 426 StatusNotification frames from Dalvegur on 2026-05-11
+// landed in event_log but assets.connectors.status never moved.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Resolve a Connector row from the OCPP frame's integer connectorId.
+ *
+ * OCPP 1.6 addresses connectors as integers (1..N for actual connectors,
+ * 0 for the charge-point itself). Our schema stores connectors with
+ * UUIDs, indexed by `connector_index` int under an EVSE under a
+ * ChargingStation.
+ *
+ * Lookup walks: OcppIdentity → ChargingStation → EVSE[] → Connector[]
+ * and returns the first connector whose `connector_index` matches the
+ * OCPP value. For single-EVSE single-connector hardware (Zaptec Pro,
+ * the common case) this is unambiguous. For multi-EVSE hardware the
+ * first match wins — acceptable until OCPP 2.0.1 evseId+connectorId
+ * pair semantics land.
+ *
+ * Returns null when no match (charger sent a connectorId for hardware
+ * we haven't provisioned yet — log + skip, don't throw).
+ */
+async function resolveConnectorByOcppIndex(
+  tx: Prisma.TransactionClient,
+  ocppIdentityId: string,
+  connectorIndex: number,
+): Promise<{
+  connectorId: string;
+  evseId: string;
+  chargingStationId: string;
+  siteId: string;
+  orgId: string;
+} | null> {
+  const identity = await tx.ocppIdentity.findUnique({
+    where: { id: ocppIdentityId },
+    select: {
+      orgId: true,
+      chargingStation: {
+        select: {
+          siteAssetId: true,
+          siteAsset: { select: { siteId: true } },
+          evses: {
+            select: {
+              id: true,
+              connectors: {
+                where: { connectorIndex },
+                select: { id: true },
+                take: 1,
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+  if (!identity?.chargingStation) return null;
+  for (const evse of identity.chargingStation.evses) {
+    const conn = evse.connectors[0];
+    if (conn) {
+      return {
+        connectorId: conn.id,
+        evseId: evse.id,
+        chargingStationId: identity.chargingStation.siteAssetId,
+        siteId: identity.chargingStation.siteAsset.siteId,
+        orgId: identity.orgId,
+      };
+    }
+  }
+  return null;
+}
+
+/**
+ * ocpp.raw.BootNotification — set the identity to 'online', mirror the
+ * BootNotification profile fields (vendor, model, serial, firmware, etc.)
+ * onto the ChargingStation. Mirrors the legacy `onChargerBooted` body
+ * but reads from event.payload.request.
+ */
+const onOcppRawBootNotification: ProjectionHandler = async (tx, event) => {
+  const request = (event.payload as { request?: unknown }).request;
+  if (!request || typeof request !== "object") return;
+
+  const now = new Date(event.occurredAt);
+  const identity = await tx.ocppIdentity.update({
+    where: { id: event.aggregateId },
+    data: { status: "online", lastSeenAt: now },
+    select: { chargingStationId: true },
+  });
+
+  const stationData: Record<string, string | undefined> = {};
+  const setIfPresent = (column: string, key: string) => {
+    const v = stringField(request, key);
+    if (v !== undefined) stationData[column] = v;
+  };
+  setIfPresent("vendor", "chargePointVendor");
+  setIfPresent("model", "chargePointModel");
+  setIfPresent("serialNumber", "chargePointSerialNumber");
+  setIfPresent("chargeBoxSerialNumber", "chargeBoxSerialNumber");
+  setIfPresent("firmwareVersion", "firmwareVersion");
+  setIfPresent("meterType", "meterType");
+  setIfPresent("meterSerialNumber", "meterSerialNumber");
+  setIfPresent("iccid", "iccid");
+  setIfPresent("imsi", "imsi");
+
+  if (identity.chargingStationId && Object.keys(stationData).length > 0) {
+    await tx.chargingStation.update({
+      where: { siteAssetId: identity.chargingStationId },
+      data: stationData,
+    });
+  }
+};
+
+/**
+ * ocpp.raw.StatusNotification — write the connector's per-connector
+ * status (connectorId > 0) OR the charge-point-wide status
+ * (connectorId === 0, mirrors to ocpp_identities.status).
+ *
+ * OCPP 1.6 §4.9 payload: { connectorId, status, errorCode,
+ * vendorErrorCode?, info?, timestamp?, vendorId? }
+ *
+ * status is PascalCase per OCPP spec ("Available" / "Charging" /
+ * "Preparing" / "Faulted" / etc.) — written verbatim. Driver/operator
+ * UI normalises with mapConnectorStatus().
+ */
+const onOcppRawStatusNotification: ProjectionHandler = async (tx, event) => {
+  const request = (event.payload as { request?: unknown }).request;
+  if (!request || typeof request !== "object") return;
+  const status = stringField(request, "status");
+  if (!status) return;
+  const connectorIndex = numberField(request, "connectorId");
+  if (connectorIndex === undefined) return;
+
+  const rawErrorCode = stringField(request, "errorCode");
+  const errorCode =
+    rawErrorCode === undefined || rawErrorCode === "NoError"
+      ? null
+      : rawErrorCode;
+  const vendorErrorCode = stringField(request, "vendorErrorCode") ?? null;
+  const occurredAt = new Date(event.occurredAt);
+
+  // connectorId === 0 — charge-point-wide status; mirrors to identity.
+  if (connectorIndex === 0) {
+    await tx.ocppIdentity.update({
+      where: { id: event.aggregateId },
+      data: { status, lastSeenAt: occurredAt },
+    });
+    return;
+  }
+
+  // connectorId > 0 — per-connector status.
+  const resolved = await resolveConnectorByOcppIndex(
+    tx,
+    event.aggregateId,
+    connectorIndex,
+  );
+  if (!resolved) {
+    console.warn("[ocpp.raw.StatusNotification] connector not found, skipping", {
+      identityId: event.aggregateId,
+      connectorIndex,
+    });
+    return;
+  }
+  await tx.connector.update({
+    where: { id: resolved.connectorId },
+    data: {
+      status,
+      statusUpdatedAt: occurredAt,
+      errorCode,
+      vendorErrorCode,
+    },
+  });
+};
+
+/**
+ * ocpp.raw.StartTransaction — mint a new ChargeSession in
+ * status='in_progress'. Resolves connector + EVSE + site + org from
+ * the OCPP identity chain. idTag is captured; userId resolution
+ * (idTag → IdToken → User) is deferred to session.stopped's ledger
+ * pass — same as the legacy onSessionStopped path does today.
+ *
+ * Idempotency note: if a re-delivered event triggers a second insert,
+ * the in-progress session for this identity won't have a unique
+ * constraint to collide on. We accept the duplicate-session risk on
+ * replay (queue-level idempotency via event_id is the first defence)
+ * and rely on the StopTransaction handler picking the most recent
+ * in-progress row to close.
+ *
+ * Note: OCPP transactionId (random int the gateway returned in the
+ * CallResult) is NOT in the event log — the DO mints it after this
+ * event is enqueued. StopTransaction handler closes by
+ * (ocppIdentityId, status='in_progress') instead. Per OCPP spec a
+ * connector has at most one in-progress transaction so this is
+ * unambiguous for single-EVSE hardware.
+ */
+const onOcppRawStartTransaction: ProjectionHandler = async (tx, event) => {
+  const request = (event.payload as { request?: unknown }).request;
+  if (!request || typeof request !== "object") return;
+  const connectorIndex = numberField(request, "connectorId");
+  if (connectorIndex === undefined || connectorIndex === 0) return;
+  const idTag = stringField(request, "idTag");
+  const meterStartWh = numberField(request, "meterStart");
+  const timestamp = stringField(request, "timestamp");
+
+  const resolved = await resolveConnectorByOcppIndex(
+    tx,
+    event.aggregateId,
+    connectorIndex,
+  );
+  if (!resolved) {
+    console.warn("[ocpp.raw.StartTransaction] connector not found, skipping", {
+      identityId: event.aggregateId,
+      connectorIndex,
+    });
+    return;
+  }
+
+  const startedAt = timestamp ? new Date(timestamp) : new Date(event.occurredAt);
+
+  await tx.chargeSession.create({
+    data: {
+      orgId: resolved.orgId,
+      siteId: resolved.siteId,
+      chargingStationId: resolved.chargingStationId,
+      evseId: resolved.evseId,
+      connectorId: resolved.connectorId,
+      ocppIdentityId: event.aggregateId,
+      idTag: idTag ?? null,
+      startedAt,
+      energyWh: meterStartWh !== undefined ? BigInt(meterStartWh) : null,
+      status: "in_progress",
+    },
+  });
+};
+
+/**
+ * ocpp.raw.StopTransaction — close out the in-progress session for
+ * this identity (most recent one wins per the design note on Start).
+ * Mirrors the legacy onSessionStopped body for the tariff resolution
+ * + ledger write, just sourcing the session by identity lookup instead
+ * of by event.aggregateId.
+ *
+ * Skip-on-miss is intentional: if no in-progress session is found
+ * (e.g. StartTransaction predated this fix), warn and ack the event.
+ * Operator can backfill via the Zaptec REST CDR path (which doesn't
+ * depend on OCPP).
+ */
+const onOcppRawStopTransaction: ProjectionHandler = async (tx, event) => {
+  const request = (event.payload as { request?: unknown }).request;
+  if (!request || typeof request !== "object") return;
+  const meterStopWh = numberField(request, "meterStop");
+  const stopReason = stringField(request, "reason");
+  const timestamp = stringField(request, "timestamp");
+  const endedAt = timestamp ? new Date(timestamp) : new Date(event.occurredAt);
+
+  // Find the most recent in-progress session for this identity.
+  const session = await tx.chargeSession.findFirst({
+    where: { ocppIdentityId: event.aggregateId, status: "in_progress" },
+    orderBy: { startedAt: "desc" },
+    select: {
+      id: true,
+      orgId: true,
+      siteId: true,
+      chargingStationId: true,
+      idTag: true,
+      startedAt: true,
+      energyWh: true,
+    },
+  });
+  if (!session) {
+    console.warn("[ocpp.raw.StopTransaction] no in-progress session, skipping", {
+      identityId: event.aggregateId,
+    });
+    return;
+  }
+
+  const updated = await tx.chargeSession.update({
+    where: { id: session.id },
+    data: {
+      endedAt,
+      stopReason: stopReason ?? null,
+      status: "completed",
+      energyWh: meterStopWh !== undefined ? BigInt(meterStopWh) : undefined,
+    },
+    select: {
+      id: true,
+      orgId: true,
+      siteId: true,
+      chargingStationId: true,
+      idTag: true,
+      startedAt: true,
+      endedAt: true,
+      energyWh: true,
+    },
+  });
+
+  // Tariff resolution + ledger write — same path as legacy
+  // onSessionStopped. Throws TariffResolutionError if Site.dsoTariffId
+  // or Installation.retailerTariffId is unconfigured; CF Queues
+  // retries; operator fix via reference catalogue + tariff console.
+  if (!updated.siteId || !updated.chargingStationId) {
+    console.warn("[ocpp.raw.StopTransaction] session missing siteId/chargingStationId, skipping ledger", {
+      sessionId: updated.id,
+    });
+    return;
+  }
+  const chain = await resolveTariffChainForSession(tx, {
+    siteId: updated.siteId,
+    chargingStationId: updated.chargingStationId,
+  });
+
+  const energyKwh =
+    updated.energyWh !== null ? Number(updated.energyWh) / 1000 : 0;
+  const stoppedAt = updated.endedAt ?? endedAt;
+  const durationSec = Math.max(
+    0,
+    Math.round((stoppedAt.getTime() - updated.startedAt.getTime()) / 1000),
+  );
+  const breakdown = computeSessionCost(
+    { startedAt: updated.startedAt, stoppedAt, energyKwh },
+    chain,
+  );
+
+  let driverUserId: string | null = null;
+  if (updated.idTag) {
+    const idTokenRow = await tx.idToken.findFirst({
+      where: { value: updated.idTag, status: "active" },
+      select: { userId: true },
+    });
+    driverUserId = idTokenRow?.userId ?? null;
+  }
+
+  await tx.sessionLedger.upsert({
+    where: { sessionId: updated.id },
+    create: {
+      sessionId: updated.id,
+      orgId: updated.orgId,
+      siteId: updated.siteId,
+      chargingStationId: updated.chargingStationId,
+      driverUserId,
+      driverIdTag: updated.idTag ?? null,
+      startedAt: updated.startedAt,
+      stoppedAt,
+      durationSec,
+      energyKwh: energyKwh.toFixed(3),
+      costIskMinor: breakdown.totalIncVatMinor,
+      tariffDefinitionId: null,
+    },
+    update: { stoppedAt },
+  });
+
+  console.log("[ledger] session_cost_recorded", {
+    sessionId: updated.id,
+    orgId: updated.orgId,
+    siteId: updated.siteId,
+    energyKwh,
+    durationSec,
+    totalIncVatMinor: String(breakdown.totalIncVatMinor),
+    source: "ocpp.raw.StopTransaction",
+  });
+};
+
 // Re-export so callers can catch the resolver's typed errors at
 // the queue-consumer boundary if they want.
 export { TariffResolutionError };
@@ -635,6 +1008,22 @@ export function registerAllProjections(): void {
   // it. Closes the OCPP-side OCMF capture gap (AMQP 723 was the only
   // path before this).
   registerProjection("ocpp.raw.MeterValues", onOcppRawMeterValues);
+  // 2026-05-11 projection-gap fix — the four raw-frame handlers that
+  // the legacy domain-event handlers above (charger.booted, charger.
+  // status_updated, connector.status_updated, session.started,
+  // session.stopped) never received because no translator emits the
+  // domain events. Direct raw-handler pattern matches the precedent
+  // set by onOcppRawMeterValues.
+  registerProjection("ocpp.raw.BootNotification", onOcppRawBootNotification);
+  registerProjection(
+    "ocpp.raw.StatusNotification",
+    onOcppRawStatusNotification,
+  );
+  registerProjection(
+    "ocpp.raw.StartTransaction",
+    onOcppRawStartTransaction,
+  );
+  registerProjection("ocpp.raw.StopTransaction", onOcppRawStopTransaction);
   // card.authorize_requested intentionally has no projection handler —
   // Sprint 2 wires it through the OCPI token resolver.
   // ocpp.unknown_message intentionally has no projection — logged only.
