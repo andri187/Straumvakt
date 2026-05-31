@@ -109,7 +109,7 @@ export default async function CostFactorsPage() {
       {/* New cost factor CTA */}
       <div className="mb-4 flex justify-end">
         <Link
-          href="/billing/cost-factors/new"
+          href={"/billing/cost-factors/new" as Parameters<typeof Link>[0]["href"]}
           className="rounded-md bg-sv-sky/20 px-3 py-1.5 text-xs font-medium text-sv-sky ring-1 ring-sv-sky/30 hover:bg-sv-sky/30"
         >
           + New cost factor
@@ -185,7 +185,7 @@ export default async function CostFactorsPage() {
                         <div className="flex items-center justify-end gap-2">
                           {/* Edit pencil */}
                           <Link
-                            href={`/billing/cost-factors/${f.id}/edit`}
+                            href={`/billing/cost-factors/${f.id}/edit` as Parameters<typeof Link>[0]["href"]}
                             title="Edit this factor"
                             className="rounded px-1.5 py-0.5 text-[10px] text-ink-400 hover:bg-bg-base/50 hover:text-sv-sky"
                           >

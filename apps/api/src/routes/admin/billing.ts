@@ -28,6 +28,7 @@ import { getSessionDetail } from "../../repositories/session-detail";
 import { getSessionFullDetail } from "../../repositories/session-full-detail";
 import { formatIskMinor } from "../../lib/tariff/compute-session-cost";
 import { tariffDetailRouter } from "./billing-tariff-detail";
+import { tariffMgmtRouter } from "./billing-tariff-mgmt";
 import { dsoRouter } from "./billing-dso";
 import { contractsRouter } from "./billing-contracts";
 import { driverContractsRouter } from "./billing-driver-contracts";
@@ -35,6 +36,7 @@ import { costFactorsRouter } from "./billing-cost-factors";
 import { electricityRouter } from "./billing-electricity";
 import { summaryRouter } from "./billing-summary";
 import { costCentersRouter } from "./billing-cost-centers";
+import { rateReferencesRouter } from "./billing-rate-references";
 import type { Env } from "../../bindings";
 
 type BillingContext = Context<{ Bindings: Env; Variables: AuthVars }>;
@@ -269,3 +271,9 @@ adminBilling.route("/electricity", electricityRouter);
 // Sprint 9 Track D — overview dashboard summary + cost-center catalogue.
 adminBilling.route("/summary", summaryRouter);
 adminBilling.route("/cost-centers", costCentersRouter);
+
+// Sprint 9 Track B — rate-reference (versioned rate book) CRUD.
+adminBilling.route("/rate-references", rateReferencesRouter);
+
+// Sprint 9 Track C — TariffDefinition create/edit/clone/lifecycle.
+adminBilling.route("/tariffs-mgmt", tariffMgmtRouter);

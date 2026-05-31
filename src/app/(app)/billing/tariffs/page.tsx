@@ -1,7 +1,7 @@
-// Read-only TariffDefinition catalogue surface — Sprint 9 (2026-05-31).
-// Replaces the BillingStub placeholder. Editing comes later (ADR 0021
-// reference-catalogue + propagation is still Open).
+// TariffDefinition catalogue surface — Sprint 9.
+// Sprint 9 Track C: added New tariff button + detail links.
 
+import Link from "next/link";
 import { SectionTabs, OPERATIONS_TABS, BILLING_TABS } from "@/components/section-tabs";
 import { ActionBar } from "@/components/action-bar";
 import { apiFetchServerJson } from "@/lib/api-client-server";
@@ -63,7 +63,8 @@ export default async function TariffsPage() {
       <SectionTabs tabs={BILLING_TABS} />
       <ActionBar
         title="Tariff catalogue"
-        description="Per-org TariffDefinition rows. The DSO and retailer rates that resolve at session-stop come from here, anchored to Site.dsoTariffId and Installation.retailerTariffId. Editing is via seed scripts until the reference-catalogue + propagation work lands (ADR 0021)."
+        description="Per-org TariffDefinition rows. The DSO and retailer rates that resolve at session-stop come from here, anchored to Site.dsoTariffId and Installation.retailerTariffId."
+        primaryAction={{ href: "/billing/tariffs/new", label: "New tariff" }}
       />
 
       <div className="mb-4 grid grid-cols-3 gap-3">
@@ -113,7 +114,12 @@ export default async function TariffsPage() {
                         }
                       >
                         <td className="px-3 py-1.5 text-ink-100">
-                          {t.displayName}
+                          <Link
+                            href={`/billing/tariffs/${t.id}` as Parameters<typeof Link>[0]["href"]}
+                            className="hover:text-sv-sky hover:underline"
+                          >
+                            {t.displayName}
+                          </Link>
                           {t.isOrphan && (
                             <span className="ml-2 rounded border border-amber-700/40 bg-amber-950/30 px-1.5 py-0.5 text-[9px] uppercase tracking-brand text-amber-300">
                               orphan

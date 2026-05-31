@@ -1,5 +1,6 @@
 // Tariff detail page — /billing/tariffs/[id]
 // Sprint 9 Track A. Read-only surface.
+// Sprint 9 Track C. Action bar: Edit / Clone / Publish / Retire.
 //
 // Shows header, "used by" sections (sites / installations / stations),
 // cost factor block, and recent ledger entries for this tariff.
@@ -12,6 +13,7 @@ import {
 } from "@/components/section-tabs";
 import { ActionBar } from "@/components/action-bar";
 import { apiFetchServerJson } from "@/lib/api-client-server";
+import { TariffActionButtons } from "./action-buttons";
 
 export const dynamic = "force-dynamic";
 
@@ -204,6 +206,11 @@ export default async function TariffDetailPage({
           </>
         }
       />
+
+      {/* Action bar — Edit / Clone / Publish / Retire */}
+      <div className="mb-6">
+        <TariffActionButtons tariffId={tariff.id} status={tariff.status} />
+      </div>
 
       {/* Header block */}
       <section className="mb-6 grid gap-4 sm:grid-cols-2">

@@ -93,6 +93,7 @@ export const BILLING_TABS: SectionTab[] = [
   { href: "/billing", label: "All", exact: true },
   { href: "/billing/cost-factors", label: "Cost factors" },
   { href: "/billing/tariffs", label: "Tariffs" },
+  { href: "/billing/rate-references", label: "Rate book" },
   { href: "/billing/cost-centers", label: "Cost centers" },
   { href: "/billing/contracts", label: "Contracts" },
   { href: "/billing/driver-contracts", label: "Driver contracts" },

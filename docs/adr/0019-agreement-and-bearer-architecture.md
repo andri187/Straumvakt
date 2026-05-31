@@ -663,3 +663,62 @@ After A.11 the cutover ADR (separate filing) decides when session-stop
 moves from the legacy resolver to the new one. A.11 is independent of
 cutover — it can ship alongside A.10 without legacy interference.
 
+---
+
+## Addendum 2026-05-31 — Pilot-scope flag pattern (Phase 1 CRUD)
+
+Filed during Sprint 9 Phase 1, when authoring CRUD landed for cost
+factors, tariff definitions, and rate references. The pilot scope (two
+agreement types, eight factor codes, two compute-rule kinds) is now
+explicit code rather than implicit convention.
+
+### The pattern
+
+`apps/api/src/lib/billing/pilot-scope.ts` is the single file that
+defines the set of values permitted at authoring time during the pilot:
+
+```
+PILOT_AGREEMENT_TYPES   — ["service_cpo", "installation"]
+PILOT_FACTOR_CODES      — ["USRF","INT","DSO","MTR","ELE","TRF_CHG","TRF_IDLE","TRF_PLUG"]
+PILOT_COMPUTE_RULE_KINDS — ["flat_per_kwh","flat_per_session"]
+```
+
+Each constant carries a `// TODO: when extending past pilot, add: ...`
+comment naming the deferred values. Every authoring endpoint that
+enforces pilot scope imports from this file — grep `pilot-scope` to find
+all gates.
+
+`TRF_PLUG` (per-minute fee while plugged in, regardless of activity,
+with optional grace period) is added to the pilot factor list here;
+the catalog seed row lands when the first agreement clause needs it
+(Phase 4 resolver work).
+
+### Where to flip each gate when extending
+
+| Gate | File | Action |
+|---|---|---|
+| Agreement type | `pilot-scope.ts` `PILOT_AGREEMENT_TYPES` | Add the new type string |
+| Factor code | `pilot-scope.ts` `PILOT_FACTOR_CODES` | Add the new code string |
+| Compute rule kind | `pilot-scope.ts` `PILOT_COMPUTE_RULE_KINDS` | Add the new kind string |
+| Zod enum validators | `apps/api/src/lib/billing/zod-common.ts` | `pilotAgreementTypeSchema` / `pilotFactorCodeSchema` re-derive automatically from the constants |
+| Seed reference data | `prisma/seed.ts` | Add an upsert for the new `CostFactor` row |
+
+### Migration cost when extending past pilot
+
+**Zero schema work.** `agreements.cost_factors` already exists; agreement
+type and factor code are stored as `TEXT` and validated at the
+application layer. Extending requires:
+
+1. Edit `pilot-scope.ts` — 3-minute change.
+2. Run `npx prisma db seed` for any new factor rows.
+3. Update UI dropdowns that enumerate agreement types or factor codes
+   (UI-only, no migration).
+4. Deploy — no schema migration, no downtime.
+
+### References
+
+- `apps/api/src/lib/billing/pilot-scope.ts` — the gate file
+- `apps/api/src/lib/billing/zod-common.ts` — shared Zod validators
+- `apps/api/src/lib/permissions.ts` — `billing.read` / `billing.write` slugs
+- Sprint 9 commits: Phase 1 Tracks A–D landed 2026-05-31
+
