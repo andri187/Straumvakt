@@ -19,6 +19,7 @@ import { Hono, type Context } from "hono";
 import { z } from "zod";
 import { makePrisma } from "../../lib/prisma";
 import { requireAdmin, type AuthVars } from "../../lib/auth-middleware";
+import { requirePermission } from "../../lib/auth/require-permission";
 import { resolveBillingLines } from "../../lib/agreement/resolve";
 import { loadAgreementContext } from "../../lib/agreement/persist";
 import { listAgreements, getAgreementDetail } from "../../repositories/agreements";
@@ -30,14 +31,14 @@ adminAgreementsDebug.use("*", requireAdmin);
 // ── Sprint 9 / ADR 0019 milestone A.8 — list + detail (operator UI) ──
 
 // GET /api/admin/agreements — list (filtered to pilot types: service_cpo + installation)
-adminAgreementsDebug.get("/", async (c) => {
+adminAgreementsDebug.get("/", requirePermission("billing.read"), async (c) => {
   const prisma = makePrisma(c.env);
   const agreements = await listAgreements(prisma);
   return c.json({ agreements });
 });
 
 // GET /api/admin/agreements/:id — detail with clauses, driver groups, memberships, bearer rules
-adminAgreementsDebug.get("/:id", async (c) => {
+adminAgreementsDebug.get("/:id", requirePermission("billing.read"), async (c) => {
   const id = c.req.param("id");
   const uuidLike = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   if (!uuidLike.test(id)) return c.json({ error: "invalid_id" }, 400);
@@ -78,7 +79,7 @@ type BillingLineJson = {
   computationDetail: Record<string, unknown>;
 };
 
-adminAgreementsDebug.post("/debug-resolve", async (c) => {
+adminAgreementsDebug.post("/debug-resolve", requirePermission("billing.read"), async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const parsed = debugResolveSchema.safeParse(body);
   if (!parsed.success) {
@@ -162,7 +163,7 @@ adminAgreementsDebug.post("/debug-resolve", async (c) => {
 
 // Form-population helper. Lists driver users + chargers so the UI can
 // render selects without separate calls.
-adminAgreementsDebug.get("/debug-options", async (c: Context<{ Bindings: Env; Variables: AuthVars }>) => {
+adminAgreementsDebug.get("/debug-options", requirePermission("billing.read"), async (c: Context<{ Bindings: Env; Variables: AuthVars }>) => {
   const prisma = makePrisma(c.env);
 
   const [users, chargingStations] = await Promise.all([

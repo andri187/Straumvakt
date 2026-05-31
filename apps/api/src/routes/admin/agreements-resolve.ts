@@ -17,13 +17,14 @@
 import { Hono } from "hono";
 import { makePrisma } from "../../lib/prisma";
 import { requireAdmin, type AuthVars } from "../../lib/auth-middleware";
+import { requirePermission } from "../../lib/auth/require-permission";
 import { resolveAndPersistForSession } from "../../lib/agreement/persist";
 import type { Env } from "../../bindings";
 
 export const adminAgreementsResolve = new Hono<{ Bindings: Env; Variables: AuthVars }>();
 adminAgreementsResolve.use("*", requireAdmin);
 
-adminAgreementsResolve.post("/:sessionId/resolve", async (c) => {
+adminAgreementsResolve.post("/:sessionId/resolve", requirePermission("billing.write"), async (c) => {
   const sessionId = c.req.param("sessionId");
   const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   if (!uuidPattern.test(sessionId)) {
