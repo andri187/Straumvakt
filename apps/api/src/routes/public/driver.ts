@@ -33,6 +33,10 @@ import {
   type DriverTokenPayload,
 } from "../../lib/driver-session";
 import { enqueueCommand } from "../../repositories/outbound-commands";
+import {
+  listDriverInstallations,
+  getDriverChargerPricing,
+} from "../../repositories/driver-pricing";
 import type { Env } from "../../bindings";
 
 type Vars = { driverPayload: DriverTokenPayload };
@@ -573,6 +577,47 @@ publicDriver.post("/start-session", requireDriver, async (c) => {
     },
     202,
   );
+});
+
+// ── GET /api/driver/installations ───────────────────────────────────
+//
+// GAP-3 / 2026-05-31 — pre-session preview surface.
+//
+// Returns installations the driver can charge at RIGHT NOW. Filters out:
+//   1. installations where the agreement isn't active at now()
+//   2. installations where the agreement has zero clauses (operator
+//      hasn't filled the pricing in yet — surfacing them would lock
+//      the driver into a session they can't see the price of)
+//
+// The pricingSummary headline is INDICATIVE — the canonical billing
+// math runs at session-stop in the agreements resolver. BearerRule
+// overrides and TRD/WRK substitutions are not walked here.
+
+publicDriver.get("/installations", requireDriver, async (c) => {
+  const { userId } = c.get("driverPayload");
+  const prisma = makePrisma(c.env);
+  const installations = await listDriverInstallations(prisma, userId);
+  return c.json({ installations });
+});
+
+// ── GET /api/driver/chargers/:id/pricing ────────────────────────────
+//
+// Full clause breakdown for one charger. Access check at single-
+// installation scope. 404s for both "doesn't exist" and "you don't
+// have access" — same response so we don't leak existence.
+
+publicDriver.get("/chargers/:id/pricing", requireDriver, async (c) => {
+  const { userId } = c.get("driverPayload");
+  const id = c.req.param("id");
+  if (!id) {
+    return c.json({ error: "validation", message: "Charger id required." }, 400);
+  }
+  const prisma = makePrisma(c.env);
+  const pricing = await getDriverChargerPricing(prisma, userId, id);
+  if (!pricing) {
+    return c.json({ error: "not_found", message: "Charger not found." }, 404);
+  }
+  return c.json(pricing);
 });
 
 // ── Health ──────────────────────────────────────────────────────────
