@@ -99,4 +99,5 @@ export const BILLING_TABS: SectionTab[] = [
   { href: "/billing/driver-contracts", label: "Driver contracts" },
   { href: "/billing/dso", label: "DSO rates" },
   { href: "/billing/electricity", label: "Electricity rates" },
+  { href: "/billing/enrichment", label: "Enrichment" },
 ];

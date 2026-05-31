@@ -92,6 +92,13 @@ interface ChargingStationRow {
   }>;
 }
 
+interface ChargeSessionRow {
+  id: string;
+  chargingStationId: string;
+  startedAt: Date;
+  ocmfBlobRef: string | null;
+}
+
 interface FakeState {
   installations: Installation[];
   agreements: Agreement[];
@@ -99,6 +106,7 @@ interface FakeState {
   memberships: DriverGroupMembership[];
   rateRefs: RateReference[];
   stations: ChargingStationRow[];
+  chargeSessions?: ChargeSessionRow[];
 }
 
 function makeFake(state: FakeState): PrismaClient {
@@ -237,6 +245,24 @@ function makeFake(state: FakeState): PrismaClient {
           .filter((r) => r.effectiveUntil === null || r.effectiveUntil > at)
           .sort((a, b) => b.effectiveFrom.getTime() - a.effectiveFrom.getTime());
         return candidates[0] ?? null;
+      },
+    },
+    chargeSession: {
+      findFirst: async ({ where }: any) => {
+        const sessions = state.chargeSessions ?? [];
+        const stationId: string | undefined = where?.chargingStationId;
+        const since: Date | undefined = where?.startedAt?.gte;
+        const ocmfNotNull: boolean =
+          where?.ocmfBlobRef !== undefined &&
+          typeof where.ocmfBlobRef === "object" &&
+          where.ocmfBlobRef.not === null;
+        const found = sessions.find((s) => {
+          if (stationId && s.chargingStationId !== stationId) return false;
+          if (since && s.startedAt < since) return false;
+          if (ocmfNotNull && s.ocmfBlobRef === null) return false;
+          return true;
+        });
+        return found ?? null;
       },
     },
   } as unknown as PrismaClient;
@@ -612,5 +638,80 @@ describe("getDriverChargerPricing", () => {
 
     expect(out!.terms.effectiveFrom).toBe(YESTERDAY.toISOString());
     expect(out!.terms.effectiveUntil).toBe(TOMORROW.toISOString());
+  });
+
+  it("returns signedReceiptSupported=true when the charger had a session with ocmfBlobRef in the last 90 days", async () => {
+    const inst = makeInstallation("inst-ocmf", "OCMF-capable site");
+    const db = makeFake({
+      installations: [inst],
+      agreements: [
+        {
+          id: "agr-ocmf",
+          agreementType: "installation",
+          installationId: "inst-ocmf",
+          status: "active",
+          effectiveFrom: YESTERDAY,
+          effectiveUntil: null,
+          clauses: [
+            {
+              defaultBearerType: "usr",
+              defaultRateRefCode: "ele",
+              factorCode: "ELE",
+              factorDisplayNameEn: "Electricity",
+            },
+          ],
+        },
+      ],
+      driverGroups: [{ id: "dg-1", agreementId: "agr-ocmf" }],
+      memberships: [{ id: "m-1", userId: "user-1", driverGroupId: "dg-1" }],
+      rateRefs: [makeRateRef("ele", 1800n)],
+      stations: [makeStation("ch-ocmf", inst)],
+      chargeSessions: [
+        {
+          id: "sess-1",
+          chargingStationId: "ch-ocmf",
+          startedAt: YESTERDAY,
+          ocmfBlobRef: "blob:abc123",
+        },
+      ],
+    });
+
+    const out = await getDriverChargerPricing(db, "user-1", "ch-ocmf", NOW);
+    expect(out).not.toBeNull();
+    expect(out!.signedReceiptSupported).toBe(true);
+  });
+
+  it("returns signedReceiptSupported=false when the charger has no sessions with ocmfBlobRef", async () => {
+    const inst = makeInstallation("inst-no-ocmf", "Non-OCMF site");
+    const db = makeFake({
+      installations: [inst],
+      agreements: [
+        {
+          id: "agr-no-ocmf",
+          agreementType: "installation",
+          installationId: "inst-no-ocmf",
+          status: "active",
+          effectiveFrom: YESTERDAY,
+          effectiveUntil: null,
+          clauses: [
+            {
+              defaultBearerType: "usr",
+              defaultRateRefCode: "ele",
+              factorCode: "ELE",
+              factorDisplayNameEn: "Electricity",
+            },
+          ],
+        },
+      ],
+      driverGroups: [{ id: "dg-1", agreementId: "agr-no-ocmf" }],
+      memberships: [{ id: "m-1", userId: "user-1", driverGroupId: "dg-1" }],
+      rateRefs: [makeRateRef("ele", 1800n)],
+      stations: [makeStation("ch-no-ocmf", inst)],
+      // chargeSessions is absent (defaults to []) — no signed receipts.
+    });
+
+    const out = await getDriverChargerPricing(db, "user-1", "ch-no-ocmf", NOW);
+    expect(out).not.toBeNull();
+    expect(out!.signedReceiptSupported).toBe(false);
   });
 });

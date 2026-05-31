@@ -262,22 +262,65 @@ async function importOne(
       },
     },
     orderBy: { startedAt: "asc" },
-    select: { id: true, userId: true },
+    select: {
+      id: true,
+      userId: true,
+      // ENRICH-1 — read OCPP-side energy to compute mismatch flag.
+      ocppEnergyKwh: true,
+    },
   });
 
+  // ENRICH-1 — the kWh value the CDR feed claims. Decimal string with
+  // 4 dp so it can be stored verbatim into cdr_energy_kwh and compared
+  // against the OCPP figure with the same precision.
+  const cdrEnergyKwh = energyKwh.toFixed(4);
+
+  // ENRICH-1 — enrichment status: if BOTH OCPP and CDR have a value
+  // and they agree within 0.05 kWh, mark "complete"; if they diverge,
+  // mark "mismatch"; if no OCPP value to compare (CDR-only path,
+  // includes the synthesised-row branch), default "complete" because
+  // CDR is the only figure we have and it's authoritative.
+  //
+  // Tolerance comparison is in 2-dp integer-kWh space (multiply by
+  // 100, round) so floating-point representation of decimals like
+  // 0.05 doesn't tip a true 0.05-difference into the mismatch bucket.
+  function computeEnrichmentStatus(
+    ocppValue: { toString(): string } | null | undefined,
+  ): "complete" | "mismatch" {
+    if (ocppValue == null) return "complete";
+    const ocppNum = Number(ocppValue.toString());
+    if (!Number.isFinite(ocppNum)) return "complete";
+    const ocppHundredths = Math.round(ocppNum * 100);
+    const cdrHundredths = Math.round(energyKwh * 100);
+    return Math.abs(ocppHundredths - cdrHundredths) <= 5
+      ? "complete"
+      : "mismatch";
+  }
+
   let sessionId: string;
+  let enrichmentStatus: "complete" | "mismatch";
   if (existingRow) {
     // Match — overlay CDR enrichment onto the OCPP-created row.
     sessionId = existingRow.id;
+    enrichmentStatus = computeEnrichmentStatus(existingRow.ocppEnergyKwh);
     await tx.chargeSession.update({
       where: { id: sessionId },
       data: {
+        // Canonical columns — CDR is authoritative per ADR 0008.
+        // Continue to write these so existing billing reads land on
+        // the right number until callers migrate to verified_source.
         endedAt: stoppedAt,
         energyWh,
         stopReason,
         status: "completed",
         costExVatMinor: breakdown.subtotalExVatMinor,
         costIncVatMinor: breakdown.totalIncVatMinor,
+        // ENRICH-1 — per-source mirror. Preserves OCPP figure under
+        // `ocppEnergyKwh` if it was set; the new CDR figure lives in
+        // its own column. Operator can audit divergence via the
+        // ledger's `enrichment_status` flag.
+        cdrEnergyKwh,
+        cdrStoppedAt: stoppedAt,
         // Only resolve user when it wasn't already pinned by the OCPP
         // path. OCPP's idTag-driven resolution (EE43C609263CC7 → N1
         // Drivers User at Dalvegur) is more reliable than CDR's
@@ -290,6 +333,8 @@ async function importOne(
   } else {
     // No match — synthesise the row (legacy single-writer path).
     sessionId = crypto.randomUUID();
+    // No OCPP value to compare against; CDR is the only figure.
+    enrichmentStatus = "complete";
     await tx.chargeSession.create({
       data: {
         id: sessionId,
@@ -311,6 +356,10 @@ async function importOne(
         // for the cost summary.
         costExVatMinor: breakdown.subtotalExVatMinor,
         costIncVatMinor: breakdown.totalIncVatMinor,
+        // ENRICH-1 — record the CDR figure in its dedicated slot in
+        // addition to the canonical column.
+        cdrEnergyKwh,
+        cdrStoppedAt: stoppedAt,
       },
     });
   }
@@ -388,6 +437,12 @@ async function importOne(
   // Ledger upsert — same shape the OCPP path writes. driverIdTag
   // gets the human label (name > username > email) so the operator
   // sees who charged at a glance instead of a UUID.
+  //
+  // ENRICH-1 — CDR is the authoritative source per ADR 0008. Flip
+  // verifiedSource to "cdr" on BOTH create and update so an existing
+  // OCPP-written ledger row (verifiedSource="ocpp" / enrichmentStatus=
+  // "pending") gets promoted to the post-CDR state. enrichmentStatus
+  // reflects the per-source agreement check computed above.
   await tx.sessionLedger.upsert({
     where: { sessionId },
     create: {
@@ -406,8 +461,13 @@ async function importOne(
       // per ADR 0008; retailer id intentionally not persisted until
       // schema gains a sibling column or JSONB breakdown).
       tariffDefinitionId: resolved.dsoTariffDefinitionId,
+      verifiedSource: "cdr",
+      enrichmentStatus,
     },
-    update: {},
+    update: {
+      verifiedSource: "cdr",
+      enrichmentStatus,
+    },
   });
 
   return {

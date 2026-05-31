@@ -37,6 +37,7 @@ import { electricityRouter } from "./billing-electricity";
 import { summaryRouter } from "./billing-summary";
 import { costCentersRouter } from "./billing-cost-centers";
 import { rateReferencesRouter } from "./billing-rate-references";
+import { enrichmentRouter } from "./billing-enrichment";
 import type { Env } from "../../bindings";
 
 type BillingContext = Context<{ Bindings: Env; Variables: AuthVars }>;
@@ -277,3 +278,6 @@ adminBilling.route("/rate-references", rateReferencesRouter);
 
 // Sprint 9 Track C — TariffDefinition create/edit/clone/lifecycle.
 adminBilling.route("/tariffs-mgmt", tariffMgmtRouter);
+
+// Sprint 9 / ENRICH-4 — enrichment-status surface.
+adminBilling.route("/enrichment", enrichmentRouter);

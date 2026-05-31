@@ -1459,6 +1459,32 @@ model ChargeSession {
   pncSucceeded             Boolean?  @map("pnc_succeeded")
   pncRejectedUuid          String?   @map("pnc_rejected_uuid")
 
+  // ── Sprint 9 / ENRICH-1 — per-source enrichment columns ─────────
+  // Three feeds converge into charging.sessions: the OCPP gateway
+  // (StartTransaction / MeterValues / StopTransaction), Zaptec REST
+  // /chargehistory (CDR sync), and Zaptec AMQP (StateId 723
+  // CompletedSession). Before ENRICH-1, the later writers silently
+  // overwrote the OCPP-side `energy_wh` and `ended_at` — billing
+  // had no audit trail of which source produced the final number.
+  //
+  // ENRICH-1 adds per-source mirror columns so each writer records
+  // its own figure WITHOUT clobbering the canonical column. The
+  // canonical columns (`energy_wh`, `ended_at`) remain the billing-
+  // read source of truth for back-compat; CDR (the authoritative
+  // figure today) overlays them in addition to populating
+  // `cdr_energy_kwh` / `cdr_stopped_at`. AMQP enriches with the
+  // OCMF reference but never touches the canonical columns.
+  //
+  // SessionLedger.verifiedSource + enrichmentStatus document which
+  // source produced the canonical figure. All columns NULLABLE so
+  // legacy rows survive without backfill.
+  ocppEnergyKwh   Decimal?  @map("ocpp_energy_kwh") @db.Decimal(10, 4)
+  cdrEnergyKwh    Decimal?  @map("cdr_energy_kwh")  @db.Decimal(10, 4)
+  amqpEnergyKwh   Decimal?  @map("amqp_energy_kwh") @db.Decimal(10, 4)
+  ocppStoppedAt   DateTime? @map("ocpp_stopped_at") @db.Timestamptz(6)
+  cdrStoppedAt    DateTime? @map("cdr_stopped_at")  @db.Timestamptz(6)
+  ocmfBlobRef     String?   @map("ocmf_blob_ref")
+
   organization      Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
   site              Site             @relation(fields: [siteId], references: [id])
   chargingStation   ChargingStation  @relation(fields: [chargingStationId], references: [siteAssetId])
@@ -2872,6 +2898,23 @@ model SessionLedger {
   costIskMinor      BigInt?      @map("cost_isk_minor")
   tariffDefinitionId String?     @map("tariff_definition_id") @db.Uuid
   computedAt        DateTime     @default(now()) @map("computed_at") @db.Timestamptz(6)
+
+  // ── Sprint 9 / ENRICH-1 — provenance metadata ───────────────────
+  // verifiedSource: which feed produced the canonical energy_kwh /
+  //   cost the ledger row carries. "ocpp" | "cdr" | "amqp" |
+  //   "reconciled". Default reality today: OCPP StopTransaction
+  //   projection writes the ledger first (verifiedSource="ocpp"),
+  //   then the CDR sync overlays with the authoritative Zaptec figure
+  //   (verifiedSource="cdr"). AMQP never sets this — it enriches
+  //   with OCMF reference only.
+  // enrichmentStatus: "pending" until CDR or AMQP confirms the
+  //   figure; "complete" when OCPP and CDR agree within 0.05 kWh;
+  //   "mismatch" when they diverge; "stale" reserved for ops to
+  //   flag rows where reconciliation never landed.
+  // Validation enforced at the application layer (per ADR 0019
+  // convention — TEXT for enums, no Postgres enum types).
+  verifiedSource     String?     @map("verified_source")
+  enrichmentStatus   String?     @map("enrichment_status")
 
   organization      Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 

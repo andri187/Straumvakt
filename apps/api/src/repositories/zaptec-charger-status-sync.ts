@@ -242,8 +242,23 @@ export async function syncZaptecChargerStatus(
       if (hardware913) stationData.hardwareVersion = hardware913;
       if (commLabel != null) stationData.commMode = commLabel;
       if (signalDbm != null) stationData.signalDbm = signalDbm;
+      // Sprint 9 / 2026-05-12 — only refresh onlineSinceAt when the
+      // charger is actually online. DO NOT clear it when offline:
+      // preserving the historical "we last saw this online at T"
+      // keeps the charger visible in the driver feed (the feed's
+      // stationStatus() ages it to "Offline" naturally if it's
+      // older than the 7d window).
+      // Clearing it caused the May 2026 ghost-row regression: every
+      // charger that was offline at cron-tick got both timestamps
+      // null'd out and disappeared from the driver app entirely.
       if (isOnline) stationData.onlineSinceAt = onlineSinceAt;
-      else stationData.onlineSinceAt = null; // clear when offline
+      // Stamp lastTelemetryAt on every successful /state poll. This is
+      // the single signal the driver feed uses to mean "the cron has
+      // recently confirmed this charger's existence." Without this,
+      // the feed depended on the operator opening each charger's
+      // technical-read page to keep it fresh — which doesn't happen
+      // for a 30-charger fleet.
+      stationData.lastTelemetryAt = now;
       if (Object.keys(stationData).length > 0) {
         await db.chargingStation
           .update({ where: { siteAssetId: stationId }, data: stationData })
