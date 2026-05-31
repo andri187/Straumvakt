@@ -1258,6 +1258,20 @@ model ChargeSession {
   pncSucceeded             Boolean?  @map("pnc_succeeded")
   pncRejectedUuid          String?   @map("pnc_rejected_uuid")
 
+  // ── Sprint 9 / ENRICH-1 — per-source enrichment columns ─────────
+  // Mirror columns: OCPP / Zaptec CDR / Zaptec AMQP each write their
+  // own figure here instead of overwriting `energy_wh` / `ended_at`.
+  // Canonical columns stay intact for back-compat (billing reads
+  // unchanged). SessionLedger.verifiedSource + enrichmentStatus
+  // document which source produced the canonical figure. All
+  // NULLABLE so legacy rows survive without backfill.
+  ocppEnergyKwh   Decimal?  @map("ocpp_energy_kwh") @db.Decimal(10, 4)
+  cdrEnergyKwh    Decimal?  @map("cdr_energy_kwh")  @db.Decimal(10, 4)
+  amqpEnergyKwh   Decimal?  @map("amqp_energy_kwh") @db.Decimal(10, 4)
+  ocppStoppedAt   DateTime? @map("ocpp_stopped_at") @db.Timestamptz(6)
+  cdrStoppedAt    DateTime? @map("cdr_stopped_at")  @db.Timestamptz(6)
+  ocmfBlobRef     String?   @map("ocmf_blob_ref")
+
   organization      Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
   site              Site             @relation(fields: [siteId], references: [id])
   chargingStation   ChargingStation  @relation(fields: [chargingStationId], references: [siteAssetId])
@@ -2617,6 +2631,13 @@ model SessionLedger {
   costIskMinor      BigInt?      @map("cost_isk_minor")
   tariffDefinitionId String?     @map("tariff_definition_id") @db.Uuid
   computedAt        DateTime     @default(now()) @map("computed_at") @db.Timestamptz(6)
+
+  // ── Sprint 9 / ENRICH-1 — provenance metadata ───────────────────
+  // verifiedSource: "ocpp" | "cdr" | "amqp" | "reconciled".
+  // enrichmentStatus: "pending" | "complete" | "mismatch" | "stale".
+  // TEXT not enum per ADR 0019 convention.
+  verifiedSource     String?     @map("verified_source")
+  enrichmentStatus   String?     @map("enrichment_status")
 
   organization      Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 

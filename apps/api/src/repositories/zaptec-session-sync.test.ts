@@ -41,12 +41,25 @@ interface State {
     energyWh: bigint | null;
     status?: string;
     userId?: string | null;
+    // ENRICH-1 — per-source mirror columns.
+    ocppEnergyKwh?: string | null;
+    cdrEnergyKwh?: string | null;
+    cdrStoppedAt?: Date | null;
   }>;
-  sessionLedger: Array<{ sessionId: string; costIskMinor: bigint | null }>;
+  sessionLedger: Array<{
+    sessionId: string;
+    costIskMinor: bigint | null;
+    // ENRICH-1 — provenance metadata.
+    verifiedSource?: string | null;
+    enrichmentStatus?: string | null;
+  }>;
   // 2026-05-12 — when set, chargeSession.findFirst returns this row,
   // simulating an OCPP-created session that CDR sync should overlay
-  // instead of duplicating.
-  preSeededOcppRow?: { id: string; userId: string | null } | null;
+  // instead of duplicating. ENRICH-1 — ocppEnergyKwh allows tests to
+  // exercise the mismatch / agreement classifier.
+  preSeededOcppRow?:
+    | { id: string; userId: string | null; ocppEnergyKwh?: string | null }
+    | null;
 }
 
 interface FakeOpts {
@@ -143,12 +156,15 @@ function makeFakeDb(state: State, opts: FakeOpts = {}): PrismaClient {
     chargeSession: {
       // 2026-05-12 — CDR-matches-OCPP reconciliation. Returns the
       // pre-seeded row from state when set; otherwise null = no match
-      // = legacy create path.
+      // = legacy create path. ENRICH-1 — also surfaces ocppEnergyKwh
+      // so the mismatch classifier has a value to compare against.
       findFirst: async () =>
         state.preSeededOcppRow
           ? {
               id: state.preSeededOcppRow.id,
               userId: state.preSeededOcppRow.userId,
+              ocppEnergyKwh:
+                state.preSeededOcppRow.ocppEnergyKwh ?? null,
             }
           : null,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -163,6 +179,15 @@ function makeFakeDb(state: State, opts: FakeOpts = {}): PrismaClient {
               data.userId !== undefined
                 ? data.userId
                 : state.chargeSessions[idx].userId,
+            // ENRICH-1 — record the per-source CDR mirror fields.
+            cdrEnergyKwh:
+              data.cdrEnergyKwh !== undefined
+                ? data.cdrEnergyKwh
+                : state.chargeSessions[idx].cdrEnergyKwh ?? null,
+            cdrStoppedAt:
+              data.cdrStoppedAt !== undefined
+                ? data.cdrStoppedAt
+                : state.chargeSessions[idx].cdrStoppedAt ?? null,
           };
         }
         return { id: where.id };
@@ -175,17 +200,42 @@ function makeFakeDb(state: State, opts: FakeOpts = {}): PrismaClient {
           energyWh: data.energyWh ?? null,
           status: data.status,
           userId: data.userId ?? null,
+          // ENRICH-1 — capture mirror fields written by the synth path.
+          cdrEnergyKwh: data.cdrEnergyKwh ?? null,
+          cdrStoppedAt: data.cdrStoppedAt ?? null,
         });
         return { id: data.id };
       },
     },
     sessionLedger: {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      upsert: async ({ create }: any) => {
-        state.sessionLedger.push({
-          sessionId: create.sessionId,
-          costIskMinor: create.costIskMinor,
-        });
+      upsert: async ({ create, update }: any) => {
+        const idx = state.sessionLedger.findIndex(
+          (l) => l.sessionId === create.sessionId,
+        );
+        if (idx >= 0) {
+          // Existing row (e.g. OCPP already wrote it); apply the update
+          // patch so verified_source / enrichment_status flip from
+          // "ocpp" / "pending" → "cdr" / "complete" | "mismatch".
+          state.sessionLedger[idx] = {
+            ...state.sessionLedger[idx],
+            verifiedSource:
+              update.verifiedSource ??
+              state.sessionLedger[idx].verifiedSource ??
+              null,
+            enrichmentStatus:
+              update.enrichmentStatus ??
+              state.sessionLedger[idx].enrichmentStatus ??
+              null,
+          };
+        } else {
+          state.sessionLedger.push({
+            sessionId: create.sessionId,
+            costIskMinor: create.costIskMinor,
+            verifiedSource: create.verifiedSource ?? null,
+            enrichmentStatus: create.enrichmentStatus ?? null,
+          });
+        }
         return { sessionId: create.sessionId };
       },
     },
@@ -437,6 +487,178 @@ describe("syncZaptecSessions", () => {
       // New UUID, not "ocpp-row-*" — confirms the create path ran.
       expect(state.chargeSessions[0].id).not.toMatch(/^ocpp-row-/);
       expect(state.chargeSessions[0].energyWh).toBe(30_000n);
+    });
+  });
+
+  // ─── Sprint 9 / ENRICH-1 — per-source columns + verifiedSource ─────
+  describe("enrichment v1 — per-source columns + verifiedSource", () => {
+    it("synth path writes cdrEnergyKwh + verifiedSource=cdr + enrichmentStatus=complete", async () => {
+      vi.mocked(listZaptecChargeHistory).mockResolvedValue(
+        happyPathHistory() as never,
+      );
+      const state: State = {
+        importedCdrRefs: [],
+        chargeSessions: [],
+        sessionLedger: [],
+        // preSeededOcppRow undefined => synth path
+      };
+      const db = makeFakeDb(state);
+
+      await syncZaptecSessions(db, { accessToken: "stub" });
+
+      // CDR figure recorded in dedicated mirror column.
+      expect(state.chargeSessions[0].cdrEnergyKwh).toBe("30.0000");
+      expect(state.chargeSessions[0].cdrStoppedAt).toBeInstanceOf(Date);
+      // Ledger flagged with CDR provenance.
+      expect(state.sessionLedger[0].verifiedSource).toBe("cdr");
+      // No OCPP value to compare against on the synth path — "complete"
+      // by definition (CDR is the only source).
+      expect(state.sessionLedger[0].enrichmentStatus).toBe("complete");
+    });
+
+    it("overlay path preserves ocppEnergyKwh on the row + writes cdrEnergyKwh", async () => {
+      // Existing OCPP row carries ocppEnergyKwh = "30.0000" (matches
+      // CDR within tolerance). CDR overlay must NOT touch
+      // ocppEnergyKwh; only its own cdrEnergyKwh column.
+      vi.mocked(listZaptecChargeHistory).mockResolvedValue(
+        happyPathHistory() as never,
+      );
+      const OCPP_ROW_ID = "ocpp-row-enrich-1";
+      const state: State = {
+        importedCdrRefs: [],
+        chargeSessions: [
+          {
+            id: OCPP_ROW_ID,
+            orgId: ORG,
+            energyWh: 30_000n,
+            status: "completed",
+            userId: null,
+            // OCPP wrote this when StopTransaction landed.
+            ocppEnergyKwh: "30.0000",
+          },
+        ],
+        sessionLedger: [
+          {
+            sessionId: OCPP_ROW_ID,
+            costIskMinor: 0n,
+            verifiedSource: "ocpp",
+            enrichmentStatus: "pending",
+          },
+        ],
+        preSeededOcppRow: {
+          id: OCPP_ROW_ID,
+          userId: null,
+          ocppEnergyKwh: "30.0000",
+        },
+      };
+      const db = makeFakeDb(state);
+
+      await syncZaptecSessions(db, { accessToken: "stub" });
+
+      // ocppEnergyKwh untouched; cdrEnergyKwh populated.
+      expect(state.chargeSessions[0].ocppEnergyKwh).toBe("30.0000");
+      expect(state.chargeSessions[0].cdrEnergyKwh).toBe("30.0000");
+      // Ledger promoted from "ocpp" / "pending" → "cdr" / "complete"
+      // (CDR == OCPP within 0.05 kWh).
+      expect(state.sessionLedger[0].verifiedSource).toBe("cdr");
+      expect(state.sessionLedger[0].enrichmentStatus).toBe("complete");
+    });
+
+    it("flags enrichmentStatus=mismatch when CDR and OCPP diverge by > 0.05 kWh", async () => {
+      // OCPP recorded 30.00 kWh; CDR reports 30.10 kWh. |diff| = 0.10
+      // > 0.05 → mismatch.
+      vi.mocked(listZaptecChargeHistory).mockResolvedValue({
+        ok: true,
+        value: [
+          {
+            Id: "z-mismatch-1",
+            ChargerId: Z_CHARGER,
+            StartDateTime: "2026-04-15T12:00:00Z",
+            EndDateTime: "2026-04-15T13:00:00Z",
+            Energy: 30.1, // CDR figure
+            UserUserName: "andri",
+          },
+        ],
+      } as never);
+      const OCPP_ROW_ID = "ocpp-row-mismatch";
+      const state: State = {
+        importedCdrRefs: [],
+        chargeSessions: [
+          {
+            id: OCPP_ROW_ID,
+            orgId: ORG,
+            energyWh: 30_000n,
+            status: "completed",
+            userId: null,
+            ocppEnergyKwh: "30.0000",
+          },
+        ],
+        sessionLedger: [
+          {
+            sessionId: OCPP_ROW_ID,
+            costIskMinor: 0n,
+            verifiedSource: "ocpp",
+            enrichmentStatus: "pending",
+          },
+        ],
+        preSeededOcppRow: {
+          id: OCPP_ROW_ID,
+          userId: null,
+          ocppEnergyKwh: "30.0000",
+        },
+      };
+      const db = makeFakeDb(state);
+
+      await syncZaptecSessions(db, { accessToken: "stub" });
+
+      // CDR mirror column carries the new figure; OCPP figure preserved.
+      expect(state.chargeSessions[0].cdrEnergyKwh).toBe("30.1000");
+      expect(state.chargeSessions[0].ocppEnergyKwh).toBe("30.0000");
+      // Ledger flagged for operator attention.
+      expect(state.sessionLedger[0].verifiedSource).toBe("cdr");
+      expect(state.sessionLedger[0].enrichmentStatus).toBe("mismatch");
+    });
+
+    it("treats |diff| at the 0.05 kWh boundary as complete (inclusive tolerance)", async () => {
+      // OCPP recorded 30.00 kWh; CDR reports 30.05 kWh exactly.
+      vi.mocked(listZaptecChargeHistory).mockResolvedValue({
+        ok: true,
+        value: [
+          {
+            Id: "z-boundary",
+            ChargerId: Z_CHARGER,
+            StartDateTime: "2026-04-15T12:00:00Z",
+            EndDateTime: "2026-04-15T13:00:00Z",
+            Energy: 30.05,
+            UserUserName: "andri",
+          },
+        ],
+      } as never);
+      const OCPP_ROW_ID = "ocpp-row-boundary";
+      const state: State = {
+        importedCdrRefs: [],
+        chargeSessions: [
+          {
+            id: OCPP_ROW_ID,
+            orgId: ORG,
+            energyWh: 30_000n,
+            status: "completed",
+            userId: null,
+            ocppEnergyKwh: "30.0000",
+          },
+        ],
+        sessionLedger: [],
+        preSeededOcppRow: {
+          id: OCPP_ROW_ID,
+          userId: null,
+          ocppEnergyKwh: "30.0000",
+        },
+      };
+      const db = makeFakeDb(state);
+
+      await syncZaptecSessions(db, { accessToken: "stub" });
+
+      expect(state.sessionLedger[0].enrichmentStatus).toBe("complete");
     });
   });
 });
