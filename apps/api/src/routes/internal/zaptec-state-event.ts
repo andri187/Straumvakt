@@ -415,6 +415,18 @@ internalZaptecStateEvent.post("/", async (c) => {
         ocmfLastReadingKwh: lastReading !== null ? lastReading.toString() : null,
         ocmfSignedSessionKwh: computedKwh !== null ? computedKwh.toString() : null,
         completedSessionSeenAt: observedAt,
+        // ENRICH-1 — AMQP per-source columns. amqpEnergyKwh records the
+        // figure the AMQP feed advertised on the 723 blob; ocmfBlobRef
+        // mirrors the signed-session blob so an operator can answer
+        // "did AMQP land OCMF on this row?" without having to inspect
+        // ocmf_signed_session (which both AMQP and OCPP MeterValues
+        // populate — first-arrival-wins per ADR 0021). CDR > AMQP in
+        // priority per spec, so AMQP does NOT touch verified_source
+        // / canonical energy_wh / canonical ended_at.
+        ...(energyKwh != null
+          ? { amqpEnergyKwh: energyKwh.toFixed(4) }
+          : {}),
+        ...(signedSession ? { ocmfBlobRef: signedSession } : {}),
         // Backfill endedAt + energyWh from the blob if not already set.
         ...(session.endedAt ? {} : endedAt ? { endedAt } : {}),
         ...(session.energyWh != null

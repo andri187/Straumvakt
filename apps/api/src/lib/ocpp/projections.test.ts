@@ -858,5 +858,117 @@ describe("projections — per-event handlers", () => {
       expect(call.data.stopReason).toBe("Local");
       expect(call.data.energyWh).toBe(15000n);
     });
+
+    // ─── Sprint 9 / ENRICH-1 — per-source mirror columns ───────────
+    it("ocpp.raw.StopTransaction also writes ocppEnergyKwh + ocppStoppedAt mirror columns", async () => {
+      const tx = makeTx();
+      tx.chargeSession.findFirst = vi.fn(async () => ({
+        id: SESSION,
+        orgId: ORG,
+        siteId: null, // forces ledger skip; isolates the chargeSession.update payload
+        chargingStationId: null,
+        idTag: null,
+        startedAt: new Date("2026-05-11T07:30:00Z"),
+        energyWh: 0n,
+      })) as never;
+      await run(
+        tx,
+        rawEvent("StopTransaction", {
+          transactionId: 12345,
+          meterStop: 15000,
+          reason: "Local",
+          timestamp: "2026-05-11T08:00:00.000Z",
+        }),
+      );
+      expect(tx.chargeSession.update).toHaveBeenCalledOnce();
+      const call = tx.chargeSession.update.mock.calls[0][0] as {
+        data: {
+          energyWh: bigint;
+          ocppEnergyKwh?: string;
+          ocppStoppedAt?: Date;
+        };
+      };
+      // Canonical column unchanged.
+      expect(call.data.energyWh).toBe(15000n);
+      // ENRICH-1 mirrors: 15000 Wh → 15.0000 kWh.
+      expect(call.data.ocppEnergyKwh).toBe("15.0000");
+      expect(call.data.ocppStoppedAt).toBeInstanceOf(Date);
+      expect(call.data.ocppStoppedAt?.toISOString()).toBe(
+        "2026-05-11T08:00:00.000Z",
+      );
+    });
+
+    it("ocpp.raw.StopTransaction ledger upsert sets verifiedSource=ocpp + enrichmentStatus=pending", async () => {
+      const tx = makeTx();
+      tx.chargeSession.findFirst = vi.fn(async () => ({
+        id: SESSION,
+        orgId: ORG,
+        siteId: SITE,
+        chargingStationId: CHARGER,
+        idTag: null,
+        startedAt: new Date("2026-05-11T07:30:00Z"),
+        energyWh: 0n,
+      })) as never;
+      tx.chargeSession.update = vi.fn(async () => ({
+        id: SESSION,
+        orgId: ORG,
+        siteId: SITE,
+        chargingStationId: CHARGER,
+        idTag: null,
+        startedAt: new Date("2026-05-11T07:30:00Z"),
+        endedAt: new Date("2026-05-11T08:00:00Z"),
+        energyWh: 15000n,
+      })) as never;
+      tx.site.findUnique = vi.fn(async () => ({
+        id: SITE,
+        dsoTariffId: "tariff-veitur-ad1",
+      }));
+      tx.chargingStation.findUnique = vi.fn(async () => ({
+        siteAssetId: CHARGER,
+        installationId: "inst-1",
+      }));
+      tx.installation.findUnique = vi.fn(async () => ({
+        id: "inst-1",
+        retailerTariffId: "tariff-n1",
+      }));
+      tx.tariffDefinition.findUnique = vi.fn(
+        async (args: unknown): Promise<unknown> => {
+          const { where } = args as { where: { id: string } };
+          const base = {
+            computeRule: { kind: "flat", pricePerKwhMinor: 864 },
+            vatRatePct: 24,
+            currency: "ISK",
+            status: "active",
+          };
+          if (where.id === "tariff-veitur-ad1")
+            return { ...base, id: where.id, displayName: "Veitur AD1" };
+          if (where.id === "tariff-n1")
+            return {
+              ...base,
+              id: where.id,
+              displayName: "N1",
+              computeRule: { kind: "flat", pricePerKwhMinor: 883 },
+            };
+          return null;
+        },
+      );
+
+      await run(
+        tx,
+        rawEvent("StopTransaction", {
+          transactionId: 12345,
+          meterStop: 15000,
+          reason: "Local",
+          timestamp: "2026-05-11T08:00:00.000Z",
+        }),
+      );
+
+      expect(tx.sessionLedger.upsert).toHaveBeenCalledOnce();
+      const upsertCall = tx.sessionLedger.upsert.mock.calls[0][0] as {
+        create: { verifiedSource: string; enrichmentStatus: string };
+      };
+      expect(upsertCall.create.verifiedSource).toBe("ocpp");
+      expect(upsertCall.create.enrichmentStatus).toBe("pending");
+    });
   });
 });
