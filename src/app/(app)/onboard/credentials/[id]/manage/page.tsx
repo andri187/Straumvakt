@@ -55,9 +55,25 @@ export default async function ManageCredentialPage({
           <span>/</span>
           <span className="font-mono">{tree.credentialUsername}</span>
         </div>
-        <h1 className="mt-1 text-2xl font-semibold text-ink-50">
-          Manage <span className="font-mono text-sv-sky">{tree.credentialUsername}</span>
-        </h1>
+        <div className="mt-1 flex items-start justify-between gap-4">
+          <h1 className="text-2xl font-semibold text-ink-50">
+            Manage{" "}
+            <span className="font-mono text-sv-sky">{tree.credentialUsername}</span>
+          </h1>
+          {/* Sprint 9 — PROBE-2 discovery surface. Read-only sibling view
+              of "what does Zaptec say this credential can see right now,
+              and which of those chargers are in our DB". */}
+          <Link
+            href={
+              `/onboard/credentials/${id}/discover` as Parameters<
+                typeof Link
+              >[0]["href"]
+            }
+            className="whitespace-nowrap rounded border border-sv-sky/50 bg-sv-sky/10 px-3 py-1.5 text-xs font-medium text-sv-sky hover:bg-sv-sky/20"
+          >
+            Discover available chargers →
+          </Link>
+        </div>
         <p className="mt-1 text-sm text-ink-400">
           Tick the chargers this credential should manage. Adding pulls the
           charger into our DB under its existing installation; removing
