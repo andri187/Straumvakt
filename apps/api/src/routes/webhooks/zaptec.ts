@@ -27,7 +27,7 @@ import { Hono } from "hono";
 import type { Env } from "../../bindings";
 import { makePrisma } from "../../lib/prisma";
 import {
-  resolveTariffChainForSession,
+  resolveTariffChainWithIdsForSession,
   TariffResolutionError,
 } from "../../lib/tariff/resolve-tariff-chain";
 import { computeSessionCost } from "../../lib/tariff/compute-session-cost";
@@ -41,9 +41,20 @@ zaptecWebhooks.use("*", async (c, next) => {
     c.env.ZAPTEC_WEBHOOK_DIAGNOSTIC === "true";
 
   if (diagnostic) {
-    // Diagnostic mode — log every header so the operator can see
-    // exactly what Zaptec puts on the wire (Authorization header?
-    // X-Zaptec-Signature? body field?). Fail-open. Lock down by
+    // Production safety guard — ZAPTEC_WEBHOOK_DIAGNOSTIC must never be
+    // active in production. If APP_ENV is unset or explicitly "production",
+    // refuse immediately rather than failing open (AUD-2).
+    const appEnv = c.env.APP_ENV ?? "production";
+    if (appEnv === "production") {
+      console.error(
+        "[webhooks/zaptec] ZAPTEC_WEBHOOK_DIAGNOSTIC must NOT be set in production — refusing fail-open",
+      );
+      return c.json({ error: "diagnostic_disabled_in_prod" }, 503);
+    }
+
+    // Diagnostic mode (non-production only) — log every header so the
+    // operator can see exactly what Zaptec puts on the wire (Authorization
+    // header? X-Zaptec-Signature? body field?). Fail-open. Lock down by
     // unsetting ZAPTEC_WEBHOOK_DIAGNOSTIC after one real callback.
     const headers: Record<string, string> = {};
     c.req.raw.headers.forEach((v, k) => {
@@ -356,13 +367,13 @@ zaptecWebhooks.post("/session-end", async (c) => {
         },
       });
 
-      const chain = await resolveTariffChainForSession(tx, {
+      const resolved = await resolveTariffChainWithIdsForSession(tx, {
         siteId: siteId!,
         chargingStationId: chargingStationId!,
       });
       const breakdown = computeSessionCost(
         { startedAt: startedAt!, stoppedAt, energyKwh },
-        chain,
+        resolved.chain,
       );
 
       const driverUserId = await resolveDriver(tx, cardId);
@@ -380,7 +391,8 @@ zaptecWebhooks.post("/session-end", async (c) => {
           durationSec,
           energyKwh: energyKwh.toFixed(3),
           costIskMinor: breakdown.totalIncVatMinor,
-          tariffDefinitionId: null,
+          // Sprint 9 FIX-1 — audit-trail FK (DSO; see ADR 0008).
+          tariffDefinitionId: resolved.dsoTariffDefinitionId,
         },
         update: {
           stoppedAt,

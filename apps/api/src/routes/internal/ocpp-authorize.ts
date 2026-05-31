@@ -57,6 +57,7 @@ export type AuthorizeReason =
   | "expiry_passed"
   | "scope_mismatch"
   | "no_contract"
+  | "no_billable_clauses"
   | "unknown_status";
 
 internalOcppAuthorize.post("/", async (c) => {
@@ -185,14 +186,21 @@ export async function resolveAuthorize(
   // Agreement anchored at the charger's installation.
   //
   // OCPP 1.6 has no richer status than Blocked, so 'no_contract' is the
-  // internal reason; the wire-level verdict is Blocked.
+  // internal reason; the wire-level verdict is Blocked. The richer
+  // reason is for operator logs / debug page.
   //
-  // We only enforce when we have an installationId to check against.
-  // A charger whose ocpp_identity has no installation chain can't be
-  // resolved here; preserving Accept matches the existing scope-check
-  // semantics and keeps shadow-mode (enforceAuthorize=false) safe for
-  // partially-wired installs.
-  if (installationId) {
+  // Gated by the per-installation `enforceAuthorize` flag. While the
+  // installation flag is off, the resolver does NOT compute a denial
+  // for missing membership — A.11 is a new return path and the default
+  // is "no enforcement" so committing this code changes nothing at any
+  // installation. When an operator flips enforceAuthorize=true, A.11
+  // activates alongside the existing token-status enforcement.
+  //
+  // We also only enforce when we have an installationId to check
+  // against. A charger whose ocpp_identity has no installation chain
+  // can't be resolved here; preserving Accept matches the existing
+  // scope-check semantics.
+  if (enforceAuthorize && installationId) {
     const now = new Date();
     const membership = await db.driverGroupMembership.findFirst({
       where: {
@@ -210,10 +218,43 @@ export async function resolveAuthorize(
           },
         },
       },
-      select: { id: true },
+      // Surface the resolved agreement id so the clause-count gate below
+      // can verify the agreement actually carries billable terms. Without
+      // this, an empty-stub agreement (membership row exists but the
+      // parent agreement has zero clauses) would Accept here and produce
+      // a silent zero-cost invoice at session-stop. See GAP-2 orphan
+      // investigation.
+      select: {
+        id: true,
+        driverGroup: { select: { agreementId: true } },
+      },
     });
     if (!membership) {
       return { verdict: "Blocked", reason: "no_contract", idTokenId: token.id, enforceAuthorize };
+    }
+
+    // GAP-2 — strengthen A.11: an agreement with zero clauses produces no
+    // billing lines at session-stop ("silent zero-cost invoice"). Treat
+    // it the same as "no contract" at the gate. The AgreementClause model
+    // has no per-row activation column today (see prisma/schema.prisma);
+    // presence of a row IS the active state, so a row count of 0 is the
+    // correct condition.
+    //
+    // Reason `no_billable_clauses` is observability metadata only — the
+    // wire-level verdict remains Blocked, same as `no_contract`. Default
+    // behaviour (flag OFF) is unchanged because this whole branch is
+    // gated by enforceAuthorize.
+    const agreementId = membership.driverGroup.agreementId;
+    const activeClauseCount = await db.agreementClause.count({
+      where: { agreementId },
+    });
+    if (activeClauseCount === 0) {
+      return {
+        verdict: "Blocked",
+        reason: "no_billable_clauses",
+        idTokenId: token.id,
+        enforceAuthorize,
+      };
     }
   }
 
@@ -275,7 +316,18 @@ export interface PrismaLike {
           agreement: Record<string, unknown>;
         };
       };
-      select: { id: true };
-    }) => Promise<{ id: string } | null>;
+      select: {
+        id: true;
+        driverGroup: { select: { agreementId: true } };
+      };
+    }) => Promise<{
+      id: string;
+      driverGroup: { agreementId: string };
+    } | null>;
+  };
+  agreementClause: {
+    count: (args: {
+      where: { agreementId: string };
+    }) => Promise<number>;
   };
 }

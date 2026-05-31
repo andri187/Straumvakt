@@ -9,6 +9,7 @@ import {
 import { makePrisma } from "../../lib/prisma";
 import { bootstrapAdminUser } from "../../repositories/admin-bootstrap";
 import { verifyPassword } from "../../lib/password";
+import { rateLimit } from "../../lib/rate-limit";
 import type { Env } from "../../bindings";
 
 export const adminAuth = new Hono<{ Bindings: Env }>();
@@ -22,7 +23,22 @@ const LoginInput = z.object({
   password: z.string().min(1).max(200),
 });
 
-adminAuth.post("/login", async (c) => {
+adminAuth.post(
+  "/login",
+  // AUD-2 / FIX-2: rate-limit the bootstrap-admin path. Constant-time
+  // string comparison is fast — without throttling the endpoint is
+  // brute-forceable. Bucket by email+IP so neither a single attacker IP
+  // nor a single targeted email can be sprayed at scale. Fails open
+  // when the binding is missing (dev environments). See
+  // docs/operator/RATE_LIMITER_BINDINGS_TODO.md for the wrangler.jsonc
+  // patch the operator must apply.
+  rateLimit({
+    keyBy: "email_or_ip",
+    limit: 10,
+    windowSec: 900,
+    bindingName: "ADMIN_LOGIN_RATE_LIMITER",
+  }),
+  async (c) => {
   const raw = (await c.req.json().catch(() => null)) as unknown;
   const parsed = LoginInput.safeParse(raw);
   if (!parsed.success) {

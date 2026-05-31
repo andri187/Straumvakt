@@ -52,7 +52,12 @@ async function deriveBits(
     {
       name: "PBKDF2",
       hash: "SHA-256",
-      salt: salt as unknown as ArrayBuffer,
+      // Uint8Array is an ArrayBufferView which satisfies the BufferSource
+      // union (ArrayBuffer | ArrayBufferView). The previous cast to
+      // ArrayBuffer was structurally incorrect — Uint8Array IS NOT an
+      // ArrayBuffer and the cast would silently produce wrong results in
+      // environments that distinguish the two.
+      salt,
       iterations,
     },
     baseKey,

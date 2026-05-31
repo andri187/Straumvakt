@@ -33,6 +33,10 @@ import {
   type DriverTokenPayload,
 } from "../../lib/driver-session";
 import { enqueueCommand } from "../../repositories/outbound-commands";
+import {
+  listDriverInstallations,
+  getDriverChargerPricing,
+} from "../../repositories/driver-pricing";
 import type { Env } from "../../bindings";
 
 type Vars = { driverPayload: DriverTokenPayload };
@@ -41,13 +45,30 @@ export const publicDriver = new Hono<{ Bindings: Env; Variables: Vars }>();
 
 // ── CORS ─────────────────────────────────────────────────────────────
 //
-// Pilot: allow any origin. Flutter mobile (Android/iOS) doesn't apply
-// CORS (native HTTP); Flutter Web does. Restrict to the published web
-// build's domain when that lands.
+// Origin allowlist — pilot tightened from "*" per AUD-2.
+// Flutter mobile (Android/iOS) makes native HTTP requests that don't
+// carry an Origin header, so CORS is irrelevant there. Flutter Web
+// and the Next.js admin UI do carry an Origin, so we enumerate the
+// known-safe origins explicitly.
+//
+// TODO: add capacitor:// or app-specific origin when mobile app deploys.
+function isAllowedDriverOrigin(origin: string | undefined | null): string | null {
+  if (!origin) return null;
+  const allowed = [
+    "https://hlada-staging.straumvakt.workers.dev",
+    "https://hlada.straumvakt.workers.dev",
+    "http://localhost:3000",
+  ];
+  return allowed.includes(origin) ? origin : null;
+}
+
 publicDriver.use(
   "*",
   cors({
-    origin: "*",
+    origin: (origin) => isAllowedDriverOrigin(origin),
+    // Driver API uses stateless bearer tokens — no cookies, so
+    // credentials:false is correct and keeps preflight simple.
+    credentials: false,
     allowMethods: ["GET", "POST", "OPTIONS"],
     allowHeaders: ["Content-Type", "Authorization"],
     maxAge: 600,
@@ -556,6 +577,47 @@ publicDriver.post("/start-session", requireDriver, async (c) => {
     },
     202,
   );
+});
+
+// ── GET /api/driver/installations ───────────────────────────────────
+//
+// GAP-3 / 2026-05-31 — pre-session preview surface.
+//
+// Returns installations the driver can charge at RIGHT NOW. Filters out:
+//   1. installations where the agreement isn't active at now()
+//   2. installations where the agreement has zero clauses (operator
+//      hasn't filled the pricing in yet — surfacing them would lock
+//      the driver into a session they can't see the price of)
+//
+// The pricingSummary headline is INDICATIVE — the canonical billing
+// math runs at session-stop in the agreements resolver. BearerRule
+// overrides and TRD/WRK substitutions are not walked here.
+
+publicDriver.get("/installations", requireDriver, async (c) => {
+  const { userId } = c.get("driverPayload");
+  const prisma = makePrisma(c.env);
+  const installations = await listDriverInstallations(prisma, userId);
+  return c.json({ installations });
+});
+
+// ── GET /api/driver/chargers/:id/pricing ────────────────────────────
+//
+// Full clause breakdown for one charger. Access check at single-
+// installation scope. 404s for both "doesn't exist" and "you don't
+// have access" — same response so we don't leak existence.
+
+publicDriver.get("/chargers/:id/pricing", requireDriver, async (c) => {
+  const { userId } = c.get("driverPayload");
+  const id = c.req.param("id");
+  if (!id) {
+    return c.json({ error: "validation", message: "Charger id required." }, 400);
+  }
+  const prisma = makePrisma(c.env);
+  const pricing = await getDriverChargerPricing(prisma, userId, id);
+  if (!pricing) {
+    return c.json({ error: "not_found", message: "Charger not found." }, 404);
+  }
+  return c.json(pricing);
 });
 
 // ── Health ──────────────────────────────────────────────────────────

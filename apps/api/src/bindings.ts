@@ -73,6 +73,23 @@ export interface Env {
   // spoof Accept/Reject decisions and ledger writes. Set via
   // wrangler secret put.
   ZAPTEC_WEBHOOK_DIAGNOSTIC?: string;
+  // Deployment environment tag. Set to "staging" for the staging worker
+  // via `wrangler secret put APP_ENV --env staging`. Left unset (or set
+  // to "production") on the production worker. Used as a safety guard to
+  // prevent diagnostic/fail-open modes from running in production.
+  APP_ENV?: string;
+
+  // Cloudflare Rate Limiting bindings — declared in wrangler.jsonc
+  // `unsafe.bindings`. Optional so dev environments without the binding
+  // fail OPEN with a warn rather than crashing. See
+  // docs/operator/RATE_LIMITER_BINDINGS_TODO.md for the wrangler.jsonc
+  // patch.
+  ADMIN_LOGIN_RATE_LIMITER?: {
+    limit(input: { key: string }): Promise<{ success: boolean }>;
+  };
+  DRIVER_LOGIN_RATE_LIMITER?: {
+    limit(input: { key: string }): Promise<{ success: boolean }>;
+  };
 }
 
 /**

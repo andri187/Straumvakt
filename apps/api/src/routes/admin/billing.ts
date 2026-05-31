@@ -173,7 +173,7 @@ adminBilling.get(
  * read; tariff editing remains via seed scripts until ADR 0021
  * lands.
  */
-adminBilling.get("/tariffs", async (c) => {
+adminBilling.get("/tariffs", requirePermission("billing.read"), async (c) => {
   const db = makePrisma(c.env);
 
   // Tariff rows + their costFactor codes

@@ -23,7 +23,7 @@ import {
   type ZaptecChargeHistoryEntry,
 } from "../lib/zaptec";
 import {
-  resolveTariffChainForSession,
+  resolveTariffChainWithIdsForSession,
   TariffResolutionError,
 } from "../lib/tariff/resolve-tariff-chain";
 import { computeSessionCost } from "../lib/tariff/compute-session-cost";
@@ -225,13 +225,13 @@ async function importOne(
   // Tariff chain — same resolver the OCPP-first path uses. Throws
   // typed TariffResolutionError on misconfig; surfaces in the
   // top-level errors[] for the operator to act on.
-  const chain = await resolveTariffChainForSession(tx, {
+  const resolved = await resolveTariffChainWithIdsForSession(tx, {
     siteId: siteAsset.siteId,
     chargingStationId: identity.chargingStationId,
   });
   const breakdown = computeSessionCost(
     { startedAt, stoppedAt, energyKwh },
-    chain,
+    resolved.chain,
   );
 
   // 2026-05-12 — CDR-matches-OCPP reconciliation. If the OCPP raw-
@@ -402,7 +402,10 @@ async function importOne(
       durationSec,
       energyKwh: energyKwh.toFixed(3),
       costIskMinor: breakdown.totalIncVatMinor,
-      tariffDefinitionId: null,
+      // Sprint 9 FIX-1 — audit-trail FK (DSO is the primary anchor
+      // per ADR 0008; retailer id intentionally not persisted until
+      // schema gains a sibling column or JSONB breakdown).
+      tariffDefinitionId: resolved.dsoTariffDefinitionId,
     },
     update: {},
   });
