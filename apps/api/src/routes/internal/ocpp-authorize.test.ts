@@ -25,17 +25,31 @@ interface IdentityRow {
   } | null;
 }
 
+type MembershipRow = {
+  id: string;
+  driverGroup: { agreementId: string };
+};
+
 function makeDb({
   token = null,
   identity = null,
-  membership = { id: "membership-default" },
+  membership = {
+    id: "membership-default",
+    driverGroup: { agreementId: "agr-default" },
+  },
+  /** Number of AgreementClause rows the resolver will see for the
+   *  membership's agreement. Default = 1 so existing A.11 tests still
+   *  pass the clause-count gate (GAP-2). Set to 0 to simulate the
+   *  empty-stub agreement. */
+  clauseCount = 1,
 }: {
   token?: TokenRow | null;
   identity?: IdentityRow | null;
   /** Membership row returned by driverGroupMembership.findFirst.
    *  Default is a non-null stub so existing tests pass agreement check
    *  without explicit setup. Pass `null` to simulate no_contract. */
-  membership?: { id: string } | null;
+  membership?: MembershipRow | null;
+  clauseCount?: number;
 } = {}): PrismaLike {
   return {
     idToken: {
@@ -46,6 +60,9 @@ function makeDb({
     },
     driverGroupMembership: {
       findFirst: async () => membership,
+    },
+    agreementClause: {
+      count: async () => clauseCount,
     },
   };
 }
@@ -386,7 +403,7 @@ describe("resolveAuthorize — agreement membership (A.11)", () => {
         scopeInstallationId: null,
       },
       identity: id("inst-PROD", true),
-      membership: { id: "m-1" },
+      membership: { id: "m-1", driverGroup: { agreementId: "agr-1" } },
     });
     const result = await resolveAuthorize(db, INPUT);
     expect(result.verdict).toBe("Accepted");
@@ -487,5 +504,138 @@ describe("resolveAuthorize — agreement membership (A.11)", () => {
     const result = await resolveAuthorize(db, INPUT);
     expect(result.verdict).toBe("Accepted");
     expect(result.enforceAuthorize).toBe(false);
+  });
+});
+
+// GAP-2 — strengthen A.11 with a clause-count gate. A driver with an
+// active DriverGroupMembership under an active installation-Agreement
+// would historically have Accepted, even when the parent Agreement
+// carried zero billable clauses. That empty-stub case still produces a
+// successful charge but no billing_lines at session-stop → silent
+// zero-cost invoice. Block Authorize at the gate with the metadata
+// reason `no_billable_clauses` (wire-level still Blocked).
+describe("resolveAuthorize — agreement clause-count gate (GAP-2)", () => {
+  // Flag ON, membership present, agreement has clauses → Accepted.
+  // (Same as A.11 case (2), repeated here for explicitness in case the
+  // existing helper defaults shift.)
+  it("flag ON: returns Accepted when membership exists and agreement has clauses", async () => {
+    const db = makeDb({
+      token: {
+        id: "token-g1",
+        userId: "user-1",
+        status: "active",
+        expiresAt: null,
+        scopeInstallationId: null,
+      },
+      identity: id("inst-PROD", true),
+      membership: { id: "m-g1", driverGroup: { agreementId: "agr-g1" } },
+      clauseCount: 3,
+    });
+    const result = await resolveAuthorize(db, INPUT);
+    expect(result.verdict).toBe("Accepted");
+    expect(result.reason).toBe("ok");
+    expect(result.userId).toBe("user-1");
+    expect(result.enforceAuthorize).toBe(true);
+  });
+
+  // Flag ON, membership present, agreement has ZERO clauses (empty stub)
+  // → Blocked / no_billable_clauses. Wire-level remains Blocked; the
+  // metadata reason distinguishes empty-stub from missing-contract for
+  // operator triage.
+  it("flag ON: returns Blocked/no_billable_clauses when membership exists but the agreement has zero clauses", async () => {
+    const db = makeDb({
+      token: {
+        id: "token-g2",
+        userId: "user-1",
+        status: "active",
+        expiresAt: null,
+        scopeInstallationId: null,
+      },
+      identity: id("inst-PROD", true),
+      membership: { id: "m-g2", driverGroup: { agreementId: "agr-empty-stub" } },
+      clauseCount: 0,
+    });
+    const result = await resolveAuthorize(db, INPUT);
+    expect(result).toEqual({
+      verdict: "Blocked",
+      reason: "no_billable_clauses",
+      idTokenId: "token-g2",
+      enforceAuthorize: true,
+    });
+  });
+
+  // Flag ON, NO membership at all → still no_contract (clause-count gate
+  // is never reached). The clause count would also be 0 in this case but
+  // the resolver must short-circuit on missing membership first so the
+  // metadata reason stays meaningful for operator triage.
+  it("flag ON: missing membership still returns no_contract (not no_billable_clauses) regardless of clause count", async () => {
+    const db = makeDb({
+      token: {
+        id: "token-g3",
+        userId: "user-1",
+        status: "active",
+        expiresAt: null,
+        scopeInstallationId: null,
+      },
+      identity: id("inst-PROD", true),
+      membership: null,
+      clauseCount: 0,
+    });
+    const result = await resolveAuthorize(db, INPUT);
+    expect(result.verdict).toBe("Blocked");
+    expect(result.reason).toBe("no_contract");
+  });
+
+  // Flag OFF — clause-count gate must not fire even when the agreement
+  // would have failed it. Default behaviour preserved at every
+  // installation that hasn't opted in.
+  it("flag OFF: returns Accepted even when the agreement has zero clauses (default behaviour preserved)", async () => {
+    const db = makeDb({
+      token: {
+        id: "token-g4",
+        userId: "user-1",
+        status: "active",
+        expiresAt: null,
+        scopeInstallationId: null,
+      },
+      identity: id("inst-PROD", false),
+      membership: { id: "m-g4", driverGroup: { agreementId: "agr-empty-stub" } },
+      clauseCount: 0,
+    });
+    const result = await resolveAuthorize(db, INPUT);
+    expect(result.verdict).toBe("Accepted");
+    expect(result.reason).toBe("ok");
+    expect(result.enforceAuthorize).toBe(false);
+  });
+
+  // Defence-in-depth — the clause-count query must not fire when the
+  // membership check itself returns null. (Prevents wasted DB roundtrips
+  // and keeps the no_contract reason from being shadowed.)
+  it("flag ON: agreementClause.count is never called when membership is missing", async () => {
+    let clauseCalls = 0;
+    const baseDb = makeDb({
+      token: {
+        id: "token-g5",
+        userId: "user-1",
+        status: "active",
+        expiresAt: null,
+        scopeInstallationId: null,
+      },
+      identity: id("inst-PROD", true),
+      membership: null,
+    });
+    const db: PrismaLike = {
+      ...baseDb,
+      agreementClause: {
+        count: async () => {
+          clauseCalls += 1;
+          return 0;
+        },
+      },
+    };
+    const result = await resolveAuthorize(db, INPUT);
+    expect(result.verdict).toBe("Blocked");
+    expect(result.reason).toBe("no_contract");
+    expect(clauseCalls).toBe(0);
   });
 });

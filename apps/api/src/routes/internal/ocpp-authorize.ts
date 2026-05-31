@@ -57,6 +57,7 @@ export type AuthorizeReason =
   | "expiry_passed"
   | "scope_mismatch"
   | "no_contract"
+  | "no_billable_clauses"
   | "unknown_status";
 
 internalOcppAuthorize.post("/", async (c) => {
@@ -217,10 +218,43 @@ export async function resolveAuthorize(
           },
         },
       },
-      select: { id: true },
+      // Surface the resolved agreement id so the clause-count gate below
+      // can verify the agreement actually carries billable terms. Without
+      // this, an empty-stub agreement (membership row exists but the
+      // parent agreement has zero clauses) would Accept here and produce
+      // a silent zero-cost invoice at session-stop. See GAP-2 orphan
+      // investigation.
+      select: {
+        id: true,
+        driverGroup: { select: { agreementId: true } },
+      },
     });
     if (!membership) {
       return { verdict: "Blocked", reason: "no_contract", idTokenId: token.id, enforceAuthorize };
+    }
+
+    // GAP-2 — strengthen A.11: an agreement with zero clauses produces no
+    // billing lines at session-stop ("silent zero-cost invoice"). Treat
+    // it the same as "no contract" at the gate. The AgreementClause model
+    // has no per-row activation column today (see prisma/schema.prisma);
+    // presence of a row IS the active state, so a row count of 0 is the
+    // correct condition.
+    //
+    // Reason `no_billable_clauses` is observability metadata only — the
+    // wire-level verdict remains Blocked, same as `no_contract`. Default
+    // behaviour (flag OFF) is unchanged because this whole branch is
+    // gated by enforceAuthorize.
+    const agreementId = membership.driverGroup.agreementId;
+    const activeClauseCount = await db.agreementClause.count({
+      where: { agreementId },
+    });
+    if (activeClauseCount === 0) {
+      return {
+        verdict: "Blocked",
+        reason: "no_billable_clauses",
+        idTokenId: token.id,
+        enforceAuthorize,
+      };
     }
   }
 
@@ -282,7 +316,18 @@ export interface PrismaLike {
           agreement: Record<string, unknown>;
         };
       };
-      select: { id: true };
-    }) => Promise<{ id: string } | null>;
+      select: {
+        id: true;
+        driverGroup: { select: { agreementId: true } };
+      };
+    }) => Promise<{
+      id: string;
+      driverGroup: { agreementId: string };
+    } | null>;
+  };
+  agreementClause: {
+    count: (args: {
+      where: { agreementId: string };
+    }) => Promise<number>;
   };
 }
