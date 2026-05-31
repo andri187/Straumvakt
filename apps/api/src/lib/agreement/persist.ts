@@ -120,16 +120,44 @@ export async function loadAgreementContext(
     };
   }
 
+  // Resolver determinism (GAP-1, Rule 5): two installation agreements can
+  // briefly coexist for the same installation during a staged supersede
+  // (old still active, new just activated). Without an explicit orderBy,
+  // PostgreSQL returns whichever row appears first in heap-scan order —
+  // typically the older one — which can silently route a session to a
+  // stale (possibly 0-clause) agreement and produce a zero-billing miss.
+  // The orderBy below makes the newest staged agreement win, with `id`
+  // as a stable tiebreak. The matching count query above is observability
+  // only — it surfaces the silent-conflict state in Workers logs without
+  // altering which row is selected.
+  const installationAgreementWhere = {
+    agreementType: "installation" as const,
+    installationId,
+    effectiveFrom: { lte: at },
+    AND: [
+      { status: "active" as const },
+      { OR: [{ effectiveUntil: null }, { effectiveUntil: { gt: at } }] },
+    ],
+  };
+
+  const installationMatchCount = await prisma.agreement.count({
+    where: installationAgreementWhere,
+  });
+  if (installationMatchCount > 1) {
+    console.warn(
+      `[agreement-resolver] multiple installation agreements matched ` +
+        `installationId=${installationId} at=${at.toISOString()} count=${installationMatchCount} ` +
+        `— resolver picks the most recently staged (effectiveFrom desc, id asc tiebreak); ` +
+        `operator should review and supersede the stale rows.`,
+    );
+  }
+
   const installationAgreement = await prisma.agreement.findFirst({
-    where: {
-      agreementType: "installation",
-      installationId,
-      effectiveFrom: { lte: at },
-      AND: [
-        { status: "active" },
-        { OR: [{ effectiveUntil: null }, { effectiveUntil: { gt: at } }] },
-      ],
-    },
+    where: installationAgreementWhere,
+    orderBy: [
+      { effectiveFrom: "desc" }, // newest agreement wins
+      { id: "asc" },             // stable tiebreak when effectiveFrom equal
+    ],
     include: {
       clauses: { include: { costFactor: { select: { code: true } } } },
       bearerRules: true,
