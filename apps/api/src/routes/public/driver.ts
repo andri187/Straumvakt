@@ -37,6 +37,7 @@ import {
   listDriverInstallations,
   getDriverChargerPricing,
 } from "../../repositories/driver-pricing";
+import { createSelfRequest } from "../../repositories/driver-access-requests";
 import type { Env } from "../../bindings";
 
 type Vars = { driverPayload: DriverTokenPayload };
@@ -620,6 +621,95 @@ publicDriver.get("/chargers/:id/pricing", requireDriver, async (c) => {
   // signedReceiptSupported is included in the pricing object returned by the
   // repository; pass it through directly — no logic change at this layer.
   return c.json(pricing);
+});
+
+// ── POST /api/driver/access-requests ────────────────────────────────
+//
+// ADR 0022 (2026-05-31 addendum) — driver self-onboarding R1 path.
+// A driver who's signed up but isn't yet a member of any DriverGroup
+// taps "Request access to this charger" in the mobile app. We log a
+// row on agreements.driver_access_requests with triggeredBy='self_request'
+// and email both the driver (receipt) and the org's main contact
+// (inbound notification).
+//
+// Validations:
+//   - installationId must exist.
+//   - Driver must not already have an active membership covering the
+//     installation (409 already_have_access).
+//   - Driver must not already have a pending request for the same
+//     installation (409 already_requested).
+//
+// Email sends fail OPEN — a Resend outage doesn't block the response.
+
+const accessRequestSchema = z.object({
+  installationId: z.string().uuid(),
+});
+
+publicDriver.post("/access-requests", requireDriver, async (c) => {
+  const raw = await c.req.json().catch(() => null);
+  const parsed = accessRequestSchema.safeParse(raw);
+  if (!parsed.success) {
+    return c.json(
+      {
+        error: "validation",
+        message: "installationId is required (uuid).",
+      },
+      400,
+    );
+  }
+
+  const { userId } = c.get("driverPayload");
+  const prisma = makePrisma(c.env);
+
+  // Pass the request's origin so the receipt email links back to the
+  // same console (staging vs production) the driver is using.
+  const origin = c.req.header("origin") ?? c.req.header("referer");
+  let baseUrl: string | undefined;
+  if (origin) {
+    try {
+      baseUrl = new URL(origin).origin;
+    } catch {
+      baseUrl = undefined;
+    }
+  }
+
+  const result = await createSelfRequest(
+    prisma,
+    c.env,
+    userId,
+    parsed.data.installationId,
+    { baseUrl },
+  );
+
+  if ("error" in result) {
+    if (result.error === "installation_not_found") {
+      return c.json(
+        { error: "not_found", message: "Installation not found." },
+        404,
+      );
+    }
+    if (result.error === "already_have_access") {
+      return c.json({ error: "already_have_access" }, 409);
+    }
+    if (result.error === "already_requested") {
+      return c.json(
+        {
+          error: "already_requested",
+          existingRequestId: result.existingRequestId,
+        },
+        409,
+      );
+    }
+    if (result.error === "user_not_found") {
+      return c.json(
+        { error: "unauthenticated", message: "User no longer exists." },
+        401,
+      );
+    }
+    return c.json({ error: "internal" }, 500);
+  }
+
+  return c.json({ accessRequest: result.accessRequest }, 201);
 });
 
 // ── Health ──────────────────────────────────────────────────────────
