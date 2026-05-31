@@ -25,7 +25,23 @@ import {
   INVITE_ROLES,
   type InviteRole,
 } from "../../repositories/invites";
+import { sendEmail } from "../../lib/email";
+import { renderInviteEmail } from "../../lib/email-templates/invite";
 import type { Env } from "../../bindings";
+
+/**
+ * Build the recipient-clickable invite URL from the request origin.
+ * Mirrors the previous UI-side construction (`{baseUrl}/invite/{token}`)
+ * so emailed links and admin-console-copied links resolve to the same
+ * landing page.
+ */
+function buildInviteUrl(c: { req: { header: (k: string) => string | undefined } }, plaintext: string): string {
+  const origin = c.req.header("origin") ?? c.req.header("referer");
+  const baseUrl = origin
+    ? new URL(origin).origin
+    : "https://hlada-staging.straumvakt.workers.dev";
+  return `${baseUrl}/invite/${plaintext}`;
+}
 
 export const adminOrgInvites = new Hono<{ Bindings: Env; Variables: AuthVars }>();
 adminOrgInvites.use("*", requireAdmin);
@@ -73,14 +89,53 @@ adminOrgInvites.post(
       const status = result.reason === "org_not_found" ? 404 : 409;
       return c.json({ error: result.reason }, status);
     }
+
+    // Send the invite email. Fails OPEN (logged warn, response still
+    // includes tokenPlaintext) so a Resend outage / missing key never
+    // blocks the operator from copying the link manually.
+    const inviteUrl = buildInviteUrl(c, result.tokenPlaintext);
+    // Fetch the org display name + inviter name for the email body. The
+    // createInvite repo doesn't return those; do a small follow-up read.
+    const [org, inviter] = await Promise.all([
+      db.organization.findUnique({
+        where: { id: c.req.param("orgId") },
+        select: { displayName: true },
+      }),
+      db.user.findUnique({
+        where: { id: session.userId },
+        select: { displayName: true, email: true },
+      }),
+    ]);
+    const content = renderInviteEmail({
+      orgDisplayName: org?.displayName ?? "your team",
+      inviteUrl,
+      roleLabel: parsed.data.role,
+      expiresAt: result.expiresAt,
+      inviterName: inviter?.displayName ?? inviter?.email,
+    });
+    const emailResult = await sendEmail(c.env, {
+      to: parsed.data.email,
+      subject: content.subject,
+      html: content.html,
+      text: content.text,
+      tags: [{ name: "category", value: "invite" }],
+    });
+
     return c.json(
       {
         invite: {
           tokenId: result.tokenId,
+          // Operator UI keeps showing the plaintext so the inviter can
+          // copy-paste as a fallback. Email is the primary channel.
           tokenPlaintext: result.tokenPlaintext,
           expiresAt: result.expiresAt.toISOString(),
           userId: result.userId,
           isNewUser: result.isNewUser,
+          email: {
+            sent: emailResult.ok,
+            id: emailResult.ok ? emailResult.id : null,
+            reason: emailResult.ok ? null : emailResult.reason,
+          },
         },
       },
       201,

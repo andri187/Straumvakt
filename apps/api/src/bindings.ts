@@ -90,6 +90,14 @@ export interface Env {
   DRIVER_LOGIN_RATE_LIMITER?: {
     limit(input: { key: string }): Promise<{ success: boolean }>;
   };
+
+  // Resend transactional email API key. Set via
+  // `wrangler secret put RESEND_API_KEY --name hlada-api-staging`.
+  // Optional so dev environments without the key fail OPEN with a warn
+  // — sendEmail() returns { ok: false, reason: "binding_missing" } and
+  // the calling route can decide to surface the plaintext invite link
+  // as a fallback. See apps/api/src/lib/email.ts.
+  RESEND_API_KEY?: string;
 }
 
 /**
