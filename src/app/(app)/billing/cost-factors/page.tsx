@@ -1,16 +1,19 @@
-// Read-only cost-factor catalogue surface. Sprint 9 — Track B.
+// Cost-factor catalogue — read + CRUD surface. Sprint 9 — Track A.
 //
 // Shows all billing.cost_factors rows grouped by anchorTier.
-// The anchorTier enum (org | property | site | installation | circuit |
-// charger | driver_contract) is the schema's discriminator for what kind
-// of cost a factor represents and at which level it is anchored.
+// Adds:
+//   • "New cost factor" button → /billing/cost-factors/new
+//   • Per-row Edit pencil → /billing/cost-factors/[id]/edit
+//   • Inline Deactivate / Reactivate toggle with confirmation + tariff-use warning
 //
-// Orphan highlighting: factors with zero TariffDefinitions referencing
-// them are flagged — they are seeded but not yet wired to any tariff.
+// The orphan highlighting and tile dashboard are preserved from the
+// original read-only Sprint 9 Track B build.
 
+import Link from "next/link";
 import { SectionTabs, BILLING_TABS } from "@/components/section-tabs";
 import { ActionBar } from "@/components/action-bar";
 import { apiFetchServerJson } from "@/lib/api-client-server";
+import { StatusToggle } from "./status-toggle";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Billing · Cost factors" };
@@ -103,9 +106,20 @@ export default async function CostFactorsPage() {
         ))}
       </div>
 
+      {/* New cost factor CTA */}
+      <div className="mb-4 flex justify-end">
+        <Link
+          href={"/billing/cost-factors/new" as Parameters<typeof Link>[0]["href"]}
+          className="rounded-md bg-sv-sky/20 px-3 py-1.5 text-xs font-medium text-sv-sky ring-1 ring-sv-sky/30 hover:bg-sv-sky/30"
+        >
+          + New cost factor
+        </Link>
+      </div>
+
       {summary.byAnchor.length === 0 ? (
         <div className="rounded border border-dashed border-bg-border p-6 text-center text-sm text-ink-500">
-          No cost factors found. Seed via apps/api/scripts/seed-*.ts.
+          No cost factors found. Use the button above or seed via
+          apps/api/scripts/seed-*.ts.
         </div>
       ) : (
         summary.byAnchor.map(({ anchor, factors }) => (
@@ -125,6 +139,7 @@ export default async function CostFactorsPage() {
                     <th className="px-3 py-2">Currency</th>
                     <th className="px-3 py-2">Status</th>
                     <th className="px-3 py-2 text-right">Tariffs</th>
+                    <th className="px-3 py-2 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-bg-border/40">
@@ -144,7 +159,9 @@ export default async function CostFactorsPage() {
                           </span>
                         )}
                       </td>
-                      <td className="px-3 py-1.5 text-ink-100">{f.displayName}</td>
+                      <td className="px-3 py-1.5 text-ink-100">
+                        {f.displayName}
+                      </td>
                       <td className="px-3 py-1.5 text-ink-400 italic">
                         {f.description ?? "—"}
                       </td>
@@ -163,6 +180,24 @@ export default async function CostFactorsPage() {
                         ) : (
                           f.tariffCount
                         )}
+                      </td>
+                      <td className="px-3 py-1.5">
+                        <div className="flex items-center justify-end gap-2">
+                          {/* Edit pencil */}
+                          <Link
+                            href={`/billing/cost-factors/${f.id}/edit` as Parameters<typeof Link>[0]["href"]}
+                            title="Edit this factor"
+                            className="rounded px-1.5 py-0.5 text-[10px] text-ink-400 hover:bg-bg-base/50 hover:text-sv-sky"
+                          >
+                            Edit
+                          </Link>
+                          {/* Inline deactivate / reactivate */}
+                          <StatusToggle
+                            factorId={f.id}
+                            currentStatus={f.status}
+                            tariffCount={f.tariffCount}
+                          />
+                        </div>
                       </td>
                     </tr>
                   ))}
