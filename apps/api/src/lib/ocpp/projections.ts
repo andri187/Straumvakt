@@ -326,14 +326,25 @@ const onSessionStopped: ProjectionHandler = async (tx, event) => {
   const meterStopWh = numberField(event.payload, "meterStopWh");
   const stopReason = stringField(event.payload, "stopReason");
 
-  // Step 1: close the ChargeSession (existing behaviour, unchanged).
+  // Step 1: close the ChargeSession (existing behaviour, unchanged
+  // for canonical fields). ENRICH-1 also mirrors the OCPP figure
+  // onto `ocppEnergyKwh` / `ocppStoppedAt` so a later CDR / AMQP
+  // overlay can't silently erase what OCPP saw. The kWh mirror is
+  // computed from Wh in the same expression — keeps the two columns
+  // arithmetically consistent at write-time.
+  const ocppStoppedAt = new Date(event.occurredAt);
+  const ocppEnergyKwh =
+    meterStopWh !== undefined ? (meterStopWh / 1000).toFixed(4) : undefined;
   const updated = await tx.chargeSession.update({
     where: { id: event.aggregateId },
     data: {
-      endedAt: new Date(event.occurredAt),
+      endedAt: ocppStoppedAt,
       stopReason: stopReason ?? null,
       status: "completed",
       energyWh: meterStopWh !== undefined ? BigInt(meterStopWh) : undefined,
+      // ENRICH-1 — per-source mirror, never overwritten by later feeds.
+      ...(ocppEnergyKwh !== undefined ? { ocppEnergyKwh } : {}),
+      ocppStoppedAt,
     },
     select: {
       id: true,
@@ -430,6 +441,11 @@ const onSessionStopped: ProjectionHandler = async (tx, event) => {
       // (resolved.retailerTariffDefinitionId) as a JSONB breakdown
       // or sibling FK column.
       tariffDefinitionId: resolved.dsoTariffDefinitionId,
+      // ENRICH-1 — provenance. OCPP is the first writer; ledger is
+      // "pending" until the CDR / AMQP feed confirms (or diverges).
+      // Documents current billing reality, not a new flip.
+      verifiedSource: "ocpp",
+      enrichmentStatus: "pending",
     },
     update: {
       // No-op on conflict — once the row exists with its computed
@@ -897,6 +913,12 @@ const onOcppRawStopTransaction: ProjectionHandler = async (tx, event) => {
     return;
   }
 
+  // ENRICH-1 — mirror the OCPP figure onto `ocppEnergyKwh` /
+  // `ocppStoppedAt` so the later CDR / AMQP overlay can't silently
+  // erase what OCPP saw. Canonical `energy_wh` + `ended_at` stay
+  // unchanged for back-compat billing reads.
+  const ocppEnergyKwh =
+    meterStopWh !== undefined ? (meterStopWh / 1000).toFixed(4) : undefined;
   const updated = await tx.chargeSession.update({
     where: { id: session.id },
     data: {
@@ -904,6 +926,8 @@ const onOcppRawStopTransaction: ProjectionHandler = async (tx, event) => {
       stopReason: stopReason ?? null,
       status: "completed",
       energyWh: meterStopWh !== undefined ? BigInt(meterStopWh) : undefined,
+      ...(ocppEnergyKwh !== undefined ? { ocppEnergyKwh } : {}),
+      ocppStoppedAt: endedAt,
     },
     select: {
       id: true,
@@ -970,6 +994,9 @@ const onOcppRawStopTransaction: ProjectionHandler = async (tx, event) => {
       // Sprint 9 FIX-1 — audit-trail FK (DSO; see legacy onSessionStopped
       // for full rationale + post-pilot TODO on retailer breakdown).
       tariffDefinitionId: resolved.dsoTariffDefinitionId,
+      // ENRICH-1 — OCPP is the first writer; CDR / AMQP confirm later.
+      verifiedSource: "ocpp",
+      enrichmentStatus: "pending",
     },
     update: { stoppedAt },
   });
