@@ -113,6 +113,31 @@
         // sessions-only sweep so /charge-log catches in-progress
         // sessions within ~1 minute even for chargers AMQP can't see.
         "crons": ["* * * * *"]
+      },
+      // Rate-limit bindings — Sprint 9 / AUD-2 FIX-2.
+      // Consumed by apps/api/src/lib/rate-limit.ts. The helper fails
+      // OPEN with a console.warn when these are missing, so removing
+      // them won't lock anyone out — but the brute-force gate goes
+      // dark. CF only supports `period` of 10 or 60 seconds (900 is
+      // rejected at deploy time). See
+      // docs/operator/RATE_LIMITER_BINDINGS_TODO.md for verification
+      // steps. namespace_id values are arbitrary and per-Worker; reuse
+      // in env.production when that block lands.
+      "unsafe": {
+        "bindings": [
+          {
+            "name": "ADMIN_LOGIN_RATE_LIMITER",
+            "type": "ratelimit",
+            "namespace_id": "1001",
+            "simple": { "limit": 10, "period": 60 }
+          },
+          {
+            "name": "DRIVER_LOGIN_RATE_LIMITER",
+            "type": "ratelimit",
+            "namespace_id": "1002",
+            "simple": { "limit": 10, "period": 60 }
+          }
+        ]
       }
     }
   }

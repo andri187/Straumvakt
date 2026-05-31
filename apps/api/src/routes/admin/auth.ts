@@ -34,8 +34,12 @@ adminAuth.post(
   // patch the operator must apply.
   rateLimit({
     keyBy: "email_or_ip",
+    // 10 attempts / 60 seconds. CF rate-limit bindings only accept
+    // period values of 10 or 60 — 900 is rejected at deploy time.
+    // The 429 surfaces this window as retry_after_sec; keep in sync
+    // with simple.period in wrangler.jsonc.
     limit: 10,
-    windowSec: 900,
+    windowSec: 60,
     bindingName: "ADMIN_LOGIN_RATE_LIMITER",
   }),
   async (c) => {
