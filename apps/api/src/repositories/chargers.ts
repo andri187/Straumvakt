@@ -478,3 +478,188 @@ export async function findConnectorOnStation(
 export async function deleteCharger(db: PrismaClient, chargingStationId: string): Promise<void> {
   await db.siteAsset.deleteMany({ where: { id: chargingStationId } });
 }
+
+// ── Vendor-attach result ─────────────────────────────────────────────────────
+
+export interface AttachVendorResult {
+  ocppIdentityId: string;
+  vendor: string;
+  vendorResourceId: string;
+  credentialsRef: string;
+}
+
+// Error codes for the attach path.
+export type AttachVendorErrorCode =
+  | "charging_station_not_found"  // no ChargingStation with that id
+  | "no_ocpp_identity"            // ChargingStation exists but has no OcppIdentity row
+  | "credential_not_found"        // credentialId doesn't exist
+  | "credential_inactive"         // credential exists but status != 'active'
+  | "vendor_mismatch"             // credential's vendor slug != body vendor
+  | "conflict_vendor_resource_id" // identity already has a different vendorResourceId
+  | "conflict_credentials_ref";   // identity already has a different credentialsRef
+
+export class AttachVendorError extends Error {
+  constructor(
+    public readonly code: AttachVendorErrorCode,
+    message: string,
+  ) {
+    super(message);
+    this.name = "AttachVendorError";
+  }
+}
+
+/**
+ * Wire a vendor identity (Zaptec UUID + credential row) onto an existing
+ * OcppIdentity row whose vendor fields are currently NULL or match the
+ * supplied values.
+ *
+ * Conflict rules:
+ * - If `vendorResourceId` is already set AND differs → 409 (AttachVendorError)
+ * - If `credentialsRef` is already set AND differs → 409 (AttachVendorError)
+ * - If both are already set to the SAME values → idempotent no-op (returns existing)
+ *
+ * The credential row must exist and have status='active'; its vendor slug
+ * must match `vendor`. All of this runs inside a single Prisma transaction.
+ * Audit log is written AFTER the transaction commits (outside the tx so a
+ * failed audit write doesn't roll back the attach).
+ */
+export async function attachVendorToOcppIdentity(
+  db: PrismaClient,
+  chargingStationId: string,
+  input: {
+    vendor: string;
+    vendorResourceId: string;
+    credentialId: string;
+  },
+  actorUserId: string | null,
+): Promise<AttachVendorResult> {
+  const result = await db.$transaction(
+    async (tx) => {
+      // 1. Load the ChargingStation → first OcppIdentity.
+      const station = await tx.chargingStation.findUnique({
+        where: { siteAssetId: chargingStationId },
+        select: {
+          siteAssetId: true,
+          orgId: true,
+          ocppIdentities: {
+            take: 1,
+            orderBy: { createdAt: "asc" },
+            select: {
+              id: true,
+              orgId: true,
+              vendor: true,
+              vendorResourceId: true,
+              credentialsRef: true,
+            },
+          },
+        },
+      });
+
+      if (!station) {
+        throw new AttachVendorError(
+          "charging_station_not_found",
+          `ChargingStation ${chargingStationId} not found`,
+        );
+      }
+
+      const identity = station.ocppIdentities[0];
+      if (!identity) {
+        throw new AttachVendorError(
+          "no_ocpp_identity",
+          `ChargingStation ${chargingStationId} has no OcppIdentity`,
+        );
+      }
+
+      // 2. Validate the credential row.
+      const credential = await tx.vendorCredential.findUnique({
+        where: { id: input.credentialId },
+        select: {
+          id: true,
+          status: true,
+          vendor: { select: { slug: true } },
+        },
+      });
+
+      if (!credential) {
+        throw new AttachVendorError(
+          "credential_not_found",
+          `VendorCredential ${input.credentialId} not found`,
+        );
+      }
+      if (credential.status !== "active") {
+        throw new AttachVendorError(
+          "credential_inactive",
+          `VendorCredential ${input.credentialId} is not active (status=${credential.status})`,
+        );
+      }
+      if (credential.vendor.slug !== input.vendor) {
+        throw new AttachVendorError(
+          "vendor_mismatch",
+          `Credential vendor slug "${credential.vendor.slug}" does not match requested vendor "${input.vendor}"`,
+        );
+      }
+
+      // 3. Conflict checks — existing non-null values that differ.
+      if (
+        identity.vendorResourceId !== null &&
+        identity.vendorResourceId !== undefined &&
+        identity.vendorResourceId !== input.vendorResourceId
+      ) {
+        throw new AttachVendorError(
+          "conflict_vendor_resource_id",
+          `OcppIdentity ${identity.id} already has vendorResourceId="${identity.vendorResourceId}". Detach first.`,
+        );
+      }
+      if (
+        identity.credentialsRef !== null &&
+        identity.credentialsRef !== undefined &&
+        identity.credentialsRef !== input.credentialId
+      ) {
+        throw new AttachVendorError(
+          "conflict_credentials_ref",
+          `OcppIdentity ${identity.id} already has credentialsRef="${identity.credentialsRef}". Detach first.`,
+        );
+      }
+
+      // 4. Update (idempotent — writing the same values is fine).
+      await tx.ocppIdentity.update({
+        where: { id: identity.id },
+        data: {
+          vendor: input.vendor,
+          vendorResourceId: input.vendorResourceId,
+          credentialsRef: input.credentialId,
+        },
+      });
+
+      return {
+        ocppIdentityId: identity.id,
+        orgId: station.orgId,
+        vendor: input.vendor,
+        vendorResourceId: input.vendorResourceId,
+        credentialsRef: input.credentialId,
+      };
+    },
+    { timeout: 30_000, maxWait: 15_000 },
+  );
+
+  await recordAuditAction(db, {
+    orgId: result.orgId,
+    actorUserId,
+    actorKind: "user",
+    action: "charger.attach_vendor",
+    targetType: "ocpp_identity",
+    targetId: result.ocppIdentityId,
+    metadata: {
+      vendor: input.vendor,
+      vendorResourceId: input.vendorResourceId,
+      credentialId: input.credentialId,
+    },
+  });
+
+  return {
+    ocppIdentityId: result.ocppIdentityId,
+    vendor: result.vendor,
+    vendorResourceId: result.vendorResourceId,
+    credentialsRef: result.credentialsRef,
+  };
+}

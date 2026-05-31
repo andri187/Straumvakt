@@ -13,6 +13,34 @@ export interface ChargerLivePhase {
   currentA: number | null;
 }
 
+/**
+ * Why the technical-read pipeline returned what it returned.
+ *
+ *  - ok                     — credential resolved, vendor API call attempted
+ *                             (whether fresh or served from cache)
+ *  - no_credential          — OcppIdentity.credentialsRef is NULL, so this
+ *                             charger isn't linked to any vendor credential.
+ *                             The fix is operator action: complete
+ *                             onboarding via /onboard/zaptec.
+ *  - no_vendor_resource_id  — OcppIdentity exists but vendorResourceId is
+ *                             NULL — we have no Zaptec UUID to read against.
+ *  - credential_unhealthy   — credentialsRef set but the matched
+ *                             VendorCredential is inactive, missing the
+ *                             encrypted password, or failed to unseal.
+ *  - vendor_api_failed      — credential is healthy but Zaptec /api/* call
+ *                             threw / returned no data; cache may be served.
+ *
+ * Cross-tenant credentials are explicitly allowed: the credential's
+ * ownerOrgId does NOT need to match the charger's org. A Straumvakt-held
+ * master credential can read telemetry for chargers in any tenant org.
+ */
+export type ChargerTechnicalReadLinkStatus =
+  | "ok"
+  | "no_credential"
+  | "no_vendor_resource_id"
+  | "credential_unhealthy"
+  | "vendor_api_failed";
+
 export interface ChargerTechnicalRead {
   /** True if Zaptec's data was reachable on THIS request. False = the
    *  fields below either come from the cache (when cachedAt is set)
@@ -25,6 +53,17 @@ export interface ChargerTechnicalRead {
    *  timestamp of that cached read. Lets the UI render
    *  "stale, last seen Xm ago" instead of em-dashes. */
   cachedAt?: string | null;
+
+  /** Result of the credential / vendor-resource resolution pipeline.
+   *  The page renders a badge driven off this value so the operator
+   *  immediately sees WHY the panel is empty rather than guessing
+   *  between "charger offline", "credential broken", and "never linked".
+   *  See ChargerTechnicalReadLinkStatus for the per-variant meaning. */
+  linkStatus: ChargerTechnicalReadLinkStatus;
+  /** Optional human-readable reason — surfaced as the badge subtitle.
+   *  Populated for credential_unhealthy / vendor_api_failed paths so
+   *  the operator gets a one-line diagnostic without diving into logs. */
+  linkStatusReason?: string | null;
 
   // Compact pills (rendered above the operator command panel).
   signalDbm: number | null;       // StateId 809 — CommunicationSignalStrength

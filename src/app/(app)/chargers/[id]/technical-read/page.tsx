@@ -35,6 +35,7 @@ import {
 import type { ChargerDetail } from "@straumvakt/shared/domain/chargers";
 import type {
   ChargerTechnicalRead,
+  ChargerTechnicalReadLinkStatus,
   LocalAuthRoster,
   LocalAuthRosterEntry,
 } from "@straumvakt/shared/domain/charger-technical-read";
@@ -134,6 +135,19 @@ export default async function ChargerTechnicalReadPage({
             ← Back to charger profile
           </Link>
         </div>
+
+        {/* Link-status badge — explains WHY telemetry is or isn't
+            populated. Sprint 9 (PROBE-1): replaces the implicit
+            "Zaptec unreachable" fallback with an actionable diagnostic
+            (no_credential, no_vendor_resource_id, credential_unhealthy,
+            vendor_api_failed). */}
+        {t ? (
+          <LinkStatusBadge
+            status={t.linkStatus}
+            reason={t.linkStatusReason ?? null}
+            chargerId={charger.chargingStationId}
+          />
+        ) : null}
 
         {/* Identity strip */}
         <div className="mb-4 space-y-2">
@@ -648,6 +662,73 @@ function ocppPillValue(t: ChargerTechnicalRead | null): string {
   const isOcpp = t.authenticationType === 2 || t.authenticationType === 3;
   if (!isOcpp) return "not OCPP";
   return t.propertyAuthenticationDisabled ? "auth off" : "ready";
+}
+
+function LinkStatusBadge({
+  status,
+  reason,
+  chargerId,
+}: {
+  status: ChargerTechnicalReadLinkStatus;
+  reason: string | null;
+  chargerId: string;
+}) {
+  // Tone palette matches the task spec:
+  //   ok                    — green (telemetry is live)
+  //   no_credential         — amber (operator action: onboard the charger)
+  //   no_vendor_resource_id — amber (operator action: re-run discovery)
+  //   credential_unhealthy  — red   (operator action: rotate / fix cred)
+  //   vendor_api_failed     — amber with retry hint (transient vendor outage)
+  const palette: Record<
+    ChargerTechnicalReadLinkStatus,
+    { label: string; cls: string; hint: string }
+  > = {
+    ok: {
+      label: "OK",
+      cls: "border-emerald-500/40 bg-emerald-500/10 text-emerald-300",
+      hint: "Vendor credential linked; Zaptec API reachable.",
+    },
+    no_credential: {
+      label: "Not linked",
+      cls: "border-amber-500/40 bg-amber-500/10 text-amber-300",
+      hint: "This charger is not linked to a vendor credential — onboard via /onboard/zaptec to enable Technical Read.",
+    },
+    no_vendor_resource_id: {
+      label: "No vendor ID",
+      cls: "border-amber-500/40 bg-amber-500/10 text-amber-300",
+      hint: "OcppIdentity has no vendor_resource_id — re-run discovery for this charger.",
+    },
+    credential_unhealthy: {
+      label: "Credential unhealthy",
+      cls: "border-red-500/40 bg-red-500/10 text-red-300",
+      hint: "The linked vendor credential is inactive, missing a password, or rejected by Zaptec. Rotate it via the credentials manager.",
+    },
+    vendor_api_failed: {
+      label: "Vendor API failed",
+      cls: "border-amber-500/40 bg-amber-500/10 text-amber-300",
+      hint: "Zaptec API call failed; showing cached values if available. Retry shortly.",
+    },
+  };
+  const p = palette[status];
+  return (
+    <div
+      className={
+        "mb-4 flex flex-wrap items-start gap-3 rounded-lg border px-3 py-2 text-xs " +
+        p.cls
+      }
+      data-charger={chargerId}
+    >
+      <span className="inline-flex items-center rounded border border-current/30 bg-bg-base/30 px-2 py-0.5 font-mono text-[10px] uppercase tracking-brand">
+        {p.label}
+      </span>
+      <span className="flex-1 leading-snug">
+        {p.hint}
+        {reason ? (
+          <span className="ml-2 italic text-ink-400">({reason})</span>
+        ) : null}
+      </span>
+    </div>
+  );
 }
 
 function Badge({ text }: { text: string }) {

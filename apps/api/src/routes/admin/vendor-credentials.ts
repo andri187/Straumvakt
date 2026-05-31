@@ -29,6 +29,7 @@ import {
 } from "../../repositories/credential-management";
 import { probeZaptecSessions } from "../../repositories/zaptec-session-probe";
 import { syncZaptecSessions } from "../../repositories/zaptec-session-sync";
+import { probeVendorCredentialChargers } from "../../repositories/vendor-credential-probe";
 import { listInstallations } from "../../lib/zaptec";
 import type { Env } from "../../bindings";
 
@@ -232,6 +233,43 @@ adminVendorCredentialsAll.post(
       if (msg === "kek_unavailable") return c.json({ error: msg }, 500);
       if (msg.startsWith("zaptec_chargehistory_fetch_failed")) {
         return c.json({ error: "zaptec_chargehistory_fetch_failed", detail: msg }, 502);
+      }
+      throw err;
+    }
+  },
+);
+
+// Sprint 9 — PROBE-2 discovery surface. Reads every installation +
+// charger a stored credential can see in Zaptec, diffs against our DB,
+// returns the cross-tenant inventory tagged with a per-charger
+// status:
+//   onboarded_linked / onboarded_unlinked /
+//   onboarded_other_credential / not_onboarded
+// Strictly read-only — no DB writes here. PROBE-3 owns "attach to
+// this credential" and PROBE-4 owns "onboard whole installation".
+// POST verb chosen because the action is triggered from the operator's
+// discover page (acts on the credential) and we want it cache-busted.
+adminVendorCredentialsAll.post(
+  "/:id/probe",
+  requirePermission("platform.tenant.read"),
+  async (c) => {
+    const db = makePrisma(c.env);
+    try {
+      const probe = await probeVendorCredentialChargers(
+        db,
+        c.env.OCPP_CRED_KEK,
+        c.req.param("id"),
+      );
+      return c.json({ probe });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg === "credential_not_found") return c.json({ error: msg }, 404);
+      if (msg === "credential_not_zaptec") return c.json({ error: msg }, 400);
+      if (msg === "credential_password_missing") return c.json({ error: msg }, 400);
+      if (msg === "zaptec_auth_failed") return c.json({ error: msg }, 502);
+      if (msg === "kek_unavailable") return c.json({ error: msg }, 500);
+      if (msg === "zaptec_list_installations_failed") {
+        return c.json({ error: msg }, 502);
       }
       throw err;
     }

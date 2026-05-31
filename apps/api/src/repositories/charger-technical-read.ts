@@ -1,6 +1,6 @@
 // Pulls live Zaptec telemetry for a single charger. Joins:
 //   ChargingStation → OcppIdentity (vendorResourceId = Zaptec UUID)
-//   ChargingStation → orgId → active Zaptec VendorCredential
+//   OcppIdentity.credentialsRef → VendorCredential
 // then unseals the credential, hits Zaptec /api/chargers/:id and
 // /api/chargers/:id/state in parallel, and maps the raw response
 // into the ChargerTechnicalRead shape.
@@ -11,10 +11,21 @@
 // transient network), the cached read is returned with `fresh: false`
 // and `cachedAt` set so the panel can render last-known values with
 // a stale-marker badge instead of em-dashes.
+//
+// Sprint 9 (PROBE-1) — credentials_ref-direct lookup. Previously this
+// repo joined VendorCredential by `ownerOrgId = charger.org_id`, which
+// silently dropped every cross-tenant charger (e.g. zpr074002, owned by
+// N1 ehf, managed by Straumvakt's master credential). The lookup is now
+// authoritative on OcppIdentity.credentialsRef — the org of the charger
+// is irrelevant to which credential reads its telemetry. The repo
+// surfaces a `linkStatus` discriminator the page renders as a badge so
+// the operator immediately sees WHY the panel is empty (not linked /
+// credential unhealthy / no vendor id / vendor API failed).
 
 import type { Prisma, PrismaClient } from "../generated/prisma/client";
 import type {
   ChargerTechnicalRead,
+  ChargerTechnicalReadLinkStatus,
   ChargerInstallationSnapshot,
   LocalAuthRoster,
   LocalAuthRosterEntry,
@@ -260,11 +271,17 @@ function emptyRoster(): LocalAuthRoster {
   };
 }
 
-function emptyRead(cachedAt: string | null = null): ChargerTechnicalRead {
+function emptyRead(
+  cachedAt: string | null = null,
+  linkStatus: ChargerTechnicalReadLinkStatus = "no_credential",
+  linkStatusReason: string | null = null,
+): ChargerTechnicalRead {
   return {
     fresh: false,
     fetchedAt: new Date().toISOString(),
     cachedAt,
+    linkStatus,
+    linkStatusReason,
     signalDbm: null,
     communicationMode: null,
     ocppConnected: null,
@@ -356,7 +373,11 @@ export async function getChargerTechnicalRead(
   chargingStationId: string,
   kek: string,
 ): Promise<ChargerTechnicalRead> {
-  // 1) Resolve the Zaptec UUID + orgId + cache via the charger's OcppIdentity.
+  // 1) Resolve the Zaptec UUID + cache via the charger's OcppIdentity.
+  // OcppIdentity.credentialsRef is the authoritative link to which
+  // vendor credential reads this charger's telemetry. The charger's
+  // own org is irrelevant — Straumvakt-held credentials may legitimately
+  // manage chargers across tenants.
   const station = await db.chargingStation.findUnique({
     where: { siteAssetId: chargingStationId },
     select: {
@@ -367,11 +388,15 @@ export async function getChargerTechnicalRead(
       ocppIdentities: {
         take: 1,
         orderBy: { createdAt: "asc" },
-        select: { vendorResourceId: true, vendor: true },
+        select: {
+          vendorResourceId: true,
+          vendor: true,
+          credentialsRef: true,
+        },
       },
     },
   });
-  if (!station) return emptyRead();
+  if (!station) return emptyRead(null, "no_credential", "charger not found");
 
   // Helper: hydrate cached read with fresh=false + cachedAt set.
   // Used at every failure-return site below. When no cache exists,
@@ -379,7 +404,10 @@ export async function getChargerTechnicalRead(
   // Note: localAuthRoster is filled in after this returns (it's a fresh
   // DB read on every call regardless of vendor cache hit, since the
   // roster changes independently of vendor telemetry).
-  const fromCache = (): ChargerTechnicalRead => {
+  const fromCache = (
+    linkStatus: ChargerTechnicalReadLinkStatus,
+    reason: string | null = null,
+  ): ChargerTechnicalRead => {
     if (
       station.lastTelemetryRead &&
       typeof station.lastTelemetryRead === "object" &&
@@ -387,15 +415,19 @@ export async function getChargerTechnicalRead(
     ) {
       const cached = station.lastTelemetryRead as Partial<ChargerTechnicalRead>;
       return {
-        ...emptyRead(station.lastTelemetryAt.toISOString()),
+        ...emptyRead(station.lastTelemetryAt.toISOString(), linkStatus, reason),
         ...cached,
-        // Force these even if the cached object had them set
+        // Force these even if the cached object had them set — cache
+        // payload predates linkStatus so always overlay the current
+        // diagnostic, not whatever the cached blob carried.
         fresh: false,
         fetchedAt: new Date().toISOString(),
         cachedAt: station.lastTelemetryAt.toISOString(),
+        linkStatus,
+        linkStatusReason: reason,
       };
     }
-    return emptyRead();
+    return emptyRead(null, linkStatus, reason);
   };
 
   // Pre-fetch the CSMS roster — independent of Zaptec reachability so
@@ -418,58 +450,136 @@ export async function getChargerTechnicalRead(
   });
 
   const identity = station.ocppIdentities[0];
-  const vendorResourceId = identity?.vendorResourceId ?? null;
-  if (!vendorResourceId || identity?.vendor !== "Zaptec") return withRoster(fromCache());
+  if (!identity || identity.vendor !== "Zaptec") {
+    return withRoster(
+      fromCache("no_credential", "charger has no Zaptec OcppIdentity"),
+    );
+  }
 
-  // 2) Find an active Zaptec credential that can see this charger.
-  // Cross-org: credentials may manage chargers owned by a different org
-  // than the credential's owning org (e.g. N1 hef chargers managed by
-  // Straumvakt's master credential). Scoping the lookup to
-  // station.orgId silently dropped every cross-org charger from
-  // technical-read — A1/ZPR042645 was the canary (Sprint 8.13.3).
-  // Same pattern site-tree.ts and runZaptecCronSync already follow.
-  // Order: prefer credentials owned by the station's org if present;
-  // otherwise any active Zaptec credential.
-  const credentials = await db.vendorCredential.findMany({
-    where: { status: "active", vendor: { slug: "zaptec" } },
+  // 2) credentials_ref-direct lookup. NULL ⇒ this charger was never
+  //    linked to a credential (onboarding incomplete / imported from a
+  //    pre-credential-vault era). Surface that as a distinct badge so
+  //    the operator knows the fix is /onboard/zaptec, NOT "wait for
+  //    Zaptec to come back up".
+  if (!identity.credentialsRef) {
+    return withRoster(
+      emptyRead(
+        null,
+        "no_credential",
+        "OcppIdentity.credentials_ref is NULL — onboard via /onboard/zaptec to link a vendor credential",
+      ),
+    );
+  }
+
+  // vendor_resource_id NULL ⇒ we have a credential but no Zaptec UUID
+  // to query against. Distinct badge so the diagnostic is unambiguous.
+  const vendorResourceId = identity.vendorResourceId ?? null;
+  if (!vendorResourceId) {
+    return withRoster(
+      emptyRead(
+        null,
+        "no_vendor_resource_id",
+        "OcppIdentity.vendor_resource_id is NULL — re-run charger discovery to populate the Zaptec UUID",
+      ),
+    );
+  }
+
+  // 3) Walk OcppIdentity.credentials_ref → VendorCredential.
+  //    The column is a free-form TEXT with no FK constraint; historical
+  //    writes use either the VendorCredential.id (UUID) or the
+  //    credential's username string. Match either shape so legacy data
+  //    keeps working without a migration.
+  //    No org filter — cross-tenant credentials are the whole point of
+  //    this rewrite (Straumvakt master credential managing N1 ehf
+  //    chargers, etc.).
+  const credentialsRef = identity.credentialsRef;
+  const credential = await db.vendorCredential.findFirst({
+    where: {
+      vendor: { slug: "zaptec" },
+      OR: [{ id: credentialsRef }, { username: credentialsRef }],
+    },
     select: {
+      id: true,
       ownerOrgId: true,
       username: true,
       passwordCipher: true,
       passwordIv: true,
+      status: true,
     },
-    orderBy: { lastUsedAt: "desc" },
-  });
-  if (credentials.length === 0) return withRoster(fromCache());
-  credentials.sort((a, b) => {
-    const aOwn = a.ownerOrgId === station.orgId ? 0 : 1;
-    const bOwn = b.ownerOrgId === station.orgId ? 0 : 1;
-    return aOwn - bOwn;
   });
 
-  // 3) Try each credential in order. First to authenticate wins; we
-  //    use its token for detail/state/installation. Defensive try/catch
-  //    inside — on any failure we return placeholders rather than
-  //    500ing the operator's detail page.
+  if (!credential) {
+    return withRoster(
+      emptyRead(
+        null,
+        "credential_unhealthy",
+        `no VendorCredential matches credentials_ref=${credentialsRef}`,
+      ),
+    );
+  }
+
+  if (credential.status !== "active") {
+    return withRoster(
+      fromCache(
+        "credential_unhealthy",
+        `credential status=${credential.status}`,
+      ),
+    );
+  }
+
+  if (!credential.passwordCipher || !credential.passwordIv) {
+    return withRoster(
+      fromCache(
+        "credential_unhealthy",
+        "credential has no stored password — re-enter via credential manager",
+      ),
+    );
+  }
+
+  // 4) Unseal the password (credential_unhealthy on failure — the
+  //    credential row exists but its sealed blob is corrupt / KEK
+  //    mismatch / etc.), then fetch an access token. Token failures
+  //    split: invalid_credentials = credential_unhealthy (operator
+  //    must rotate); everything else = vendor_api_failed (transient).
+  let password: string;
   try {
-    let accessToken: string | null = null;
-    for (const cred of credentials) {
-      if (!cred.passwordCipher || !cred.passwordIv) continue;
-      try {
-        const password = await openPassword(kek, {
-          cipher: cred.passwordCipher,
-          iv: cred.passwordIv,
-        });
-        const tokenResult = await getZaptecAccessToken(cred.username, password);
-        if (tokenResult.ok) {
-          accessToken = tokenResult.value;
-          break;
-        }
-      } catch {
-        // try next credential
+    password = await openPassword(kek, {
+      cipher: credential.passwordCipher,
+      iv: credential.passwordIv,
+    });
+  } catch (err) {
+    return withRoster(
+      fromCache(
+        "credential_unhealthy",
+        `credential unseal failed: ${err instanceof Error ? err.message : String(err)}`,
+      ),
+    );
+  }
+
+  try {
+    let accessToken: string;
+    {
+      const tokenResult = await getZaptecAccessToken(credential.username, password);
+      if (!tokenResult.ok) {
+        const reason =
+          tokenResult.error.kind === "invalid_credentials"
+            ? "Zaptec rejected credentials (invalid_credentials)"
+            : tokenResult.error.kind === "unreachable"
+              ? "Zaptec OAuth endpoint unreachable"
+              : tokenResult.error.kind === "no_token"
+                ? "Zaptec returned no access_token"
+                : `Zaptec OAuth status=${tokenResult.error.status}`;
+        // invalid_credentials specifically = credential is broken, not
+        // a transient vendor outage. Surface as credential_unhealthy so
+        // the operator knows to rotate the password rather than retry.
+        const status: ChargerTechnicalReadLinkStatus =
+          tokenResult.error.kind === "invalid_credentials"
+            ? "credential_unhealthy"
+            : "vendor_api_failed";
+        return withRoster(fromCache(status, reason));
       }
+      accessToken = tokenResult.value;
     }
-    if (!accessToken) return withRoster(fromCache());
 
     // Fetch detail + state first; we need detail.InstallationId to
     // know which installation to fetch. Then in parallel: installation
@@ -553,13 +663,20 @@ export async function getChargerTechnicalRead(
     const detailHasData = detailRes.ok && Object.keys(d).length > 0;
     const stateHasData = stateRes.ok && state.length > 0;
     if (!detailHasData && !stateHasData) {
-      return withRoster(fromCache());
+      return withRoster(
+        fromCache(
+          "vendor_api_failed",
+          "Zaptec /api/chargers/:id and /state both returned empty",
+        ),
+      );
     }
 
     const liveRead: ChargerTechnicalRead = {
       fresh: true,
       fetchedAt: new Date().toISOString(),
       cachedAt: null,
+      linkStatus: "ok",
+      linkStatusReason: null,
       signalDbm: pickStateNumber(state, STATE_IDS.CommunicationSignalStrength),
       communicationMode: decodeCommMode(state),
       ocppConnected: pickStateBool(state, STATE_IDS.IsOcppConnected),
@@ -688,11 +805,12 @@ export async function getChargerTechnicalRead(
 
     return withRoster(liveRead);
   } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
     console.error("[charger-technical-read] zaptec fetch failed", {
       chargingStationId,
       vendorResourceId,
-      error: err instanceof Error ? err.message : String(err),
+      error: reason,
     });
-    return withRoster(fromCache());
+    return withRoster(fromCache("vendor_api_failed", reason));
   }
 }
