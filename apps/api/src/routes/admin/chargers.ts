@@ -16,6 +16,8 @@ import { makePrisma } from "../../lib/prisma";
 import { requireAdmin, type AuthVars } from "../../lib/auth-middleware";
 import { requirePermission } from "../../lib/auth/require-permission";
 import {
+  attachVendorToOcppIdentity,
+  AttachVendorError,
   createCharger,
   deleteCharger,
   findConnectorOnStation,
@@ -276,6 +278,78 @@ adminChargers.delete("/:id", requirePermission("charger.write"), async (c) => {
   await deleteCharger(db, c.req.param("id"));
   return c.json({ ok: true });
 });
+
+// ── Vendor-attach ─────────────────────────────────────────────────────────
+//
+// POST /:id/attach-vendor — wire a Zaptec UUID + credential row onto the
+// existing OcppIdentity for a charger that was onboarded via OCPP-first
+// but not yet linked to the vendor portal. Fixes the "onboarded_unlinked"
+// discovery state (PROBE-3).
+//
+// Conflict semantics: if the OcppIdentity already has different values for
+// vendor_resource_id or credentials_ref the request is rejected 409 — the
+// operator must detach first. Identical values are idempotent (200).
+
+adminChargers.post(
+  "/:id/attach-vendor",
+  requirePermission("charger.write"),
+  async (c) => {
+    const raw = (await c.req.json().catch(() => null)) as unknown;
+    if (
+      !raw ||
+      typeof raw !== "object" ||
+      typeof (raw as Record<string, unknown>).vendor !== "string" ||
+      typeof (raw as Record<string, unknown>).vendorResourceId !== "string" ||
+      typeof (raw as Record<string, unknown>).credentialId !== "string"
+    ) {
+      return c.json(
+        { error: "validation", message: "vendor, vendorResourceId, and credentialId are required strings" },
+        400,
+      );
+    }
+    const body = raw as { vendor: string; vendorResourceId: string; credentialId: string };
+
+    // Only "zaptec" is supported for the pilot.
+    if (body.vendor !== "zaptec") {
+      return c.json({ error: "validation", message: 'vendor must be "zaptec"' }, 400);
+    }
+
+    const db = makePrisma(c.env);
+    const session = c.get("session");
+    const actorUserId = session.userId ?? null;
+
+    try {
+      const result = await attachVendorToOcppIdentity(
+        db,
+        c.req.param("id"),
+        {
+          vendor: body.vendor,
+          vendorResourceId: body.vendorResourceId,
+          credentialId: body.credentialId,
+        },
+        actorUserId,
+      );
+      return c.json({ ok: true, ...result });
+    } catch (err) {
+      if (err instanceof AttachVendorError) {
+        switch (err.code) {
+          case "charging_station_not_found":
+          case "no_ocpp_identity":
+            return c.json({ error: err.code, message: err.message }, 404);
+          case "credential_not_found":
+            return c.json({ error: err.code, message: err.message }, 404);
+          case "credential_inactive":
+          case "vendor_mismatch":
+            return c.json({ error: err.code, message: err.message }, 400);
+          case "conflict_vendor_resource_id":
+          case "conflict_credentials_ref":
+            return c.json({ error: err.code, message: err.message }, 409);
+        }
+      }
+      throw err;
+    }
+  },
+);
 
 // ── OCPP outbound-command enqueue ────────────────────────────────────────
 //
