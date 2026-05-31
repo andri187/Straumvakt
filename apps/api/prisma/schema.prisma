@@ -432,6 +432,9 @@ model Organization {
   rateReferencesAsSupplier RateReference[] @relation("RateReferenceSupplier")
   driverGroupsOwned        DriverGroup[] @relation("DriverGroupOwner")
 
+  // ── Sprint 9 / ADR 0022 (ENROLL-3) — email domain rules ─────────
+  emailDomains             OrgEmailDomain[]
+
   @@map("organizations")
   @@schema("tenancy")
 }
@@ -2914,6 +2917,8 @@ model DriverGroup {
   ownerOrg        Organization        @relation("DriverGroupOwner", fields: [ownerOrgId], references: [id], onDelete: Restrict)
 
   memberships     DriverGroupMembership[]
+  // ADR 0022 (2026-05-31 addendum) — auto-join target for email-domain rules
+  emailDomainAutoJoinTargets OrgEmailDomain[] @relation("OrgEmailDomainDefaultGroup")
 
   @@index([agreementId])
   @@index([ownerOrgId])
@@ -3007,4 +3012,50 @@ model AgreementBillingLine {
   @@index([recipientOrgId, createdAt(sort: Desc)])
   @@map("billing_lines")
   @@schema("agreements")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// tenancy — OrgEmailDomain (ADR 0022, 2026-05-31 addendum)
+//
+// Drives the registration → driver-group flow. When a self-registered driver
+// finishes email verification, the handler looks up this table by the
+// lowercased email domain. Three outcomes per the policy enum:
+//
+//   • auto_join         — insert agreements.driver_group_memberships pointing
+//                         at defaultDriverGroupId. Driver can charge
+//                         immediately at every Installation the group covers.
+//   • request_approval  — insert agreements.driver_access_requests with
+//                         triggeredBy='email_domain_match'. Operator inbox
+//                         handles approve/deny. (Default.)
+//   • disabled          — ignore. Lets the operator pause auto-join without
+//                         deleting the rule.
+//
+// `domain` is globally UNIQUE — one org owns each domain; no overlap between
+// tenants. Operator UX surfaces a conflict error at create time.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model OrgEmailDomain {
+  id                       String                @id @default(uuid()) @db.Uuid
+  orgId                    String                @map("org_id") @db.Uuid
+  domain                   String                                  // lowercased — e.g. "n1.is"
+  policy                   OrgEmailDomainPolicy  @default(request_approval)
+  defaultDriverGroupId     String?               @map("default_driver_group_id") @db.Uuid
+  createdAt                DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization             Organization          @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  defaultDriverGroup       DriverGroup?          @relation("OrgEmailDomainDefaultGroup", fields: [defaultDriverGroupId], references: [id], onDelete: SetNull)
+
+  @@unique([domain])
+  @@index([orgId])
+  @@map("org_email_domains")
+  @@schema("tenancy")
+}
+
+enum OrgEmailDomainPolicy {
+  auto_join
+  request_approval
+  disabled
+
+  @@schema("tenancy")
 }
