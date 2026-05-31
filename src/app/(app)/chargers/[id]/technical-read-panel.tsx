@@ -1,4 +1,6 @@
 "use client";
+import { useEffect, useState } from "react";
+import { apiFetch } from "@/lib/api-client";
 import {
   signalIconClass as signalIconClassShared,
   formatSignal as formatSignalShared,
@@ -18,7 +20,11 @@ import {
 // consistent regardless of which subset of fields Zaptec returned.
 
 import { Signal, Radio, ShieldCheck, Thermometer, Zap, Cpu } from "lucide-react";
-import type { ChargerTechnicalRead } from "@straumvakt/shared/domain/charger-technical-read";
+import type {
+  ChargerTechnicalRead,
+  LocalAuthRoster,
+  LocalAuthRosterEntry,
+} from "@straumvakt/shared/domain/charger-technical-read";
 
 const DASH = "—";
 
@@ -155,7 +161,16 @@ function Pill({
   );
 }
 
-export function TechnicalReadDetail({ read }: { read: ChargerTechnicalRead | null }) {
+export function TechnicalReadDetail({
+  read,
+  ocppIdentityId,
+}: {
+  read: ChargerTechnicalRead | null;
+  /** OCPP identity uuid — the SendLocalList push endpoint is keyed
+   *  off this. Null when the charger has no OCPP identity attached
+   *  yet, in which case the push button renders disabled. */
+  ocppIdentityId: string | null;
+}) {
   if (!read) return null;
 
   const phasesActive = read.phases.some(
@@ -287,10 +302,305 @@ export function TechnicalReadDetail({ read }: { read: ChargerTechnicalRead | nul
             }
             mono
           />
+          <Row label="Current user UUID" value={read.currentUserUuid ?? DASH} mono />
+          <Row label="Last rejected UUID" value={read.lastRejectedUserUuid ?? DASH} mono />
+          <Row label="Enabled NFC tech" value={read.enabledNfcTechnologies ?? DASH} mono />
           <Row label="Routing ID" value={read.routingId ?? DASH} mono />
         </Card>
+
+        <LocalAuthRosterCard
+          roster={read.localAuthRoster}
+          ocppIdentityId={ocppIdentityId}
+        />
       </div>
     </section>
+  );
+}
+
+function LocalAuthRosterCard({
+  roster,
+  ocppIdentityId,
+}: {
+  roster: LocalAuthRoster | null;
+  ocppIdentityId: string | null;
+}) {
+  if (!roster) return null;
+  const hint =
+    `${roster.count} entries · ${roster.effectiveCount} would authorize` +
+    (roster.chargerListVersion != null
+      ? ` · charger v${roster.chargerListVersion}`
+      : "");
+
+  return (
+    <div className="rounded-lg border border-bg-border bg-bg-base/30 p-3 lg:col-span-2">
+      <header className="mb-2 flex items-baseline justify-between">
+        <h3 className="text-xs font-semibold text-ink-100">Local auth list (CSMS roster)</h3>
+        <span className="text-[10px] text-ink-500">{hint}</span>
+      </header>
+      {roster.note === "no_installation" ? (
+        <p className="text-[11px] italic text-ink-500">
+          Charger not linked to a Straumvakt Installation row.
+        </p>
+      ) : roster.note === "native_zaptec_managed" ? (
+        <p className="text-[11px] italic text-ink-500">
+          Installation is on{" "}
+          <span className="font-mono">AuthenticationType=0</span> (Native) —
+          Zaptec Portal owns the auth list. CSMS roster does not apply.
+        </p>
+      ) : roster.entries.length === 0 ? (
+        <p className="text-[11px] italic text-ink-500">
+          No IdTokens scoped to this installation (or globally) yet.
+        </p>
+      ) : (
+        <>
+          <p className="mb-2 text-[10px] text-ink-500">
+            CSMS-side view. Use{" "}
+            <span className="font-mono">Push</span> to send a single
+            entry via OCPP <span className="font-mono">SendLocalList</span>{" "}
+            (Differential). Pushes propagate to this charger only —
+            other chargers in the same installation will drift until
+            you push to them too.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[11px]">
+              <thead className="text-[10px] uppercase tracking-brand text-ink-500">
+                <tr>
+                  <th className="py-1 text-left font-medium">User</th>
+                  <th className="py-1 text-left font-medium">idTag</th>
+                  <th className="py-1 text-left font-medium">Kind</th>
+                  <th className="py-1 text-left font-medium">Scope</th>
+                  <th className="py-1 text-left font-medium">Verdict</th>
+                  <th className="py-1 text-right font-medium">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {roster.entries.map((e) => (
+                  <RosterRowCompact
+                    key={e.id}
+                    entry={e}
+                    ocppIdentityId={ocppIdentityId}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function RosterRowCompact({
+  entry,
+  ocppIdentityId,
+}: {
+  entry: LocalAuthRosterEntry;
+  ocppIdentityId: string | null;
+}) {
+  const verdictText =
+    entry.effectiveVerdict === "would_authorize"
+      ? "would authorize"
+      : entry.effectiveVerdict === "blocked_revoked"
+        ? "blocked (revoked)"
+        : entry.effectiveVerdict === "blocked_suspended"
+          ? "blocked (suspended)"
+          : entry.effectiveVerdict === "blocked_no_contract"
+            ? "blocked (no contract)"
+            : "expired";
+  const verdictTone =
+    entry.effectiveVerdict === "would_authorize"
+      ? "text-sv-green"
+      : "text-ink-500";
+
+  const [busy, setBusy] = useState(false);
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const [feedbackTone, setFeedbackTone] = useState<"ok" | "warn" | null>(null);
+  // Inflight tracker — set immediately after a 202 from the push
+  // endpoint. The polling effect below watches this and flips the
+  // feedback text to the charger's eventual verdict (or a timeout
+  // if the dispatcher / gateway hangs).
+  const [inflight, setInflight] = useState<{
+    commandId: string;
+    listVersion: number;
+  } | null>(null);
+
+  // Polling: watch the OutboundCommand status until it reaches a
+  // terminal state. status='acked' means the gateway DO got a
+  // CallResult from the charger; the OCPP verdict lives inside
+  // result.result.status (Accepted | Failed | NotSupported |
+  // VersionMismatch). status='failed' means the dispatcher gave up
+  // (gateway down, no active websocket after retries, etc) and the
+  // OCPP frame likely never reached the charger.
+  //
+  // Cap the poll at ~30s; charger replies are usually <1s, but a
+  // hibernating DO + Cloudflare Queues can add a few seconds. After
+  // the cap we surface "still queued — check ocpp.outbound_commands"
+  // so the operator can investigate the dispatcher pipeline manually.
+  useEffect(() => {
+    if (!inflight) return;
+    const startedAt = Date.now();
+    const TIMEOUT_MS = 30_000;
+    const POLL_MS = 1_500;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const poll = async () => {
+      if (cancelled) return;
+      try {
+        const res = await apiFetch(`/api/admin/chargers/commands/${inflight.commandId}`);
+        if (!res.ok) {
+          // 404 / 5xx — keep trying until timeout. Don't bail on
+          // transient errors.
+          if (Date.now() - startedAt < TIMEOUT_MS) {
+            timer = setTimeout(poll, POLL_MS);
+          }
+          return;
+        }
+        const body = (await res.json()) as {
+          status: "pending" | "acked" | "failed" | "cancelled" | string;
+          result: unknown;
+        };
+        if (body.status === "acked") {
+          // Pull the OCPP verdict out of the result blob. Shape comes
+          // from gateway/identity-do.ts recordCommandResult.
+          const r = body.result as
+            | { result?: { status?: string } }
+            | null;
+          const ocppVerdict = r?.result?.status ?? "Accepted";
+          if (ocppVerdict === "Accepted") {
+            setFeedback(`accepted · v${inflight.listVersion}`);
+            setFeedbackTone("ok");
+          } else {
+            setFeedback(`${ocppVerdict.toLowerCase()} · v${inflight.listVersion}`);
+            setFeedbackTone("warn");
+          }
+          setInflight(null);
+          return;
+        }
+        if (body.status === "failed" || body.status === "cancelled") {
+          const r = body.result as { error?: string } | null;
+          setFeedback(r?.error ? `failed · ${r.error}` : `failed · ${body.status}`);
+          setFeedbackTone("warn");
+          setInflight(null);
+          return;
+        }
+        // Still pending — keep polling until the cap.
+        if (Date.now() - startedAt < TIMEOUT_MS) {
+          timer = setTimeout(poll, POLL_MS);
+        } else {
+          setFeedback(`still queued · v${inflight.listVersion}`);
+          setFeedbackTone("warn");
+          setInflight(null);
+        }
+      } catch {
+        if (Date.now() - startedAt < TIMEOUT_MS) {
+          timer = setTimeout(poll, POLL_MS);
+        }
+      }
+    };
+
+    timer = setTimeout(poll, POLL_MS);
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [inflight]);
+
+  // Only `would_authorize` entries are pushable. Anything else, if
+  // pushed into the charger's local list, would let it authorize during
+  // an offline window (LocalAuthorizeOffline=true on Zaptec defaults) —
+  // bypassing the contract gate that lives in ocpp-authorize.ts. That's
+  // a Rule 5 access-grant violation: a revoked / suspended / expired /
+  // no-contract user should never authorize at the charger, online or
+  // offline.
+  const pushable =
+    !!ocppIdentityId && entry.effectiveVerdict === "would_authorize";
+
+  const disabledReason = !ocppIdentityId
+    ? "Charger has no OCPP identity yet"
+    : entry.effectiveVerdict === "blocked_revoked"
+      ? "Token is revoked — pushing would re-authorize at the charger"
+      : entry.effectiveVerdict === "blocked_suspended"
+        ? "Token is suspended"
+        : entry.effectiveVerdict === "blocked_no_contract"
+          ? "User has no active contract at this installation. Pushing would authorize them during offline windows, bypassing the contract gate."
+          : entry.effectiveVerdict === "expired"
+            ? "Token has expired"
+            : "Send via OCPP SendLocalList (Differential)";
+
+  async function onPush() {
+    if (!ocppIdentityId || busy) return;
+    setBusy(true);
+    setFeedback(null);
+    setFeedbackTone(null);
+    try {
+      const res = await apiFetch(
+        `/api/admin/chargers/${ocppIdentityId}/local-auth-list/push`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ idTokenId: entry.id }),
+        },
+      );
+      if (res.status === 202) {
+        const body = (await res.json()) as {
+          commandId: string;
+          listVersion: number;
+        };
+        setFeedback(`queued · v${body.listVersion}`);
+        setFeedbackTone(null);
+        setInflight({ commandId: body.commandId, listVersion: body.listVersion });
+      } else {
+        const body = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          message?: string;
+        };
+        setFeedback(body.message ?? body.error ?? `HTTP ${res.status}`);
+        setFeedbackTone("warn");
+      }
+    } catch (err) {
+      setFeedback(err instanceof Error ? err.message : String(err));
+      setFeedbackTone("warn");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <tr className="border-t border-bg-border/30">
+      <td className="py-1 text-ink-100">{entry.userDisplay}</td>
+      <td className="py-1 font-mono text-ink-100">{entry.value}</td>
+      <td className="py-1 text-ink-300">{entry.kind}</td>
+      <td className="py-1 text-ink-300">{entry.scope}</td>
+      <td className={"py-1 " + verdictTone}>{verdictText}</td>
+      <td className="py-1 text-right">
+        {feedback ? (
+          <span
+            className={
+              "text-[10px] " +
+              (feedbackTone === "ok" ? "text-sv-green" : "text-amber-300")
+            }
+          >
+            {feedback}
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={onPush}
+            disabled={!pushable || busy}
+            className={
+              "rounded border px-2 py-0.5 text-[10px] font-medium " +
+              (pushable
+                ? "border-bg-border bg-bg-base/40 text-ink-100 hover:border-sv-sky hover:text-sv-sky"
+                : "border-bg-border/30 bg-bg-base/20 text-ink-600 cursor-not-allowed")
+            }
+            title={disabledReason}
+          >
+            {busy ? "…" : "Push"}
+          </button>
+        )}
+      </td>
+    </tr>
   );
 }
 

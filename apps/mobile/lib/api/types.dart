@@ -1,0 +1,197 @@
+// API response shapes — mirrors the OpenAPI spec at
+// /api/driver/* on the deployed Straumvakt API Worker.
+
+class DriverProfile {
+  const DriverProfile({
+    required this.id,
+    required this.email,
+    required this.displayName,
+    required this.locale,
+    this.organizationName,
+  });
+
+  final String id;
+  final String email;
+  final String displayName;
+  final String locale;
+  final String? organizationName;
+
+  factory DriverProfile.fromJson(Map<String, dynamic> json) {
+    return DriverProfile(
+      id: json['id'] as String,
+      email: json['email'] as String,
+      displayName: json['displayName'] as String,
+      locale: json['locale'] as String,
+      organizationName: json['organizationName'] as String?,
+    );
+  }
+}
+
+class AuthSession {
+  const AuthSession({
+    required this.accessToken,
+    required this.refreshToken,
+    required this.expiresInSeconds,
+    required this.driver,
+  });
+
+  final String accessToken;
+  final String refreshToken;
+  final int expiresInSeconds;
+  final DriverProfile driver;
+
+  factory AuthSession.fromJson(Map<String, dynamic> json) {
+    return AuthSession(
+      accessToken: json['accessToken'] as String,
+      refreshToken: json['refreshToken'] as String,
+      expiresInSeconds: json['expiresInSeconds'] as int,
+      driver: DriverProfile.fromJson(json['driver'] as Map<String, dynamic>),
+    );
+  }
+}
+
+enum ConnectorStatus {
+  available,
+  preparing,
+  charging,
+  suspendedEv,
+  suspendedEvse,
+  finishing,
+  unavailable,
+  faulted,
+  offline,
+  unknown;
+
+  static ConnectorStatus fromString(String? raw) {
+    switch (raw) {
+      case 'Available':
+        return ConnectorStatus.available;
+      case 'Preparing':
+        return ConnectorStatus.preparing;
+      case 'Charging':
+        return ConnectorStatus.charging;
+      case 'SuspendedEV':
+        return ConnectorStatus.suspendedEv;
+      case 'SuspendedEVSE':
+        return ConnectorStatus.suspendedEvse;
+      case 'Finishing':
+        return ConnectorStatus.finishing;
+      case 'Unavailable':
+        return ConnectorStatus.unavailable;
+      case 'Faulted':
+        return ConnectorStatus.faulted;
+      case 'Offline':
+        return ConnectorStatus.offline;
+      default:
+        return ConnectorStatus.unknown;
+    }
+  }
+
+  String get label {
+    switch (this) {
+      case ConnectorStatus.available:
+        return 'Available';
+      case ConnectorStatus.preparing:
+        return 'Preparing';
+      case ConnectorStatus.charging:
+        return 'Charging';
+      case ConnectorStatus.suspendedEv:
+        return 'Paused (vehicle)';
+      case ConnectorStatus.suspendedEvse:
+        return 'Paused (charger)';
+      case ConnectorStatus.finishing:
+        return 'Finishing';
+      case ConnectorStatus.unavailable:
+        return 'Unavailable';
+      case ConnectorStatus.faulted:
+        return 'Faulted';
+      case ConnectorStatus.offline:
+        return 'Offline';
+      case ConnectorStatus.unknown:
+        return 'Unknown';
+    }
+  }
+
+  bool get canStart => this == ConnectorStatus.available;
+}
+
+class StartSessionResult {
+  const StartSessionResult({
+    required this.commandId,
+    required this.status,
+    this.tokenKind,
+    this.tokenLabel,
+  });
+
+  final String commandId;
+  final String status;
+  // Which IdToken kind the backend used as the OCPP idTag — surfaced
+  // so the UI can show "Started with virtual RFID" / "with VID RFID".
+  final String? tokenKind;
+  final String? tokenLabel;
+
+  factory StartSessionResult.fromJson(Map<String, dynamic> json) {
+    return StartSessionResult(
+      commandId: json['commandId'] as String,
+      status: json['status'] as String,
+      tokenKind: json['tokenKind'] as String?,
+      tokenLabel: json['tokenLabel'] as String?,
+    );
+  }
+
+  String get tokenKindLabel {
+    switch (tokenKind) {
+      case 'evccid':
+        return 'VID RFID';
+      case 'rfid':
+        return 'RFID card';
+      case 'manual':
+        return 'virtual RFID';
+      default:
+        return 'token';
+    }
+  }
+}
+
+class DriverCharger {
+  const DriverCharger({
+    required this.chargerId,
+    required this.connectorId,
+    required this.displayName,
+    required this.locationName,
+    required this.status,
+    required this.maxPowerKw,
+    this.priceLabel,
+    this.bleAdvertisingId,
+    this.bleAdvertisingKind,
+  });
+
+  final String chargerId;
+  final String connectorId;
+  final String displayName;
+  final String locationName;
+  final ConnectorStatus status;
+  final double maxPowerKw;
+  final String? priceLabel;
+
+  // BLE tap-and-access (Sprint 9 / 2026-05-10)
+  // bleAdvertisingId is what the charger broadcasts; the Flutter
+  // scanner matches BLE devices by id and surfaces nearby chargers.
+  // bleAdvertisingKind discriminates: 'zaptec_serial' | 'ibeacon_uuid' | 'mac'.
+  final String? bleAdvertisingId;
+  final String? bleAdvertisingKind;
+
+  factory DriverCharger.fromJson(Map<String, dynamic> json) {
+    return DriverCharger(
+      chargerId: json['chargerId'] as String,
+      connectorId: json['connectorId'] as String,
+      displayName: json['displayName'] as String,
+      locationName: json['locationName'] as String,
+      status: ConnectorStatus.fromString(json['status'] as String?),
+      maxPowerKw: (json['maxPowerKw'] as num).toDouble(),
+      priceLabel: json['priceLabel'] as String?,
+      bleAdvertisingId: json['bleAdvertisingId'] as String?,
+      bleAdvertisingKind: json['bleAdvertisingKind'] as String?,
+    );
+  }
+}

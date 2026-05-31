@@ -174,6 +174,21 @@ adminUsers.post("/:id/tokens", requirePermission("member.write"), async (c) => {
   }
   const value = typeof body.value === "string" ? body.value.trim() : undefined;
   const label = typeof body.label === "string" ? body.label.trim() : undefined;
+  // Sprint 9 / 2026-05-10 — accept optional scopeInstallationId +
+  // expiresAt so the technical-read add-idTag form can pre-bind a
+  // freshly-minted token to the charger's installation.
+  const scopeInstallationId =
+    typeof body.scopeInstallationId === "string"
+      ? body.scopeInstallationId
+      : undefined;
+  let expiresAt: Date | undefined;
+  if (typeof body.expiresAt === "string" && body.expiresAt.length > 0) {
+    const d = new Date(body.expiresAt);
+    if (Number.isNaN(d.getTime())) {
+      return c.json({ error: "expiresAt_invalid_iso" }, 400);
+    }
+    expiresAt = d;
+  }
   const db = makePrisma(c.env);
   try {
     const token = await createIdToken(db, {
@@ -181,6 +196,8 @@ adminUsers.post("/:id/tokens", requirePermission("member.write"), async (c) => {
       kind,
       ...(value && value.length > 0 ? { value } : {}),
       ...(label && label.length > 0 ? { label } : {}),
+      ...(scopeInstallationId ? { scopeInstallationId } : {}),
+      ...(expiresAt ? { expiresAt } : {}),
     });
     return c.json({ token }, 201);
   } catch (err) {

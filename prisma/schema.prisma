@@ -916,6 +916,12 @@ model ChargingStation {
   ipRating         String?       @map("ip_rating")                // IP54, IP65, …
   breakerAmps      Int?          @map("breaker_amps")             // upstream breaker
 
+  // ── BLE tap-and-access (Sprint 9 / 2026-05-10) ───────────────────
+  // What the charger broadcasts over BLE so the Flutter driver app
+  // can detect proximity. kind='zaptec_serial' | 'ibeacon_uuid' | 'mac'.
+  bleAdvertisingId   String?     @map("ble_advertising_id")
+  bleAdvertisingKind String?     @map("ble_advertising_kind")
+
   // ── Lifetime kWh cache (Sprint 3 / ADR 0013) ──────────────────────
   // Persisted snapshot of Zaptec SignedMeterValueKwh (the OCMF-signed
   // cumulative meter reading). Updated write-through on every successful
@@ -964,6 +970,14 @@ model ChargingStation {
   // per-row Zaptec round-trip.
   commMode               String?   @map("comm_mode")     // "Wi-Fi" / "LTE" / "PLC" / "Ethernet"
   signalDbm              Int?      @map("signal_dbm")    // negative dBm magnitude
+
+  // Sprint 9 / 2026-05-10 — Local auth list (CSMS-side bookkeeping)
+  // Tracks the listVersion Straumvakt last pushed via OCPP SendLocalList.
+  // Per-charger because OCPP versions are per-charge-point. Defaults to 0
+  // (matches the OCPP convention "no list synced"). Bumped monotonically
+  // on each successful enqueue; on charger VersionMismatch the recovery
+  // flow re-syncs to the charger's reported StateId 751 and retries.
+  pushedAuthListVersion  Int       @default(0) @map("pushed_auth_list_version")
 
   // ── Existing relations ───────────────────────────────────────────
   siteAsset        SiteAsset     @relation(fields: [siteAssetId], references: [id], onDelete: Cascade)

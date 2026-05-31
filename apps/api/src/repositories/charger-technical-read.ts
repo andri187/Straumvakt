@@ -16,6 +16,9 @@ import type { Prisma, PrismaClient } from "../generated/prisma/client";
 import type {
   ChargerTechnicalRead,
   ChargerInstallationSnapshot,
+  LocalAuthRoster,
+  LocalAuthRosterEntry,
+  LocalAuthEffectiveVerdict,
 } from "@straumvakt/shared/domain/charger-technical-read";
 import {
   getChargerDetail,
@@ -52,6 +55,9 @@ const STATE_IDS = {
   LteImsi: 960,
   MidCalibrationID: 982,
   AuthenticationListVersion: 751,
+  ChargerCurrentUserUuid: 722,
+  RejectedUserUuid: 725,
+  EnabledNfcTechnologies: 752,
   RoutingId: 801,
   InstallationId: 800,
   MainboardSwVersion: 908,
@@ -106,6 +112,154 @@ const DEVICE_TYPE_LABELS: Record<number, string> = {
   8: "TicApm",
 };
 
+/**
+ * Build the CSMS-side local auth roster for a charger.
+ *
+ * Returns the IdTokens that scope to this charger's installation (or are
+ * globally scoped) plus a per-entry verdict that mirrors the rules in
+ * routes/internal/ocpp-authorize.ts: status checks, expiry, and the
+ * installation-type Agreement / DriverGroupMembership contract gate
+ * (ADR 0019). The verdict is read-only — this function never mutates
+ * anything.
+ *
+ * Half A scope: roster surfacing only. Edits and SendLocalList
+ * propagation are out of scope and explicitly noted in the UI.
+ */
+async function getLocalAuthRosterForInstallation(
+  db: PrismaClient,
+  installationId: string | null,
+  authenticationType: number | null,
+  chargerListVersion: number | null,
+): Promise<LocalAuthRoster> {
+  if (!installationId) {
+    return {
+      installationId: null,
+      note: "no_installation",
+      count: 0,
+      effectiveCount: 0,
+      chargerListVersion,
+      pushedListVersion: null,
+      entries: [],
+    };
+  }
+  // AuthenticationType 0 = Zaptec Portal owns the list; our IdToken table
+  // is not the source of truth for that install.
+  if (authenticationType === 0) {
+    return {
+      installationId,
+      note: "native_zaptec_managed",
+      count: 0,
+      effectiveCount: 0,
+      chargerListVersion,
+      pushedListVersion: null,
+      entries: [],
+    };
+  }
+
+  const tokens = await db.idToken.findMany({
+    where: {
+      OR: [
+        { scopeInstallationId: installationId },
+        { scopeInstallationId: null },
+      ],
+    },
+    select: {
+      id: true,
+      value: true,
+      kind: true,
+      label: true,
+      status: true,
+      expiresAt: true,
+      lastUsedAt: true,
+      scopeInstallationId: true,
+      userId: true,
+      user: { select: { displayName: true, email: true } },
+    },
+    orderBy: [{ status: "asc" }, { createdAt: "asc" }],
+  });
+
+  // Contract gate (ADR 0019) — match the same rule used by
+  // resolveAuthorize in ocpp-authorize.ts. One bulk findMany keyed off
+  // userIds keeps this O(1) round-trips regardless of roster size.
+  const userIds = Array.from(new Set(tokens.map((t) => t.userId)));
+  const now = new Date();
+  const contractedUsers = new Set<string>();
+  if (userIds.length > 0) {
+    const memberships = await db.driverGroupMembership.findMany({
+      where: {
+        userId: { in: userIds },
+        driverGroup: {
+          agreement: {
+            agreementType: "installation",
+            installationId,
+            status: "active",
+            effectiveFrom: { lte: now },
+            OR: [{ effectiveUntil: null }, { effectiveUntil: { gt: now } }],
+          },
+        },
+      },
+      select: { userId: true },
+    });
+    for (const m of memberships) contractedUsers.add(m.userId);
+  }
+
+  const entries: LocalAuthRosterEntry[] = tokens.map((t) => {
+    const verdict = decideVerdict(
+      t.status,
+      t.expiresAt,
+      contractedUsers.has(t.userId),
+    );
+    return {
+      id: t.id,
+      value: t.value,
+      kind: t.kind,
+      label: t.label,
+      status: t.status,
+      expiresAt: t.expiresAt?.toISOString() ?? null,
+      lastUsedAt: t.lastUsedAt?.toISOString() ?? null,
+      scope: t.scopeInstallationId ? "installation" : "global",
+      userId: t.userId,
+      userDisplay: t.user.displayName ?? t.user.email,
+      effectiveVerdict: verdict,
+    };
+  });
+
+  return {
+    installationId,
+    note: "show_csms_roster",
+    count: entries.length,
+    effectiveCount: entries.filter((e) => e.effectiveVerdict === "would_authorize").length,
+    chargerListVersion,
+    pushedListVersion: null,
+    entries,
+  };
+}
+
+function decideVerdict(
+  status: string,
+  expiresAt: Date | null,
+  hasContract: boolean,
+): LocalAuthEffectiveVerdict {
+  if (status === "revoked") return "blocked_revoked";
+  if (status === "suspended") return "blocked_suspended";
+  if (status === "expired") return "expired";
+  if (expiresAt && expiresAt.getTime() <= Date.now()) return "expired";
+  if (!hasContract) return "blocked_no_contract";
+  return "would_authorize";
+}
+
+function emptyRoster(): LocalAuthRoster {
+  return {
+    installationId: null,
+    note: "no_installation",
+    count: 0,
+    effectiveCount: 0,
+    chargerListVersion: null,
+    pushedListVersion: null,
+    entries: [],
+  };
+}
+
 function emptyRead(cachedAt: string | null = null): ChargerTechnicalRead {
   return {
     fresh: false,
@@ -145,6 +299,9 @@ function emptyRead(cachedAt: string | null = null): ChargerTechnicalRead {
     ocppDefaultIdTag: null,
     ocppCloudUrlVersion: null,
     authListVersion: null,
+    currentUserUuid: null,
+    lastRejectedUserUuid: null,
+    enabledNfcTechnologies: null,
     routingId: null,
     installationId: null,
     mainboardSwVersion: null,
@@ -163,6 +320,7 @@ function emptyRead(cachedAt: string | null = null): ChargerTechnicalRead {
     deviceTypeLabel: null,
     installation: null,
     warningsBitmask: null,
+    localAuthRoster: emptyRoster(),
   };
 }
 
@@ -203,6 +361,7 @@ export async function getChargerTechnicalRead(
     where: { siteAssetId: chargingStationId },
     select: {
       orgId: true,
+      installationId: true,
       lastTelemetryRead: true,
       lastTelemetryAt: true,
       ocppIdentities: {
@@ -217,6 +376,9 @@ export async function getChargerTechnicalRead(
   // Helper: hydrate cached read with fresh=false + cachedAt set.
   // Used at every failure-return site below. When no cache exists,
   // returns the all-null empty read with no cachedAt.
+  // Note: localAuthRoster is filled in after this returns (it's a fresh
+  // DB read on every call regardless of vendor cache hit, since the
+  // roster changes independently of vendor telemetry).
   const fromCache = (): ChargerTechnicalRead => {
     if (
       station.lastTelemetryRead &&
@@ -236,9 +398,28 @@ export async function getChargerTechnicalRead(
     return emptyRead();
   };
 
+  // Pre-fetch the CSMS roster — independent of Zaptec reachability so
+  // it renders even when the vendor call fails. authenticationType is
+  // unknown at this point; pass null and let the roster builder hit
+  // the IdToken table normally. We refine when liveRead lands and we
+  // know the install's AuthType (the readout there overrides).
+  let roster: LocalAuthRoster = await getLocalAuthRosterForInstallation(
+    db,
+    station.installationId,
+    null,
+    null,
+  );
+  const withRoster = (read: ChargerTechnicalRead): ChargerTechnicalRead => ({
+    ...read,
+    localAuthRoster: {
+      ...roster,
+      chargerListVersion: read.authListVersion,
+    },
+  });
+
   const identity = station.ocppIdentities[0];
   const vendorResourceId = identity?.vendorResourceId ?? null;
-  if (!vendorResourceId || identity?.vendor !== "Zaptec") return fromCache();
+  if (!vendorResourceId || identity?.vendor !== "Zaptec") return withRoster(fromCache());
 
   // 2) Find an active Zaptec credential that can see this charger.
   // Cross-org: credentials may manage chargers owned by a different org
@@ -259,7 +440,7 @@ export async function getChargerTechnicalRead(
     },
     orderBy: { lastUsedAt: "desc" },
   });
-  if (credentials.length === 0) return fromCache();
+  if (credentials.length === 0) return withRoster(fromCache());
   credentials.sort((a, b) => {
     const aOwn = a.ownerOrgId === station.orgId ? 0 : 1;
     const bOwn = b.ownerOrgId === station.orgId ? 0 : 1;
@@ -288,7 +469,7 @@ export async function getChargerTechnicalRead(
         // try next credential
       }
     }
-    if (!accessToken) return fromCache();
+    if (!accessToken) return withRoster(fromCache());
 
     // Fetch detail + state first; we need detail.InstallationId to
     // know which installation to fetch. Then in parallel: installation
@@ -372,7 +553,7 @@ export async function getChargerTechnicalRead(
     const detailHasData = detailRes.ok && Object.keys(d).length > 0;
     const stateHasData = stateRes.ok && state.length > 0;
     if (!detailHasData && !stateHasData) {
-      return fromCache();
+      return withRoster(fromCache());
     }
 
     const liveRead: ChargerTechnicalRead = {
@@ -434,6 +615,9 @@ export async function getChargerTechnicalRead(
       // if needed.
       ocppCloudUrlVersion: null,
       authListVersion: pickStateNumber(state, STATE_IDS.AuthenticationListVersion),
+      currentUserUuid: pickState(state, STATE_IDS.ChargerCurrentUserUuid),
+      lastRejectedUserUuid: pickState(state, STATE_IDS.RejectedUserUuid),
+      enabledNfcTechnologies: pickState(state, STATE_IDS.EnabledNfcTechnologies),
       routingId: pickState(state, STATE_IDS.RoutingId),
       installationId: pickState(state, STATE_IDS.InstallationId),
       mainboardSwVersion: pickState(state, STATE_IDS.MainboardSwVersion),
@@ -456,17 +640,42 @@ export async function getChargerTechnicalRead(
           : null,
       installation: installationSnapshot,
       warningsBitmask: warnings ?? notifications,
+      // Filled in by withRoster() at the return site. Stays as the
+      // empty placeholder here so the cached payload doesn't carry a
+      // potentially-stale roster around (the roster is a fresh DB
+      // read every call, regardless of vendor cache hit).
+      localAuthRoster: emptyRoster(),
     };
+
+    // Refine the roster now that we know the install's AuthenticationType.
+    // For AuthType=0 (Native) the Zaptec Portal owns the list, so the
+    // CSMS roster surface flips to native_zaptec_managed regardless of
+    // what's in our IdToken table.
+    if (liveRead.authenticationType === 0) {
+      roster = await getLocalAuthRosterForInstallation(
+        db,
+        station.installationId,
+        0,
+        liveRead.authListVersion,
+      );
+    }
 
     // Sprint 8.4.3 — write-through cache. Best-effort; failure is
     // non-blocking (we still return liveRead). Don't await; the page
     // is already rendering. We don't store `installation` since
     // installation-level data is its own thing and varies less.
+    // Note: localAuthRoster is intentionally not part of the cached
+    // payload — it's a fresh DB read on every call (cheap, local) and
+    // changes independently of vendor telemetry.
+    const liveReadForCache: ChargerTechnicalRead = {
+      ...liveRead,
+      localAuthRoster: emptyRoster(),
+    };
     void db.chargingStation
       .update({
         where: { siteAssetId: chargingStationId },
         data: {
-          lastTelemetryRead: liveRead as unknown as Prisma.InputJsonValue,
+          lastTelemetryRead: liveReadForCache as unknown as Prisma.InputJsonValue,
           lastTelemetryAt: new Date(),
         },
       })
@@ -477,13 +686,13 @@ export async function getChargerTechnicalRead(
         });
       });
 
-    return liveRead;
+    return withRoster(liveRead);
   } catch (err) {
     console.error("[charger-technical-read] zaptec fetch failed", {
       chargingStationId,
       vendorResourceId,
       error: err instanceof Error ? err.message : String(err),
     });
-    return fromCache();
+    return withRoster(fromCache());
   }
 }

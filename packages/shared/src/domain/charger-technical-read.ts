@@ -69,6 +69,14 @@ export interface ChargerTechnicalRead {
   ocppDefaultIdTag: string | null;          // PropertyOcppDefaultIdTag — fallback for StartTransaction
   ocppCloudUrlVersion: number | null;       // 0=Legacy, 1=OCPP 1.6 compliant
   authListVersion: number | null;           // StateId 751 — Zaptec local auth list version
+  // Auth-list metadata that the charger exposes alongside the version
+  // counter. The list contents themselves are not readable (neither
+  // OCPP `GetLocalListVersion` nor the Zaptec REST surface returns the
+  // roster) — these are the per-tap event mirrors plus the reader
+  // capability flags. Source of truth for the roster remains the CSMS.
+  currentUserUuid: string | null;           // StateId 722 — UUID currently authorized for the active session
+  lastRejectedUserUuid: string | null;      // StateId 725 — UUID of the most recently rejected card
+  enabledNfcTechnologies: string | null;    // StateId 752 — bitmask/label of enabled NFC stacks
   routingId: string | null;                 // StateId 801 — DLB routing key
   installationId: string | null;            // StateId 800 — Zaptec installation UUID
 
@@ -100,6 +108,64 @@ export interface ChargerTechnicalRead {
 
   // Active warnings/notifications bitmask (decoded by the UI).
   warningsBitmask: number | null;      // StateId 803/804
+
+  // CSMS-side local auth roster for this charger's installation.
+  // The roster ON the charger is unreadable (OCPP 1.6J only exposes
+  // GetLocalListVersion; Zaptec REST has no contents endpoint), so we
+  // surface what Straumvakt's IdToken table believes the list should
+  // be. Today (pre-SendLocalList wiring) this is informational only —
+  // edits to the IdToken table do not propagate to the charger.
+  localAuthRoster: LocalAuthRoster | null;
+}
+
+export type LocalAuthRosterNote =
+  /** Charger has no installationId on the Straumvakt side. */
+  | "no_installation"
+  /** Installation is configured for AuthenticationType=0 (Native) — Zaptec
+   *  Portal owns the list and our IdToken table doesn't reflect it. */
+  | "native_zaptec_managed"
+  /** Roster is the IdToken table view; what we'd push if SendLocalList
+   *  were wired. */
+  | "show_csms_roster";
+
+export interface LocalAuthRoster {
+  installationId: string | null;
+  note: LocalAuthRosterNote;
+  /** Total entries returned (regardless of effective status). */
+  count: number;
+  /** Of those, how many would actually be Accepted by ocpp-authorize. */
+  effectiveCount: number;
+  /** Mirrored from authListVersion (StateId 751) for the badge. */
+  chargerListVersion: number | null;
+  /** Reserved for when SendLocalList wiring lands — version Straumvakt
+   *  last pushed. Always null in the read-only Half A. */
+  pushedListVersion: number | null;
+  entries: LocalAuthRosterEntry[];
+}
+
+export type LocalAuthRosterScope = "installation" | "global";
+
+/** Mirrors the verdicts in ocpp-authorize.ts so the operator sees what
+ *  would happen at tap time, not just the raw IdToken status. */
+export type LocalAuthEffectiveVerdict =
+  | "would_authorize"
+  | "blocked_revoked"
+  | "blocked_suspended"
+  | "blocked_no_contract"
+  | "expired";
+
+export interface LocalAuthRosterEntry {
+  id: string;
+  value: string;                     // canonical OCPP idTag
+  kind: string;                      // IdTokenKind enum literal
+  label: string | null;
+  status: string;                    // IdTokenStatus enum literal
+  expiresAt: string | null;
+  lastUsedAt: string | null;
+  scope: LocalAuthRosterScope;       // 'installation' = scoped here, 'global' = scope is null
+  userId: string;
+  userDisplay: string;               // displayName ?? email
+  effectiveVerdict: LocalAuthEffectiveVerdict;
 }
 
 export interface ChargerInstallationSnapshot {

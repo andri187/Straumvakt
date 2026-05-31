@@ -43,7 +43,23 @@ function makeTx() {
       create: vi.fn(async () => ({ id: "log-1" })),
     },
     ocppIdentity: {
-      update: vi.fn(async (args: unknown) => args),
+      // BootNotification handler reads `chargingStationId` off the
+      // returned row; default to a populated shape so the station-
+      // mirror branch fires. Per-test overrides can return args
+      // verbatim if a test wants to inspect the call shape only.
+      update: vi.fn(async (_args: unknown) => ({ chargingStationId: CHARGER })),
+      // Used by resolveConnectorByOcppIndex (2026-05-11 raw-handler
+      // fix). Default returns the canonical single-EVSE single-
+      // connector shape; per-test overrides can return null for the
+      // not-found path.
+      findUnique: vi.fn(async (_args: unknown): Promise<unknown> => ({
+        orgId: ORG,
+        chargingStation: {
+          siteAssetId: CHARGER,
+          siteAsset: { siteId: SITE },
+          evses: [{ id: EVSE, connectors: [{ id: CONNECTOR }] }],
+        },
+      })),
     },
     connector: {
       findUnique: vi.fn(async () => ({
@@ -99,6 +115,7 @@ function makeTx() {
     },
     chargingStation: {
       findUnique: vi.fn(async (_args: unknown): Promise<unknown> => null),
+      update: vi.fn(async (args: unknown) => args),
     },
     installation: {
       findUnique: vi.fn(async (_args: unknown): Promise<unknown> => null),
@@ -681,6 +698,165 @@ describe("projections — per-event handlers", () => {
       await run(tx, meterValuesEvent(frameWithoutOcmf));
       expect(tx.chargeSession.findFirst).not.toHaveBeenCalled();
       expect(tx.chargeSession.update).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── 2026-05-11 — raw-frame handlers (projection-gap fix) ─────────
+  describe("ocpp.raw.* raw-frame handlers", () => {
+    function rawEvent(action: string, request: unknown): IngestEvent {
+      return event({
+        eventType: `ocpp.raw.${action}`,
+        retentionClass: "raw_protocol",
+        payload: { action, request },
+      });
+    }
+
+    it("ocpp.raw.BootNotification sets identity online + mirrors station fields", async () => {
+      const tx = makeTx();
+      await run(
+        tx,
+        rawEvent("BootNotification", {
+          chargePointVendor: "Zaptec",
+          chargePointModel: "Pro",
+          chargePointSerialNumber: "ZPR-001",
+          firmwareVersion: "3.3.5.1",
+        }),
+      );
+      expect(tx.ocppIdentity.update).toHaveBeenCalledOnce();
+      const idCall = tx.ocppIdentity.update.mock.calls[0][0] as {
+        where: { id: string };
+        data: { status: string; lastSeenAt: Date };
+      };
+      expect(idCall.where.id).toBe(IDENTITY);
+      expect(idCall.data.status).toBe("online");
+      expect(tx.chargingStation.update).toHaveBeenCalledOnce();
+    });
+
+    it("ocpp.raw.StatusNotification with connectorId=0 updates ocpp_identities.status", async () => {
+      const tx = makeTx();
+      await run(
+        tx,
+        rawEvent("StatusNotification", {
+          connectorId: 0,
+          status: "Available",
+          errorCode: "NoError",
+        }),
+      );
+      expect(tx.ocppIdentity.update).toHaveBeenCalledOnce();
+      const call = tx.ocppIdentity.update.mock.calls[0][0] as {
+        data: { status: string };
+      };
+      expect(call.data.status).toBe("Available");
+      expect(tx.connector.update).not.toHaveBeenCalled();
+    });
+
+    it("ocpp.raw.StatusNotification with connectorId=1 resolves connector + writes status", async () => {
+      const tx = makeTx();
+      await run(
+        tx,
+        rawEvent("StatusNotification", {
+          connectorId: 1,
+          status: "Charging",
+          errorCode: "NoError",
+        }),
+      );
+      expect(tx.ocppIdentity.findUnique).toHaveBeenCalledOnce();
+      expect(tx.connector.update).toHaveBeenCalledOnce();
+      const call = tx.connector.update.mock.calls[0][0] as {
+        where: { id: string };
+        data: { status: string; statusUpdatedAt: Date; errorCode: string | null };
+      };
+      expect(call.where.id).toBe(CONNECTOR);
+      expect(call.data.status).toBe("Charging");
+      expect(call.data.errorCode).toBeNull(); // NoError normalised
+      expect(tx.ocppIdentity.update).not.toHaveBeenCalled();
+    });
+
+    it("ocpp.raw.StatusNotification skips when connector lookup misses", async () => {
+      const tx = makeTx();
+      tx.ocppIdentity.findUnique = vi.fn(async () => ({
+        orgId: ORG,
+        chargingStation: {
+          siteAssetId: CHARGER,
+          siteAsset: { siteId: SITE },
+          evses: [{ id: EVSE, connectors: [] }], // no matching connectorIndex
+        },
+      })) as never;
+      await run(
+        tx,
+        rawEvent("StatusNotification", {
+          connectorId: 99,
+          status: "Charging",
+          errorCode: "NoError",
+        }),
+      );
+      expect(tx.connector.update).not.toHaveBeenCalled();
+    });
+
+    it("ocpp.raw.StartTransaction creates ChargeSession via identity lookup", async () => {
+      const tx = makeTx();
+      await run(
+        tx,
+        rawEvent("StartTransaction", {
+          connectorId: 1,
+          idTag: "TAG-123",
+          meterStart: 0,
+          timestamp: "2026-05-11T07:30:00.000Z",
+        }),
+      );
+      expect(tx.chargeSession.create).toHaveBeenCalledOnce();
+      const call = tx.chargeSession.create.mock.calls[0][0] as {
+        data: {
+          siteId: string;
+          chargingStationId: string;
+          evseId: string;
+          connectorId: string;
+          ocppIdentityId: string;
+          idTag: string;
+          status: string;
+          energyWh: bigint | null;
+        };
+      };
+      expect(call.data.siteId).toBe(SITE);
+      expect(call.data.chargingStationId).toBe(CHARGER);
+      expect(call.data.evseId).toBe(EVSE);
+      expect(call.data.connectorId).toBe(CONNECTOR);
+      expect(call.data.ocppIdentityId).toBe(IDENTITY);
+      expect(call.data.idTag).toBe("TAG-123");
+      expect(call.data.status).toBe("in_progress");
+      expect(call.data.energyWh).toBe(0n);
+    });
+
+    it("ocpp.raw.StopTransaction finds in-progress session + closes it", async () => {
+      const tx = makeTx();
+      tx.chargeSession.findFirst = vi.fn(async () => ({
+        id: SESSION,
+        orgId: ORG,
+        siteId: null, // forces ledger skip; isolates the close-session assertion
+        chargingStationId: null,
+        idTag: null,
+        startedAt: new Date("2026-05-11T07:30:00Z"),
+        energyWh: 0n,
+      })) as never;
+      await run(
+        tx,
+        rawEvent("StopTransaction", {
+          transactionId: 12345,
+          meterStop: 15000,
+          reason: "Local",
+          timestamp: "2026-05-11T08:00:00.000Z",
+        }),
+      );
+      expect(tx.chargeSession.findFirst).toHaveBeenCalledOnce();
+      expect(tx.chargeSession.update).toHaveBeenCalledOnce();
+      const call = tx.chargeSession.update.mock.calls[0][0] as {
+        where: { id: string };
+        data: { status: string; stopReason: string; energyWh: bigint };
+      };
+      expect(call.where.id).toBe(SESSION);
+      expect(call.data.status).toBe("completed");
+      expect(call.data.stopReason).toBe("Local");
+      expect(call.data.energyWh).toBe(15000n);
     });
   });
 });

@@ -35,8 +35,18 @@ interface State {
     sessionId: string;
     orgId: string;
   }>;
-  chargeSessions: Array<{ id: string; orgId: string; energyWh: bigint | null }>;
+  chargeSessions: Array<{
+    id: string;
+    orgId: string;
+    energyWh: bigint | null;
+    status?: string;
+    userId?: string | null;
+  }>;
   sessionLedger: Array<{ sessionId: string; costIskMinor: bigint | null }>;
+  // 2026-05-12 — when set, chargeSession.findFirst returns this row,
+  // simulating an OCPP-created session that CDR sync should overlay
+  // instead of duplicating.
+  preSeededOcppRow?: { id: string; userId: string | null } | null;
 }
 
 interface FakeOpts {
@@ -131,12 +141,40 @@ function makeFakeDb(state: State, opts: FakeOpts = {}): PrismaClient {
       },
     },
     chargeSession: {
+      // 2026-05-12 — CDR-matches-OCPP reconciliation. Returns the
+      // pre-seeded row from state when set; otherwise null = no match
+      // = legacy create path.
+      findFirst: async () =>
+        state.preSeededOcppRow
+          ? {
+              id: state.preSeededOcppRow.id,
+              userId: state.preSeededOcppRow.userId,
+            }
+          : null,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      update: async ({ where, data }: any) => {
+        const idx = state.chargeSessions.findIndex((s) => s.id === where.id);
+        if (idx >= 0) {
+          state.chargeSessions[idx] = {
+            ...state.chargeSessions[idx],
+            energyWh: data.energyWh ?? state.chargeSessions[idx].energyWh,
+            status: data.status ?? state.chargeSessions[idx].status,
+            userId:
+              data.userId !== undefined
+                ? data.userId
+                : state.chargeSessions[idx].userId,
+          };
+        }
+        return { id: where.id };
+      },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       create: async ({ data }: any) => {
         state.chargeSessions.push({
           id: data.id,
           orgId: data.orgId,
           energyWh: data.energyWh ?? null,
+          status: data.status,
+          userId: data.userId ?? null,
         });
         return { id: data.id };
       },
@@ -301,5 +339,104 @@ describe("syncZaptecSessions", () => {
     await expect(syncZaptecSessions(db, { accessToken: "stub" })).rejects.toThrow(
       /zaptec_chargehistory_fetch_failed/,
     );
+  });
+
+  // ─── 2026-05-12 — CDR-matches-OCPP reconciliation ────────────────
+  describe("match-existing OCPP row", () => {
+    it("overlays existing row instead of creating duplicate", async () => {
+      vi.mocked(listZaptecChargeHistory).mockResolvedValue(
+        happyPathHistory() as never,
+      );
+      const OCPP_ROW_ID = "ocpp-row-1";
+      const N1_DRIVERS_USER = "n1-drivers-user-id";
+      const state: State = {
+        importedCdrRefs: [],
+        // OCPP path pre-created the row (status in_progress, idTag set,
+        // user already resolved via EE43C609263CC7 → N1 Drivers User).
+        chargeSessions: [
+          {
+            id: OCPP_ROW_ID,
+            orgId: ORG,
+            energyWh: 0n,
+            status: "in_progress",
+            userId: N1_DRIVERS_USER,
+          },
+        ],
+        sessionLedger: [],
+        // Make findFirst return this row.
+        preSeededOcppRow: { id: OCPP_ROW_ID, userId: N1_DRIVERS_USER },
+      };
+      const db = makeFakeDb(state);
+
+      const report = await syncZaptecSessions(db, { accessToken: "stub" });
+
+      expect(report.imported).toHaveLength(1);
+      expect(report.imported[0].ourSessionId).toBe(OCPP_ROW_ID);
+
+      // No duplicate row created — single row, updated in place.
+      expect(state.chargeSessions).toHaveLength(1);
+      expect(state.chargeSessions[0].id).toBe(OCPP_ROW_ID);
+      expect(state.chargeSessions[0].energyWh).toBe(30_000n); // 30 kWh
+      expect(state.chargeSessions[0].status).toBe("completed");
+      // OCPP-resolved user_id preserved (not overwritten with CDR's null).
+      expect(state.chargeSessions[0].userId).toBe(N1_DRIVERS_USER);
+
+      // Idempotency record + ledger upsert still happen.
+      expect(state.importedCdrRefs).toHaveLength(1);
+      expect(state.importedCdrRefs[0].sessionId).toBe(OCPP_ROW_ID);
+      expect(state.sessionLedger).toHaveLength(1);
+      expect(state.sessionLedger[0].sessionId).toBe(OCPP_ROW_ID);
+    });
+
+    it("preserves OCPP-resolved user_id; doesn't overwrite when CDR has driver too", async () => {
+      // Same as above but CDR also resolves a user (different one). The
+      // pre-existing user_id on the OCPP row should win.
+      vi.mocked(listZaptecChargeHistory).mockResolvedValue(
+        happyPathHistory() as never,
+      );
+      const OCPP_ROW_ID = "ocpp-row-2";
+      const OCPP_USER = "ocpp-resolved-user";
+      const state: State = {
+        importedCdrRefs: [],
+        chargeSessions: [
+          {
+            id: OCPP_ROW_ID,
+            orgId: ORG,
+            energyWh: 0n,
+            status: "in_progress",
+            userId: OCPP_USER,
+          },
+        ],
+        sessionLedger: [],
+        preSeededOcppRow: { id: OCPP_ROW_ID, userId: OCPP_USER },
+      };
+      const db = makeFakeDb(state);
+
+      await syncZaptecSessions(db, { accessToken: "stub" });
+
+      expect(state.chargeSessions[0].userId).toBe(OCPP_USER);
+    });
+
+    it("falls through to create when no matching OCPP row exists", async () => {
+      // No preSeededOcppRow → findFirst returns null → legacy create path.
+      vi.mocked(listZaptecChargeHistory).mockResolvedValue(
+        happyPathHistory() as never,
+      );
+      const state: State = {
+        importedCdrRefs: [],
+        chargeSessions: [],
+        sessionLedger: [],
+        // preSeededOcppRow undefined => no match
+      };
+      const db = makeFakeDb(state);
+
+      const report = await syncZaptecSessions(db, { accessToken: "stub" });
+
+      expect(report.imported).toHaveLength(1);
+      expect(state.chargeSessions).toHaveLength(1);
+      // New UUID, not "ocpp-row-*" — confirms the create path ran.
+      expect(state.chargeSessions[0].id).not.toMatch(/^ocpp-row-/);
+      expect(state.chargeSessions[0].energyWh).toBe(30_000n);
+    });
   });
 });

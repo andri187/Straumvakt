@@ -189,7 +189,7 @@ export default async function ChargerDetailPage({ params }: { params: Promise<{ 
           environment, etc. Below the edit panel per operator request.
           Volatile fields auto-update from the same TechnicalReadProvider
           poll above (one fetch refreshes both panels). */}
-      <TechnicalReadDetailLive />
+      <TechnicalReadDetailLive ocppIdentityId={identity?.id ?? null} />
       </TechnicalReadProvider>
 
       {/* Full Technical Read view — the long-form layout with every
