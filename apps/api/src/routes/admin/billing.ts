@@ -27,6 +27,14 @@ import {
 import { getSessionDetail } from "../../repositories/session-detail";
 import { getSessionFullDetail } from "../../repositories/session-full-detail";
 import { formatIskMinor } from "../../lib/tariff/compute-session-cost";
+import { tariffDetailRouter } from "./billing-tariff-detail";
+import { dsoRouter } from "./billing-dso";
+import { contractsRouter } from "./billing-contracts";
+import { driverContractsRouter } from "./billing-driver-contracts";
+import { costFactorsRouter } from "./billing-cost-factors";
+import { electricityRouter } from "./billing-electricity";
+import { summaryRouter } from "./billing-summary";
+import { costCentersRouter } from "./billing-cost-centers";
 import type { Env } from "../../bindings";
 
 type BillingContext = Context<{ Bindings: Env; Variables: AuthVars }>;
@@ -152,3 +160,112 @@ adminBilling.get(
     });
   },
 );
+
+/**
+ * GET /tariffs — read-only catalogue of every TariffDefinition,
+ * grouped by org. Includes attachment counts (sites / installations
+ * / stations using each tariff) so the operator can spot orphan
+ * tariffs and gaps (sites/installations without anchors).
+ *
+ * Sprint 9 — first surface for the parked billing UX work. Pure
+ * read; tariff editing remains via seed scripts until ADR 0021
+ * lands.
+ */
+adminBilling.get("/tariffs", async (c) => {
+  const db = makePrisma(c.env);
+
+  // Tariff rows + their costFactor codes
+  const tariffs = await db.tariffDefinition.findMany({
+    include: {
+      organization: { select: { id: true, displayName: true } },
+      costFactor: { select: { code: true, displayName: true } },
+    },
+    orderBy: [{ orgId: "asc" }, { displayName: "asc" }],
+  });
+
+  // Attachment counts in three batched queries
+  const tariffIds = tariffs.map((t) => t.id);
+  if (tariffIds.length === 0) {
+    return c.json({ orgs: [], tariffs: [] });
+  }
+
+  const [siteCounts, installCounts, stationCounts] = await Promise.all([
+    db.site.groupBy({
+      by: ["dsoTariffId"],
+      where: { dsoTariffId: { in: tariffIds } },
+      _count: { _all: true },
+    }),
+    db.installation.groupBy({
+      by: ["retailerTariffId"],
+      where: { retailerTariffId: { in: tariffIds } },
+      _count: { _all: true },
+    }),
+    db.chargingStation.groupBy({
+      by: ["chrgrfTariffId"],
+      where: { chrgrfTariffId: { in: tariffIds } },
+      _count: { _all: true },
+    }),
+  ]);
+
+  const siteCountByTariff = new Map<string, number>();
+  for (const r of siteCounts) {
+    if (r.dsoTariffId) siteCountByTariff.set(r.dsoTariffId, r._count._all);
+  }
+  const installCountByTariff = new Map<string, number>();
+  for (const r of installCounts) {
+    if (r.retailerTariffId)
+      installCountByTariff.set(r.retailerTariffId, r._count._all);
+  }
+  const stationCountByTariff = new Map<string, number>();
+  for (const r of stationCounts) {
+    if (r.chrgrfTariffId)
+      stationCountByTariff.set(r.chrgrfTariffId, r._count._all);
+  }
+
+  const out = tariffs.map((t) => {
+    const sitesUsing = siteCountByTariff.get(t.id) ?? 0;
+    const installationsUsing = installCountByTariff.get(t.id) ?? 0;
+    const stationsUsing = stationCountByTariff.get(t.id) ?? 0;
+    const rule = t.computeRule as Record<string, unknown> | null;
+    return {
+      id: t.id,
+      orgId: t.orgId,
+      orgDisplayName: t.organization.displayName,
+      displayName: t.displayName,
+      currency: t.currency,
+      vatRatePct: t.vatRatePct?.toString() ?? null,
+      status: t.status,
+      costFactorCode: t.costFactor?.code ?? null,
+      costFactorName: t.costFactor?.displayName ?? null,
+      computeRuleKind: typeof rule?.kind === "string" ? rule.kind : null,
+      pricePerKwhMinor:
+        rule?.pricePerKwhMinor !== undefined
+          ? String(rule.pricePerKwhMinor)
+          : null,
+      sitesUsing,
+      installationsUsing,
+      stationsUsing,
+      isOrphan: sitesUsing + installationsUsing + stationsUsing === 0,
+    };
+  });
+
+  return c.json({ tariffs: out });
+});
+
+// Sprint 9 Track A — tariff detail + DSO rates sub-routers.
+// Mount after the /tariffs catalogue route so the more-specific
+// /:id/detail path doesn't shadow the list endpoint.
+adminBilling.route("/tariffs/:id/detail", tariffDetailRouter);
+adminBilling.route("/dso", dsoRouter);
+
+// Sprint 9 Track C — Agreement catalogue + driver-level membership surfaces.
+adminBilling.route("/contracts", contractsRouter);
+adminBilling.route("/driver-contracts", driverContractsRouter);
+
+// Sprint 9 Track B — cost-factor catalogue + retailer/electricity rates.
+adminBilling.route("/cost-factors", costFactorsRouter);
+adminBilling.route("/electricity", electricityRouter);
+
+// Sprint 9 Track D — overview dashboard summary + cost-center catalogue.
+adminBilling.route("/summary", summaryRouter);
+adminBilling.route("/cost-centers", costCentersRouter);
