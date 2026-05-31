@@ -194,7 +194,7 @@ interface SkipReason {
               td.vat_rate_pct::text as vat_rate_pct
          from reports.session_ledger sl
          left join charging.sessions cs    on cs.id  = sl.session_id
-         left join assets.site_assets sa   on sa.id  = cs.charging_station_id
+         left join properties.site_assets sa on sa.id  = cs.charging_station_id
          left join properties.sites s      on s.id   = sa.site_id
          left join billing.tariff_definitions td on td.id = s.dso_tariff_id
         where sl.tariff_definition_id is null
