@@ -150,6 +150,10 @@ model User {
   // ── Sprint 9 / ADR 0019 — agreements schema back-relation ───────
   driverGroupMemberships DriverGroupMembership[] @relation("DriverGroupMembershipUser")
 
+  // ── ADR 0022 (2026-05-31 addendum) — self-onboarding access requests ──
+  driverAccessRequests         DriverAccessRequest[] @relation("DriverAccessRequestUser")
+  driverAccessRequestsReviewed DriverAccessRequest[] @relation("DriverAccessRequestReviewer")
+
   // ── Sprint 9 / 2026-05-08 — AMQP StateId 722 driver enrichment ──
   liveSessions   LiveSession[]    @relation("LiveSessionUser")
 
@@ -272,6 +276,11 @@ enum IdTokenKind {
   ocpi_token     // received from a roaming partner via OCPI
   manual         // operator-created static value (e.g. Zaptec portal default tag)
   evccid         // Vehicle Identifier — value IS the EV's EVCCID / EV-PLC-MAC, Autocharge-derived (ADR 0021)
+  virtual_rfid   // auto-issued at User creation. value = first 20 hex chars of User.id,
+                 //   uppercased, hyphens stripped. Used by app-start RemoteStartTransaction
+                 //   and any future "scan QR / link to my Straumvakt account" flow.
+                 //   Same User.id appears across all sessions, reports, billing rows.
+                 //   ADR 0022 2026-05-31 addendum.
 
   @@schema("identity")
 }
@@ -553,6 +562,9 @@ model Organization {
   rateReferencesAsSupplier RateReference[] @relation("RateReferenceSupplier")
   driverGroupsOwned        DriverGroup[] @relation("DriverGroupOwner")
 
+  // ── ADR 0022 (2026-05-31 addendum) — self-onboarding email-domain rules ──
+  emailDomains             OrgEmailDomain[]
+
   @@map("organizations")
   @@schema("tenancy")
 }
@@ -633,6 +645,53 @@ enum MembershipStatus {
   active
   suspended
   revoked
+
+  @@schema("tenancy")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// tenancy — OrgEmailDomain (ADR 0022 / 2026-05-31 addendum)
+//
+// Drives the registration → driver-group flow. When a self-registered driver
+// finishes email verification, the handler looks up this table by the
+// lowercased email domain. Three outcomes per the policy enum:
+//
+//   • auto_join         — insert agreements.driver_group_memberships pointing
+//                         at defaultDriverGroupId. Driver can charge
+//                         immediately at every Installation the group covers.
+//   • request_approval  — insert agreements.driver_access_requests with
+//                         triggeredBy='email_domain_match'. Operator inbox
+//                         handles approve/deny. (Default.)
+//   • disabled          — ignore. Lets the operator pause auto-join without
+//                         deleting the rule.
+//
+// `domain` is globally UNIQUE — one org owns each domain; no overlap between
+// tenants. Operator UX surfaces a conflict error at create time.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model OrgEmailDomain {
+  id                       String                @id @default(uuid()) @db.Uuid
+  orgId                    String                @map("org_id") @db.Uuid
+  domain                   String                                  // lowercased — e.g. "n1.is"
+  policy                   OrgEmailDomainPolicy  @default(request_approval)
+  defaultDriverGroupId     String?               @map("default_driver_group_id") @db.Uuid
+  createdAt                DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization             Organization          @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  defaultDriverGroup       DriverGroup?          @relation("OrgEmailDomainDefaultGroup", fields: [defaultDriverGroupId], references: [id], onDelete: SetNull)
+  triggeredRequests        DriverAccessRequest[] @relation("DriverAccessRequestFromDomain")
+
+  @@unique([domain])
+  @@index([orgId])
+  @@map("org_email_domains")
+  @@schema("tenancy")
+}
+
+enum OrgEmailDomainPolicy {
+  auto_join
+  request_approval
+  disabled
 
   @@schema("tenancy")
 }
@@ -838,6 +897,9 @@ model Installation {
 
   // ── Sprint 9 / ADR 0019 (2026-05-08) — agreements back-relation ──
   agreementsAtInstallation Agreement[]                 @relation("AgreementInstallation")
+
+  // ── ADR 0022 (2026-05-31 addendum) — self-onboarding access requests ──
+  driverAccessRequests     DriverAccessRequest[]       @relation("InstallationDriverAccessRequests")
 
   @@index([orgId, siteId])
   @@index([vendorId])
@@ -3202,6 +3264,8 @@ model DriverGroup {
   ownerOrg        Organization        @relation("DriverGroupOwner", fields: [ownerOrgId], references: [id], onDelete: Restrict)
 
   memberships     DriverGroupMembership[]
+  // ADR 0022 (2026-05-31 addendum) — auto-join target for email-domain rules
+  emailDomainAutoJoinTargets OrgEmailDomain[] @relation("OrgEmailDomainDefaultGroup")
 
   @@index([agreementId])
   @@index([ownerOrgId])
@@ -3221,6 +3285,61 @@ model DriverGroupMembership {
   @@unique([driverGroupId, userId])
   @@index([userId])
   @@map("driver_group_memberships")
+  @@schema("agreements")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// agreements — DriverAccessRequest (ADR 0022 / 2026-05-31 addendum)
+//
+// Operator inbox for the request-approve path of driver self-onboarding.
+// Triggered either by the driver clicking "Request access to this charger"
+// (triggeredBy='self_request') or by the email-verify handler matching an
+// OrgEmailDomain row with policy='request_approval'
+// (triggeredBy='email_domain_match').
+//
+// On approve: write a DriverGroupMembership row, set resultingMembershipId,
+// status='approved'. Driver gets the standard access-granted email.
+// On deny: status='denied', denialReason text, driver gets the denied email.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model DriverAccessRequest {
+  id                       String                       @id @default(uuid()) @db.Uuid
+  userId                   String                       @map("user_id") @db.Uuid
+  installationId           String                       @map("installation_id") @db.Uuid
+  triggeredBy              DriverAccessRequestTrigger
+  orgEmailDomainId         String?                      @map("org_email_domain_id") @db.Uuid
+  status                   DriverAccessRequestStatus    @default(pending)
+  reviewedByUserId         String?                      @map("reviewed_by_user_id") @db.Uuid
+  reviewedAt               DateTime?                    @map("reviewed_at") @db.Timestamptz(6)
+  denialReason             String?                      @map("denial_reason")
+  resultingMembershipId    String?                      @map("resulting_membership_id") @db.Uuid
+  createdAt                DateTime                     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime                     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user                     User                         @relation("DriverAccessRequestUser", fields: [userId], references: [id], onDelete: Cascade)
+  installation             Installation                 @relation("InstallationDriverAccessRequests", fields: [installationId], references: [id], onDelete: Cascade)
+  orgEmailDomain           OrgEmailDomain?              @relation("DriverAccessRequestFromDomain", fields: [orgEmailDomainId], references: [id], onDelete: SetNull)
+  reviewedBy               User?                        @relation("DriverAccessRequestReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([status, installationId])
+  @@index([userId, status])
+  @@map("driver_access_requests")
+  @@schema("agreements")
+}
+
+enum DriverAccessRequestTrigger {
+  self_request
+  email_domain_match
+
+  @@schema("agreements")
+}
+
+enum DriverAccessRequestStatus {
+  pending
+  approved
+  denied
+  withdrawn
+
   @@schema("agreements")
 }
 
