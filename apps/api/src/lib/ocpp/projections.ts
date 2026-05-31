@@ -29,7 +29,7 @@ import {
 import type { IngestEvent } from "./event-envelope";
 import { computeSessionCost } from "../tariff/compute-session-cost";
 import {
-  resolveTariffChainForSession,
+  resolveTariffChainWithIdsForSession,
   TariffResolutionError,
 } from "../tariff/resolve-tariff-chain";
 import { parseOcmf } from "../ocmf";
@@ -363,7 +363,7 @@ const onSessionStopped: ProjectionHandler = async (tx, event) => {
     });
     return;
   }
-  const chain = await resolveTariffChainForSession(tx, {
+  const resolved = await resolveTariffChainWithIdsForSession(tx, {
     siteId: updated.siteId,
     chargingStationId: updated.chargingStationId,
   });
@@ -384,7 +384,7 @@ const onSessionStopped: ProjectionHandler = async (tx, event) => {
       stoppedAt,
       energyKwh,
     },
-    chain,
+    resolved.chain,
   );
 
   // Resolve driver via idTag → IdToken → userId. Drivers see their
@@ -423,7 +423,13 @@ const onSessionStopped: ProjectionHandler = async (tx, event) => {
       durationSec,
       energyKwh: energyKwh.toFixed(3),
       costIskMinor: breakdown.totalIncVatMinor,
-      tariffDefinitionId: null, // chain has 2 tariffs; can't pick one. Future schema change to add JSONB breakdown.
+      // Sprint 9 FIX-1 — audit-trail FK. Chain has 2 tariffs
+      // (DSO + retailer); we record the DSO id because DSO is the
+      // primary anchor per ADR 0008. TODO post-pilot: when schema
+      // supports both, also persist retailerTariffDefinitionId
+      // (resolved.retailerTariffDefinitionId) as a JSONB breakdown
+      // or sibling FK column.
+      tariffDefinitionId: resolved.dsoTariffDefinitionId,
     },
     update: {
       // No-op on conflict — once the row exists with its computed
@@ -921,7 +927,7 @@ const onOcppRawStopTransaction: ProjectionHandler = async (tx, event) => {
     });
     return;
   }
-  const chain = await resolveTariffChainForSession(tx, {
+  const resolved = await resolveTariffChainWithIdsForSession(tx, {
     siteId: updated.siteId,
     chargingStationId: updated.chargingStationId,
   });
@@ -935,7 +941,7 @@ const onOcppRawStopTransaction: ProjectionHandler = async (tx, event) => {
   );
   const breakdown = computeSessionCost(
     { startedAt: updated.startedAt, stoppedAt, energyKwh },
-    chain,
+    resolved.chain,
   );
 
   let driverUserId: string | null = null;
@@ -961,7 +967,9 @@ const onOcppRawStopTransaction: ProjectionHandler = async (tx, event) => {
       durationSec,
       energyKwh: energyKwh.toFixed(3),
       costIskMinor: breakdown.totalIncVatMinor,
-      tariffDefinitionId: null,
+      // Sprint 9 FIX-1 — audit-trail FK (DSO; see legacy onSessionStopped
+      // for full rationale + post-pilot TODO on retailer breakdown).
+      tariffDefinitionId: resolved.dsoTariffDefinitionId,
     },
     update: { stoppedAt },
   });

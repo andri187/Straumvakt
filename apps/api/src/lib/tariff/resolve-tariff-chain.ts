@@ -128,16 +128,64 @@ interface ResolveInput {
 }
 
 /**
+ * Composite output of {@link resolveTariffChainWithIdsForSession}.
+ *
+ * Carries both the priced TariffChain (engine input) AND the
+ * TariffDefinition UUIDs that backed each component so the caller can
+ * record an audit-trail FK alongside the computed cost in
+ * `reports.session_ledger`.
+ *
+ * `dsoTariffDefinitionId` is the singular value written into
+ * `session_ledger.tariff_definition_id` — DSO is the primary anchor
+ * per ADR 0008. `retailerTariffDefinitionId` is captured for future
+ * use (e.g. JSONB breakdown column once schema supports both) but is
+ * currently not persisted on the ledger row.
+ *
+ * Sprint 9 FIX-1 — strictly additive over Sprint 8.3's resolver:
+ *   • TariffChain shape unchanged (engine contract preserved)
+ *   • Cost math unchanged (Rule 5)
+ *   • Tariff selection unchanged (same Site→DSO + Installation→retailer walk)
+ *   • Audit-trail-only — captures which TariffDefinition resolved
+ */
+export interface ResolvedTariffChainWithIds {
+  chain: TariffChain;
+  dsoTariffDefinitionId: string;
+  retailerTariffDefinitionId: string;
+}
+
+/**
  * Resolve the TariffChain for a session at the given location.
  *
  * Pure relative to a Prisma client — call with the same `tx` that
  * the session.stopped projection runs in so the lookup sees the
  * just-committed rows.
+ *
+ * Sprint 9 FIX-1 — delegates to {@link resolveTariffChainWithIdsForSession}
+ * and strips the audit IDs to preserve the historical signature. Use the
+ * "WithIds" variant at every site that writes to `reports.session_ledger`.
  */
 export async function resolveTariffChainForSession(
   db: PrismaClient | Prisma.TransactionClient,
   input: ResolveInput,
 ): Promise<TariffChain> {
+  const resolved = await resolveTariffChainWithIdsForSession(db, input);
+  return resolved.chain;
+}
+
+/**
+ * Same resolver walk as {@link resolveTariffChainForSession} but ALSO
+ * returns the TariffDefinition.id of each chain component. Use at every
+ * `reports.session_ledger` write site so the row carries an audit-trail
+ * FK to the tariff that priced the session.
+ *
+ * Behaviour, error codes, and component composition are byte-for-byte
+ * identical to the historical resolver — this function IS the resolver
+ * now; the legacy alias just strips the IDs (test contract preserved).
+ */
+export async function resolveTariffChainWithIdsForSession(
+  db: PrismaClient | Prisma.TransactionClient,
+  input: ResolveInput,
+): Promise<ResolvedTariffChainWithIds> {
   // 1. Site → DSO tariff
   const site = await db.site.findUnique({
     where: { id: input.siteId },
@@ -228,9 +276,14 @@ export async function resolveTariffChainForSession(
     vatRatePct: Number(retailerTariff.vatRatePct),
   };
 
-  return {
+  const chain: TariffChain = {
     currency: "ISK",
     components: [dsoComponent, retailerComponent],
+  };
+  return {
+    chain,
+    dsoTariffDefinitionId: dsoTariff.id,
+    retailerTariffDefinitionId: retailerTariff.id,
   };
 }
 
