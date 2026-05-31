@@ -20,6 +20,7 @@ export function OrgSectionTabs({ orgId }: { orgId: string }) {
     { href: `${base}/tariff-chain`, label: "Tariff chain" },
     { href: `${base}/contracts`, label: "Contracts" },
     { href: `${base}/agents`, label: "Agents" },
+    { href: `${base}/email-domains`, label: "Email domains" },
   ];
 
   const matched = tabs
