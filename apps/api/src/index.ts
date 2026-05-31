@@ -35,8 +35,13 @@ import { adminBilling } from "./routes/admin/billing";
 import { adminContracts } from "./routes/admin/contracts";
 import { adminAgreementsDebug } from "./routes/admin/agreements-debug";
 import { adminAgreementsResolve } from "./routes/admin/agreements-resolve";
+import { adminDriverGroupMemberships } from "./routes/admin/driver-group-memberships";
+import { adminAccessRequests } from "./routes/admin/access-requests";
 import { publicDriver } from "./routes/public/driver";
 import { publicInvites } from "./routes/public/invites";
+import { publicRegister } from "./routes/public/register";
+import { publicEmailVerification } from "./routes/public/email-verification";
+import { publicPasswordReset } from "./routes/public/password-reset";
 import { internalOcppAuth } from "./routes/internal/ocpp-auth";
 import { internalOcppAuthorize } from "./routes/internal/ocpp-authorize";
 import { internalOcppEvents } from "./routes/internal/ocpp-events";
@@ -125,6 +130,13 @@ app.route("/api/admin/tokens", adminIdTokens);
 // /api/admin/orgs/:orgId/invites — see org-invites.ts.
 app.route("/api/admin/orgs", adminOrgInvites);
 
+// Sprint 9 / ADR 0022 (ENROLL-4) — DriverGroupMembership create endpoint.
+//   POST /api/admin/orgs/:orgId/driver-group-memberships
+//   GET  /api/admin/orgs/:orgId/driver-group-memberships?driverGroupId=<uuid>
+// Creates an access grant. Idempotent on (driverGroupId, userId).
+// Cross-tenant guard: DriverGroup.ownerOrgId must equal URL :orgId.
+app.route("/api/admin/orgs", adminDriverGroupMemberships);
+
 // Sprint 8.4 — billing dashboard read surface.
 //   GET /api/admin/billing/sessions[?orgId|siteId|chargingStationId|driverUserId][&startedAfter&startedBefore&limit&offset]
 // Scope-tagged read with totals tile + paginated session list.
@@ -148,11 +160,32 @@ app.route("/api/admin/agreements", adminAgreementsDebug);
 // Idempotent — second call returns alreadyExisted=true.
 app.route("/api/admin/agreements/sessions", adminAgreementsResolve);
 
+// Sprint 9 / ADR 0022 (ENROLL-2, 2026-05-31 addendum) — driver
+// self-onboarding operator inbox.
+//   GET   /api/admin/access-requests?orgId=&status=
+//   PATCH /api/admin/access-requests/:id   { action, denialReason? }
+// Approve writes a DriverGroupMembership row + emails the driver;
+// deny records the reason + emails the driver. member.write on the
+// installation's parent org required.
+app.route("/api/admin/access-requests", adminAccessRequests);
+
 // Sprint 5.8 — agent invite flow (recipient side). Public routes
 // gated by the token itself, NOT by the admin session cookie.
 //   GET  /api/public/invites/peek?token=<plaintext>
 //   POST /api/public/invites/consume
 app.route("/api/public/invites", publicInvites);
+
+// Sprint 9 / ENROLL-1 / ADR 0022 (2026-05-31 addendum) — driver
+// self-onboarding public endpoints. No auth gate; rate-limited via the
+// shared ADMIN_LOGIN_RATE_LIMITER binding.
+//   POST /api/public/register                          — create driver + send verify email
+//   GET  /api/public/verify-email/:token               — confirm + maybe auto-join
+//   POST /api/public/verify-email/:token               — same handler, POST alias
+//   POST /api/public/password-reset                    — anti-enumeration initiate
+//   POST /api/public/password-reset/confirm/:token     — set new password
+app.route("/api/public/register", publicRegister);
+app.route("/api/public/verify-email", publicEmailVerification);
+app.route("/api/public/password-reset", publicPasswordReset);
 
 // Sprint 9 / 2026-05-10 — Driver-app public API (Flutter mobile).
 // Implements the driver-app-api OpenAPI contract natively in
