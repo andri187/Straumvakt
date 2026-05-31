@@ -344,8 +344,16 @@ describe("resolveAuthorize — enforceAuthorize flag", () => {
 });
 
 // ADR 0019 milestone A.11 — agreement-membership gate at OCPP Authorize.
+//
+// Gated by the per-installation `enforceAuthorize` flag. While the flag
+// is OFF (the default at every installation until an operator flips it),
+// the resolver does not compute any denial for missing membership —
+// existing behaviour is preserved. When the flag is ON, missing
+// membership produces Blocked/no_contract.
 describe("resolveAuthorize — agreement membership (A.11)", () => {
-  it("returns Blocked/no_contract when active token has no DriverGroupMembership at this installation", async () => {
+  // (1) Flag OFF (default) → Authorize succeeds for a token with no
+  // membership at this installation. Existing behaviour preserved.
+  it("flag OFF: returns Accepted even when membership is missing (existing behaviour preserved)", async () => {
     const db = makeDb({
       token: {
         id: "token-c1",
@@ -354,19 +362,21 @@ describe("resolveAuthorize — agreement membership (A.11)", () => {
         expiresAt: null,
         scopeInstallationId: null,
       },
-      identity: id("inst-PROD"),
+      identity: id("inst-PROD", false),
       membership: null,
     });
     const result = await resolveAuthorize(db, INPUT);
     expect(result).toEqual({
-      verdict: "Blocked",
-      reason: "no_contract",
+      verdict: "Accepted",
+      reason: "ok",
+      userId: "user-1",
       idTokenId: "token-c1",
       enforceAuthorize: false,
     });
   });
 
-  it("returns Accepted when a matching DriverGroupMembership exists", async () => {
+  // (2) Flag ON, membership present → Authorize succeeds.
+  it("flag ON: returns Accepted when a matching DriverGroupMembership exists", async () => {
     const db = makeDb({
       token: {
         id: "token-c2",
@@ -375,19 +385,19 @@ describe("resolveAuthorize — agreement membership (A.11)", () => {
         expiresAt: null,
         scopeInstallationId: null,
       },
-      identity: id("inst-PROD"),
+      identity: id("inst-PROD", true),
       membership: { id: "m-1" },
     });
     const result = await resolveAuthorize(db, INPUT);
     expect(result.verdict).toBe("Accepted");
+    expect(result.reason).toBe("ok");
     expect(result.userId).toBe("user-1");
+    expect(result.enforceAuthorize).toBe(true);
   });
 
-  it("does NOT enforce membership when the identity has no installation chain (cannot resolve)", async () => {
-    // Defensive — a charger whose ocpp_identity is unattached can't be
-    // checked against an installation Agreement. Preserve Accept rather
-    // than fail closed; shadow-mode (enforceAuthorize=false) keeps the
-    // gateway from honouring this anyway.
+  // (3) Flag ON, membership missing → Authorize returns Blocked /
+  // no_contract. Wire-level still Blocked; no_contract is metadata.
+  it("flag ON: returns Blocked/no_contract when membership is missing at this installation", async () => {
     const db = makeDb({
       token: {
         id: "token-c3",
@@ -396,14 +406,27 @@ describe("resolveAuthorize — agreement membership (A.11)", () => {
         expiresAt: null,
         scopeInstallationId: null,
       },
-      identity: null,
+      identity: id("inst-PROD", true),
       membership: null,
     });
     const result = await resolveAuthorize(db, INPUT);
-    expect(result.verdict).toBe("Accepted");
+    expect(result).toEqual({
+      verdict: "Blocked",
+      reason: "no_contract",
+      idTokenId: "token-c3",
+      enforceAuthorize: true,
+    });
   });
 
-  it("returns Blocked/no_contract preserving enforceAuthorize=true when the installation enforces", async () => {
+  // (4) Flag ON, membership exists but for a different installation →
+  // findFirst (scoped by installationId in WHERE) returns null →
+  // Blocked/no_contract. Simulated by passing membership=null while the
+  // charger's installation is inst-PROD.
+  it("flag ON: returns Blocked/no_contract when membership matches a different installation", async () => {
+    // Driver has a DriverGroupMembership but it's anchored under an
+    // Agreement at inst-OTHER, not inst-PROD where this charger lives.
+    // The Prisma where-clause filters by installationId, so findFirst
+    // returns null — same outcome as no membership at all.
     const db = makeDb({
       token: {
         id: "token-c4",
@@ -419,5 +442,50 @@ describe("resolveAuthorize — agreement membership (A.11)", () => {
     expect(result.verdict).toBe("Blocked");
     expect(result.reason).toBe("no_contract");
     expect(result.enforceAuthorize).toBe(true);
+  });
+
+  // (5) Token unknown → still Blocked path (Invalid/unknown_id_tag) and
+  // the membership check is never reached. Existing behaviour preserved.
+  it("flag ON: unknown token short-circuits before membership check", async () => {
+    let membershipCalls = 0;
+    const baseDb = makeDb({
+      // No token row at all
+      identity: id("inst-PROD", true),
+    });
+    const db: PrismaLike = {
+      ...baseDb,
+      driverGroupMembership: {
+        findFirst: async () => {
+          membershipCalls += 1;
+          return null;
+        },
+      },
+    };
+    const result = await resolveAuthorize(db, INPUT);
+    expect(result.verdict).toBe("Invalid");
+    expect(result.reason).toBe("unknown_id_tag");
+    expect(result.enforceAuthorize).toBe(true);
+    expect(membershipCalls).toBe(0);
+  });
+
+  // Defence-in-depth — identity has no installation chain (orphan).
+  // The membership check can't anchor to an installationId, so the
+  // resolver preserves Accept. enforceAuthorize remains false because
+  // the identity has no Installation row to read the flag from.
+  it("does NOT enforce membership when the identity has no installation chain", async () => {
+    const db = makeDb({
+      token: {
+        id: "token-c6",
+        userId: "user-1",
+        status: "active",
+        expiresAt: null,
+        scopeInstallationId: null,
+      },
+      identity: null,
+      membership: null,
+    });
+    const result = await resolveAuthorize(db, INPUT);
+    expect(result.verdict).toBe("Accepted");
+    expect(result.enforceAuthorize).toBe(false);
   });
 });

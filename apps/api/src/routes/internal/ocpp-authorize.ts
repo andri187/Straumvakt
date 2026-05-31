@@ -185,14 +185,21 @@ export async function resolveAuthorize(
   // Agreement anchored at the charger's installation.
   //
   // OCPP 1.6 has no richer status than Blocked, so 'no_contract' is the
-  // internal reason; the wire-level verdict is Blocked.
+  // internal reason; the wire-level verdict is Blocked. The richer
+  // reason is for operator logs / debug page.
   //
-  // We only enforce when we have an installationId to check against.
-  // A charger whose ocpp_identity has no installation chain can't be
-  // resolved here; preserving Accept matches the existing scope-check
-  // semantics and keeps shadow-mode (enforceAuthorize=false) safe for
-  // partially-wired installs.
-  if (installationId) {
+  // Gated by the per-installation `enforceAuthorize` flag. While the
+  // installation flag is off, the resolver does NOT compute a denial
+  // for missing membership — A.11 is a new return path and the default
+  // is "no enforcement" so committing this code changes nothing at any
+  // installation. When an operator flips enforceAuthorize=true, A.11
+  // activates alongside the existing token-status enforcement.
+  //
+  // We also only enforce when we have an installationId to check
+  // against. A charger whose ocpp_identity has no installation chain
+  // can't be resolved here; preserving Accept matches the existing
+  // scope-check semantics.
+  if (enforceAuthorize && installationId) {
     const now = new Date();
     const membership = await db.driverGroupMembership.findFirst({
       where: {
