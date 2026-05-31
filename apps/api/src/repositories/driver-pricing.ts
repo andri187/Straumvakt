@@ -98,6 +98,16 @@ export interface ChargerPricing {
     effectiveFrom: string;
     effectiveUntil: string | null;
   };
+  /**
+   * True when at least one session at this charger in the last 90 days
+   * had a non-null ocmfBlobRef — signals to the driver app that a signed
+   * receipt is available after the session ends. False when no historical
+   * data is present or the charger has never produced OCMF blobs.
+   *
+   * ENRICH-1 dependency: ChargeSession.ocmfBlobRef is declared in the
+   * Prisma schema; the column exists once the ENRICH-1 migration lands.
+   */
+  signedReceiptSupported: boolean;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -483,6 +493,12 @@ export async function getDriverChargerPricing(
 
   const agreement = access.driverGroup.agreement;
 
+  // signedReceiptSupported: check whether any session at this charger in
+  // the last 90 days had a non-null ocmfBlobRef. Runs in parallel with
+  // rate-ref resolution so there's no extra round-trip latency on the
+  // happy path.
+  const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+
   // Resolve every rate-ref code in parallel.
   const codes = Array.from(
     new Set(
@@ -495,11 +511,23 @@ export async function getDriverChargerPricing(
     string,
     Awaited<ReturnType<typeof findActiveRateRef>>
   >();
-  await Promise.all(
-    codes.map(async (code) => {
-      rateRefByCode.set(code, await findActiveRateRef(db, code, now));
+  const [, ocmfCheck] = await Promise.all([
+    Promise.all(
+      codes.map(async (code) => {
+        rateRefByCode.set(code, await findActiveRateRef(db, code, now));
+      }),
+    ),
+    db.chargeSession.findFirst({
+      where: {
+        chargingStationId: station.siteAssetId,
+        startedAt: { gte: ninetyDaysAgo },
+        ocmfBlobRef: { not: null },
+      },
+      select: { id: true },
     }),
-  );
+  ]);
+
+  const signedReceiptSupported = ocmfCheck !== null;
 
   // Build clause rows + a parallel "resolved" list for the headline.
   const clauseRows: ChargerPricingClause[] = [];
@@ -552,5 +580,6 @@ export async function getDriverChargerPricing(
       effectiveFrom: agreement.effectiveFrom.toISOString(),
       effectiveUntil: agreement.effectiveUntil?.toISOString() ?? null,
     },
+    signedReceiptSupported,
   };
 }

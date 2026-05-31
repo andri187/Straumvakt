@@ -617,6 +617,8 @@ publicDriver.get("/chargers/:id/pricing", requireDriver, async (c) => {
   if (!pricing) {
     return c.json({ error: "not_found", message: "Charger not found." }, 404);
   }
+  // signedReceiptSupported is included in the pricing object returned by the
+  // repository; pass it through directly — no logic change at this layer.
   return c.json(pricing);
 });
 
