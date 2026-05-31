@@ -73,6 +73,11 @@ export interface Env {
   // spoof Accept/Reject decisions and ledger writes. Set via
   // wrangler secret put.
   ZAPTEC_WEBHOOK_DIAGNOSTIC?: string;
+  // Deployment environment tag. Set to "staging" for the staging worker
+  // via `wrangler secret put APP_ENV --env staging`. Left unset (or set
+  // to "production") on the production worker. Used as a safety guard to
+  // prevent diagnostic/fail-open modes from running in production.
+  APP_ENV?: string;
 }
 
 /**

@@ -41,13 +41,30 @@ export const publicDriver = new Hono<{ Bindings: Env; Variables: Vars }>();
 
 // ── CORS ─────────────────────────────────────────────────────────────
 //
-// Pilot: allow any origin. Flutter mobile (Android/iOS) doesn't apply
-// CORS (native HTTP); Flutter Web does. Restrict to the published web
-// build's domain when that lands.
+// Origin allowlist — pilot tightened from "*" per AUD-2.
+// Flutter mobile (Android/iOS) makes native HTTP requests that don't
+// carry an Origin header, so CORS is irrelevant there. Flutter Web
+// and the Next.js admin UI do carry an Origin, so we enumerate the
+// known-safe origins explicitly.
+//
+// TODO: add capacitor:// or app-specific origin when mobile app deploys.
+function isAllowedDriverOrigin(origin: string | undefined | null): string | null {
+  if (!origin) return null;
+  const allowed = [
+    "https://hlada-staging.straumvakt.workers.dev",
+    "https://hlada.straumvakt.workers.dev",
+    "http://localhost:3000",
+  ];
+  return allowed.includes(origin) ? origin : null;
+}
+
 publicDriver.use(
   "*",
   cors({
-    origin: "*",
+    origin: (origin) => isAllowedDriverOrigin(origin),
+    // Driver API uses stateless bearer tokens — no cookies, so
+    // credentials:false is correct and keeps preflight simple.
+    credentials: false,
     allowMethods: ["GET", "POST", "OPTIONS"],
     allowHeaders: ["Content-Type", "Authorization"],
     maxAge: 600,
