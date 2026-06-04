@@ -32,6 +32,7 @@
     "./domain/credential-management": "./src/domain/credential-management.ts",
     "./domain/vendor-credential-probe": "./src/domain/vendor-credential-probe.ts",
     "./domain/contracts": "./src/domain/contracts.ts",
+    "./domain/host-applications": "./src/domain/host-applications.ts",
     "./domain/family-groups": "./src/domain/family-groups.ts",
     "./domain/vendor-user-groups": "./src/domain/vendor-user-groups.ts"
   },

@@ -37,11 +37,13 @@ import { adminAgreementsDebug } from "./routes/admin/agreements-debug";
 import { adminAgreementsResolve } from "./routes/admin/agreements-resolve";
 import { adminDriverGroupMemberships } from "./routes/admin/driver-group-memberships";
 import { adminAccessRequests } from "./routes/admin/access-requests";
+import { adminHostApplications } from "./routes/admin/host-applications";
 import { publicDriver } from "./routes/public/driver";
 import { publicInvites } from "./routes/public/invites";
 import { publicRegister } from "./routes/public/register";
 import { publicEmailVerification } from "./routes/public/email-verification";
 import { publicPasswordReset } from "./routes/public/password-reset";
+import { publicHostApplications } from "./routes/public/host-applications";
 import { internalOcppAuth } from "./routes/internal/ocpp-auth";
 import { internalOcppAuthorize } from "./routes/internal/ocpp-authorize";
 import { internalOcppEvents } from "./routes/internal/ocpp-events";
@@ -169,11 +171,22 @@ app.route("/api/admin/agreements/sessions", adminAgreementsResolve);
 // installation's parent org required.
 app.route("/api/admin/access-requests", adminAccessRequests);
 
+// ADR 0026 §6/§7 — going-public host-application (RFQ) operator inbox.
+//   GET   /api/admin/host-applications?status=
+//   GET   /api/admin/host-applications/:id
+//   PATCH /api/admin/host-applications/:id   { status }
+// Global (pre-tenant) surface; gated by platform.tenant.read/write.
+app.route("/api/admin/host-applications", adminHostApplications);
+
 // Sprint 5.8 — agent invite flow (recipient side). Public routes
 // gated by the token itself, NOT by the admin session cookie.
 //   GET  /api/public/invites/peek?token=<plaintext>
 //   POST /api/public/invites/consume
 app.route("/api/public/invites", publicInvites);
+
+// ADR 0026 §6 — going-public public /apply intake. No auth (allow-listed
+// in middleware.ts isPublicApplyPath). POST /api/public/host-applications.
+app.route("/api/public/host-applications", publicHostApplications);
 
 // Sprint 9 / ENROLL-1 / ADR 0022 (2026-05-31 addendum) — driver
 // self-onboarding public endpoints. No auth gate; rate-limited via the
