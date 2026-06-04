@@ -36,7 +36,10 @@ export type InviteRole =
   | "technician"
   | "finance"
   | "support"
-  | "viewer";
+  | "viewer"
+  // ADR 0027 — going-public host-admin invite (tenancy-scoped host
+  // self-management; HOST_ADMIN_BUNDLE permissions).
+  | "host_admin";
 
 export const INVITE_ROLES: InviteRole[] = [
   "manager",
@@ -44,6 +47,7 @@ export const INVITE_ROLES: InviteRole[] = [
   "finance",
   "support",
   "viewer",
+  "host_admin",
 ];
 
 export interface CreateInviteInput {
