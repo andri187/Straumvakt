@@ -20,6 +20,7 @@
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
     "db:validate": "prisma validate",
+    "check:schema-parity": "prisma migrate diff --from-schema apps/api/prisma/schema.prisma --to-schema prisma/schema.prisma --exit-code",
     "sync:detour-assets": "node scripts/sync-detour-assets.mjs"
   },
   "prisma": {

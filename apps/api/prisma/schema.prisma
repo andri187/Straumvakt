@@ -116,6 +116,10 @@ model User {
   billObjectsOwned        BillObject[]       @relation("BillObjectOwnerUser")
   billObjectMemberships   BillObjectMember[] @relation("BillObjectMemberUser")
 
+  // ── ADR 0022 (2026-05-31 addendum) — self-onboarding access requests ──
+  driverAccessRequests         DriverAccessRequest[] @relation("DriverAccessRequestUser")
+  driverAccessRequestsReviewed DriverAccessRequest[] @relation("DriverAccessRequestReviewer")
+
   @@map("users")
   @@schema("identity")
 }
@@ -207,6 +211,9 @@ enum IdTokenKind {
   ocpi_token
   manual
   evccid
+  // ADR 0022 (2026-05-31 addendum) — auto-issued at User creation;
+  // value = first 20 hex chars of User.id, uppercased, hyphens stripped.
+  virtual_rfid
 
   @@schema("identity")
 }
@@ -792,6 +799,9 @@ model Installation {
 
   // ── ADR 0029 — billing child-objects under this installation ─────
   billObjects              BillObject[]                @relation("BillObjectInstallation")
+
+  // ── ADR 0022 (2026-05-31 addendum) — self-onboarding access requests ──
+  driverAccessRequests     DriverAccessRequest[]       @relation("InstallationDriverAccessRequests")
 
   @@index([orgId, siteId])
   @@index([vendorId])
@@ -3219,11 +3229,60 @@ model OrgEmailDomain {
 
   organization             Organization          @relation(fields: [orgId], references: [id], onDelete: Cascade)
   defaultDriverGroup       DriverGroup?          @relation("OrgEmailDomainDefaultGroup", fields: [defaultDriverGroupId], references: [id], onDelete: SetNull)
+  triggeredRequests        DriverAccessRequest[] @relation("DriverAccessRequestFromDomain")
 
   @@unique([domain])
   @@index([orgId])
   @@map("org_email_domains")
   @@schema("tenancy")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// agreements — DriverAccessRequest (ADR 0022 / 2026-05-31 addendum)
+// Mirror of the root schema (migration source). Was missing from this
+// apps/api client schema — the API worker reached the table via raw SQL.
+// Restored for parity so the generated client is typed against the DB.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model DriverAccessRequest {
+  id                       String                       @id @default(uuid()) @db.Uuid
+  userId                   String                       @map("user_id") @db.Uuid
+  installationId           String                       @map("installation_id") @db.Uuid
+  triggeredBy              DriverAccessRequestTrigger
+  orgEmailDomainId         String?                      @map("org_email_domain_id") @db.Uuid
+  status                   DriverAccessRequestStatus    @default(pending)
+  reviewedByUserId         String?                      @map("reviewed_by_user_id") @db.Uuid
+  reviewedAt               DateTime?                    @map("reviewed_at") @db.Timestamptz(6)
+  denialReason             String?                      @map("denial_reason")
+  resultingMembershipId    String?                      @map("resulting_membership_id") @db.Uuid
+  createdAt                DateTime                     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime                     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user                     User                         @relation("DriverAccessRequestUser", fields: [userId], references: [id], onDelete: Cascade)
+  installation             Installation                 @relation("InstallationDriverAccessRequests", fields: [installationId], references: [id], onDelete: Cascade)
+  orgEmailDomain           OrgEmailDomain?              @relation("DriverAccessRequestFromDomain", fields: [orgEmailDomainId], references: [id], onDelete: SetNull)
+  reviewedBy               User?                        @relation("DriverAccessRequestReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([status, installationId])
+  @@index([userId, status])
+  @@map("driver_access_requests")
+  @@schema("agreements")
+}
+
+enum DriverAccessRequestTrigger {
+  self_request
+  email_domain_match
+
+  @@schema("agreements")
+}
+
+enum DriverAccessRequestStatus {
+  pending
+  approved
+  denied
+  withdrawn
+
+  @@schema("agreements")
 }
 
 enum OrgEmailDomainPolicy {
