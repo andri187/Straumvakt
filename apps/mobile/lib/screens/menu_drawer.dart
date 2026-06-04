@@ -8,7 +8,9 @@
 
 import 'package:flutter/material.dart';
 import '../api/auth_storage.dart';
+import '../api/client.dart';
 import '../api/types.dart';
+import '../i18n/strings.dart';
 import '../theme/palette.dart';
 import 'login.dart';
 
@@ -141,14 +143,14 @@ class MenuDrawer extends StatelessWidget {
                     },
                   ),
                   const _SectionLabel('Settings'),
-                  _MenuTile(
-                    icon: Icons.translate_rounded,
-                    label: 'Language',
-                    subtitle: driver.locale == 'is' ? 'Íslenska' : 'English',
-                    onTap: () {
-                      Navigator.of(context).pop();
-                      _showSnack(context, 'Language toggle — Phase 2');
-                    },
+                  ValueListenableBuilder<AppLocale>(
+                    valueListenable: localeNotifier,
+                    builder: (context, locale, _) => _MenuTile(
+                      icon: Icons.translate_rounded,
+                      label: tr('menu.language'),
+                      subtitle: locale.nativeLabel,
+                      onTap: () => _pickLanguage(context),
+                    ),
                   ),
                   _MenuTile(
                     icon: Icons.notifications_none_rounded,
@@ -200,6 +202,77 @@ class MenuDrawer extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  // Language chooser. Applies the locale optimistically (notifier +
+  // local persistence so it survives restart and works offline) then
+  // best-effort syncs it to the backend via PATCH /api/driver/me. A
+  // failed sync doesn't roll back the local choice — the next /me on
+  // boot reconciles.
+  Future<void> _pickLanguage(BuildContext context) async {
+    final picked = await showModalBottomSheet<AppLocale>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: const BoxDecoration(
+          color: BrandPalette.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          border: Border(top: BorderSide(color: BrandPalette.border)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: BrandPalette.muted.withValues(alpha: 0.4),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            for (final l in AppLocale.values)
+              ListTile(
+                leading: Icon(
+                  localeNotifier.value == l
+                      ? Icons.radio_button_checked
+                      : Icons.radio_button_unchecked,
+                  color: localeNotifier.value == l
+                      ? BrandPalette.mint
+                      : BrandPalette.muted,
+                ),
+                title: Text(
+                  l.nativeLabel,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                onTap: () => Navigator.of(ctx).pop(l),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked == null || picked == localeNotifier.value) return;
+
+    // Apply locally + persist immediately.
+    localeNotifier.value = picked;
+    final storage = AuthStorage();
+    await storage.saveLocale(picked.code);
+
+    // Best-effort server sync.
+    final token = await storage.readAccessToken();
+    if (token != null) {
+      try {
+        await StraumvaktApi()
+            .updateLocale(accessToken: token, locale: picked.code);
+      } catch (_) {
+        // Non-fatal — local choice stands; /me reconciles on next boot.
+      }
+    }
+    if (context.mounted) Navigator.of(context).pop();
   }
 
   void _showSnack(BuildContext context, String msg) {

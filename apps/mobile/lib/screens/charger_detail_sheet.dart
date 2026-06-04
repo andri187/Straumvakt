@@ -8,6 +8,7 @@ import '../api/auth_storage.dart';
 import '../api/client.dart';
 import '../api/types.dart';
 import '../theme/palette.dart';
+import 'active_session.dart';
 
 class ChargerDetailSheet extends StatefulWidget {
   const ChargerDetailSheet({super.key, required this.charger});
@@ -287,7 +288,34 @@ class _ChargerDetailSheetState extends State<ChargerDetailSheet> {
                 ],
               ),
             )
-          else
+          else ...[
+            // Start request was accepted — offer the live session screen
+            // (polls /sessions/current, exposes Stop).
+            FilledButton.icon(
+              onPressed: () {
+                Navigator.of(context).pop();
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => ActiveSessionScreen(
+                      chargerName: c.displayName,
+                    ),
+                  ),
+                );
+              },
+              style: FilledButton.styleFrom(
+                backgroundColor: BrandPalette.cyan,
+                foregroundColor: BrandPalette.midnight,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                textStyle:
+                    const TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
+              ),
+              icon: const Icon(Icons.electric_bolt_rounded, size: 20),
+              label: const Text('View charging'),
+            ),
+            const SizedBox(height: 10),
             OutlinedButton(
               onPressed: () => Navigator.of(context).pop(),
               style: OutlinedButton.styleFrom(
@@ -306,6 +334,7 @@ class _ChargerDetailSheetState extends State<ChargerDetailSheet> {
                 ),
               ),
             ),
+          ],
           if (c.status.canStart && _state == _StartState.idle) ...[
             const SizedBox(height: 10),
             const Text(

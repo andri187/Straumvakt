@@ -153,6 +153,101 @@ class StartSessionResult {
   }
 }
 
+// Result of consuming an invite (ADR 0026 §3/§5). Mirrors the
+// POST /api/public/invites/consume response. The backend resolves the
+// driver's email + org from the invite token; the mobile app captures
+// kennitala + password at redemption time and sends them up.
+class ConsumeInviteResult {
+  const ConsumeInviteResult({
+    required this.userId,
+    required this.orgId,
+    required this.email,
+    this.pendingApproval = false,
+  });
+
+  final String userId;
+  final String orgId;
+  final String email;
+  // True when the invite was configured with a host-admin allow-term
+  // (ADR 0026 §3) — the membership is not active until the host approves.
+  final bool pendingApproval;
+
+  factory ConsumeInviteResult.fromJson(Map<String, dynamic> json) {
+    return ConsumeInviteResult(
+      userId: json['userId'] as String,
+      orgId: json['orgId'] as String,
+      email: json['email'] as String,
+      pendingApproval: json['pendingApproval'] as bool? ?? false,
+    );
+  }
+}
+
+// Live charging session snapshot — polled from
+// GET /api/driver/sessions/current every ~3s while a session is active.
+class ActiveSession {
+  const ActiveSession({
+    required this.sessionId,
+    required this.connectorId,
+    required this.chargerName,
+    required this.status,
+    this.startedAt,
+    this.powerKw,
+    this.energyKwh,
+    this.costIsk,
+  });
+
+  final String sessionId;
+  final String connectorId;
+  final String chargerName;
+  // Raw OCPP-ish session status string, e.g. 'Charging', 'Preparing'.
+  final String status;
+  final DateTime? startedAt;
+  final double? powerKw;
+  final double? energyKwh;
+  final double? costIsk;
+
+  factory ActiveSession.fromJson(Map<String, dynamic> json) {
+    return ActiveSession(
+      sessionId: json['sessionId'] as String,
+      connectorId: json['connectorId'] as String,
+      chargerName: json['chargerName'] as String? ?? 'Charger',
+      status: json['status'] as String? ?? 'Unknown',
+      startedAt: json['startedAt'] != null
+          ? DateTime.tryParse(json['startedAt'] as String)
+          : null,
+      powerKw: (json['powerKw'] as num?)?.toDouble(),
+      energyKwh: (json['energyKwh'] as num?)?.toDouble(),
+      costIsk: (json['costIsk'] as num?)?.toDouble(),
+    );
+  }
+
+  ConnectorStatus get connectorStatus => ConnectorStatus.fromString(status);
+}
+
+// Result of POST /api/driver/stop-session — 202 accepted with the
+// command id and the (now finishing) session snapshot.
+class StopSessionResult {
+  const StopSessionResult({
+    required this.commandId,
+    required this.status,
+    this.session,
+  });
+
+  final String commandId;
+  final String status;
+  final ActiveSession? session;
+
+  factory StopSessionResult.fromJson(Map<String, dynamic> json) {
+    return StopSessionResult(
+      commandId: json['commandId'] as String,
+      status: json['status'] as String,
+      session: json['session'] != null
+          ? ActiveSession.fromJson(json['session'] as Map<String, dynamic>)
+          : null,
+    );
+  }
+}
+
 class DriverCharger {
   const DriverCharger({
     required this.chargerId,

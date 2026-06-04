@@ -2,8 +2,11 @@ import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import '../api/client.dart';
 import '../api/auth_storage.dart';
+import '../api/types.dart';
+import '../i18n/strings.dart';
 import '../theme/logo.dart';
 import '../theme/palette.dart';
+import 'empty_access.dart';
 import 'home.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -57,10 +60,30 @@ class _LoginScreenState extends State<LoginScreen> {
         refreshToken: session.refreshToken,
         email: session.driver.email,
       );
+      // Adopt the driver's server-side locale.
+      await _storage.saveLocale(session.driver.locale);
+      localeNotifier.value = AppLocale.fromCode(session.driver.locale);
+
+      // Branch on access: zero chargers → invite-redeem funnel
+      // (ADR 0026 §5), otherwise the regular home shell.
+      List<DriverCharger> chargers = const [];
+      try {
+        chargers = await _api.getChargers(session.accessToken);
+      } catch (_) {
+        // Fall through to home; its own error handling takes over.
+      }
       if (!mounted) return;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => HomeScreen(driver: session.driver)),
-      );
+      if (chargers.isEmpty) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => EmptyAccessScreen(driver: session.driver),
+          ),
+        );
+      } else {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => HomeScreen(driver: session.driver)),
+        );
+      }
     } on ApiException catch (e) {
       setState(() => _error = e.message);
     } catch (e) {
@@ -73,17 +96,29 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      // Default true, but make it explicit — Scaffold needs to shrink
+      // the body when the soft keyboard appears so the inner scroll
+      // view can scroll the form into view.
+      resizeToAvoidBottomInset: true,
       body: SafeArea(
         child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 420),
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
+          child: SingleChildScrollView(
+            // ClampingScrollPhysics avoids the iOS-style bounce on a
+            // mostly-static form so the screen doesn't jitter when the
+            // keyboard opens.
+            physics: const ClampingScrollPhysics(),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    // mainAxisSize.min lets the column size to its
+                    // content so the SingleChildScrollView can scroll
+                    // cleanly when the keyboard squeezes the viewport.
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
                     const SizedBox(height: 24),
                     const LogoWordmark(height: 56),
                     const SizedBox(height: 32),
@@ -192,7 +227,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       textAlign: TextAlign.center,
                     ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
