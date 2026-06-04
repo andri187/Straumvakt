@@ -38,6 +38,12 @@ import {
   getDriverChargerPricing,
 } from "../../repositories/driver-pricing";
 import { createSelfRequest } from "../../repositories/driver-access-requests";
+import {
+  getDriverActiveSessions,
+  resolveStoppableSession,
+  listDriverSessionHistory,
+  updateDriverProfile,
+} from "../../repositories/driver-sessions";
 import type { Env } from "../../bindings";
 
 type Vars = { driverPayload: DriverTokenPayload };
@@ -70,7 +76,7 @@ publicDriver.use(
     // Driver API uses stateless bearer tokens — no cookies, so
     // credentials:false is correct and keeps preflight simple.
     credentials: false,
-    allowMethods: ["GET", "POST", "OPTIONS"],
+    allowMethods: ["GET", "POST", "PATCH", "OPTIONS"],
     allowHeaders: ["Content-Type", "Authorization"],
     maxAge: 600,
   }),
@@ -578,6 +584,168 @@ publicDriver.post("/start-session", requireDriver, async (c) => {
     },
     202,
   );
+});
+
+// ── POST /api/driver/stop-session ───────────────────────────────────
+//
+// Driver requests RemoteStopTransaction on one of THEIR in-progress
+// sessions. Mirrors start-session's enqueue path: resolve the session +
+// its OCPP identity + protocol transactionId, then enqueue an
+// ocpp.outbound_commands row with controlDomain='remote_stop'. OCPP 1.6
+// §6.23 stops by transactionId, so we never guess a connector-based
+// stop — if the session has no protocol transaction id yet we 409.
+//
+// Ownership is enforced in the repository (WHERE user_id = driver), so a
+// driver can never stop another driver's session — 404 for any sessionId
+// that isn't theirs (don't leak existence).
+
+const stopSessionSchema = z.object({
+  sessionId: z.string().uuid(),
+});
+
+publicDriver.post("/stop-session", requireDriver, async (c) => {
+  const raw = await c.req.json().catch(() => null);
+  const parsed = stopSessionSchema.safeParse(raw);
+  if (!parsed.success) {
+    return c.json({ error: "validation", message: "sessionId required (uuid)." }, 400);
+  }
+
+  const { userId } = c.get("driverPayload");
+  const prisma = makePrisma(c.env);
+  const now = new Date();
+
+  const resolved = await resolveStoppableSession(prisma, userId, parsed.data.sessionId);
+
+  if (resolved.kind === "not_found") {
+    return c.json(
+      { error: "not_found", message: "No active session with that id." },
+      404,
+    );
+  }
+  if (resolved.kind === "no_ocpp_identity") {
+    return c.json(
+      {
+        error: "not_stoppable",
+        message: "This session isn't on an OCPP charger we can stop remotely.",
+      },
+      409,
+    );
+  }
+  if (resolved.kind === "no_transaction_id") {
+    return c.json(
+      {
+        error: "not_stoppable",
+        message: "The session hasn't reported a transaction id yet. Try again shortly.",
+      },
+      409,
+    );
+  }
+
+  const session = resolved.session;
+
+  // Enqueue RemoteStopTransaction. Payload is passed verbatim to the
+  // gateway as the OCPP 1.6 §6.23 action payload — { transactionId }.
+  const enqueued = await enqueueCommand(prisma, c.env.OUTBOUND_QUEUE, {
+    orgId: session.orgId,
+    identityId: session.identityId,
+    controlDomain: "remote_stop",
+    routedTo: "ocpp",
+    payload: {
+      transactionId: session.transactionId,
+    },
+    correlationId: crypto.randomUUID(),
+    requestedBy: userId,
+  });
+
+  return c.json(
+    {
+      commandId: enqueued.id,
+      status: "accepted",
+      session: {
+        sessionId: session.sessionId,
+        connectorId: session.connectorId,
+        chargerName: session.chargerName,
+        status: "Finishing",
+        startedAt: session.startedAt,
+        powerKw: 0,
+        energyKwh: 0,
+        costIsk: 0,
+      },
+    },
+    202,
+  );
+});
+
+// ── GET /api/driver/sessions/current ────────────────────────────────
+//
+// The driver's in-progress session(s). Read-only; reads charging.sessions
+// WHERE user_id = driver AND status='in_progress'. Empty array when the
+// driver isn't charging.
+
+publicDriver.get("/sessions/current", requireDriver, async (c) => {
+  const { userId } = c.get("driverPayload");
+  const prisma = makePrisma(c.env);
+  const sessions = await getDriverActiveSessions(prisma, userId);
+  return c.json({ sessions });
+});
+
+// ── GET /api/driver/sessions/history ────────────────────────────────
+//
+// Past (billed) sessions for this driver from reports.session_ledger,
+// newest-first, paginated via skip/limit. Driver-scoped in the repo.
+
+const historyQuerySchema = z.object({
+  skip: z.coerce.number().int().min(0).optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+});
+
+publicDriver.get("/sessions/history", requireDriver, async (c) => {
+  const parsed = historyQuerySchema.safeParse({
+    skip: c.req.query("skip"),
+    limit: c.req.query("limit"),
+  });
+  if (!parsed.success) {
+    return c.json(
+      { error: "validation", message: "skip/limit must be non-negative integers (limit ≤ 100)." },
+      400,
+    );
+  }
+  const { userId } = c.get("driverPayload");
+  const prisma = makePrisma(c.env);
+  const sessions = await listDriverSessionHistory(prisma, userId, {
+    skip: parsed.data.skip,
+    limit: parsed.data.limit,
+  });
+  return c.json({ sessions });
+});
+
+// ── PATCH /api/driver/me ────────────────────────────────────────────
+//
+// Update the driver's own profile. Only displayName + locale are
+// driver-editable; everything else (email, audience, status) is admin-
+// only. Empty body is a no-op that returns the current profile.
+
+const updateMeSchema = z.object({
+  displayName: z.string().trim().min(1).max(200).optional(),
+  locale: z.string().trim().min(2).max(10).optional(),
+});
+
+publicDriver.patch("/me", requireDriver, async (c) => {
+  const raw = await c.req.json().catch(() => null);
+  const parsed = updateMeSchema.safeParse(raw ?? {});
+  if (!parsed.success) {
+    return c.json(
+      { error: "validation", message: "displayName (1–200 chars) and/or locale (2–10 chars) only." },
+      400,
+    );
+  }
+  const { userId } = c.get("driverPayload");
+  const prisma = makePrisma(c.env);
+  const profile = await updateDriverProfile(prisma, userId, parsed.data);
+  if (!profile) {
+    return c.json({ error: "not_found", message: "User no longer exists." }, 404);
+  }
+  return c.json(profile);
 });
 
 // ── GET /api/driver/installations ───────────────────────────────────
