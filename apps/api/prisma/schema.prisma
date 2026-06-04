@@ -112,6 +112,10 @@ model User {
   // ── Sprint 9 / 2026-05-08 — AMQP StateId 722 driver enrichment ──
   liveSessions            LiveSession[]    @relation("LiveSessionUser")
 
+  // ── ADR 0029 — billing attribution back-relations ───────────────
+  billObjectsOwned        BillObject[]       @relation("BillObjectOwnerUser")
+  billObjectMemberships   BillObjectMember[] @relation("BillObjectMemberUser")
+
   @@map("users")
   @@schema("identity")
 }
@@ -306,6 +310,20 @@ model UserToken {
   metadata      Json           @default("{}") @db.JsonB
   createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
 
+  // ── ADR 0028 — driver invite (code / QR / email) ────────────────
+  // Populated when kind = driver. driverGroupId = the access grant the
+  // invite confers; billObjectId = the billing home to attach at
+  // redemption (nullable → "Unattributed" fallback, ADR 0029). security
+  // gates redemption. maxRedemptions: null = unlimited (shared poster),
+  // 1 = single-use.
+  driverGroupId   String?              @map("driver_group_id") @db.Uuid
+  billObjectId    String?              @map("bill_object_id") @db.Uuid
+  security        DriverInviteSecurity @default(none)
+  passwordKeyHash String?              @map("password_key_hash")
+  maxRedemptions  Int?                 @map("max_redemptions")
+  driverGroup     DriverGroup?         @relation("UserTokenDriverGroup", fields: [driverGroupId], references: [id], onDelete: SetNull)
+  billObject      BillObject?          @relation("UserTokenBillObject", fields: [billObjectId], references: [id], onDelete: SetNull)
+
   @@index([userId, kind, expiresAt])
   @@map("user_tokens")
   @@schema("identity")
@@ -315,6 +333,17 @@ enum UserTokenKind {
   invite
   magic_link
   password_reset
+  // ADR 0028 — driver invite (code / QR / email).
+  driver
+
+  @@schema("identity")
+}
+
+// ADR 0028 — optional QR security layers chosen by the host-admin.
+enum DriverInviteSecurity {
+  none
+  password_key
+  allow_term
 
   @@schema("identity")
 }
@@ -348,6 +377,11 @@ model Organization {
   regulatorLicenceNo  String?             @map("regulator_licence_no")
   roles               OrganizationRole[]  @default([])
   notes               String?             @db.Text
+
+  // ── ADR 0026 — going-public host classification ──────────────────
+  // Null for non-host orgs (operators, vendors, DSOs…). Set for customer
+  // host orgs: multi_dwelling (HOA/building) or company (employer/fleet).
+  kind                OrganizationKind?
 
   // ── Contacts (ADR 0014 follow-up) ────────────────────────────────
   // Array of {role, name, email?, phone?, notes?} contact rows.
@@ -435,6 +469,11 @@ model Organization {
   // ── Sprint 9 / ADR 0022 (ENROLL-3) — email domain rules ─────────
   emailDomains             OrgEmailDomain[]
 
+  // ── ADR 0026 / 0029 — going-public host + billing back-relations ─
+  billObjects              BillObject[]      @relation("BillObjectOrg")
+  billObjectsOwned         BillObject[]      @relation("BillObjectOwnerOrg")
+  hostApplications         HostApplication[] @relation("HostApplicationConvertedOrg")
+
   @@map("organizations")
   @@schema("tenancy")
 }
@@ -443,6 +482,53 @@ enum OrgStatus {
   active
   suspended
   archived
+
+  @@schema("tenancy")
+}
+
+// ADR 0026 — host org classification (going-public).
+enum OrganizationKind {
+  multi_dwelling
+  company
+
+  @@schema("tenancy")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// tenancy — host applications (ADR 0026 §6, going-public RFQ inbox)
+// Public /apply submissions land here; operator works them in the
+// /applications inbox and converts a "won" row into a host org.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model HostApplication {
+  id             String                @id @default(uuid()) @db.Uuid
+  companyName    String                @map("company_name")
+  contactName    String                @map("contact_name")
+  contactEmail   String                @map("contact_email")
+  contactPhone   String?               @map("contact_phone")
+  kennitala      String?
+  siteType       OrganizationKind      @map("site_type")
+  // [{ address, estChargers, estDrivers }, …]
+  sites          Json                  @default("[]") @db.JsonB
+  description    String?               @db.Text
+  status         HostApplicationStatus @default(new)
+  convertedOrgId String?               @map("converted_org_id") @db.Uuid
+  createdAt      DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  convertedOrg   Organization?         @relation("HostApplicationConvertedOrg", fields: [convertedOrgId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@map("host_applications")
+  @@schema("tenancy")
+}
+
+enum HostApplicationStatus {
+  new
+  in_review
+  offered
+  won
+  lost
 
   @@schema("tenancy")
 }
@@ -490,6 +576,11 @@ enum MembershipRole {
   technician
   finance
   support
+
+  // ADR 0027 — going-public host self-management (tenancy-scoped;
+  // manages the host's own drivers + reads its billing; no platform
+  // surface).
+  host_admin
 
   @@schema("tenancy")
 }
@@ -698,6 +789,9 @@ model Installation {
 
   // ── Sprint 9 / ADR 0019 (2026-05-08) — agreements back-relation ──
   agreementsAtInstallation Agreement[]                 @relation("AgreementInstallation")
+
+  // ── ADR 0029 — billing child-objects under this installation ─────
+  billObjects              BillObject[]                @relation("BillObjectInstallation")
 
   @@index([orgId, siteId])
   @@index([vendorId])
@@ -2919,6 +3013,8 @@ model DriverGroup {
   memberships     DriverGroupMembership[]
   // ADR 0022 (2026-05-31 addendum) — auto-join target for email-domain rules
   emailDomainAutoJoinTargets OrgEmailDomain[] @relation("OrgEmailDomainDefaultGroup")
+  // ADR 0028 — driver invite tokens conferring access to this group
+  driverInviteTokens UserToken[] @relation("UserTokenDriverGroup")
 
   @@index([agreementId])
   @@index([ownerOrgId])
@@ -2939,6 +3035,84 @@ model DriverGroupMembership {
   @@index([userId])
   @@map("driver_group_memberships")
   @@schema("agreements")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// billing — child-object attribution (ADR 0029)
+// The BILLING spine (who pays), orthogonal to the ACCESS spine
+// (DriverGroup → Agreement → scope, ADR 0019/0020). A ChargeSession's
+// invoice recipient resolves: session → driver → BillObjectMember active
+// at session.startedAt → BillObject → owner (ownerUser XOR ownerOrg).
+// NOTE: the "owner exactly-one" rule (ownerUserId XOR ownerOrgId) is a
+// CHECK constraint added by hand in the migration SQL — Prisma can't
+// express it in-schema.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model BillObject {
+  id             String             @id @default(uuid()) @db.Uuid
+  orgId          String             @map("org_id") @db.Uuid          // host org
+  installationId String?            @map("installation_id") @db.Uuid // null for company-flat
+  kind           BillObjectKind
+  label          String
+  parentId       String?            @map("parent_id") @db.Uuid       // self-FK for company hierarchy
+  ownerUserId    String?            @map("owner_user_id") @db.Uuid   // person (kennitala-bearing)
+  ownerOrgId     String?            @map("owner_org_id") @db.Uuid    // org (HOA / landlord / company)
+  status         BillObjectStatus   @default(active)
+  createdAt      DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization   Organization       @relation("BillObjectOrg", fields: [orgId], references: [id], onDelete: Cascade)
+  installation   Installation?      @relation("BillObjectInstallation", fields: [installationId], references: [id], onDelete: SetNull)
+  ownerUser      User?              @relation("BillObjectOwnerUser", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  ownerOrg       Organization?      @relation("BillObjectOwnerOrg", fields: [ownerOrgId], references: [id], onDelete: SetNull)
+  parent         BillObject?        @relation("BillObjectParent", fields: [parentId], references: [id], onDelete: SetNull)
+  children       BillObject[]       @relation("BillObjectParent")
+  members        BillObjectMember[]
+  inviteTokens   UserToken[]        @relation("UserTokenBillObject")
+
+  @@index([orgId, installationId])
+  @@index([ownerUserId])
+  @@index([ownerOrgId])
+  @@map("bill_objects")
+  @@schema("billing")
+}
+
+model BillObjectMember {
+  id            String     @id @default(uuid()) @db.Uuid
+  billObjectId  String     @map("bill_object_id") @db.Uuid
+  userId        String     @map("user_id") @db.Uuid
+  // History-preserving: effectiveTo NULL = current. Ownership/occupancy
+  // changes close the old row + open a new one so past sessions stay
+  // attributed to who paid THEN (ADR 0029 §4).
+  effectiveFrom DateTime   @default(now()) @map("effective_from") @db.Timestamptz(6)
+  effectiveTo   DateTime?  @map("effective_to") @db.Timestamptz(6)
+
+  billObject    BillObject @relation(fields: [billObjectId], references: [id], onDelete: Cascade)
+  user          User       @relation("BillObjectMemberUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, effectiveTo])
+  @@index([billObjectId])
+  @@map("bill_object_members")
+  @@schema("billing")
+}
+
+enum BillObjectKind {
+  apartment
+  unit
+  stall
+  company
+  department
+  cost_center
+  other
+
+  @@schema("billing")
+}
+
+enum BillObjectStatus {
+  active
+  inactive
+
+  @@schema("billing")
 }
 
 // The override row. Lives at one cell of (scope x audience). Each override

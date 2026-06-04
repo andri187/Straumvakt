@@ -19,7 +19,9 @@ export type MembershipRole =
   | "manager"
   | "technician"
   | "finance"
-  | "support";
+  | "support"
+  // ADR 0027 — going-public host self-management (tenancy-scoped).
+  | "host_admin";
 
 export type MembershipStatus = "invited" | "active" | "suspended" | "revoked";
 

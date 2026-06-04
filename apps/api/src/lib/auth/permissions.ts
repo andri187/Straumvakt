@@ -178,6 +178,19 @@ const FINANCE_BUNDLE: PerTenantPermission[] = [
 
 const SUPPORT_BUNDLE: PerTenantPermission[] = READ_ALL;
 
+// ADR 0027 — going-public host self-management. Tenancy-scoped: manage
+// the host's own drivers (invite + edit/suspend memberships) + read its
+// billing + read its chargers/sites/property. No platform surface, no
+// charger config, no tariff authoring (operator sets the negotiated
+// terms), no member.remove.
+const HOST_ADMIN_BUNDLE: PerTenantPermission[] = [
+  ...VIEWER_BUNDLE,
+  "member.read",
+  "member.invite",
+  "member.write",
+  "billing.read",
+];
+
 // ─────────────────────────────────────────────────────────────────────
 // 3. Role-to-permission map
 // ─────────────────────────────────────────────────────────────────────
@@ -205,6 +218,9 @@ export const MEMBERSHIP_ROLE_PERMISSIONS: Record<
   finance: FINANCE_BUNDLE,
   support: SUPPORT_BUNDLE,
   viewer: VIEWER_BUNDLE,
+
+  // ── ADR 0027 — going-public host self-management (tenancy-scoped) ──
+  host_admin: HOST_ADMIN_BUNDLE,
 
   // ── Pre-ADR-0014 — map to equivalent new bundles ──────────────────
   operator: MANAGER_BUNDLE, // operator was overloaded; manager is the closest non-org-edit role.
