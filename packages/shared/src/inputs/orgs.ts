@@ -25,6 +25,11 @@ export const OrganizationRoleEnum = z.enum([
 ]);
 export type OrganizationRole = z.infer<typeof OrganizationRoleEnum>;
 
+// ADR 0026 — going-public host classification (multi-dwelling building
+// or company). Optional; set when onboarding a customer host org.
+export const OrganizationKindEnum = z.enum(["multi_dwelling", "company"]);
+export type OrganizationKind = z.infer<typeof OrganizationKindEnum>;
+
 // Address shape used for both postalAddress and legalAddress. Iceland-
 // only scope today, so country is omitted; add when the first
 // non-IS org lands.
@@ -84,6 +89,7 @@ export const OrgCreateInput = z.object({
   countryCode: z.string().regex(COUNTRY_RE, {
     message: "ISO-3166-1 alpha-2 (e.g. IS, NO, SE)",
   }),
+  kind: OrganizationKindEnum.optional().nullable(),
   kennitala: z
     .string()
     .regex(KENNITALA_RE, { message: "format: DDMMYY-XXXX" })
@@ -115,6 +121,7 @@ export type OrgCreateInput = z.infer<typeof OrgCreateInput>;
 export const OrgUpdateInput = z.object({
   displayName: z.string().min(1).max(120).optional(),
   countryCode: z.string().regex(COUNTRY_RE).optional(),
+  kind: OrganizationKindEnum.optional().nullable(),
   kennitala: z
     .string()
     .regex(KENNITALA_RE)

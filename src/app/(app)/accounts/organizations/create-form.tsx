@@ -71,6 +71,7 @@ export function CreateOrgForm() {
   const [main, setMain] = useState(BLANK_MAIN);
   const [additional, setAdditional] = useState<OrgContact[]>([]);
   const [roles, setRoles] = useState<string[]>([]);
+  const [kind, setKind] = useState<string>("");
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -101,6 +102,7 @@ export function CreateOrgForm() {
         regulatorLicenceNo: identity.regulatorLicenceNo || undefined,
         notes: notes || undefined,
         roles,
+        kind: kind || undefined,
         postalAddress: addr.postalAddress,
         legalAddress: addr.legalAddress,
         municipalityCode: addr.municipalityCode ?? undefined,
@@ -166,6 +168,21 @@ export function CreateOrgForm() {
           ))}
         </div>
       </fieldset>
+
+      <label className="block">
+        <span className="block text-[11px] font-semibold uppercase tracking-brand text-ink-400">
+          Host classification (ADR 0026)
+        </span>
+        <select
+          value={kind}
+          onChange={(e) => setKind(e.target.value)}
+          className="mt-1 w-full rounded-md border border-bg-border bg-bg-base/50 px-3 py-2 text-sm text-ink-50 focus:border-sv-sky focus:outline-none"
+        >
+          <option value="">Not a host (operator / vendor / …)</option>
+          <option value="multi_dwelling">Multi-dwelling (HOA / building)</option>
+          <option value="company">Company (employer / fleet)</option>
+        </select>
+      </label>
 
       <AddressSection state={address} onChange={setAddress} />
 

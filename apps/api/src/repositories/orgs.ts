@@ -83,6 +83,7 @@ function toSummary(row: Row): OrgSummary {
     displayName: row.displayName,
     countryCode: row.countryCode,
     status: row.status,
+    kind: row.kind,
     kennitala: row.kennitala,
     legalName: row.legalName,
     legalForm: row.legalForm,
@@ -137,6 +138,7 @@ export async function createOrg(
     data: {
       displayName: input.displayName,
       countryCode: input.countryCode,
+      kind: input.kind ?? null,
       kennitala: input.kennitala,
       legalName: input.legalName,
       legalForm: input.legalForm,

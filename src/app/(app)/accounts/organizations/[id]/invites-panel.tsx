@@ -17,7 +17,7 @@ import { apiFetch } from "@/lib/api-client";
  *     'revoked' so re-inviting starts fresh.
  */
 
-const ROLES = ["manager", "technician", "finance", "support", "viewer"] as const;
+const ROLES = ["manager", "technician", "finance", "support", "viewer", "host_admin"] as const;
 type Role = (typeof ROLES)[number];
 
 type InviteListItem = {

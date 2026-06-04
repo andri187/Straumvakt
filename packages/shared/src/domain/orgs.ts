@@ -5,6 +5,10 @@
 
 export type OrgStatus = "active" | "suspended" | "archived";
 
+// ADR 0026 — going-public host classification. Null for non-host orgs
+// (operators, vendors, DSOs…); set for customer hosts.
+export type OrganizationKind = "multi_dwelling" | "company";
+
 export type OrganizationRole =
   | "cpo"
   | "emsp"
@@ -53,6 +57,7 @@ export interface OrgSummary {
   displayName: string;
   countryCode: string;
   status: OrgStatus;
+  kind: OrganizationKind | null;
   kennitala: string | null;
   legalName: string | null;
   legalForm: string | null;
