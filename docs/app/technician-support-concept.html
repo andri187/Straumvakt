@@ -1,0 +1,1535 @@
+<!doctype html>
+<html lang="is">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Straumvakt — Þjónustuaðili (technician / contractor support concept)</title>
+  <!--
+    Straumvakt TECHNICIAN / CONTRACTOR support console concept.
+    Fourth sibling of:
+      • host-portal-concept.html        (HOST admin self-service)
+      • straumvakt-admin-concept.html   (OPERATOR / staff console)
+      • driver-portal-concept.html      (END-USER driver)
+    This is the FIELD-SERVICE view for a service provider — either
+    "Tengill" (Straumvakt's default service provider, ADR 0032 §5C) or a
+    host's own contracted contractor. Same design system; teal accent
+    (matches the admin concept's .pill.co contractor colour).
+
+    Grounded in ADR 0032 (Neighbour-helper + Issue Engine) and ADR 0031
+    (cost model / money flow). What a contractor does here, and ONLY here:
+
+      • Receive COST-GATED escalations (5C) — the driver already saw and
+        ACCEPTED the price before the job reached the technician. The
+        accepted amount is shown, never re-negotiated silently.
+      • Receive SYSTEM-DETECTED tickets routed by owner-first precedence
+        (5D / ADR 0008) for hardware the contractor services.
+      • Diagnose: read charger state + the explainable detection signal
+        (the five §4 rules), fetch device logs.
+      • Control the charger: remote start / stop / reset — contractors
+        (like host-designated helpers) MAY actuate; this is the
+        escalation tier, not chat-only.
+      • Talk to the raising driver via per-ticket chat (§6).
+      • Settle the call-out: labour + parts against the disclosed rate
+        (host SLA rate if the host has one, else Tengill rate-card).
+
+    Deliberately OUT of scope for a contractor (per ADR 0032 §3 + tenancy
+    boundaries): driver management, host org internals, energy-tariff
+    config, cross-host visibility, ticket triage/close of issues not
+    assigned to them, and any billing surface beyond their own call-out
+    settlement. A contractor is a service party, NOT host staff.
+
+    Standalone mock — open in a browser. No build, no data.
+  -->
+  <style>
+    :root {
+      --bg: #070b16;
+      --surface: #0b1220;
+      --raised: #111a2e;
+      --inset: #0e1626;
+      --border: #1e2a44;
+      --ring: #2b3a5e;
+      --text: #f5f7fa;
+      --muted: #97a3b8;
+      --soft: #c8d1e0;
+      --green: #3ee9a7;
+      --teal: #2bd3c9;
+      --blue: #2bb6e8;
+      --sky: #6fb8f0;
+      --amber: #f4c95d;
+      --red: #ff6b6b;
+      --violet: #a78bfa;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; color: var(--text);
+      background:
+        radial-gradient(1200px 600px at 80% -10%, rgba(43, 211, 201, .10), transparent 60%),
+        radial-gradient(900px 500px at -10% 10%, rgba(43, 182, 232, .08), transparent 60%),
+        var(--bg);
+      background-attachment: fixed;
+    }
+    a { color: inherit; text-decoration: none; }
+    button { font-family: inherit; }
+
+    /* ---------- shell ---------- */
+    .shell { display: grid; grid-template-columns: 248px 1fr; min-height: 100vh; }
+    .sidebar {
+      border-right: 1px solid var(--border); background: rgba(11, 18, 32, .6);
+      backdrop-filter: blur(8px); display: flex; flex-direction: column;
+      position: sticky; top: 0; height: 100vh;
+    }
+    .brand { display: flex; align-items: center; gap: 12px; padding: 18px 18px 14px; border-bottom: 1px solid var(--border); }
+    .brand .logo {
+      width: 34px; height: 34px; border-radius: 9px;
+      background: linear-gradient(135deg, var(--teal), var(--blue) 55%, var(--sky));
+      display: grid; place-items: center; color: #04121b; font-weight: 900;
+      box-shadow: 0 10px 26px rgba(43,211,201,.28);
+    }
+    .brand .word strong {
+      display: block; font-size: 16px; line-height: 1.1;
+      background: linear-gradient(135deg, var(--teal), var(--blue) 55%, var(--sky));
+      background-clip: text; -webkit-background-clip: text; color: transparent;
+    }
+    .brand .word span { display: block; margin-top: 2px; font-size: 10px; letter-spacing: .22em; text-transform: uppercase; color: var(--sky); }
+
+    .nav { padding: 12px 10px; overflow-y: auto; flex: 1; }
+    .nav-label { font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); padding: 14px 12px 6px; }
+    .nav-item {
+      display: flex; align-items: center; gap: 11px; padding: 9px 12px; border-radius: 9px; cursor: pointer;
+      color: var(--soft); font-size: 14px; font-weight: 500; border: 1px solid transparent;
+    }
+    .nav-item:hover { background: var(--raised); }
+    .nav-item.active {
+      background: linear-gradient(135deg, rgba(43,211,201,.14), rgba(43,182,232,.12));
+      border-color: rgba(43,211,201,.35); color: var(--text);
+    }
+    .nav-item .ico { width: 18px; text-align: center; opacity: .9; }
+    .nav-item .badge {
+      margin-left: auto; font-size: 11px; font-weight: 700;
+      background: rgba(244,201,93,.16); color: var(--amber); border: 1px solid rgba(244,201,93,.4);
+      padding: 1px 7px; border-radius: 999px;
+    }
+    .nav-item .badge.live { background: rgba(43,182,232,.16); color: var(--blue); border-color: rgba(43,182,232,.4); }
+    .nav-item .badge.bad  { background: rgba(255,107,107,.14); color: var(--red); border-color: rgba(255,107,107,.4); }
+
+    .nav-foot { border-top: 1px solid var(--border); padding: 12px 14px; display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--muted); }
+    .avatar { width: 30px; height: 30px; border-radius: 999px; flex: none; background: linear-gradient(135deg, #2bd3c9, #2bb6e8); color: #04121b; display: grid; place-items: center; font-weight: 800; font-size: 12px; }
+
+    /* ---------- main ---------- */
+    .main { min-width: 0; }
+    .topbar {
+      height: 58px; display: flex; align-items: center; gap: 16px; padding: 0 28px;
+      border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 5;
+      background: rgba(7,11,22,.75); backdrop-filter: blur(14px);
+    }
+    .who-am-i { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 15px; }
+    .pill { font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--border); color: var(--soft); background: var(--inset); }
+    .pill.co { color: var(--teal); border-color: rgba(43,211,201,.4); background: rgba(43,211,201,.08); }
+    .topbar .spacer { flex: 1; }
+    .topbar .tlink { font-size: 13px; color: var(--muted); cursor: pointer; }
+    .switcher { position: relative; display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--soft); background: var(--inset); border: 1px solid var(--border); border-radius: 9px; padding: 6px 12px; cursor: pointer; }
+    .switcher:hover { border-color: var(--ring); }
+    .switcher .sub { color: var(--muted); font-weight: 500; }
+    .menu { position: absolute; top: 40px; left: 0; min-width: 260px; background: var(--surface); border: 1px solid var(--border); border-radius: 11px; padding: 6px; display: none; z-index: 30; box-shadow: 0 20px 44px rgba(2,6,16,.55); }
+    .menu.open { display: block; }
+    .menu > div { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 11px; border-radius: 8px; font-size: 13px; font-weight: 600; color: var(--soft); cursor: pointer; }
+    .menu > div:hover { background: var(--raised); }
+    .menu .mini { font-size: 11px; color: var(--muted); font-weight: 500; }
+
+    .content { padding: 26px 28px 60px; max-width: 1160px; }
+    .screen { display: none; }
+    .screen.active { display: block; animation: fade .18s ease; }
+    @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+    .crumb { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+    .crumb a { color: var(--sky); cursor: pointer; }
+    .head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+    .head h1 { font-size: 23px; margin: 0 0 4px; letter-spacing: -.01em; }
+    .head .titlewrap { display: flex; align-items: center; gap: 10px; }
+    .head p { margin: 0; color: var(--muted); font-size: 13px; max-width: 64ch; }
+
+    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 9px 15px; border-radius: 10px; font-size: 13px; font-weight: 700; border: 1px solid var(--border); background: var(--raised); color: var(--text); cursor: pointer; }
+    .btn:hover { border-color: var(--ring); }
+    .btn.primary { background: linear-gradient(135deg, var(--teal), var(--blue)); color: #04121b; border: 0; box-shadow: 0 10px 24px rgba(43,182,232,.22); }
+    .btn.ghost { background: transparent; }
+    .btn.sm { padding: 6px 11px; font-size: 12px; }
+    .btn.danger { color: var(--red); border-color: rgba(255,107,107,.4); background: rgba(255,107,107,.07); }
+    .btn.ok { color: var(--green); border-color: rgba(62,233,167,.4); background: rgba(62,233,167,.07); }
+    .btn.full { width: 100%; justify-content: center; }
+
+    .tabs { display: flex; gap: 4px; margin-bottom: 18px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+    .tab { padding: 9px 14px; font-size: 13px; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; }
+    .tab.active { color: var(--text); border-color: var(--teal); }
+
+    .card { border: 1px solid var(--border); border-radius: 14px; background: linear-gradient(180deg, rgba(17,26,46,.5), rgba(11,18,32,.6)); box-shadow: 0 18px 40px rgba(2,6,16,.35); }
+    .card .card-h { padding: 13px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13px; font-weight: 700; }
+    .card .card-h .sub { color: var(--muted); font-weight: 500; font-size: 12px; }
+
+    .grid { display: grid; gap: 16px; }
+    .g4 { grid-template-columns: repeat(4, 1fr); }
+    .g3 { grid-template-columns: repeat(3, 1fr); }
+    .g2 { grid-template-columns: 1.6fr 1fr; }
+    .g2e { grid-template-columns: 1fr 1fr; }
+
+    .kpi { padding: 16px 18px; }
+    .kpi .lbl { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+    .kpi .val { font-size: 27px; font-weight: 800; letter-spacing: -.02em; margin: 8px 0 2px; }
+    .kpi .val.grad { background: linear-gradient(135deg, var(--teal), var(--blue)); background-clip: text; -webkit-background-clip: text; color: transparent; }
+    .kpi .delta { font-size: 12px; color: var(--green); }
+    .kpi .delta.flat { color: var(--muted); }
+    .kpi .delta.bad { color: var(--red); }
+
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead th { text-align: left; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; padding: 11px 18px; border-bottom: 1px solid var(--border); }
+    tbody td { padding: 13px 18px; border-bottom: 1px solid rgba(30,42,68,.55); }
+    tbody tr:last-child td { border-bottom: 0; }
+    tbody tr:hover { background: rgba(17,26,46,.45); }
+    .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; color: var(--soft); }
+    .sub { color: var(--muted); font-size: 12px; }
+    .right { text-align: right; }
+    .clickrow tbody tr { cursor: pointer; }
+
+    .badge2 { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; display: inline-flex; align-items: center; gap: 6px; }
+    .dot { width: 7px; height: 7px; border-radius: 999px; display: inline-block; }
+    .s-ok    { color: var(--green); background: rgba(62,233,167,.1);  border: 1px solid rgba(62,233,167,.35); }
+    .s-live  { color: var(--blue);  background: rgba(43,182,232,.1);  border: 1px solid rgba(43,182,232,.35); }
+    .s-warn  { color: var(--amber); background: rgba(244,201,93,.1);  border: 1px solid rgba(244,201,93,.35); }
+    .s-mut   { color: var(--muted); background: rgba(151,163,184,.08);border: 1px solid rgba(151,163,184,.3); }
+    .s-bad   { color: var(--red);   background: rgba(255,107,107,.08);border: 1px solid rgba(255,107,107,.35); }
+    .s-co    { color: var(--teal);  background: rgba(43,211,201,.1);  border: 1px solid rgba(43,211,201,.35); }
+    .bg-ok{background:var(--green);} .bg-live{background:var(--blue);} .bg-warn{background:var(--amber);} .bg-mut{background:var(--muted);} .bg-bad{background:var(--red);} .bg-co{background:var(--teal);}
+    .ro { font-size: 11px; color: var(--muted); border: 1px dashed var(--border); padding: 2px 8px; border-radius: 6px; }
+
+    /* status tags — shared convention across all four mocks.
+       .new = backed, newly surfaced · .soon = not backed yet (ADR/P-gated) */
+    .tag { font-size: 8.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; padding: 1px 6px; border-radius: 5px; border: 1px solid; white-space: nowrap; }
+    .tag.new { color: var(--green); border-color: rgba(62,233,167,.4); background: rgba(62,233,167,.08); }
+    .tag.soon { color: var(--amber); border-color: rgba(244,201,93,.45); background: rgba(244,201,93,.09); }
+    .nav-item .tag { margin-left: 6px; }
+    .nav-item .tag.solo { margin-left: auto; }
+    .newtag { font-size: 9px; letter-spacing: .1em; text-transform: uppercase; padding: 2px 7px; border-radius: 6px; border: 1px solid; }
+    .newtag.soon { color: var(--amber); border-color: rgba(244,201,93,.35); background: rgba(244,201,93,.07); }
+    /* whole-view aspirational banner */
+    .aspbanner { display: flex; gap: 12px; align-items: flex-start; padding: 12px 16px; border-radius: 12px;
+      background: rgba(244,201,93,.08); border: 1px solid rgba(244,201,93,.4); font-size: 12.5px; color: var(--soft);
+      margin-bottom: 18px; line-height: 1.55; }
+    .aspbanner .ic { font-size: 17px; }
+    .aspbanner b { color: var(--amber); }
+    .legend { margin-top: 26px; padding: 12px 16px; border: 1px solid var(--border); border-radius: 11px; background: var(--inset); font-size: 11.5px; color: var(--muted); line-height: 1.6; }
+    .legend b { color: var(--soft); }
+
+    /* severity chips for detection rules */
+    .sev { font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; padding: 2px 7px; border-radius: 6px; }
+    .sev.high { color: var(--red); background: rgba(255,107,107,.1); border: 1px solid rgba(255,107,107,.4); }
+    .sev.med  { color: var(--amber); background: rgba(244,201,93,.1); border: 1px solid rgba(244,201,93,.4); }
+    .sev.low  { color: var(--muted); background: rgba(151,163,184,.08); border: 1px solid rgba(151,163,184,.3); }
+
+    .ribbon { font-size: 12px; color: var(--soft); background: rgba(43,211,201,.06); border: 1px solid rgba(43,211,201,.25); border-radius: 10px; padding: 9px 14px; margin-bottom: 18px; }
+    .ribbon.warn { color: var(--amber); background: rgba(244,201,93,.07); border-color: rgba(244,201,93,.3); }
+
+    .field { margin-bottom: 14px; }
+    .field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+    .field .ro-val { padding: 10px 12px; border: 1px solid var(--border); border-radius: 9px; background: var(--inset); font-size: 13px; }
+    .inp { width: 100%; background: var(--inset); border: 1px solid var(--border); border-radius: 9px; color: var(--text); padding: 9px 11px; font-size: 13px; }
+    .inp::placeholder { color: var(--muted); }
+    textarea.inp { resize: vertical; font-family: inherit; }
+    .note { font-size: 12px; color: var(--muted); margin-top: 8px; }
+
+    .kv { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; padding: 8px 0; border-bottom: 1px solid rgba(30,42,68,.5); }
+    .kv:last-child { border: 0; }
+    .kv .k { color: var(--muted); }
+
+    .gate { display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; border-radius: 12px; background: rgba(43,211,201,.07); border: 1px solid rgba(43,211,201,.35); font-size: 13px; }
+    .gate.money { background: rgba(244,201,93,.07); border-color: rgba(244,201,93,.35); }
+    .gate .lock { font-size: 18px; }
+    .gate b { color: var(--teal); }
+    .gate.money b { color: var(--amber); }
+
+    .toggle { display: flex; align-items: center; gap: 12px; padding: 11px 0; }
+    .sw { width: 38px; height: 22px; border-radius: 999px; background: var(--ring); position: relative; flex: none; cursor: pointer; }
+    .sw.on { background: linear-gradient(135deg, var(--teal), var(--blue)); }
+    .sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 999px; background: #fff; transition: .15s; }
+    .sw.on::after { left: 19px; }
+
+    /* diagnostics readout */
+    .diag { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+    .diag .cell { background: var(--inset); padding: 13px 15px; }
+    .diag .cell .l { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+    .diag .cell .v { font-size: 16px; font-weight: 700; margin-top: 5px; }
+    .diag .cell .v.sm { font-size: 13px; }
+
+    /* device log */
+    .log { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; line-height: 1.7; background: #060a13; border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; max-height: 230px; overflow-y: auto; }
+    .log .ts { color: var(--muted); }
+    .log .ev { color: var(--soft); }
+    .log .warn { color: var(--amber); }
+    .log .err { color: var(--red); }
+    .log .ok { color: var(--green); }
+
+    /* charger control pad */
+    .ctl { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; padding: 16px 18px; }
+    .ctl button { padding: 14px; font-size: 13px; font-weight: 700; border-radius: 11px; border: 1px solid var(--border); background: var(--inset); color: var(--text); cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+    .ctl button:hover { border-color: var(--ring); }
+    .ctl button .big { font-size: 19px; }
+    .ctl button.warn { border-color: rgba(244,201,93,.4); }
+    .ctl button.danger { border-color: rgba(255,107,107,.4); color: var(--red); }
+    .ctl button.go { border-color: rgba(62,233,167,.4); color: var(--green); }
+
+    /* timeline + chat (shared with driver portal) */
+    .chat { display: grid; gap: 10px; padding: 16px 18px; max-height: 330px; overflow-y: auto; }
+    .bubble { max-width: 80%; padding: 9px 13px; border-radius: 13px; font-size: 13px; line-height: 1.45; }
+    .bubble .meta { font-size: 10px; color: var(--muted); margin-bottom: 3px; letter-spacing: .04em; }
+    .bubble.them { background: var(--inset); border: 1px solid var(--border); border-bottom-left-radius: 4px; justify-self: start; }
+    .bubble.me { background: rgba(43,211,201,.1); border: 1px solid rgba(43,211,201,.35); border-bottom-right-radius: 4px; justify-self: end; }
+    .bubble.sys { background: transparent; border: 1px dashed var(--border); color: var(--muted); justify-self: center; font-size: 11.5px; max-width: 92%; text-align: center; }
+    .bubble .att { margin-top: 7px; display: inline-flex; align-items: center; gap: 7px; font-size: 11px; color: var(--sky); border: 1px solid var(--border); border-radius: 7px; padding: 5px 9px; background: var(--surface); }
+    .chatbar { display: flex; gap: 10px; padding: 12px 18px; border-top: 1px solid var(--border); }
+    .timeline { display: grid; gap: 0; padding: 6px 18px 14px; }
+    .tl { display: flex; gap: 12px; padding: 9px 0; font-size: 13px; }
+    .tl .stamp { color: var(--muted); font-size: 11px; width: 92px; flex: none; }
+    .tl .pin { width: 9px; height: 9px; border-radius: 999px; margin-top: 4px; flex: none; }
+
+    /* line-item cost table */
+    .li { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid rgba(30,42,68,.5); font-size: 13px; }
+    .li:last-of-type { border-bottom: 0; }
+    .li .desc { flex: 1; }
+    .li .qty { width: 90px; }
+    .li .amt { width: 110px; text-align: right; font-weight: 700; }
+    .li input { background: var(--inset); border: 1px solid var(--border); border-radius: 7px; color: var(--text); padding: 6px 8px; font-size: 12px; width: 100%; }
+    .total { display: flex; justify-content: space-between; padding: 14px 0 2px; font-size: 15px; font-weight: 800; }
+
+    /* charger status strip (shared with host portal) */
+    .conns { display: flex; flex-wrap: wrap; gap: 8px; padding: 16px 18px; }
+    .conn { width: 58px; height: 58px; border-radius: 12px; border: 1px solid var(--border); display: grid; place-items: center; background: var(--inset); position: relative; font-size: 10px; color: var(--muted); text-align: center; line-height: 1.2; cursor: pointer; }
+    .conn .id { font-weight: 800; color: var(--soft); font-size: 11px; }
+    .conn.ok   { border-color: rgba(62,233,167,.5);  box-shadow: 0 0 16px rgba(62,233,167,.18) inset; }
+    .conn.live { border-color: rgba(43,182,232,.6);  box-shadow: 0 0 18px rgba(43,182,232,.25) inset; }
+    .conn.warn { border-color: rgba(244,201,93,.5); }
+    .conn.bad  { border-color: rgba(255,107,107,.5); opacity: .85; }
+
+    /* toasts */
+    #toasts { position: fixed; right: 20px; bottom: 20px; display: flex; flex-direction: column; gap: 10px; z-index: 120; }
+    .toast { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--teal); border-radius: 10px; padding: 12px 16px; font-size: 13px; color: var(--text); box-shadow: 0 16px 40px rgba(2,6,16,.5); min-width: 240px; animation: tIn .2s ease; }
+    @keyframes tIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+    /* ===== technician deep-dive ===== */
+    .subtabs { display: flex; gap: 4px; margin-bottom: 18px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+    .subtab { padding: 9px 14px; font-size: 13px; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; display: inline-flex; align-items: center; gap: 7px; }
+    .subtab.active { color: var(--text); border-color: var(--teal); }
+    .subtab .badge { font-size: 10px; font-weight: 700; background: rgba(255,107,107,.14); color: var(--red); border: 1px solid rgba(255,107,107,.4); padding: 0 6px; border-radius: 999px; }
+    .subpanel { display: none; }
+    .subpanel.active { display: block; animation: fade .18s ease; }
+
+    /* health ring */
+    .hring { width: 122px; height: 122px; border-radius: 999px; display: grid; place-items: center; position: relative; flex: none;
+      background: conic-gradient(var(--amber) 0 72%, rgba(244,201,93,.12) 72% 100%);
+      box-shadow: 0 0 24px rgba(244,201,93,.16) inset; }
+    .hring::before { content: ""; position: absolute; inset: 11px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); }
+    .hring .inner { position: relative; text-align: center; }
+    .hring .inner .big { font-size: 26px; font-weight: 800; }
+    .hring .inner .small { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; }
+
+    /* per-phase electrical meters */
+    .phase { display: grid; grid-template-columns: 44px 1fr 96px; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid rgba(30,42,68,.5); font-size: 13px; }
+    .phase:last-child { border: 0; }
+    .phase .lbl { font-weight: 800; color: var(--soft); }
+    .phase .track { height: 8px; border-radius: 999px; background: var(--inset); border: 1px solid var(--border); overflow: hidden; }
+    .phase .track > span { display: block; height: 100%; background: linear-gradient(90deg, var(--teal), var(--blue)); }
+    .phase .track > span.warn { background: linear-gradient(90deg, var(--amber), var(--red)); }
+    .phase .pval { text-align: right; font-family: ui-monospace, monospace; font-size: 12px; color: var(--text); }
+
+    /* raw OCPP frame log */
+    .ftoolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 12px 18px; border-bottom: 1px solid var(--border); }
+    .chip { font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--inset); color: var(--muted); cursor: pointer; }
+    .chip.on { color: var(--text); border-color: var(--ring); background: var(--raised); }
+    .frames { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; background: #060a13; max-height: 440px; overflow-y: auto; }
+    .frame { padding: 8px 14px; border-bottom: 1px solid rgba(30,42,68,.5); cursor: pointer; display: flex; gap: 10px; align-items: flex-start; }
+    .frame:hover { background: rgba(17,26,46,.5); }
+    .frame .ts { color: var(--muted); flex: none; width: 66px; }
+    .frame .dir { flex: none; width: 18px; text-align: center; font-weight: 800; }
+    .frame .dir.up { color: var(--green); }   /* charger → CSMS */
+    .frame .dir.dn { color: var(--sky); }      /* CSMS → charger */
+    .frame .col { flex: 1; min-width: 0; }
+    .frame .act { color: var(--soft); }
+    .frame .act .typ { font-size: 10px; color: var(--muted); border: 1px solid var(--border); border-radius: 5px; padding: 0 6px; margin-left: 8px; }
+    .frame .act .err { color: var(--red); }
+    .frame .act .ok { color: var(--green); }
+    .frame .payload { display: none; margin-top: 8px; white-space: pre-wrap; color: var(--soft); background: var(--surface); border: 1px solid var(--border); border-radius: 7px; padding: 9px 11px; line-height: 1.55; }
+    .frame.open .payload { display: block; }
+    .frame .caret { color: var(--muted); flex: none; }
+
+    /* command console */
+    .cmd { display: grid; grid-template-columns: repeat(auto-fill, minmax(158px, 1fr)); gap: 8px; padding: 16px 18px; }
+    .cmd button { padding: 11px 12px; font-size: 12px; font-weight: 700; border-radius: 9px; border: 1px solid var(--border); background: var(--inset); color: var(--soft); cursor: pointer; text-align: left; }
+    .cmd button:hover { border-color: var(--ring); color: var(--text); }
+    .cmd button .k { display: block; font-size: 10px; color: var(--muted); margin-top: 3px; font-family: ui-monospace, monospace; font-weight: 500; }
+    .cmd button.danger { border-color: rgba(255,107,107,.35); }
+    .cmd button.danger:hover { color: var(--red); }
+
+    /* config table */
+    .cfg input { background: var(--inset); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 5px 8px; font-size: 12px; font-family: ui-monospace, monospace; width: 100%; }
+    .cfg .drift { color: var(--amber); }
+    .cfg .drift input { border-color: rgba(244,201,93,.45); }
+
+    /* knowledge base accordion */
+    .kb { border: 1px solid var(--border); border-radius: 11px; overflow: hidden; }
+    .kb + .kb { margin-top: 10px; }
+    .kb-h { padding: 13px 16px; display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 13px; font-weight: 700; }
+    .kb-h:hover { background: var(--raised); }
+    .kb-b { display: none; padding: 0 16px 16px; font-size: 13px; color: var(--soft); line-height: 1.6; }
+    .kb.open .kb-b { display: block; }
+    .kb .caret { margin-left: auto; color: var(--muted); }
+
+    /* innovation tag */
+    .nu { font-size: 10px; font-weight: 800; letter-spacing: .04em; color: var(--violet); background: rgba(167,139,250,.12); border: 1px solid rgba(167,139,250,.4); border-radius: 6px; padding: 2px 7px; }
+
+    /* meter-curve sparkline */
+    .spark { display: flex; align-items: flex-end; gap: 3px; height: 46px; }
+    .spark > i { flex: 1; background: linear-gradient(180deg, var(--teal), var(--blue)); border-radius: 2px 2px 0 0; min-width: 3px; opacity: .85; }
+
+    /* hamburger + responsive */
+    .hamb { display: none; width: 34px; height: 34px; border: 1px solid var(--border); border-radius: 8px; place-items: center; color: var(--text); font-size: 16px; cursor: pointer; }
+    @media (max-width: 860px) {
+      .shell { grid-template-columns: 1fr; }
+      .sidebar { position: fixed; top: 0; left: -260px; height: 100vh; width: 248px; z-index: 80; transition: left .2s; }
+      .sidebar.open { left: 0; box-shadow: 24px 0 70px rgba(0,0,0,.6); }
+      .hamb { display: grid; }
+      .switcher { display: none; }
+      .grid.g4, .grid.g3, .grid.g2, .grid.g2e { grid-template-columns: 1fr !important; }
+      .content { padding: 20px 16px 56px; }
+      .ctl { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <!-- ============ SIDEBAR ============ -->
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <div class="logo">T</div>
+        <div class="word"><strong>Straumvakt</strong><span>Þjónustuaðili · Service</span></div>
+      </div>
+      <nav class="nav" id="nav">
+        <div class="nav-label">Vinna <span class="tag soon">soon</span></div>
+        <div class="nav-item active" data-screen="dashboard"><span class="ico">▦</span> Mælaborð</div>
+        <div class="nav-item" data-screen="jobs"><span class="ico">🧰</span> Útköll <span class="badge bad">2</span></div>
+
+        <div class="nav-label">Greining</div>
+        <div class="nav-item" data-screen="alerts"><span class="ico">🛰</span> Vélræn vöktun <span class="badge">3</span></div>
+        <div class="nav-item" data-screen="chargers"><span class="ico">⚡</span> Stöðvar</div>
+        <div class="nav-item" data-screen="device"><span class="ico">🔬</span> Djúpgreining stöðvar</div>
+
+        <div class="nav-label">Uppgjör</div>
+        <div class="nav-item" data-screen="ratecard"><span class="ico">💳</span> Taxti &amp; SLA</div>
+        <div class="nav-item" data-screen="payouts"><span class="ico">🧾</span> Reikningar</div>
+
+        <div class="nav-label">Annað</div>
+        <div class="nav-item" data-screen="settings"><span class="ico">⚙</span> Stillingar</div>
+      </nav>
+      <div class="nav-foot">
+        <div class="avatar">SÞ</div>
+        <div>
+          <div style="color:var(--soft);font-weight:600;">Sveinn Þorláksson</div>
+          <div>Tæknimaður · Tengill</div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ============ MAIN ============ -->
+    <div class="main">
+      <div class="topbar">
+        <div class="hamb" id="hamb">☰</div>
+        <div class="who-am-i">
+          Tengill ehf.
+          <span class="pill co">Þjónustuaðili · Sjálfgefinn</span>
+        </div>
+        <div class="switcher" id="orgSwitcher">🔧 <span class="sub">Vinn fyrir:</span> <span id="orgLabel">Öll svæði</span> ▾
+          <div class="menu" id="orgMenu">
+            <div data-org="all">Öll svæði <span class="mini">Tengill sjálfgefinn</span></div>
+            <div data-org="dalvegur">Dalvegur Húsfélag <span class="mini">SLA-samningur</span></div>
+            <div data-org="n1">N1 hf. <span class="mini">eigin stöðvar</span></div>
+          </div>
+        </div>
+        <div class="spacer"></div>
+        <span class="tlink">IS · EN</span>
+        <span class="tlink">Útskrá</span>
+      </div>
+
+      <div class="content">
+
+        <div class="aspbanner">
+          <span class="ic">🔭</span>
+          <div><b>Hugmyndasýn — 0% bakkað í dag (soon · ADR 0032).</b> Öll þessi þjónustuaðila-sýn er framtíðarmynd:
+          hún byggir á því að ADR 0032 (Issue Engine + nágrannahjálp + ticket-spjall) verði smíðað, að <b>Tengill</b> verði
+          skilgreindur sem aðili (P0.5) og að aðgangsgjald/uppgjör (P0.7) verði ákveðið. Ekkert af eftirfarandi er til í
+          baklandi enn: <span class="mono">is_helper</span>, <span class="mono">issue.*</span> heimildir, Issue-Engine leiðir,
+          <span class="mono">ticket_chat_messages</span>, stigmögnun eða uppgjör verktaka. Haltu þessu sem hönnunarmarkmiði — ekki sem væntanlegri útgáfu.</div>
+        </div>
+
+        <!-- ===================== DASHBOARD ===================== -->
+        <section class="screen active" data-screen="dashboard">
+          <div class="head">
+            <div>
+              <h1>Mælaborð <span class="newtag soon">soon · ADR 0032</span></h1>
+              <p>Útköll sem hafa borist þér — ökumaður stigmagnaði og samþykkti kostnað, eða vöktunin tilkynnti bilun á búnaði sem þú þjónustar.</p>
+            </div>
+            <button class="btn primary" data-goto="jobs"><span>🧰</span> Opna útköll</button>
+          </div>
+
+          <div class="grid g4" style="margin-bottom:16px;">
+            <div class="card kpi"><div class="lbl">Opin útköll</div><div class="val grad">2</div><div class="delta bad">1 nýtt · bíður þín</div></div>
+            <div class="card kpi"><div class="lbl">Vöktun · ný mál</div><div class="val">3</div><div class="delta flat">1 hátt forgang</div></div>
+            <div class="card kpi"><div class="lbl">Leyst í mánuðinum</div><div class="val">19</div><div class="delta">▲ meðaltími 3,1 klst</div></div>
+            <div class="card kpi"><div class="lbl">Áætlað uppgjör</div><div class="val">214.300 kr.</div><div class="delta flat">júní · ógreitt</div></div>
+          </div>
+
+          <!-- new escalation — top of mind -->
+          <div class="card" style="margin-bottom:16px;border-color:rgba(255,107,107,.45);">
+            <div class="card-h">
+              <span>🔴 Nýtt útkall — ökumaður stigmagnaði <span class="sub">ZPR074006 · Dalvegur 10–14</span></span>
+              <span class="badge2 s-bad"><span class="dot bg-bad"></span>Bíður viðbragðs</span>
+            </div>
+            <div style="padding:14px 18px;display:flex;gap:18px;align-items:center;flex-wrap:wrap;justify-content:space-between;">
+              <div style="font-size:13px;color:var(--soft);max-width:62ch;">
+                <b>ZPR074006 ræsir ekki hleðslu.</b> Sjálfboðaliði úr húsinu (Stefán, Íbúð 201) reyndi endurræsingu án árangurs. Ökumaður (Alice Jónsdóttir) stigmagnaði til verktaka og <b>samþykkti áætlaðan kostnað 12.900 kr.</b>
+                <div class="sub" style="margin-top:8px;">Hýsill: Dalvegur Húsfélag · SLA-taxti gildir · Eigandi búnaðar: Dalvegur Húsfélag</div>
+              </div>
+              <div style="display:flex;gap:10px;">
+                <button class="btn ok" data-goto="job">Taka að mér</button>
+                <button class="btn ghost" data-goto="job">Skoða</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid g2">
+            <div class="card">
+              <div class="card-h">Útköll í vinnslu <span class="sub">þín verk</span></div>
+              <table class="clickrow">
+                <thead><tr><th>Stöð</th><th>Svæði / hýsill</th><th>Uppruni</th><th>Taxti</th><th>Staða</th></tr></thead>
+                <tbody>
+                  <tr data-goto="job"><td class="mono">ZPR074006</td><td>Dalvegur 10–14 <span class="sub">· Húsfélag</span></td><td><span class="badge2 s-co"><span class="dot bg-co"></span>Stigmögnun</span></td><td>SLA</td><td><span class="badge2 s-bad"><span class="dot bg-bad"></span>Nýtt</span></td></tr>
+                  <tr data-goto="job"><td class="mono">EAS220104</td><td>Bílakjallari <span class="sub">· Húsfélag</span></td><td><span class="badge2 s-warn"><span class="dot bg-warn"></span>Vöktun</span></td><td>SLA</td><td><span class="badge2 s-warn"><span class="dot bg-warn"></span>Í vinnslu</span></td></tr>
+                  <tr data-goto="job"><td class="mono">EAS911042</td><td>N1 — Reykjavík HQ</td><td><span class="badge2 s-co"><span class="dot bg-co"></span>Stigmögnun</span></td><td>Tengill</td><td><span class="badge2 s-live"><span class="dot bg-live"></span>Beðið svars</span></td></tr>
+                </tbody>
+              </table>
+              <div style="padding:12px 18px;"><button class="btn sm ghost" data-goto="jobs">Öll útköll →</button></div>
+            </div>
+
+            <div class="grid" style="align-content:start;">
+              <div class="card" style="border-color:rgba(244,201,93,.35);">
+                <div class="card-h">Vöktun · ný mál <span class="badge">3</span></div>
+                <div style="padding:14px 18px;font-size:13px;color:var(--soft);">
+                  Vélræn vöktun tilkynnti bilanir á búnaði sem þú þjónustar — án mannlegrar greiningar.
+                  <div style="margin-top:12px;"><button class="btn sm" data-goto="alerts">Skoða vöktun →</button></div>
+                </div>
+              </div>
+              <div class="card">
+                <div class="card-h">Taxti í gildi <span class="sub">2 leiðir</span></div>
+                <div style="padding:8px 18px 14px;">
+                  <div class="kv"><span class="k">Dalvegur Húsfélag</span><span><b>SLA-taxti</b> <span class="ro">samningur</span></span></div>
+                  <div class="kv"><span class="k">Annað (sjálfgefið)</span><span>Tengill verðskrá</span></div>
+                  <div style="margin-top:10px;"><button class="btn sm ghost" data-goto="ratecard">Skoða taxta →</button></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ===================== JOBS (call-out queue) ===================== -->
+        <section class="screen" data-screen="jobs">
+          <div class="head">
+            <div>
+              <h1>Útköll</h1>
+              <p>Verk sem komu til þín — annað hvort ökumaður stigmagnaði og samþykkti kostnað, eða vöktunin beindi máli á þig sem þjónustuaðila búnaðarins. Þú getur ekki séð eða breytt málum sem ekki eru þér úthlutuð.</p>
+            </div>
+          </div>
+
+          <div class="tabs">
+            <div class="tab active">Ný · 1</div>
+            <div class="tab">Í vinnslu · 2</div>
+            <div class="tab">Beðið svars · 1</div>
+            <div class="tab">Lokið · 19</div>
+          </div>
+
+          <div class="card">
+            <div class="card-h">Útköll <span class="sub">úthlutuð Tengli</span></div>
+            <table class="clickrow">
+              <thead><tr><th>Stöð</th><th>Vandamál</th><th>Svæði / hýsill</th><th>Uppruni</th><th>Samþ. kostn.</th><th>Forgangur</th><th>Staða</th></tr></thead>
+              <tbody>
+                <tr data-goto="job">
+                  <td class="mono">ZPR074006</td>
+                  <td>Ræsir ekki hleðslu</td>
+                  <td>Dalvegur 10–14 <span class="sub">· Húsfélag</span></td>
+                  <td><span class="badge2 s-co"><span class="dot bg-co"></span>Stigmögnun 5C</span></td>
+                  <td>12.900 kr. <span class="ro">samþ.</span></td>
+                  <td><span class="sev high">Hátt</span></td>
+                  <td><span class="badge2 s-bad"><span class="dot bg-bad"></span>Nýtt</span></td>
+                </tr>
+                <tr data-goto="job">
+                  <td class="mono">EAS220104</td>
+                  <td>Stöð ótengd &gt; 5 klst</td>
+                  <td>Bílakjallari <span class="sub">· Húsfélag</span></td>
+                  <td><span class="badge2 s-warn"><span class="dot bg-warn"></span>Vöktun · charger_offline</span></td>
+                  <td class="sub">SLA · pr. útkall</td>
+                  <td><span class="sev high">Hátt</span></td>
+                  <td><span class="badge2 s-warn"><span class="dot bg-warn"></span>Í vinnslu</span></td>
+                </tr>
+                <tr data-goto="job">
+                  <td class="mono">EAS911042</td>
+                  <td>Hleðsla rofnar (mæligildi)</td>
+                  <td>N1 — Reykjavík HQ</td>
+                  <td><span class="badge2 s-co"><span class="dot bg-co"></span>Stigmögnun 5C</span></td>
+                  <td>9.500 kr. <span class="ro">samþ.</span></td>
+                  <td><span class="sev med">Miðlungs</span></td>
+                  <td><span class="badge2 s-live"><span class="dot bg-live"></span>Beðið svars</span></td>
+                </tr>
+                <tr data-goto="job">
+                  <td class="mono">ZPR074011</td>
+                  <td>Mæligildi ósamræmd</td>
+                  <td>Dalvegur 10–14 <span class="sub">· Húsfélag</span></td>
+                  <td><span class="badge2 s-warn"><span class="dot bg-warn"></span>Vöktun · metering_anomaly</span></td>
+                  <td class="sub">SLA</td>
+                  <td><span class="sev high">Hátt</span></td>
+                  <td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Lokið í dag</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="note">Stigmögnun (5C) þýðir að ökumaður sá kostnaðinn og samþykkti hann áður en málið barst þér — upphæðin er föst og þú samþykkir hana ekki aftur. Vöktunarmál (5D) eru gjaldfærð skv. þjónustusamningi hýsils/eiganda.</div>
+        </section>
+
+        <!-- ===================== JOB DETAIL ===================== -->
+        <section class="screen" data-screen="job">
+          <div class="crumb"><a data-goto="jobs">Útköll</a> / ZPR074006</div>
+          <div class="head">
+            <div class="titlewrap">
+              <div>
+                <h1>ZPR074006 ræsir ekki hleðslu</h1>
+                <p>Dalvegur 10–14 · Type 2 · 22 kW · stigmögnun frá ökumanni (5C) · hýsill: Dalvegur Húsfélag</p>
+              </div>
+            </div>
+            <div style="display:flex;gap:10px;">
+              <button class="btn ghost" id="claimBtn">Taka að mér</button>
+              <button class="btn ok" data-goto="resolve">Leysa &amp; gera upp</button>
+            </div>
+          </div>
+
+          <!-- accepted-cost banner (5C disclosure-before-commit) -->
+          <div class="gate money" style="margin-bottom:16px;">
+            <span class="lock">💸</span>
+            <div>Ökumaður <b>samþykkti áætlaðan kostnað 12.900 kr.</b> áður en málið barst þér (kostnaður birtur fyrst, ADR 0032 §5C). SLA-taxti Dalvegur Húsfélags gildir. Þú gerir upp raunkostnað í lok verks — fari hann fram úr áætlun þarf nýtt samþykki ökumanns.</div>
+          </div>
+
+          <div class="grid g2">
+            <!-- LEFT: context + diagnostics + controls -->
+            <div style="display:grid;gap:16px;align-content:start;">
+              <div class="card">
+                <div class="card-h">Málsupplýsingar</div>
+                <div style="padding:6px 18px 14px;">
+                  <div class="kv"><span class="k">Stöð</span><span class="mono">ZPR074006 · Zaptec Pro</span></div>
+                  <div class="kv"><span class="k">Svæði / uppsetning</span><span>Dalvegur 10–14 · Stigagangur A–C</span></div>
+                  <div class="kv"><span class="k">Hýsill</span><span>Dalvegur Húsfélag</span></div>
+                  <div class="kv"><span class="k">Eigandi búnaðar</span><span>Dalvegur Húsfélag <span class="ro">owner routing</span></span></div>
+                  <div class="kv"><span class="k">Tilkynnt af</span><span>Alice Jónsdóttir <span class="sub">(ökumaður)</span></span></div>
+                  <div class="kv"><span class="k">Reyndi áður</span><span>Stefán Árnason <span class="sub">(hjálpari · endurræsti)</span></span></div>
+                  <div class="kv"><span class="k">Lýsing ökumanns</span><span class="right" style="max-width:58%">Tengill fer í en hleðsla byrjar ekki, ljós blikkar rautt.</span></div>
+                </div>
+              </div>
+
+              <div class="card">
+                <div class="card-h">Greining stöðvar <span class="sub">rauntími · sótt 16:31</span></div>
+                <div style="padding:14px 18px 0;">
+                  <div class="diag">
+                    <div class="cell"><div class="l">OCPP staða</div><div class="v" style="color:var(--red)">Faulted</div></div>
+                    <div class="cell"><div class="l">Tengsl</div><div class="v sm">Nettengd · 1.6J</div></div>
+                    <div class="cell"><div class="l">Síðasti hjartsláttur</div><div class="v sm">fyrir 18 s</div></div>
+                    <div class="cell"><div class="l">Villukóði</div><div class="v sm" style="color:var(--amber)">EVSE_GroundFault</div></div>
+                    <div class="cell"><div class="l">Afl núna</div><div class="v">0,0 kW</div></div>
+                    <div class="cell"><div class="l">Vélbúnaður</div><div class="v sm">FW 6.2.1</div></div>
+                  </div>
+                </div>
+                <div style="padding:14px 18px 4px;">
+                  <div class="sub" style="margin-bottom:8px;">Atburðaannáll stöðvar <span class="ro">events.event_log</span></div>
+                  <div class="log">
+                    <div><span class="ts">16:28:02</span> <span class="ev">StatusNotification</span> <span class="err">Faulted · GroundFault</span></div>
+                    <div><span class="ts">16:27:55</span> <span class="ev">StartTransaction</span> <span class="warn">rejected → fault</span></div>
+                    <div><span class="ts">16:27:51</span> <span class="ev">Authorize</span> <span class="ok">Accepted (idTag EE43C6…)</span></div>
+                    <div><span class="ts">16:21:10</span> <span class="ev">BootNotification</span> <span class="ok">after remote Reset (Stefán)</span></div>
+                    <div><span class="ts">16:19:44</span> <span class="ev">Reset</span> <span class="warn">Soft · requested by helper</span></div>
+                    <div><span class="ts">16:02:31</span> <span class="ev">StatusNotification</span> <span class="err">Faulted · GroundFault</span></div>
+                  </div>
+                </div>
+                <div style="padding:12px 18px 16px;display:flex;gap:10px;flex-wrap:wrap;">
+                  <button class="btn sm primary" data-goto="device">🔬 Djúpgreining stöðvar →</button>
+                  <button class="btn sm ghost" id="fetchLog">↻ Sækja annál aftur</button>
+                  <button class="btn sm ghost">⬇ Hlaða niður greiningu</button>
+                </div>
+              </div>
+
+              <div class="card">
+                <div class="card-h">Fjarstýring stöðvar <span class="sub">þjónustuaðili má aðgerð · scope-gated</span></div>
+                <div class="ctl">
+                  <button class="warn" data-toast="Endurræsing send (Soft Reset) — bíð eftir BootNotification…"><span class="big">↻</span> Endurræsa (Soft)</button>
+                  <button class="warn" data-toast="Endurræsing send (Hard Reset) — stöð fer niður í ~30 s."><span class="big">⟳</span> Endurræsa (Hard)</button>
+                  <button class="go" data-toast="Prófunarhleðsla ræst — fylgstu með OCPP stöðu."><span class="big">⚡</span> Ræsa prófun</button>
+                  <button class="danger" data-toast="Hleðsla stöðvuð."><span class="big">⏻</span> Stöðva hleðslu</button>
+                </div>
+                <div class="note" style="padding:0 18px 16px;">Þjónustuaðili og hýsil-hjálparar mega ræsa / stöðva / endurræsa innan síns aðgangs (ADR 0032 §3). Þú sérð <b>ekki</b> stillingar á orkuverði, samningum hýsils né aðra ökumenn.</div>
+              </div>
+            </div>
+
+            <!-- RIGHT: timeline + chat -->
+            <div style="display:grid;gap:16px;align-content:start;">
+              <div class="card">
+                <div class="card-h">Tímalína <span class="sub">ticket_events</span></div>
+                <div class="timeline">
+                  <div class="tl"><span class="stamp">í dag 14:02</span><span class="pin bg-mut"></span><div>Alice stofnaði málið og bað um aðstoð.</div></div>
+                  <div class="tl"><span class="stamp">14:09</span><span class="pin bg-live"></span><div>Stefán (hjálpari) tók málið og endurræsti stöð.</div></div>
+                  <div class="tl"><span class="stamp">14:31</span><span class="pin bg-warn"></span><div>Endurræsing dugði ekki — villa kom strax aftur.</div></div>
+                  <div class="tl"><span class="stamp">14:38</span><span class="pin bg-bad"></span><div>Alice stigmagnaði til verktaka og <b>samþykkti 12.900 kr.</b></div></div>
+                  <div class="tl"><span class="stamp">14:38</span><span class="pin bg-co"></span><div>Úthlutað Tengli (SLA Dalvegur Húsfélags).</div></div>
+                  <div class="tl"><span class="stamp">núna</span><span class="pin bg-mut"></span><div>Bíður viðbragðs þíns.</div></div>
+                </div>
+              </div>
+
+              <div class="card">
+                <div class="card-h">Spjall <span class="sub">ZPR074006 · þú ↔ ökumaður</span></div>
+                <div class="chat">
+                  <div class="bubble sys">Tengill (þjónustuaðili) gekk í málið · 14:38</div>
+                  <div class="bubble them"><div class="meta">Alice (ökumaður) · 14:39</div>Sæll, stöðin blikkar rautt og ekkert gerist. Stefán reyndi að endurræsa en það kom aftur strax.</div>
+                  <div class="bubble me"><div class="meta">Þú (Tengill) · 14:44</div>Sæl Alice. Ég sé jarðbilun (GroundFault) í annálnum — það er ekki eitthvað sem á að keyra áfram. Ekki nota stöðina þangað til ég kem.</div>
+                  <div class="bubble them"><div class="meta">Alice (ökumaður) · 14:46</div>Skil, ég færi bílinn á ZPR074008 á meðan. Hér er mynd af skjánum.<div class="att">📎 villa-skjar.jpg · 240 kB</div></div>
+                  <div class="bubble me"><div class="meta">Þú (Tengill) · 14:52</div>Takk, það staðfestir málið. Ég kem milli 16–17 í dag og skipti um RCD-einingu. Læt vita þegar ég er á staðnum.</div>
+                </div>
+                <div class="chatbar">
+                  <input class="inp" placeholder="Skrifa skilaboð til ökumanns…" />
+                  <button class="btn ghost sm">📎</button>
+                  <button class="btn primary sm">Senda</button>
+                </div>
+                <div class="note" style="padding:0 18px 16px;">Spjall er bundið þessu máli (ADR 0032 §6). Ökumaður, hjálparinn sem tók málið og þú eruð þátttakendur. Þú sérð hvorki greiðsluupplýsingar ökumanns né önnur mál hússins.</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ===================== RESOLVE / SETTLE ===================== -->
+        <section class="screen" data-screen="resolve">
+          <div class="crumb"><a data-goto="job">ZPR074006</a> / Leysa &amp; gera upp</div>
+          <div class="head">
+            <div>
+              <h1>Leysa &amp; gera upp</h1>
+              <p>Skráðu hvað var gert, lokaðu málinu og gerðu upp raunkostnað. Uppgjör miðast við SLA-taxta hýsils (eða Tengill verðskrá þar sem enginn SLA gildir).</p>
+            </div>
+          </div>
+
+          <div class="grid g2">
+            <div style="display:grid;gap:16px;align-content:start;">
+              <div class="card" style="padding:18px;">
+                <div class="card-h" style="border:0;padding:0 0 14px;">Úrlausn</div>
+                <div class="field"><label>Niðurstaða</label><div class="ro-val">Búnaðarbilun — skipt um íhlut ▾</div></div>
+                <div class="field"><label>Hvað var gert</label><textarea class="inp" rows="3">Jarðbilun (GroundFault) staðfest. Skipt um RCD/jarðlekaliða í ZPR074006. Prófunarhleðsla keyrð — stöð fór í Charging, engin villa. Stöð skilin eftir í Available.</textarea></div>
+                <div class="field" style="margin:0;"><label>Viðhengi <span class="sub">(valkvætt)</span></label>
+                  <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                    <span class="ro">📎 rcd-fyrir.jpg</span><span class="ro">📎 rcd-eftir.jpg</span><button class="btn sm ghost">＋ Bæta við</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="card" style="padding:18px;">
+                <div class="card-h" style="border:0;padding:0 0 8px;">Staða stöðvar eftir verk</div>
+                <div class="toggle"><div class="sw on"></div><div><strong style="font-size:13px;">Stöð prófuð og virk</strong><div class="sub">Prófunarhleðsla keyrð · OCPP staða: Available</div></div></div>
+                <div class="toggle"><div class="sw on"></div><div><strong style="font-size:13px;">Læt hýsil vita</strong><div class="sub">Tilkynning á Dalvegur Húsfélag um lokið verk</div></div></div>
+                <div class="toggle"><div class="sw"></div><div><strong style="font-size:13px;">Eftirfylgni þarf</strong><div class="sub">Opnar nýtt mál ef hakað</div></div></div>
+              </div>
+            </div>
+
+            <div style="display:grid;gap:16px;align-content:start;">
+              <div class="card" style="padding:18px;">
+                <div class="card-h" style="border:0;padding:0 0 6px;">Uppgjör <span class="ro">SLA · Dalvegur Húsfélag</span></div>
+                <div class="li"><span class="desc">Útkall (grunngjald)</span><span class="qty sub">1 ×</span><span class="amt">7.900 kr.</span></div>
+                <div class="li"><span class="desc">Vinna</span><span class="qty"><input value="1,0 klst" /></span><span class="amt">3.200 kr.</span></div>
+                <div class="li"><span class="desc">Varahlutur — RCD-eining</span><span class="qty"><input value="1 stk" /></span><span class="amt">4.800 kr.</span></div>
+                <div class="li"><span class="desc"><button class="btn sm ghost">＋ Bæta við línu</button></span><span class="qty"></span><span class="amt"></span></div>
+                <div class="total"><span>Samtals</span><span>15.900 kr.</span></div>
+
+                <div class="gate money" style="margin-top:14px;">
+                  <span class="lock">⚠</span>
+                  <div>Raunkostnaður (<b>15.900 kr.</b>) er hærri en samþykkt áætlun (<b>12.900 kr.</b>). Mismunur 3.000 kr. — ökumaður verður beðinn um <b>nýtt samþykki</b> áður en hægt er að loka. Engin upphæð umfram samþykki er rukkuð án staðfestingar.</div>
+                </div>
+
+                <div style="margin-top:16px;display:flex;gap:10px;">
+                  <button class="btn primary full" data-toast="Beiðni um nýtt samþykki send á ökumann (15.900 kr.).">Senda til samþykkis</button>
+                </div>
+                <div class="note">Ef þú heldur þig innan 12.900 kr. lokast málið strax án nýs samþykkis.</div>
+              </div>
+
+              <div class="card" style="padding:18px;">
+                <div class="card-h" style="border:0;padding:0 0 10px;">Hver greiðir?</div>
+                <div class="kv"><span class="k">Greiðandi</span><span><b>Alice Jónsdóttir</b> <span class="sub">(ökumaður sem stigmagnaði)</span></span></div>
+                <div class="kv"><span class="k">Innheimta</span><span>Straumvakt fyrir hönd Tengils</span></div>
+                <div class="kv"><span class="k">Birtist á</span><span>eftirá-reikningi ökumanns</span></div>
+                <div class="note">Greiðsla milli ökumanns og verktaka fer í gegnum Straumvakt sem umboðsaðila (ADR 0031). Þú sérð ekki kortaupplýsingar.</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ===================== ALERTS (detection rules) ===================== -->
+        <section class="screen" data-screen="alerts">
+          <div class="head">
+            <div>
+              <h1>Vélræn vöktun</h1>
+              <p>Mál sem vöktunin stofnaði sjálfkrafa út frá merkjum — án mannlegrar greiningar. Aðeins búnaður sem þú þjónustar birtist hér; reglur eru útskýranlegar svo þú sérð af hverju málið kom.</p>
+            </div>
+            <span class="ro">5 grunnreglur · ADR 0032 §4</span>
+          </div>
+
+          <div class="ribbon">Vöktun beinir bilunum á eiganda búnaðar fyrst (owner-first, ADR 0008): tengi-, mæli- og aðgangsvillur fara á eiganda/þjónustuaðila — aldrei á nágranna. Ökumaður sér þessi mál ekki.</div>
+
+          <div class="card">
+            <div class="card-h">Opin vöktunarmál <span class="badge">3</span></div>
+            <table class="clickrow">
+              <thead><tr><th>Regla</th><th>Efni</th><th>Svæði / hýsill</th><th>Flokkur</th><th>Forgangur</th><th>Greint</th><th>Staða</th></tr></thead>
+              <tbody>
+                <tr data-goto="job">
+                  <td class="mono">charger_offline</td>
+                  <td>EAS220104 — enginn hjartsláttur &gt; 5 mín</td>
+                  <td>Bílakjallari <span class="sub">· Húsfélag</span></td>
+                  <td><span class="badge2 s-bad"><span class="dot bg-bad"></span>physical</span></td>
+                  <td><span class="sev high">Hátt</span></td>
+                  <td class="sub">fyrir 22 mín</td>
+                  <td><span class="badge2 s-warn"><span class="dot bg-warn"></span>Í vinnslu</span></td>
+                </tr>
+                <tr data-goto="job">
+                  <td class="mono">metering_anomaly</td>
+                  <td>ZPR074011 — mæligildi ekki einhalla</td>
+                  <td>Dalvegur 10–14 <span class="sub">· Húsfélag</span></td>
+                  <td><span class="badge2 s-warn"><span class="dot bg-warn"></span>metering</span></td>
+                  <td><span class="sev high">Hátt</span></td>
+                  <td class="sub">fyrir 1 klst</td>
+                  <td><span class="badge2 s-bad"><span class="dot bg-bad"></span>Nýtt</span></td>
+                </tr>
+                <tr data-goto="job">
+                  <td class="mono">stuck_session</td>
+                  <td>EAS220102 — 41 klst án mæliframvindu</td>
+                  <td>Bílakjallari <span class="sub">· Húsfélag</span></td>
+                  <td><span class="badge2 s-warn"><span class="dot bg-warn"></span>physical</span></td>
+                  <td><span class="sev med">Miðlungs</span></td>
+                  <td class="sub">fyrir 3 klst</td>
+                  <td><span class="badge2 s-bad"><span class="dot bg-bad"></span>Nýtt</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="card" style="margin-top:16px;">
+            <div class="card-h">Fylgst er með — engin frávik <span class="sub">síðustu 24 klst</span></div>
+            <table>
+              <thead><tr><th>Regla</th><th>Hvað hún vaktar</th><th>Þröskuldur</th><th>Staða</th></tr></thead>
+              <tbody>
+                <tr><td class="mono">site_connectivity</td><td>Margar stöðvar detta út samtímis á svæði</td><td class="sub">≥ 3 stöðvar / 2 mín</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Í lagi</span></td></tr>
+                <tr><td class="mono">auth_failure_burst</td><td>Höfnun á auðkenningu yfir mörkum</td><td class="sub">&gt; 10 / 5 mín</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Í lagi</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="note">Fyrsta útgáfa vöktunar er <b>aðeins greining</b> — hún stofnar útskýranleg mál en framkvæmir engar sjálfvirkar lagfæringar. Þröskuldar eru stilltir per hýsil.</div>
+        </section>
+
+        <!-- ===================== CHARGERS (serviced fleet) ===================== -->
+        <section class="screen" data-screen="chargers">
+          <div class="head">
+            <div>
+              <h1>Stöðvar í þjónustu</h1>
+              <p>Búnaður sem þú þjónustar — innan þíns aðgangs. Þú sérð stöðu og greiningu en ekki orkuverð, samninga né ökumenn hýsilsins.</p>
+            </div>
+          </div>
+
+          <div class="tabs" data-tabset>
+            <div class="tab active">Dalvegur 10–14 · 12</div>
+            <div class="tab">Bílakjallari · 4</div>
+            <div class="tab">N1 — Reykjavík HQ · 22</div>
+          </div>
+
+          <div class="card" style="margin-bottom:16px;">
+            <div class="card-h">Staða stöðva <span class="sub">Dalvegur 10–14 · rauntími</span></div>
+            <div class="conns">
+              <div class="conn ok"><div><div class="id">02</div>Laus</div></div>
+              <div class="conn live"><div><div class="id">03</div>Hleður</div></div>
+              <div class="conn ok"><div><div class="id">04</div>Laus</div></div>
+              <div class="conn ok"><div><div class="id">05</div>Laus</div></div>
+              <div class="conn bad" data-goto="job"><div><div class="id">06</div>Bilun</div></div>
+              <div class="conn live"><div><div class="id">07</div>Hleður</div></div>
+              <div class="conn warn"><div><div class="id">08</div>Undirb.</div></div>
+              <div class="conn ok"><div><div class="id">09</div>Laus</div></div>
+              <div class="conn warn" data-goto="job"><div><div class="id">11</div>Mæling</div></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-h">Stöðvar <span class="sub">smelltu á stöð fyrir djúpgreiningu · Dalvegur 10–14</span></div>
+            <table class="clickrow">
+              <thead><tr><th>Stöð</th><th>Gerð</th><th>Vélbúnaður</th><th>OCPP</th><th>Síðasti hjartsláttur</th><th>Staða</th><th></th></tr></thead>
+              <tbody>
+                <tr data-goto="device"><td class="mono">ZPR074002</td><td>Zaptec Pro · 22 kW</td><td class="sub">FW 6.2.1</td><td class="sub">1.6J</td><td class="sub">fyrir 9 s</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Available</span></td><td class="right"><span class="sub">🔬</span></td></tr>
+                <tr data-goto="device"><td class="mono">ZPR074003</td><td>Zaptec Pro · 22 kW</td><td class="sub">FW 6.2.1</td><td class="sub">1.6J</td><td class="sub">fyrir 4 s</td><td><span class="badge2 s-live"><span class="dot bg-live"></span>Charging</span></td><td class="right"><span class="sub">🔬</span></td></tr>
+                <tr data-goto="device"><td class="mono">ZPR074006</td><td>Zaptec Pro · 22 kW</td><td class="sub">FW 6.2.1</td><td class="sub">1.6J</td><td class="sub">fyrir 18 s</td><td><span class="badge2 s-bad"><span class="dot bg-bad"></span>Faulted</span></td><td class="right"><span class="sub">🔬</span></td></tr>
+                <tr data-goto="device"><td class="mono">ZPR074008</td><td>Zaptec Pro · 22 kW</td><td class="sub">FW 6.2.1</td><td class="sub">1.6J</td><td class="sub">fyrir 2 s</td><td><span class="badge2 s-warn"><span class="dot bg-warn"></span>Preparing</span></td><td class="right"><span class="sub">🔬</span></td></tr>
+                <tr data-goto="device"><td class="mono">ZPR074011</td><td>Zaptec · CCS 50 kW</td><td class="sub">FW 6.1.0</td><td class="sub">1.6J</td><td class="sub">fyrir 6 s</td><td><span class="badge2 s-warn"><span class="dot bg-warn"></span>Mæli-frávik</span></td><td class="right"><span class="sub">🔬</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="note">Þú sérð stöðvar þvert á hýsla sem þú þjónustar, en aðeins tæknilega stöðu þeirra. Allt sem snýr að samningum, verði og ökumönnum er hýsilsins (eða Straumvaktar) — ekki þitt.</div>
+        </section>
+
+        <!-- ===================== DEVICE DEEP-DIVE ===================== -->
+        <section class="screen" data-screen="device">
+          <div class="crumb"><a data-goto="chargers">Stöðvar</a> / ZPR074006 / Djúpgreining</div>
+          <div class="head">
+            <div class="titlewrap">
+              <div>
+                <h1>ZPR074006 <span class="sub" style="font-size:14px;">· djúpgreining</span></h1>
+                <p>Zaptec Pro · Dalvegur 10–14 · Stigagangur A–C · raðnr. ZAP-PRO-074006 · full tæknileg sýn fyrir þjónustuaðila.</p>
+              </div>
+            </div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+              <span class="badge2 s-bad"><span class="dot bg-bad"></span>Faulted · GroundFailure</span>
+              <button class="btn sm ghost" data-goto="job">↩ Aftur á útkall</button>
+            </div>
+          </div>
+
+          <div class="subtabs" data-subtabset>
+            <div class="subtab active" data-subtab="overview">Yfirlit</div>
+            <div class="subtab" data-subtab="electrical">Rafmagn</div>
+            <div class="subtab" data-subtab="raw">Hrá OCPP-skrá <span class="badge">live</span></div>
+            <div class="subtab" data-subtab="config">Stillingar</div>
+            <div class="subtab" data-subtab="firmware">Vélbúnaður &amp; greining</div>
+            <div class="subtab" data-subtab="history">Saga &amp; eign</div>
+          </div>
+
+          <!-- ---------- OVERVIEW ---------- -->
+          <div class="subpanel active" data-subpanel="overview">
+            <div class="grid g2" style="margin-bottom:16px;">
+              <div class="card">
+                <div class="card-h">Auðkenni búnaðar <span class="sub">BootNotification</span></div>
+                <div style="padding:6px 18px 14px;">
+                  <div class="kv"><span class="k">Raðnúmer</span><span class="mono">ZAP-PRO-074006</span></div>
+                  <div class="kv"><span class="k">Framleiðandi / gerð</span><span>Zaptec · Pro (Type 2)</span></div>
+                  <div class="kv"><span class="k">Vélbúnaður (FW)</span><span class="mono">6.2.1 <span class="ro">nýjast 6.3.0</span></span></div>
+                  <div class="kv"><span class="k">Bootloader</span><span class="mono">2.0.4</span></div>
+                  <div class="kv"><span class="k">OCPP</span><span class="mono">1.6J · JSON/WS</span></div>
+                  <div class="kv"><span class="k">Mælir (MID)</span><span class="mono">EM-074006 · sn 81final2233</span></div>
+                  <div class="kv"><span class="k">SIM (ICCID)</span><span class="mono">8935401…7741</span></div>
+                  <div class="kv"><span class="k">Tengi / afl</span><span>Type 2 · 1×32A · 22 kW</span></div>
+                </div>
+              </div>
+
+              <div class="card">
+                <div class="card-h">Tengsl &amp; heilsa <span class="sub">rauntími</span></div>
+                <div style="padding:16px 18px;display:flex;gap:18px;align-items:center;">
+                  <div class="hring"><div class="inner"><div class="big">58</div><div class="small">Heilsa</div></div></div>
+                  <div style="flex:1;display:grid;gap:7px;">
+                    <div class="kv" style="padding:5px 0;"><span class="k">WebSocket</span><span><span class="badge2 s-ok"><span class="dot bg-ok"></span>Tengd</span></span></div>
+                    <div class="kv" style="padding:5px 0;"><span class="k">Svartími (RTT)</span><span class="mono">42 ms</span></div>
+                    <div class="kv" style="padding:5px 0;"><span class="k">Sendistyrkur (RSSI)</span><span class="mono">−71 dBm · 4G</span></div>
+                    <div class="kv" style="padding:5px 0;"><span class="k">Uppitími</span><span>6 d 04:11</span></div>
+                    <div class="kv" style="padding:5px 0;"><span class="k">Endurtengingar (24 klst)</span><span class="drift" style="color:var(--amber)">7</span></div>
+                  </div>
+                </div>
+                <div class="gate" style="margin:0 18px 16px;">
+                  <span class="lock">✨</span>
+                  <div><span class="nu">NÝJUNG</span> Sjálfvirk greining: <b>GroundFailure</b> hefur endurtekið sig 4× á 30 mín — líklegasta orsök er <b>jarðlekaliði (RCD)</b>. Sjá þekkingargrunn undir „Saga &amp; eign“.</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-h">Tengi (connectors) <span class="sub">StatusNotification per tengi</span></div>
+              <div style="padding:14px 18px 4px;">
+                <div class="diag">
+                  <div class="cell"><div class="l">Tengi 1 · staða</div><div class="v" style="color:var(--red)">Faulted</div></div>
+                  <div class="cell"><div class="l">Villukóði</div><div class="v sm" style="color:var(--amber)">GroundFailure</div></div>
+                  <div class="cell"><div class="l">CP / PP merki</div><div class="v sm">State E · 0 V</div></div>
+                  <div class="cell"><div class="l">Lás (cable lock)</div><div class="v sm">Læstur</div></div>
+                  <div class="cell"><div class="l">Afl núna</div><div class="v">0,0 kW</div></div>
+                  <div class="cell"><div class="l">Innri hiti</div><div class="v sm">37 °C</div></div>
+                </div>
+              </div>
+              <div style="padding:14px 18px 16px;display:flex;gap:10px;flex-wrap:wrap;">
+                <button class="btn sm ghost" data-toast="TriggerMessage(StatusNotification) sent — bíð svars…">↻ Endurlesa stöðu</button>
+                <button class="btn sm ghost" data-toast="UnlockConnector(1) sent.">🔓 Aflæsa tengli</button>
+                <button class="btn sm ghost" data-goto="device" onclick="document.querySelector('[data-subtab=raw]').click()">⟶ Hrá skrá</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- ---------- ELECTRICAL ---------- -->
+          <div class="subpanel" data-subpanel="electrical">
+            <div class="grid g2" style="margin-bottom:16px;">
+              <div class="card">
+                <div class="card-h">Rauntíma rafmagn <span class="sub">MeterValues · sótt fyrir 4 s</span></div>
+                <div style="padding:8px 18px 14px;">
+                  <div class="phase"><span class="lbl">L1</span><span class="track"><span style="width:2%"></span></span><span class="pval">228,4 V · 0,0 A</span></div>
+                  <div class="phase"><span class="lbl">L2</span><span class="track"><span style="width:2%"></span></span><span class="pval">229,1 V · 0,0 A</span></div>
+                  <div class="phase"><span class="lbl">L3</span><span class="track"><span style="width:2%"></span></span><span class="pval">227,8 V · 0,0 A</span></div>
+                  <div class="phase"><span class="lbl">PE</span><span class="track"><span class="warn" style="width:64%"></span></span><span class="pval">jarðleki 31 mA</span></div>
+                </div>
+                <div class="gate money" style="margin:0 18px 16px;">
+                  <span class="lock">⚠</span>
+                  <div>Jarðlekastraumur <b>31 mA</b> mælist á PE — yfir 30 mA mörkum RCD. Spenna eðlileg, enginn hleðslustraumur (stöð í Faulted). Staðfestir jarðbilun fremur en aflgjafa.</div>
+                </div>
+              </div>
+
+              <div class="card">
+                <div class="card-h">Mæligildi &amp; merki</div>
+                <div style="padding:6px 18px 14px;">
+                  <div class="kv"><span class="k">Virkt afl (P)</span><span class="mono">0,00 kW</span></div>
+                  <div class="kv"><span class="k">Aflstuðull (PF)</span><span class="mono">—</span></div>
+                  <div class="kv"><span class="k">Tíðni</span><span class="mono">50,0 Hz</span></div>
+                  <div class="kv"><span class="k">Mælir (heild)</span><span class="mono">4 812,663 kWh</span></div>
+                  <div class="kv"><span class="k">Control Pilot</span><span class="mono">State E (villa) · 0 V</span></div>
+                  <div class="kv"><span class="k">Proximity Pilot</span><span class="mono">1500 Ω · 20 A kapall</span></div>
+                  <div class="kv"><span class="k">RCD / RCM</span><span style="color:var(--red)">Útleyst</span></div>
+                  <div class="kv"><span class="k">Liðar (relay)</span><span>Opnir (öryggi)</span></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-h">Afl síðustu 24 klst <span class="sub">samþjöppuð MeterValues · kW</span></div>
+              <div style="padding:18px;">
+                <div class="spark">
+                  <i style="height:62%"></i><i style="height:71%"></i><i style="height:48%"></i><i style="height:80%"></i><i style="height:90%"></i><i style="height:74%"></i><i style="height:36%"></i><i style="height:22%"></i><i style="height:14%"></i><i style="height:10%"></i><i style="height:55%"></i><i style="height:68%"></i><i style="height:77%"></i><i style="height:84%"></i><i style="height:60%"></i><i style="height:40%"></i><i style="height:30%"></i><i style="height:18%"></i><i style="height:6%"></i><i style="height:4%;background:var(--red)"></i><i style="height:4%;background:var(--red)"></i><i style="height:4%;background:var(--red)"></i><i style="height:4%;background:var(--red)"></i><i style="height:4%;background:var(--red)"></i>
+                </div>
+                <div class="sub" style="margin-top:10px;">Rautt = stöð í Faulted (frá 16:02). Ekkert afl dregið síðan. Engin mæliframvinda — útilokar „stuck session“.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ---------- RAW OCPP LOG ---------- -->
+          <div class="subpanel" data-subpanel="raw">
+            <div class="ribbon">Beinn OCPP 1.6J rammastraumur milli stöðvar og CSMS. ▲ = stöð → CSMS · ▼ = CSMS → stöð. Smelltu á ramma til að sjá fullt JSON. Allt sem þú sendir héðan er skráð í aðgerðaannál (Saga &amp; eign).</div>
+
+            <div class="grid g2">
+              <div class="card" style="align-content:start;">
+                <div class="ftoolbar">
+                  <span class="chip on">Allt</span>
+                  <span class="chip">▲ Inn</span>
+                  <span class="chip">▼ Út</span>
+                  <span class="chip">Villur</span>
+                  <span style="flex:1"></span>
+                  <span class="badge2 s-live"><span class="dot bg-live"></span>Live</span>
+                  <button class="btn sm ghost">⏸ Frysta</button>
+                  <button class="btn sm ghost">⬇ Export</button>
+                </div>
+                <div class="frames">
+                  <div class="frame open">
+                    <span class="ts">16:28:02</span><span class="dir up">▲</span>
+                    <div class="col">
+                      <div class="act">StatusNotification <span class="act err">Faulted · GroundFailure</span><span class="typ">CALL · 2</span></div>
+                      <div class="payload">[2,"a3f1c","StatusNotification",{
+  "connectorId": 1,
+  "errorCode": "GroundFailure",
+  "status": "Faulted",
+  "info": "RCM tripped",
+  "timestamp": "2026-06-04T16:28:02Z",
+  "vendorErrorCode": "ZAP_RCM_03"
+}]</div>
+                    </div>
+                    <span class="caret">▾</span>
+                  </div>
+                  <div class="frame">
+                    <span class="ts">16:28:02</span><span class="dir dn">▼</span>
+                    <div class="col"><div class="act">StatusNotification.conf<span class="typ">CALLRESULT · 3</span></div>
+                      <div class="payload">[3,"a3f1c",{}]</div></div>
+                    <span class="caret">▸</span>
+                  </div>
+                  <div class="frame">
+                    <span class="ts">16:27:55</span><span class="dir up">▲</span>
+                    <div class="col"><div class="act">StartTransaction <span class="act err">→ fault</span><span class="typ">CALL · 2</span></div>
+                      <div class="payload">[2,"a3f0e","StartTransaction",{
+  "connectorId": 1,
+  "idTag": "EE43C609263CC7",
+  "meterStart": 4812663,
+  "timestamp": "2026-06-04T16:27:55Z"
+}]</div></div>
+                    <span class="caret">▸</span>
+                  </div>
+                  <div class="frame">
+                    <span class="ts">16:27:55</span><span class="dir dn">▼</span>
+                    <div class="col"><div class="act">StartTransaction.conf <span class="act ok">Accepted · tx 90412</span><span class="typ">CALLRESULT · 3</span></div>
+                      <div class="payload">[3,"a3f0e",{
+  "transactionId": 90412,
+  "idTagInfo": { "status": "Accepted" }
+}]</div></div>
+                    <span class="caret">▸</span>
+                  </div>
+                  <div class="frame">
+                    <span class="ts">16:27:51</span><span class="dir up">▲</span>
+                    <div class="col"><div class="act">Authorize <span class="act ok">Accepted</span><span class="typ">CALL · 2</span></div>
+                      <div class="payload">[2,"a3eff","Authorize",{ "idTag": "EE43C609263CC7" }]</div></div>
+                    <span class="caret">▸</span>
+                  </div>
+                  <div class="frame">
+                    <span class="ts">16:27:20</span><span class="dir up">▲</span>
+                    <div class="col"><div class="act">MeterValues <span class="sub">L1/L2/L3 · 0 A</span><span class="typ">CALL · 2</span></div>
+                      <div class="payload">[2,"a3ef0","MeterValues",{
+  "connectorId": 1,
+  "meterValue": [{
+    "timestamp": "2026-06-04T16:27:20Z",
+    "sampledValue": [
+      { "measurand": "Voltage", "phase": "L1", "value": "228.4", "unit": "V" },
+      { "measurand": "Current.Import", "phase": "L1", "value": "0.0", "unit": "A" },
+      { "measurand": "Power.Active.Import", "value": "0.0", "unit": "kW" },
+      { "measurand": "Energy.Active.Import.Register", "value": "4812663", "unit": "Wh" },
+      { "measurand": "Temperature", "value": "37", "unit": "Celsius" }
+    ]
+  }]
+}]</div></div>
+                    <span class="caret">▸</span>
+                  </div>
+                  <div class="frame">
+                    <span class="ts">16:26:50</span><span class="dir up">▲</span>
+                    <div class="col"><div class="act">Heartbeat<span class="typ">CALL · 2</span></div>
+                      <div class="payload">[2,"a3ee1","Heartbeat",{}]</div></div>
+                    <span class="caret">▸</span>
+                  </div>
+                  <div class="frame">
+                    <span class="ts">16:21:10</span><span class="dir up">▲</span>
+                    <div class="col"><div class="act">BootNotification <span class="sub">eftir Reset</span><span class="typ">CALL · 2</span></div>
+                      <div class="payload">[2,"a3d22","BootNotification",{
+  "chargePointVendor": "Zaptec",
+  "chargePointModel": "Pro",
+  "firmwareVersion": "6.2.1",
+  "chargePointSerialNumber": "ZAP-PRO-074006",
+  "iccid": "8935401...7741",
+  "meterSerialNumber": "81final2233"
+}]</div></div>
+                    <span class="caret">▸</span>
+                  </div>
+                  <div class="frame">
+                    <span class="ts">16:19:44</span><span class="dir dn">▼</span>
+                    <div class="col"><div class="act">Reset <span class="sub">Soft · af hjálpara</span><span class="typ">CALL · 2</span></div>
+                      <div class="payload">[2,"srv-0091","Reset",{ "type": "Soft" }]</div></div>
+                    <span class="caret">▸</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- command console -->
+              <div style="display:grid;gap:16px;align-content:start;">
+                <div class="card">
+                  <div class="card-h">Skipanir til stöðvar <span class="sub">OCPP CALL · skráð</span></div>
+                  <div class="cmd">
+                    <button data-toast="TriggerMessage(StatusNotification) sent.">Endurlesa stöðu<span class="k">TriggerMessage</span></button>
+                    <button data-toast="TriggerMessage(MeterValues) sent.">Endurlesa mæligildi<span class="k">TriggerMessage</span></button>
+                    <button data-toast="TriggerMessage(BootNotification) sent.">Endurlesa auðkenni<span class="k">BootNotification</span></button>
+                    <button data-toast="GetConfiguration sent — sjá Stillingar.">Sækja stillingar<span class="k">GetConfiguration</span></button>
+                    <button data-toast="GetDiagnostics sent — bundle hleðst upp.">Sækja greiningarskrá<span class="k">GetDiagnostics</span></button>
+                    <button data-toast="UnlockConnector(1) sent.">Aflæsa tengli<span class="k">UnlockConnector</span></button>
+                    <button class="danger" data-toast="ChangeAvailability(Inoperative) sent — stöð tekin úr rekstri.">Taka úr rekstri<span class="k">ChangeAvailability</span></button>
+                    <button class="danger" data-toast="Reset(Hard) sent — stöð fer niður ~30 s.">Endurræsa (Hard)<span class="k">Reset</span></button>
+                  </div>
+                  <div class="note" style="padding:0 18px 16px;">Hverri skipun er svarað með CALLRESULT/CALLERROR sem birtist í rammaskránni. <span class="nu">NÝJUNG</span> „Senda hráa skipun“ (sérfræðihamur) er falin að baki tvöfaldri staðfestingu.</div>
+                </div>
+                <div class="card" style="padding:0;">
+                  <div class="card-h">Sérfræðihamur <span class="sub">hrá OCPP skipun</span></div>
+                  <div style="padding:14px 18px;">
+                    <div class="field" style="margin:0;"><label>Hrátt CALL payload</label><textarea class="inp" rows="2" style="font-family:ui-monospace,monospace;">[2,"tech-01","ChangeConfiguration",{"key":"WebSocketPingInterval","value":"60"}]</textarea></div>
+                    <button class="btn sm danger" style="margin-top:10px;" data-toast="Staðfestu sérfræðiskipun (tvöföld staðfesting).">⚠ Senda hráa skipun</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ---------- CONFIG ---------- -->
+          <div class="subpanel" data-subpanel="config">
+            <div class="ribbon warn">⚠ 2 lyklar víkja frá grunnstillingu (config drift). <span class="nu">NÝJUNG</span> Stöðin er borin saman við „gylltu“ grunnstillinguna fyrir Zaptec Pro á þessu svæði — frávik eru lituð.</div>
+
+            <div class="card">
+              <div class="card-h">
+                <span>Stillingar stöðvar <span class="sub">GetConfiguration · 1.6 Core</span></span>
+                <div style="display:flex;gap:8px;">
+                  <button class="btn sm ghost" data-toast="GetConfiguration sent — endurles.">↻ Endurlesa</button>
+                  <button class="btn sm ghost">↺ Bera við grunn</button>
+                  <button class="btn sm primary" data-toast="ChangeConfiguration sent fyrir breytta lykla.">Vista breytingar</button>
+                </div>
+              </div>
+              <table class="cfg">
+                <thead><tr><th>Lykill</th><th>Gildi</th><th>Grunnur</th><th>Aðgangur</th><th></th></tr></thead>
+                <tbody>
+                  <tr><td class="mono">HeartbeatInterval</td><td><input value="300" /></td><td class="sub mono">300</td><td><span class="ro">RW</span></td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>OK</span></td></tr>
+                  <tr class="drift"><td class="mono">WebSocketPingInterval</td><td><input value="30" /></td><td class="sub mono">60</td><td><span class="ro">RW</span></td><td><span class="badge2 s-warn"><span class="dot bg-warn"></span>Frávik</span></td></tr>
+                  <tr><td class="mono">MeterValueSampleInterval</td><td><input value="60" /></td><td class="sub mono">60</td><td><span class="ro">RW</span></td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>OK</span></td></tr>
+                  <tr><td class="mono">MeterValuesSampledData</td><td><input value="Energy.Active.Import.Register,Power.Active.Import,Current.Import,Voltage,Temperature" /></td><td class="sub mono">= grunni</td><td><span class="ro">RW</span></td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>OK</span></td></tr>
+                  <tr><td class="mono">ConnectionTimeOut</td><td><input value="60" /></td><td class="sub mono">60</td><td><span class="ro">RW</span></td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>OK</span></td></tr>
+                  <tr><td class="mono">AuthorizeRemoteTxRequests</td><td><input value="true" /></td><td class="sub mono">true</td><td><span class="ro">RW</span></td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>OK</span></td></tr>
+                  <tr class="drift"><td class="mono">LocalPreAuthorize</td><td><input value="false" /></td><td class="sub mono">true</td><td><span class="ro">RW</span></td><td><span class="badge2 s-warn"><span class="dot bg-warn"></span>Frávik</span></td></tr>
+                  <tr><td class="mono">ResetRetries</td><td><input value="3" /></td><td class="sub mono">3</td><td><span class="ro">RW</span></td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>OK</span></td></tr>
+                  <tr><td class="mono">NumberOfConnectors</td><td class="mono">1</td><td class="sub mono">1</td><td><span class="ro">RO</span></td><td><span class="badge2 s-mut"><span class="dot bg-mut"></span>Læst</span></td></tr>
+                  <tr><td class="mono">SupportedFeatureProfiles</td><td class="mono sub">Core, FirmwareManagement, LocalAuthListManagement, RemoteTrigger, SmartCharging</td><td class="sub mono">—</td><td><span class="ro">RO</span></td><td><span class="badge2 s-mut"><span class="dot bg-mut"></span>Læst</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="note">Sumir lyklar (t.d. CSMS-slóð, öryggislyklar) eru <b>aðeins-lesnir</b> fyrir þjónustuaðila og krefjast samþykkis eiganda/rekstraraðila. Skrifaðgerðir eru skráðar í aðgerðaannál með notanda og niðurstöðu.</div>
+          </div>
+
+          <!-- ---------- FIRMWARE & DIAGNOSTICS ---------- -->
+          <div class="subpanel" data-subpanel="firmware">
+            <div class="grid g2" style="margin-bottom:16px;">
+              <div class="card">
+                <div class="card-h">Vélbúnaður (firmware)</div>
+                <div style="padding:6px 18px 14px;">
+                  <div class="kv"><span class="k">Núverandi</span><span class="mono">6.2.1</span></div>
+                  <div class="kv"><span class="k">Nýjast í boði</span><span class="mono" style="color:var(--green)">6.3.0 <span class="ro">öryggisbót</span></span></div>
+                  <div class="kv"><span class="k">Síðasta uppfærsla</span><span class="sub">12. apr 2026 · tókst</span></div>
+                  <div class="kv"><span class="k">FirmwareStatus</span><span><span class="badge2 s-ok"><span class="dot bg-ok"></span>Idle</span></span></div>
+                </div>
+                <div style="padding:0 18px 16px;display:flex;gap:10px;flex-wrap:wrap;">
+                  <button class="btn sm primary" data-toast="UpdateFirmware(6.3.0) sett í biðröð — sækir á rólegum tíma.">⬆ Uppfæra í 6.3.0</button>
+                  <div class="toggle" style="padding:6px 0;"><div class="sw on"></div><div class="sub">Sjálfvirk afturköllun ef boot mistekst</div></div>
+                </div>
+                <div class="note" style="padding:0 18px 16px;"><span class="nu">NÝJUNG</span> Uppfærsla keyrir aðeins þegar stöð er laus; afturköllun (rollback) í 6.2.1 ef BootNotification berst ekki innan 5 mín.</div>
+              </div>
+
+              <div class="card">
+                <div class="card-h">Greiningarskrá <span class="sub">GetDiagnostics</span></div>
+                <div style="padding:14px 18px;">
+                  <button class="btn full" data-toast="GetDiagnostics sent — stöð hleður upp bundle í R2.">📦 Sækja greiningar-bundle af stöð</button>
+                  <div class="note">Stöðin hleður upp annál + kjarnaskrá. DiagnosticsStatusNotification fylgir framvindu.</div>
+                  <table style="margin-top:8px;">
+                    <thead><tr><th>Skrá</th><th>Dags.</th><th>Staða</th></tr></thead>
+                    <tbody>
+                      <tr><td class="mono">diag-074006-1628.tar.gz</td><td class="sub">í dag 16:32</td><td><span class="badge2 s-live"><span class="dot bg-live"></span>Uploading 64%</span></td></tr>
+                      <tr><td class="mono">diag-074006-0412.tar.gz</td><td class="sub">12. apr</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Tilbúin</span></td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-h">Rekstrarstýring <span class="sub">availability &amp; reset</span></div>
+              <div class="ctl">
+                <button class="warn" data-toast="ChangeAvailability(Inoperative) sent.">⏸ Taka úr rekstri</button>
+                <button class="go" data-toast="ChangeAvailability(Operative) sent.">▶ Setja í rekstur</button>
+                <button class="warn" data-toast="Reset(Soft) sent.">↻ Endurræsa (Soft)</button>
+                <button class="danger" data-toast="Reset(Hard) sent — ~30 s niðri.">⟳ Endurræsa (Hard)</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- ---------- HISTORY & ASSET ---------- -->
+          <div class="subpanel" data-subpanel="history">
+            <div class="grid g2" style="margin-bottom:16px;">
+              <div class="card">
+                <div class="card-h">Eignaskrá <span class="sub">asset record</span></div>
+                <div style="padding:6px 18px 14px;">
+                  <div class="kv"><span class="k">Raðnúmer</span><span class="mono">ZAP-PRO-074006</span></div>
+                  <div class="kv"><span class="k">Eigandi búnaðar</span><span>Dalvegur Húsfélag</span></div>
+                  <div class="kv"><span class="k">Uppsett</span><span>14. nóv 2024 · af Tengli</span></div>
+                  <div class="kv"><span class="k">Ábyrgð til</span><span>14. nóv 2027 <span class="ro">í gildi</span></span></div>
+                  <div class="kv"><span class="k">Rafrás / vörn</span><span>Grein B-12 · 32A C-vari · jafnvægishópur DAL-A</span></div>
+                  <div class="kv"><span class="k">Útköll alls</span><span>3 (þar af 1 opið)</span></div>
+                  <div class="kv"><span class="k">Liða-rofar (lífstími)</span><span class="mono">18 412 <span class="drift" style="color:var(--amber)">· slit 61%</span></span></div>
+                </div>
+              </div>
+
+              <div class="card">
+                <div class="card-h">Aðgerðaannáll <span class="sub">skipanir &amp; niðurstöður</span></div>
+                <table>
+                  <thead><tr><th>Tími</th><th>Aðgerð</th><th>Notandi</th><th>Niðurst.</th></tr></thead>
+                  <tbody>
+                    <tr><td class="sub">16:31</td><td class="mono">GetDiagnostics</td><td class="sub">Sveinn (Tengill)</td><td><span class="badge2 s-live"><span class="dot bg-live"></span>Uploading</span></td></tr>
+                    <tr><td class="sub">16:19</td><td class="mono">Reset · Soft</td><td class="sub">Stefán (hjálpari)</td><td><span class="badge2 s-warn"><span class="dot bg-warn"></span>Engin bót</span></td></tr>
+                    <tr><td class="sub">12. apr</td><td class="mono">UpdateFirmware 6.2.1</td><td class="sub">kerfi</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Tókst</span></td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="card" style="margin-bottom:16px;">
+              <div class="card-h">Bilanasaga &amp; þekkingargrunnur <span class="sub"><span class="nu">NÝJUNG</span> errorCode → orsök → lausn → varahlutir</span></div>
+              <div style="padding:16px 18px;">
+                <div class="kb open">
+                  <div class="kb-h"><span class="sev high">GroundFailure</span> Jarðbilun / RCD útleystur <span class="caret">▾</span></div>
+                  <div class="kb-b">
+                    <b>Líkleg orsök:</b> Bilaður jarðlekaliði (RCD/RCM), rakainntak í tengli, eða jarðtengingargalli í EVSE.<br>
+                    <b>Lausn:</b> 1) Mæla jarðlekastraum (PE) — staðfest 31 mA. 2) Skoða og þurrka tengil. 3) Skipta um RCD/RCM-einingu. 4) Keyra prófunarhleðslu og staðfesta Charging án villu.<br>
+                    <b>Varahlutir:</b> RCD/RCM-eining (Zaptec Pro), þéttikit.<br>
+                    <b>Áætlaður tími:</b> ~1 klst · <b>Áætlað:</b> samræmist samþykktu útkalli (12.900 kr.).
+                  </div>
+                </div>
+                <div class="kb">
+                  <div class="kb-h"><span class="sev med">OverCurrentFailure</span> Yfirstraumur <span class="caret">▸</span></div>
+                  <div class="kb-b">Oftast bíll sem dregur umfram heimild eða rangt stillt hámark. Athuga ChargingProfile og kapalmerki (PP). Sjaldan vélbúnaðarbilun.</div>
+                </div>
+                <div class="kb">
+                  <div class="kb-h"><span class="sev low">ConnectorLockFailure</span> Lás festist <span class="caret">▸</span></div>
+                  <div class="kb-b">Læsimótor nær ekki stöðu. Reyna UnlockConnector, athuga aðskotahluti, skipta um læsimótor ef viðvarandi.</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-h">Hleðslusaga <span class="sub">síðustu lotur · án greiðsluupplýsinga</span></div>
+              <table>
+                <thead><tr><th>Hófst</th><th>Lengd</th><th>Orka</th><th>Lok</th><th>Mæliferill</th></tr></thead>
+                <tbody>
+                  <tr><td class="sub">16:27 í dag</td><td>—</td><td>0,0 kWh</td><td><span class="badge2 s-bad"><span class="dot bg-bad"></span>Faulted</span></td><td><span class="sub">engin framvinda</span></td></tr>
+                  <tr><td class="sub">3. jún 21:03</td><td>0:52</td><td>7,7 kWh</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Lokið</span></td><td><span class="spark" style="height:20px;"><i style="height:40%"></i><i style="height:70%"></i><i style="height:90%"></i><i style="height:85%"></i><i style="height:60%"></i><i style="height:30%"></i></span></td></tr>
+                  <tr><td class="sub">1. jún 18:40</td><td>3:11</td><td>22,3 kWh</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Lokið</span></td><td><span class="spark" style="height:20px;"><i style="height:55%"></i><i style="height:80%"></i><i style="height:88%"></i><i style="height:90%"></i><i style="height:72%"></i><i style="height:50%"></i></span></td></tr>
+                </tbody>
+              </table>
+              <div class="note">Þú sérð tæknilega lotusögu (orka, tími, mæliferil) til greiningar — en hvorki verð, reikninga né hver ökumaðurinn er nema á virku útkalli sem þér er úthlutað.</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ===================== RATE CARD & SLA ===================== -->
+        <section class="screen" data-screen="ratecard">
+          <div class="head">
+            <div>
+              <h1>Taxti &amp; SLA</h1>
+              <p>Verðskráin sem ökumanni er sýnd við stigmögnun. Forgangur: SLA-taxti hýsils þar sem samningur er til, annars almenn verðskrá Tengils (sjálfgefinn veitandi).</p>
+            </div>
+            <span class="ro">Skoðun · taxti ákveðinn í samningi</span>
+          </div>
+
+          <div class="grid g2e" style="margin-bottom:16px;">
+            <div class="card">
+              <div class="card-h">Tengill — almenn verðskrá <span class="sub">sjálfgefið þar sem enginn SLA gildir</span></div>
+              <div style="padding:8px 18px 14px;">
+                <div class="kv"><span class="k">Útkall (grunngjald)</span><span><b>9.900 kr.</b></span></div>
+                <div class="kv"><span class="k">Vinna · pr. klst</span><span>5.900 kr.</span></div>
+                <div class="kv"><span class="k">Akstur / svæðisgjald</span><span>3.000 kr.</span></div>
+                <div class="kv"><span class="k">Útkall utan dagvinnu</span><span>+50%</span></div>
+                <div class="kv"><span class="k">Varahlutir</span><span>skv. reikningi + 15%</span></div>
+              </div>
+            </div>
+            <div class="card" style="border-color:rgba(43,211,201,.4);">
+              <div class="card-h">Dalvegur Húsfélag — SLA-taxti <span class="badge2 s-co"><span class="dot bg-co"></span>Samningur virkur</span></div>
+              <div style="padding:8px 18px 14px;">
+                <div class="kv"><span class="k">Útkall (grunngjald)</span><span><b>7.900 kr.</b></span></div>
+                <div class="kv"><span class="k">Vinna · pr. klst</span><span>3.200 kr.</span></div>
+                <div class="kv"><span class="k">Akstur / svæðisgjald</span><span>Innifalið</span></div>
+                <div class="kv"><span class="k">Viðbragðstími</span><span>&lt; 4 klst (dagvinna)</span></div>
+                <div class="kv"><span class="k">Varahlutir</span><span>skv. reikningi</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-h">Þjónustusamningar <span class="sub">hverjir hafa SLA</span></div>
+            <table>
+              <thead><tr><th>Hýsill / eigandi</th><th>Tegund</th><th>Taxti</th><th>Viðbragð</th><th>Staða</th></tr></thead>
+              <tbody>
+                <tr><td>Dalvegur Húsfélag</td><td class="sub">SLA-samningur</td><td>SLA-taxti</td><td class="sub">&lt; 4 klst</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Virkur</span></td></tr>
+                <tr><td>N1 hf.</td><td class="sub">Enginn SLA</td><td>Tengill verðskrá</td><td class="sub">—</td><td><span class="badge2 s-mut"><span class="dot bg-mut"></span>Sjálfgefið</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="note">Taxti er hluti samnings og þú breytir honum ekki hér — hann ræður upphæðinni sem ökumanni er sýnd áður en hann samþykkir stigmögnun. Skilgreining á Tengli sem veitanda og verðskrá er í vinnslu (ADR 0031 / ADR 0032 §5C).</div>
+        </section>
+
+        <!-- ===================== PAYOUTS / INVOICES ===================== -->
+        <section class="screen" data-screen="payouts">
+          <div class="head">
+            <div>
+              <h1>Reikningar</h1>
+              <p>Lokin útköll og uppgjör. Straumvakt innheimtir fyrir þína hönd og gerir upp við þig mánaðarlega.</p>
+            </div>
+            <button class="btn sm ghost">⬇ Sækja CSV</button>
+          </div>
+
+          <div class="grid g3" style="margin-bottom:16px;">
+            <div class="card kpi"><div class="lbl">Júní · ógreitt</div><div class="val grad">214.300 kr.</div><div class="delta flat">12 útköll</div></div>
+            <div class="card kpi"><div class="lbl">Næsta uppgjör</div><div class="val" style="font-size:20px;">1. júlí</div><div class="delta flat">frá Straumvakt</div></div>
+            <div class="card kpi"><div class="lbl">Greitt í maí</div><div class="val">186.500 kr.</div><div class="delta">greitt 1. jún</div></div>
+          </div>
+
+          <div class="card">
+            <div class="card-h">Lokin útköll <span class="sub">júní 2026</span></div>
+            <table>
+              <thead><tr><th>Dags.</th><th>Stöð</th><th>Hýsill</th><th>Taxti</th><th>Upphæð</th><th>Greiðandi</th><th>Staða</th></tr></thead>
+              <tbody>
+                <tr><td>4. jún</td><td class="mono">ZPR074011</td><td>Dalvegur Húsfélag</td><td>SLA</td><td>11.100 kr.</td><td class="sub">ökumaður</td><td><span class="badge2 s-warn"><span class="dot bg-warn"></span>Í innheimtu</span></td></tr>
+                <tr><td>2. jún</td><td class="mono">EAS911042</td><td>N1 hf.</td><td>Tengill</td><td>9.500 kr.</td><td class="sub">ökumaður</td><td><span class="badge2 s-warn"><span class="dot bg-warn"></span>Í innheimtu</span></td></tr>
+                <tr><td>31. maí</td><td class="mono">EAS220104</td><td>Dalvegur Húsfélag</td><td>SLA</td><td>7.900 kr.</td><td class="sub">hýsill (SLA)</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Greitt</span></td></tr>
+                <tr><td>28. maí</td><td class="mono">ZPR074002</td><td>Dalvegur Húsfélag</td><td>SLA</td><td>15.200 kr.</td><td class="sub">ökumaður</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Greitt</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="note">Greiðandi fer eftir uppruna: stigmögnun ökumanns greiðist af ökumanni; vöktunarmál innan SLA greiðast af hýsil/eiganda skv. samningi. Straumvakt er umboðsaðili í báðum tilvikum (ADR 0031).</div>
+        </section>
+
+        <!-- ===================== SETTINGS ===================== -->
+        <section class="screen" data-screen="settings">
+          <div class="head">
+            <div>
+              <h1>Stillingar</h1>
+              <p>Aðgangur þinn sem þjónustuaðili og hvernig þú færð tilkynningar um ný útköll.</p>
+            </div>
+          </div>
+
+          <div class="grid g2e">
+            <div class="card" style="padding:20px;">
+              <div class="card-h" style="border:0;padding:0 0 14px;">Tæknimaður</div>
+              <div class="field"><label>Nafn</label><div class="ro-val">Sveinn Þorláksson</div></div>
+              <div class="field"><label>Fyrirtæki</label><div class="ro-val">Tengill ehf. <span class="ro">sjálfgefinn veitandi</span></div></div>
+              <div class="field"><label>Netfang</label><div class="ro-val">sveinn@tengill.is</div></div>
+              <div class="field" style="margin:0;"><label>Sími</label><input class="inp" value="+354 660 4412" /></div>
+              <div class="note">Aðgangur þinn er þjónustuaðila-aðgangur — ekki hýsil- eða rekstraraðgangur. Þú færð aðeins úthlutuð útköll og búnað sem þú þjónustar.</div>
+            </div>
+
+            <div style="display:grid;gap:16px;align-content:start;">
+              <div class="card" style="padding:20px;">
+                <div class="card-h" style="border:0;padding:0 0 6px;">Tilkynningar</div>
+                <div class="toggle" style="border-bottom:1px solid rgba(30,42,68,.5);"><div class="sw on"></div><div><strong style="font-size:13px;">Ný útköll (stigmögnun)</strong><div class="sub">Þegar ökumaður stigmagnar og samþykkir kostnað</div></div></div>
+                <div class="toggle" style="border-bottom:1px solid rgba(30,42,68,.5);"><div class="sw on"></div><div><strong style="font-size:13px;">Vöktunarmál · hátt forgang</strong><div class="sub">Stöð ótengd, mæli-frávik o.fl.</div></div></div>
+                <div class="toggle" style="border-bottom:1px solid rgba(30,42,68,.5);"><div class="sw on"></div><div><strong style="font-size:13px;">Ný skilaboð á máli</strong><div class="sub">Þegar ökumaður svarar í spjalli</div></div></div>
+                <div class="toggle"><div class="sw"></div><div><strong style="font-size:13px;">Vöktunarmál · miðlungs/lágt</strong><div class="sub">Safnað í daglegt yfirlit</div></div></div>
+                <div class="field" style="margin:14px 0 0;"><label>Tungumál</label><div class="ro-val">Íslenska ▾</div></div>
+              </div>
+              <button class="btn full">Vista breytingar</button>
+            </div>
+          </div>
+        </section>
+
+        <div class="legend">
+          <b>Stöðumerki / status legend</b> — <span class="tag new">new</span> nýtt yfirborð, bakland til staðar ·
+          <span class="tag soon">soon</span> ekki bakkað enn, háð ADR/ákvörðun. <b>Öll þessi sýn er merkt</b>
+          <span class="tag soon">soon · ADR 0032</span> — hún er 0% bakkað í dag og bíður þess að ADR 0032 (Issue Engine,
+          nágrannahjálp, ticket-spjall) verði smíðað, Tengill skilgreindur (P0.5) og uppgjör ákveðið (P0.7).
+          Orðalag samræmt hinum sýnunum: <b>eining</b> = billing-home, <b>aðgangshópur</b> = access group,
+          stýriplan-merki (<span class="mono">OCPP 1.6J</span> o.fl.) eins og í operator-borðinu.
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <div id="toasts"></div>
+
+  <script>
+    const items = [...document.querySelectorAll('.nav-item')];
+    const screens = [...document.querySelectorAll('.screen')];
+    function show(name) {
+      const target = screens.find(s => s.dataset.screen === name);
+      if (!target) return;
+      // detail screens map back to their sidebar section
+      const navMap = { job: 'jobs', resolve: 'jobs' };
+      const navName = navMap[name] || name;
+      items.forEach(i => i.classList.toggle('active', i.dataset.screen === navName));
+      screens.forEach(s => s.classList.toggle('active', s.dataset.screen === name));
+      window.scrollTo(0, 0);
+      document.getElementById('sidebar').classList.remove('open');
+    }
+
+    document.getElementById('nav').addEventListener('click', e => {
+      const item = e.target.closest('.nav-item');
+      if (item) { show(item.dataset.screen); history.replaceState(null, '', '#' + item.dataset.screen); }
+    });
+
+    document.body.addEventListener('click', e => {
+      const b = e.target.closest('[data-goto]');
+      if (!b) return;
+      show(b.dataset.goto);
+      history.replaceState(null, '', '#' + b.dataset.goto);
+    });
+
+    // Tabs (visual only)
+    document.body.addEventListener('click', e => {
+      const t = e.target.closest('.tab');
+      if (!t) return;
+      [...t.parentNode.children].forEach(x => x.classList.remove('active'));
+      t.classList.add('active');
+    });
+
+    // Toggle switches
+    document.body.addEventListener('click', e => {
+      const sw = e.target.closest('.sw');
+      if (sw) sw.classList.toggle('on');
+    });
+
+    // org switcher
+    const os = document.getElementById('orgSwitcher');
+    const om = document.getElementById('orgMenu');
+    os.addEventListener('click', e => { e.stopPropagation(); om.classList.toggle('open'); });
+    document.addEventListener('click', () => om.classList.remove('open'));
+    om.addEventListener('click', e => {
+      const it = e.target.closest('[data-org]');
+      if (!it) return;
+      document.getElementById('orgLabel').textContent = it.firstChild.textContent.trim();
+    });
+
+    // hamburger
+    document.getElementById('hamb').addEventListener('click', () =>
+      document.getElementById('sidebar').classList.toggle('open'));
+
+    // toasts (charger controls, settle actions)
+    function toast(msg) {
+      const t = document.createElement('div');
+      t.className = 'toast';
+      t.textContent = msg;
+      document.getElementById('toasts').appendChild(t);
+      setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity .3s'; }, 2600);
+      setTimeout(() => t.remove(), 3000);
+    }
+    document.body.addEventListener('click', e => {
+      const b = e.target.closest('[data-toast]');
+      if (b) toast(b.dataset.toast);
+    });
+    document.getElementById('fetchLog').addEventListener('click', () => toast('Sæki annál frá stöð…'));
+
+    // device deep-dive sub-tabs
+    document.querySelectorAll('[data-subtabset]').forEach(set => {
+      set.addEventListener('click', e => {
+        const t = e.target.closest('.subtab');
+        if (!t) return;
+        const screen = set.closest('.screen');
+        set.querySelectorAll('.subtab').forEach(x => x.classList.remove('active'));
+        t.classList.add('active');
+        screen.querySelectorAll('.subpanel').forEach(p =>
+          p.classList.toggle('active', p.dataset.subpanel === t.dataset.subtab));
+      });
+    });
+
+    // expandable raw OCPP frames + knowledge-base accordions
+    document.body.addEventListener('click', e => {
+      const f = e.target.closest('.frame');
+      if (f) {
+        f.classList.toggle('open');
+        const c = f.querySelector('.caret');
+        if (c) c.textContent = f.classList.contains('open') ? '▾' : '▸';
+      }
+      const kbh = e.target.closest('.kb-h');
+      if (kbh) {
+        const kb = kbh.parentElement;
+        kb.classList.toggle('open');
+        const c = kbh.querySelector('.caret');
+        if (c) c.textContent = kb.classList.contains('open') ? '▾' : '▸';
+      }
+    });
+
+    // raw-log filter chips (visual)
+    document.body.addEventListener('click', e => {
+      const chip = e.target.closest('.chip');
+      if (!chip) return;
+      [...chip.parentNode.querySelectorAll('.chip')].forEach(x => x.classList.remove('on'));
+      chip.classList.add('on');
+    });
+
+    // claim button
+    const claim = document.getElementById('claimBtn');
+    claim.addEventListener('click', () => {
+      claim.textContent = '✓ Tekið að mér';
+      claim.classList.add('ok');
+      toast('Þú tókst málið að þér — ökumaður fær tilkynningu.');
+    });
+
+    if (location.hash) show(location.hash.slice(1));
+  </script>
+</body>
+</html>

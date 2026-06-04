@@ -1,0 +1,849 @@
+<!doctype html>
+<html lang="is">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Straumvakt — Ökumaður (driver portal concept)</title>
+  <!--
+    Straumvakt DRIVER self-service web portal concept.
+    Sibling of host-portal-concept.html (HOST admin) and
+    straumvakt-admin-concept.html (OPERATOR staff). This is the END-USER
+    DRIVER view: the web counterpart to the mobile app. Same design system.
+
+    Strictly driver-specific. Everything here is about THIS driver:
+    their own charging, their own cost, their own access, their own family
+    group, their own issues. NO fleet management, NO other drivers, NO host
+    contracts/MRR, NO onboarding, NO operator surfaces.
+
+    Four driver realities modelled here:
+      • Family group — dependents (e.g. a child, no kennitala) share the
+        driver's billing-home (ADR 0031 dependent-via-group carve-out).
+      • Issues — driver raised an issue and tracks it (ADR 0032 pull model).
+      • Helper — the driver can also volunteer to help others' issues
+        (ADR 0032 voluntary peer assistance, per-ticket chat).
+      • Workplace pays — the driver has a second membership at a company
+        host that can cover charging; a billing-context switcher routes cost.
+
+    Standalone mock — open in a browser. No build, no data.
+  -->
+  <style>
+    :root {
+      --bg: #070b16;
+      --surface: #0b1220;
+      --raised: #111a2e;
+      --inset: #0e1626;
+      --border: #1e2a44;
+      --ring: #2b3a5e;
+      --text: #f5f7fa;
+      --muted: #97a3b8;
+      --soft: #c8d1e0;
+      --green: #3ee9a7;
+      --teal: #2bd3c9;
+      --blue: #2bb6e8;
+      --sky: #6fb8f0;
+      --amber: #f4c95d;
+      --red: #ff6b6b;
+      --violet: #a78bfa;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; color: var(--text);
+      background:
+        radial-gradient(1200px 600px at 80% -10%, rgba(43, 182, 232, .10), transparent 60%),
+        radial-gradient(900px 500px at -10% 10%, rgba(62, 233, 167, .08), transparent 60%),
+        var(--bg);
+      background-attachment: fixed;
+    }
+    a { color: inherit; text-decoration: none; }
+    button { font-family: inherit; }
+
+    /* ---------- shell ---------- */
+    .shell { display: grid; grid-template-columns: 248px 1fr; min-height: 100vh; }
+    .sidebar {
+      border-right: 1px solid var(--border); background: rgba(11, 18, 32, .6);
+      backdrop-filter: blur(8px); display: flex; flex-direction: column;
+      position: sticky; top: 0; height: 100vh;
+    }
+    .brand { display: flex; align-items: center; gap: 12px; padding: 18px 18px 14px; border-bottom: 1px solid var(--border); }
+    .brand .logo {
+      width: 34px; height: 34px; border-radius: 9px;
+      background: linear-gradient(135deg, var(--green), var(--teal) 55%, var(--blue));
+      display: grid; place-items: center; color: #04121b; font-weight: 900;
+      box-shadow: 0 10px 26px rgba(43,182,232,.28);
+    }
+    .brand .word strong {
+      display: block; font-size: 16px; line-height: 1.1;
+      background: linear-gradient(135deg, var(--green), var(--teal) 55%, var(--blue));
+      background-clip: text; -webkit-background-clip: text; color: transparent;
+    }
+    .brand .word span { display: block; margin-top: 2px; font-size: 10px; letter-spacing: .22em; text-transform: uppercase; color: var(--sky); }
+
+    .nav { padding: 12px 10px; overflow-y: auto; flex: 1; }
+    .nav-label { font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); padding: 14px 12px 6px; }
+    .nav-item {
+      display: flex; align-items: center; gap: 11px; padding: 9px 12px; border-radius: 9px; cursor: pointer;
+      color: var(--soft); font-size: 14px; font-weight: 500; border: 1px solid transparent;
+    }
+    .nav-item:hover { background: var(--raised); }
+    .nav-item.active {
+      background: linear-gradient(135deg, rgba(62,233,167,.14), rgba(43,182,232,.12));
+      border-color: rgba(43,182,232,.35); color: var(--text);
+    }
+    .nav-item .ico { width: 18px; text-align: center; opacity: .9; }
+    .nav-item .badge {
+      margin-left: auto; font-size: 11px; font-weight: 700;
+      background: rgba(244,201,93,.16); color: var(--amber); border: 1px solid rgba(244,201,93,.4);
+      padding: 1px 7px; border-radius: 999px;
+    }
+    .nav-item .badge.live { background: rgba(43,182,232,.16); color: var(--blue); border-color: rgba(43,182,232,.4); }
+
+    .nav-foot { border-top: 1px solid var(--border); padding: 12px 14px; display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--muted); }
+    .avatar { width: 30px; height: 30px; border-radius: 999px; flex: none; background: linear-gradient(135deg, #3ee9a7, #2bb6e8); color: #04121b; display: grid; place-items: center; font-weight: 800; font-size: 12px; }
+
+    /* ---------- main ---------- */
+    .main { min-width: 0; }
+    .topbar {
+      height: 58px; display: flex; align-items: center; gap: 16px; padding: 0 28px;
+      border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 5;
+      background: rgba(7,11,22,.75); backdrop-filter: blur(14px);
+    }
+    .who-am-i { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 15px; }
+    .pill { font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--border); color: var(--soft); background: var(--inset); }
+    .pill.driver { color: var(--green); border-color: rgba(62,233,167,.4); background: rgba(62,233,167,.08); }
+    .topbar .spacer { flex: 1; }
+    .topbar .tlink { font-size: 13px; color: var(--muted); cursor: pointer; }
+    .switcher { position: relative; display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--soft); background: var(--inset); border: 1px solid var(--border); border-radius: 9px; padding: 6px 12px; cursor: pointer; }
+    .switcher:hover { border-color: var(--ring); }
+    .switcher .sub { color: var(--muted); font-weight: 500; }
+    .menu { position: absolute; top: 40px; left: 0; min-width: 260px; background: var(--surface); border: 1px solid var(--border); border-radius: 11px; padding: 6px; display: none; z-index: 30; box-shadow: 0 20px 44px rgba(2,6,16,.55); }
+    .menu.open { display: block; }
+    .menu > div { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 11px; border-radius: 8px; font-size: 13px; font-weight: 600; color: var(--soft); cursor: pointer; }
+    .menu > div:hover { background: var(--raised); }
+    .menu .mini { font-size: 11px; color: var(--muted); font-weight: 500; }
+
+    .content { padding: 26px 28px 60px; max-width: 1120px; }
+    .screen { display: none; }
+    .screen.active { display: block; animation: fade .18s ease; }
+    @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+    .head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+    .head h1 { font-size: 23px; margin: 0 0 4px; letter-spacing: -.01em; }
+    .head p { margin: 0; color: var(--muted); font-size: 13px; max-width: 62ch; }
+
+    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 9px 15px; border-radius: 10px; font-size: 13px; font-weight: 700; border: 1px solid var(--border); background: var(--raised); color: var(--text); cursor: pointer; }
+    .btn:hover { border-color: var(--ring); }
+    .btn.primary { background: linear-gradient(135deg, var(--green), var(--blue)); color: #04121b; border: 0; box-shadow: 0 10px 24px rgba(43,182,232,.22); }
+    .btn.ghost { background: transparent; }
+    .btn.sm { padding: 6px 11px; font-size: 12px; }
+    .btn.danger { color: var(--red); border-color: rgba(255,107,107,.4); background: rgba(255,107,107,.07); }
+    .btn.full { width: 100%; justify-content: center; }
+
+    .tabs { display: flex; gap: 4px; margin-bottom: 18px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+    .tab { padding: 9px 14px; font-size: 13px; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; }
+    .tab.active { color: var(--text); border-color: var(--blue); }
+
+    .card { border: 1px solid var(--border); border-radius: 14px; background: linear-gradient(180deg, rgba(17,26,46,.5), rgba(11,18,32,.6)); box-shadow: 0 18px 40px rgba(2,6,16,.35); }
+    .card .card-h { padding: 13px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13px; font-weight: 700; }
+    .card .card-h .sub { color: var(--muted); font-weight: 500; font-size: 12px; }
+
+    .grid { display: grid; gap: 16px; }
+    .g4 { grid-template-columns: repeat(4, 1fr); }
+    .g3 { grid-template-columns: repeat(3, 1fr); }
+    .g2 { grid-template-columns: 1.6fr 1fr; }
+    .g2e { grid-template-columns: 1fr 1fr; }
+
+    .kpi { padding: 16px 18px; }
+    .kpi .lbl { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+    .kpi .val { font-size: 27px; font-weight: 800; letter-spacing: -.02em; margin: 8px 0 2px; }
+    .kpi .val.grad { background: linear-gradient(135deg, var(--green), var(--blue)); background-clip: text; -webkit-background-clip: text; color: transparent; }
+    .kpi .delta { font-size: 12px; color: var(--green); }
+    .kpi .delta.flat { color: var(--muted); }
+
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead th { text-align: left; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; padding: 11px 18px; border-bottom: 1px solid var(--border); }
+    tbody td { padding: 13px 18px; border-bottom: 1px solid rgba(30,42,68,.55); }
+    tbody tr:last-child td { border-bottom: 0; }
+    tbody tr:hover { background: rgba(17,26,46,.45); }
+    .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; color: var(--soft); }
+    .sub { color: var(--muted); font-size: 12px; }
+    .right { text-align: right; }
+
+    .badge2 { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; display: inline-flex; align-items: center; gap: 6px; }
+    .dot { width: 7px; height: 7px; border-radius: 999px; display: inline-block; }
+    .s-ok    { color: var(--green); background: rgba(62,233,167,.1);  border: 1px solid rgba(62,233,167,.35); }
+    .s-live  { color: var(--blue);  background: rgba(43,182,232,.1);  border: 1px solid rgba(43,182,232,.35); }
+    .s-warn  { color: var(--amber); background: rgba(244,201,93,.1);  border: 1px solid rgba(244,201,93,.35); }
+    .s-mut   { color: var(--muted); background: rgba(151,163,184,.08);border: 1px solid rgba(151,163,184,.3); }
+    .s-bad   { color: var(--red);   background: rgba(255,107,107,.08);border: 1px solid rgba(255,107,107,.35); }
+    .bg-ok{background:var(--green);} .bg-live{background:var(--blue);} .bg-warn{background:var(--amber);} .bg-mut{background:var(--muted);} .bg-bad{background:var(--red);}
+    .ro { font-size: 11px; color: var(--muted); border: 1px dashed var(--border); padding: 2px 8px; border-radius: 6px; }
+
+    /* status tags — shared convention across all four mocks.
+       .new = backed, newly surfaced · .soon = not backed yet (ADR-gated) */
+    .tag { font-size: 8.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; padding: 1px 6px; border-radius: 5px; border: 1px solid; white-space: nowrap; }
+    .tag.new { color: var(--green); border-color: rgba(62,233,167,.4); background: rgba(62,233,167,.08); }
+    .tag.soon { color: var(--amber); border-color: rgba(244,201,93,.45); background: rgba(244,201,93,.09); }
+    .nav-item .tag { margin-left: 6px; }
+    .nav-item .tag.solo { margin-left: auto; }
+    .newtag { font-size: 9px; letter-spacing: .1em; text-transform: uppercase; padding: 2px 7px; border-radius: 6px; border: 1px solid; }
+    .newtag.soon { color: var(--amber); border-color: rgba(244,201,93,.35); background: rgba(244,201,93,.07); }
+    .legend { margin-top: 26px; padding: 12px 16px; border: 1px solid var(--border); border-radius: 11px; background: var(--inset); font-size: 11.5px; color: var(--muted); line-height: 1.6; }
+    .legend b { color: var(--soft); }
+
+    .ribbon { font-size: 12px; color: var(--soft); background: rgba(43,182,232,.06); border: 1px solid rgba(43,182,232,.25); border-radius: 10px; padding: 9px 14px; margin-bottom: 18px; }
+    .ribbon.soon { color: var(--amber); background: rgba(244,201,93,.07); border-color: rgba(244,201,93,.3); }
+    .ribbon.warn { color: var(--amber); background: rgba(244,201,93,.07); border-color: rgba(244,201,93,.3); }
+
+    .field { margin-bottom: 14px; }
+    .field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+    .field .ro-val { padding: 10px 12px; border: 1px solid var(--border); border-radius: 9px; background: var(--inset); font-size: 13px; }
+    .inp { width: 100%; background: var(--inset); border: 1px solid var(--border); border-radius: 9px; color: var(--text); padding: 9px 11px; font-size: 13px; }
+    .inp::placeholder { color: var(--muted); }
+    .note { font-size: 12px; color: var(--muted); margin-top: 8px; }
+
+    .kv { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; padding: 8px 0; border-bottom: 1px solid rgba(30,42,68,.5); }
+    .kv:last-child { border: 0; }
+    .kv .k { color: var(--muted); }
+
+    .gate { display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; border-radius: 12px; background: rgba(244,201,93,.07); border: 1px solid rgba(244,201,93,.35); font-size: 13px; }
+    .gate .lock { font-size: 18px; }
+    .gate b { color: var(--amber); }
+
+    .toggle { display: flex; align-items: center; gap: 12px; padding: 11px 0; }
+    .sw { width: 38px; height: 22px; border-radius: 999px; background: var(--ring); position: relative; flex: none; cursor: pointer; }
+    .sw.on { background: linear-gradient(135deg, var(--green), var(--blue)); }
+    .sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 999px; background: #fff; transition: .15s; }
+    .sw.on::after { left: 19px; }
+
+    /* live charging gauge */
+    .live-wrap { display: grid; grid-template-columns: 168px 1fr; gap: 22px; padding: 20px; align-items: center; }
+    .ring { width: 168px; height: 168px; border-radius: 999px; display: grid; place-items: center; position: relative;
+      background: conic-gradient(var(--blue) 0 62%, rgba(43,182,232,.12) 62% 100%);
+      box-shadow: 0 0 30px rgba(43,182,232,.25) inset, 0 0 26px rgba(43,182,232,.12); }
+    .ring::before { content: ""; position: absolute; inset: 14px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); }
+    .ring .inner { position: relative; text-align: center; }
+    .ring .inner .big { font-size: 30px; font-weight: 800; letter-spacing: -.02em; }
+    .ring .inner .small { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .12em; }
+    .live-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    .live-stat .l { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+    .live-stat .v { font-size: 19px; font-weight: 700; margin-top: 4px; }
+    .bar { height: 8px; border-radius: 999px; background: var(--inset); border: 1px solid var(--border); overflow: hidden; }
+    .bar > span { display: block; height: 100%; background: linear-gradient(90deg, var(--green), var(--blue)); }
+
+    /* helper / chat */
+    .chat { display: grid; gap: 10px; padding: 16px 18px; }
+    .bubble { max-width: 78%; padding: 9px 13px; border-radius: 13px; font-size: 13px; line-height: 1.45; }
+    .bubble .meta { font-size: 10px; color: var(--muted); margin-bottom: 3px; letter-spacing: .04em; }
+    .bubble.them { background: var(--inset); border: 1px solid var(--border); border-bottom-left-radius: 4px; justify-self: start; }
+    .bubble.me { background: rgba(43,182,232,.1); border: 1px solid rgba(43,182,232,.35); border-bottom-right-radius: 4px; justify-self: end; }
+    .bubble.sys { background: transparent; border: 1px dashed var(--border); color: var(--muted); justify-self: center; font-size: 11.5px; max-width: 90%; text-align: center; }
+    .chatbar { display: flex; gap: 10px; padding: 12px 18px; border-top: 1px solid var(--border); }
+    .who { display: flex; align-items: center; gap: 10px; }
+    .veh { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 11px 0; border-bottom: 1px solid rgba(30,42,68,.5); }
+    .veh:last-of-type { border-bottom: 0; }
+    .timeline { display: grid; gap: 0; padding: 6px 18px 14px; }
+    .tl { display: flex; gap: 12px; padding: 9px 0; font-size: 13px; }
+    .tl .stamp { color: var(--muted); font-size: 11px; width: 84px; flex: none; }
+    .tl .pin { width: 9px; height: 9px; border-radius: 999px; margin-top: 4px; flex: none; }
+    .seg { display: flex; gap: 8px; }
+    .seg .opt { flex: 1; padding: 12px 14px; border: 1px solid var(--border); border-radius: 11px; background: var(--inset); cursor: pointer; font-size: 13px; }
+    .seg .opt.sel { border-color: rgba(43,182,232,.5); background: rgba(43,182,232,.08); }
+    .seg .opt strong { display: block; }
+    .seg .opt p { margin: 3px 0 0; font-size: 11px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <!-- ============ SIDEBAR ============ -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="logo">S</div>
+        <div class="word"><strong>Straumvakt</strong><span>Ökumaður · Driver</span></div>
+      </div>
+      <nav class="nav" id="nav">
+        <div class="nav-label">Yfirlit</div>
+        <div class="nav-item active" data-screen="dashboard"><span class="ico">▦</span> Mælaborð</div>
+        <div class="nav-item" data-screen="charging"><span class="ico">⚡</span> Hleðsla <span class="badge live">1</span></div>
+
+        <div class="nav-label">Mín notkun</div>
+        <div class="nav-item" data-screen="history"><span class="ico">🗓</span> Hleðslusaga</div>
+        <div class="nav-item" data-screen="cost"><span class="ico">🧾</span> Kostnaður</div>
+        <div class="nav-item" data-screen="family"><span class="ico">👪</span> Fjölskylda <span class="tag soon solo">soon</span></div>
+
+        <div class="nav-label">Aðgangur</div>
+        <div class="nav-item" data-screen="access"><span class="ico">🔑</span> Mínir aðgangar</div>
+        <div class="nav-item" data-screen="redeem"><span class="ico">＋</span> Leysa inn boð</div>
+
+        <div class="nav-label">Hjálp <span class="tag soon">soon</span></div>
+        <div class="nav-item" data-screen="issues"><span class="ico">🛟</span> Mín mál <span class="tag soon">soon</span> <span class="badge">1</span></div>
+        <div class="nav-item" data-screen="helper"><span class="ico">🤝</span> Verða hjálpari <span class="tag soon">soon</span> <span class="badge">2</span></div>
+
+        <div class="nav-label">Annað</div>
+        <div class="nav-item" data-screen="settings"><span class="ico">⚙</span> Stillingar</div>
+      </nav>
+      <div class="nav-foot">
+        <div class="avatar">AJ</div>
+        <div>
+          <div style="color:var(--soft);font-weight:600;">Alice Jónsdóttir</div>
+          <div>Ökumaður</div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ============ MAIN ============ -->
+    <div class="main">
+      <div class="topbar">
+        <div class="who-am-i">
+          Alice Jónsdóttir
+          <span class="pill driver">Ökumaður</span>
+        </div>
+        <div class="switcher" id="billSwitcher">💳 <span class="sub">Hleðsla reiknast á:</span> <span id="billLabel">Íbúð 304 · heimili</span> <span class="tag soon">soon</span> ▾
+          <div class="menu" id="billMenu">
+            <div data-bill="home">Íbúð 304 · heimili <span class="mini">Dalvegur Húsfélag</span></div>
+            <div data-bill="work">N1 hf. · vinnustaður <span class="mini">vinnan greiðir</span></div>
+          </div>
+        </div>
+        <div class="spacer"></div>
+        <span class="tlink">IS · EN</span>
+        <span class="tlink">Útskrá</span>
+      </div>
+
+      <div class="content">
+
+        <!-- ===================== DASHBOARD ===================== -->
+        <section class="screen active" data-screen="dashboard">
+          <div class="head">
+            <div>
+              <h1>Hæ, Alice 👋</h1>
+              <p>Yfirlit yfir þína hleðslu þennan mánuð — þín og fjölskyldunnar.</p>
+            </div>
+            <button class="btn primary" data-goto="charging"><span>⚡</span> Skoða hleðslu</button>
+          </div>
+
+          <div class="grid g4" style="margin-bottom:16px;">
+            <div class="card kpi"><div class="lbl">Orka í mánuðinum</div><div class="val grad">112 kWh</div><div class="delta flat">þú 84 · Ari 28</div></div>
+            <div class="card kpi"><div class="lbl">Kostnaður minn</div><div class="val">6.160 kr.</div><div class="delta flat">í söfnun · júní</div></div>
+            <div class="card kpi"><div class="lbl">Hleðslur</div><div class="val">14</div><div class="delta flat">síðustu 30 daga</div></div>
+            <div class="card kpi"><div class="lbl">Reiknast á</div><div class="val" style="font-size:20px;">Íbúð 304</div><div class="delta flat">eigandi: þú · eftirá</div></div>
+          </div>
+
+          <!-- live now -->
+          <div class="card" style="margin-bottom:16px;border-color:rgba(43,182,232,.45);">
+            <div class="card-h">
+              <span>⚡ Í hleðslu núna <span class="sub">ZPR074003 · Dalvegur 10–14 · 🚗 Tesla Model Y</span></span>
+              <span class="badge2 s-live"><span class="dot bg-live"></span>Hleður</span>
+            </div>
+            <div class="live-wrap">
+              <div class="ring"><div class="inner"><div class="big">18,4</div><div class="small">kWh</div></div></div>
+              <div style="display:grid;gap:16px;">
+                <div class="live-stats">
+                  <div class="live-stat"><div class="l">Afl núna</div><div class="v">11,2 kW</div></div>
+                  <div class="live-stat"><div class="l">Tími</div><div class="v">1 klst 38 mín</div></div>
+                  <div class="live-stat"><div class="l">Áætlað verð</div><div class="v">1.012 kr.</div></div>
+                </div>
+                <div>
+                  <div class="sub" style="margin-bottom:6px;">Afl af hámarki stöðvar (22 kW)</div>
+                  <div class="bar"><span style="width:51%"></span></div>
+                </div>
+                <div style="display:flex;gap:10px;">
+                  <button class="btn danger sm" data-goto="charging">Stöðva hleðslu</button>
+                  <button class="btn ghost sm" data-goto="charging">Nánar</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid g2">
+            <div class="card">
+              <div class="card-h">Nýlegar hleðslur <span class="sub">þú &amp; fjölskylda</span></div>
+              <table>
+                <thead><tr><th>Ökumaður</th><th>Stöð</th><th>Orka</th><th>Verð</th><th>Staða</th></tr></thead>
+                <tbody>
+                  <tr><td>Þú</td><td class="mono">ZPR074003</td><td>18,4 kWh</td><td class="sub">í gangi</td><td><span class="badge2 s-live"><span class="dot bg-live"></span>Í hleðslu</span></td></tr>
+                  <tr><td>Ari <span class="sub">(barn)</span></td><td class="mono">ZPR074008</td><td>11,0 kWh</td><td>605 kr.</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Lokið</span></td></tr>
+                  <tr><td>Þú</td><td class="mono">ZPR074003</td><td>7,7 kWh</td><td>424 kr.</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Lokið</span></td></tr>
+                  <tr><td>Þú <span class="sub">(vinnan)</span></td><td class="mono">EAS911042</td><td>31,2 kWh</td><td class="sub">vinnan greiðir</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Lokið</span></td></tr>
+                </tbody>
+              </table>
+              <div style="padding:12px 18px;"><button class="btn sm ghost" data-goto="history">Öll hleðslusaga →</button></div>
+            </div>
+
+            <div class="grid" style="align-content:start;">
+              <div class="card" style="border-color:rgba(244,201,93,.35);">
+                <div class="card-h">Mál í vinnslu <span class="tag soon">soon · ADR 0032</span> <span class="badge">1</span></div>
+                <div style="padding:14px 18px;font-size:13px;color:var(--soft);">
+                  <b>ZPR074006 ræsir ekki hleðslu</b> — hjálpari úr húsinu hefur svarað.
+                  <div style="margin-top:12px;"><button class="btn sm" data-goto="issues">Opna mál →</button></div>
+                </div>
+              </div>
+              <div class="card">
+                <div class="card-h">Hjálparbeiðnir nálægt þér <span class="tag soon">soon · ADR 0032</span> <span class="badge">2</span></div>
+                <div style="padding:14px 18px;font-size:13px;color:var(--soft);">
+                  2 nágrannar þurfa aðstoð við hleðslu. Þú ert skráð sem hjálpari.
+                  <div style="margin-top:12px;"><button class="btn sm" data-goto="helper">Skoða beiðnir →</button></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ===================== CHARGING (live) ===================== -->
+        <section class="screen" data-screen="charging">
+          <div class="head">
+            <div>
+              <h1>Hleðsla</h1>
+              <p>Þú ræsir hleðslu með appinu (BLE / RFID) við stöðina. Hér fylgist þú með og getur stöðvað.</p>
+            </div>
+          </div>
+
+          <div class="card" style="margin-bottom:16px;border-color:rgba(43,182,232,.45);">
+            <div class="card-h">
+              <span>Virk hleðsla <span class="sub">ZPR074003 · Type 2 · 22 kW · Dalvegur 10–14</span></span>
+              <span class="badge2 s-live"><span class="dot bg-live"></span>🚗 Tesla Model Y · Hleður · hófst 16:48</span>
+            </div>
+            <div class="live-wrap">
+              <div class="ring"><div class="inner"><div class="big">18,4</div><div class="small">kWh</div></div></div>
+              <div style="display:grid;gap:16px;">
+                <div class="live-stats">
+                  <div class="live-stat"><div class="l">Afl núna</div><div class="v">11,2 kW</div></div>
+                  <div class="live-stat"><div class="l">Tími</div><div class="v">1 klst 38 mín</div></div>
+                  <div class="live-stat"><div class="l">Áætlað verð</div><div class="v">1.012 kr.</div></div>
+                </div>
+                <div class="live-stats">
+                  <div class="live-stat"><div class="l">Verð á orku</div><div class="v" style="font-size:15px;">55 kr/kWh</div></div>
+                  <div class="live-stat"><div class="l">Reiknast á</div><div class="v" style="font-size:15px;">Íbúð 304</div></div>
+                  <div class="live-stat"><div class="l">Biðgjald eftir</div><div class="v" style="font-size:15px;">15 kr/klst</div></div>
+                </div>
+                <div style="display:flex;gap:10px;">
+                  <button class="btn danger">Stöðva hleðslu</button>
+                  <button class="btn ghost">Halda á 80%</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-h">Stöðvar á þessu svæði <span class="sub">Dalvegur 10–14 · staða núna</span></div>
+            <table>
+              <thead><tr><th>Stöð</th><th>Tengi</th><th>Staða</th><th></th></tr></thead>
+              <tbody>
+                <tr><td class="mono">ZPR074002</td><td>Type 2 · 22 kW</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Laus</span></td><td class="right"><span class="sub">Ræs með appi við stöð</span></td></tr>
+                <tr><td class="mono">ZPR074003</td><td>Type 2 · 22 kW</td><td><span class="badge2 s-live"><span class="dot bg-live"></span>Þín hleðsla</span></td><td class="right"><span class="sub">—</span></td></tr>
+                <tr><td class="mono">ZPR074006</td><td>Type 2 · 22 kW</td><td><span class="badge2 s-bad"><span class="dot bg-bad"></span>Ótengd</span></td><td class="right"><button class="btn sm ghost" data-goto="issues">Tilkynna →</button></td></tr>
+                <tr><td class="mono">ZPR074008</td><td>Type 2 · 22 kW</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Laus</span></td><td class="right"><span class="sub">Ræs með appi við stöð</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="note">Hleðsla er ræst með snertingu (BLE) eða RFID-lykli í appinu þegar þú ert við stöðina — af öryggisástæðum er ekki hægt að ræsa fjarstýrt úr vafranum.</div>
+        </section>
+
+        <!-- ===================== HISTORY ===================== -->
+        <section class="screen" data-screen="history">
+          <div class="head">
+            <div>
+              <h1>Hleðslusaga</h1>
+              <p>Allar þínar hleðslur og fjölskyldunnar — með orku, verði og hvert reikningurinn fór.</p>
+            </div>
+            <button class="btn sm ghost">⬇ Sækja CSV</button>
+          </div>
+
+          <div class="tabs">
+            <div class="tab active">Allt · 14</div>
+            <div class="tab">Þú · 9</div>
+            <div class="tab">Ari (barn) · 4</div>
+            <div class="tab">Vinnan · 1</div>
+          </div>
+
+          <div class="card">
+            <div class="card-h">Júní 2026 <span class="sub">112 kWh · 6.160 kr. (þitt heimili) + 31,2 kWh (vinnan greiðir)</span></div>
+            <table>
+              <thead><tr><th>Dags.</th><th>Ökumaður</th><th>Stöð</th><th>Svæði</th><th>Tími</th><th>Orka</th><th>Verð</th><th>Reiknast á</th><th>Staða</th></tr></thead>
+              <tbody>
+                <tr><td>4. jún 16:48</td><td>Þú</td><td class="mono">ZPR074003</td><td class="sub">Dalvegur 10–14</td><td>í gangi</td><td>18,4 kWh</td><td class="sub">—</td><td>Íbúð 304</td><td><span class="badge2 s-live"><span class="dot bg-live"></span>Í hleðslu</span></td></tr>
+                <tr><td>4. jún 07:20</td><td>Ari <span class="sub">(barn)</span></td><td class="mono">ZPR074008</td><td class="sub">Dalvegur 10–14</td><td>2 klst 04 mín</td><td>11,0 kWh</td><td>605 kr.</td><td>Íbúð 304</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Lokið</span></td></tr>
+                <tr><td>3. jún 15:12</td><td>Þú <span class="sub">(vinnan)</span></td><td class="mono">EAS911042</td><td class="sub">N1 — Reykjavík HQ</td><td>1 klst 06 mín</td><td>31,2 kWh</td><td class="sub">vinnan greiðir</td><td>N1 hf.</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Lokið</span></td></tr>
+                <tr><td>2. jún 21:03</td><td>Þú</td><td class="mono">ZPR074003</td><td class="sub">Dalvegur 10–14</td><td>0 klst 52 mín</td><td>7,7 kWh</td><td>424 kr.</td><td>Íbúð 304</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Lokið</span></td></tr>
+                <tr><td>1. jún 18:40</td><td>Þú</td><td class="mono">ZPR074002</td><td class="sub">Dalvegur 10–14</td><td>3 klst 11 mín</td><td>22,3 kWh</td><td>1.227 kr.</td><td>Íbúð 304</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Lokið</span></td></tr>
+                <tr><td>30. maí 08:05</td><td>Ari <span class="sub">(barn)</span></td><td class="mono">ZPR074008</td><td class="sub">Dalvegur 10–14</td><td>1 klst 40 mín</td><td>9,1 kWh</td><td>501 kr.</td><td>Íbúð 304</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Lokið</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="note">Verð (55 kr/kWh) er ákveðið í samningi húsfélagsins við Straumvakt — það er fast og þú getur ekki breytt því.</div>
+        </section>
+
+        <!-- ===================== COST ===================== -->
+        <section class="screen" data-screen="cost">
+          <div class="head">
+            <div>
+              <h1>Kostnaður</h1>
+              <p>Hvað hleðslan þín kostar og hver fær reikninginn. Straumvakt rukkar eftirá, mánaðarlega, fyrir hönd húsfélagsins.</p>
+            </div>
+            <span class="ro">Skrifvarið · skoðun</span>
+          </div>
+
+          <div class="grid g3" style="margin-bottom:16px;">
+            <div class="card kpi"><div class="lbl">Þetta tímabil (heimili)</div><div class="val grad">6.160 kr.</div><div class="delta flat">júní · í söfnun · 112 kWh</div></div>
+            <div class="card kpi"><div class="lbl">Vinnan greiðir</div><div class="val">1.716 kr.</div><div class="delta flat">31,2 kWh · N1 hf.</div></div>
+            <div class="card kpi"><div class="lbl">Síðasti reikningur</div><div class="val">5.390 kr.</div><div class="delta flat">maí · greiddur</div></div>
+          </div>
+
+          <div class="grid g2" style="margin-bottom:16px;">
+            <div class="card">
+              <div class="card-h">Hvert fer reikningurinn? <span class="sub">tvær reikningsleiðir</span></div>
+              <div style="padding:8px 18px 16px;">
+                <div class="kv"><span class="k">Heimahleðsla → eining</span><span><b>Íbúð 304</b></span></div>
+                <div class="kv"><span class="k">Reikningsmóttakandi</span><span>Alice Jónsdóttir <span class="sub mono">(þú — eigandi)</span></span></div>
+                <div class="kv"><span class="k">Vinnuhleðsla → greiðir</span><span><b>N1 hf.</b> <span class="sub">(vinnustaður)</span></span></div>
+                <div class="kv"><span class="k">Verð á orku</span><span>55 kr/kWh <span class="ro">skv. samningi</span></span></div>
+                <div class="kv"><span class="k">Uppgjör</span><span>eftirá, mánaðarlega</span></div>
+                <div class="note">Hleðslur Ara (barn á þínu framfæri) leggjast líka á Íbúð 304 — þú ert reikningsmóttakandi þeirra.</div>
+              </div>
+            </div>
+            <div class="card" style="align-content:start;">
+              <div class="card-h">Skipta reikningi</div>
+              <div style="padding:14px 18px;">
+                <p class="sub" style="margin:0 0 12px;line-height:1.6;">Veldu hvert næstu hleðslur reiknast. Vinnustaðurinn greiðir aðeins hleðslur á sínum stöðvum eða ef hann hefur samþykkt að greiða annars staðar.</p>
+                <button class="btn full" data-goto="redeem">Biðja vinnustað um að greiða →</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-h">Tímabil</div>
+            <table>
+              <thead><tr><th>Tímabil</th><th>Orka</th><th>Reiknast á</th><th>Upphæð</th><th>Staða</th><th></th></tr></thead>
+              <tbody>
+                <tr><td>Jún 2026</td><td>112 kWh</td><td>Íbúð 304</td><td>6.160 kr.</td><td><span class="badge2 s-warn"><span class="dot bg-warn"></span>Í söfnun</span></td><td class="right"><button class="btn sm ghost">Sundurliðun</button></td></tr>
+                <tr><td>Jún 2026</td><td>31,2 kWh</td><td>N1 hf. <span class="sub">(vinnan)</span></td><td class="sub">vinnan greiðir</td><td><span class="badge2 s-warn"><span class="dot bg-warn"></span>Í söfnun</span></td><td class="right"><button class="btn sm ghost">Sundurliðun</button></td></tr>
+                <tr><td>Maí 2026</td><td>98 kWh</td><td>Íbúð 304</td><td>5.390 kr.</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Greiddur</span></td><td class="right"><button class="btn sm ghost">PDF</button></td></tr>
+                <tr><td>Apr 2026</td><td>86 kWh</td><td>Íbúð 304</td><td>4.730 kr.</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Greiddur</span></td><td class="right"><button class="btn sm ghost">PDF</button></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- ===================== FAMILY ===================== -->
+        <section class="screen" data-screen="family">
+          <div class="head">
+            <div>
+              <h1>Fjölskylda <span class="newtag soon">soon · ADR 0031</span></h1>
+              <p>Fólk á þínu framfæri sem hleður undir þinni einingu (eining). Hleðslur þeirra leggjast á Íbúð 304 — þú ert reikningsmóttakandi. <span class="sub">Háð kerfi: dependent-via-group líkanið er enn óskilgreint (ADR 0031 liður 18).</span></p>
+            </div>
+            <button class="btn primary"><span>＋</span> Bæta við fjölskyldumeðlim</button>
+          </div>
+
+          <div class="ribbon">Fjölskylduhópur hangir undir þinni einingu (Íbúð 304). Barn án kennitölu fær aðgang gegnum hópinn — engin sjálfstæð skráning, enginn sjálfstæður reikningur.</div>
+
+          <div class="card">
+            <div class="card-h">Fjölskylduhópur · Íbúð 304 <span class="sub">2 meðlimir</span></div>
+            <table>
+              <thead><tr><th>Nafn</th><th>Tengsl</th><th>Aðgangur</th><th>Orka í mán.</th><th>Staða</th><th></th></tr></thead>
+              <tbody>
+                <tr><td><strong>Alice Jónsdóttir</strong> <span class="sub">(þú)</span></td><td>Eigandi einingar</td><td class="sub">Allar uppsetningar · Dalvegur</td><td>84 kWh</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Virk</span></td><td class="right"><span class="ro">þú</span></td></tr>
+                <tr><td><strong>Ari Jónsson</strong></td><td>Barn á framfæri</td><td class="sub">Dalvegur 10–14 · án kennitölu, undir þér</td><td>28 kWh</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Virkur</span></td><td class="right"><button class="btn sm ghost">Stýra</button> <button class="btn sm danger">Loka á</button></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="note">Vilt þú bæta við fullorðnum með eigin kennitölu? Hann fær sitt eigið ökumannsaðgengi — biddu húsfélagið um boð fyrir hann undir Íbúð 304.</div>
+        </section>
+
+        <!-- ===================== ACCESS ===================== -->
+        <section class="screen" data-screen="access">
+          <div class="head">
+            <div>
+              <h1>Mínir aðgangar</h1>
+              <p>Hvar þú mátt hlaða. Aðgangur er veittur af hverjum hýsil (húsfélagi / vinnustað) — þú getur skoðað en ekki breytt.</p>
+            </div>
+            <button class="btn primary" data-goto="redeem"><span>＋</span> Leysa inn boð</button>
+          </div>
+
+          <div class="card" style="margin-bottom:14px;">
+            <div class="card-h">
+              <span>🏠 Dalvegur Húsfélag <span class="sub">heimili · reiknast á Íbúð 304</span></span>
+              <span class="badge2 s-ok"><span class="dot bg-ok"></span>Virkur aðgangur</span>
+            </div>
+            <table>
+              <thead><tr><th>Uppsetning</th><th>Stöðvar</th><th>Aðgangshópur</th><th>Staða</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Dalvegur 10–14</strong></td><td>12</td><td class="sub">Íbúar</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Hleðsla opin</span></td></tr>
+                <tr><td><strong>Bílakjallari</strong></td><td>4</td><td class="sub">Íbúar</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Hleðsla opin</span></td></tr>
+                <tr><td><strong>Geymslusvæði</strong> <span class="ro">ný</span></td><td>2</td><td class="sub">Íbúar</td><td><span class="badge2 s-warn"><span class="dot bg-warn"></span>Bíður virkjunar</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="card">
+            <div class="card-h">
+              <span>🏢 N1 hf. <span class="sub">vinnustaður · vinnan greiðir</span></span>
+              <span class="badge2 s-ok"><span class="dot bg-ok"></span>Virkur aðgangur</span>
+            </div>
+            <table>
+              <thead><tr><th>Uppsetning</th><th>Stöðvar</th><th>Aðgangshópur</th><th>Staða</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Reykjavík HQ</strong></td><td>22</td><td class="sub">Starfsfólk · fleet</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Hleðsla opin</span></td></tr>
+              </tbody>
+            </table>
+            <div class="note">Hleðslur hér reiknast á vinnustaðinn (N1 hf.) — ekki á þig — svo lengi sem aðgangurinn er virkur.</div>
+          </div>
+        </section>
+
+        <!-- ===================== REDEEM / WORKPLACE ===================== -->
+        <section class="screen" data-screen="redeem">
+          <div class="head">
+            <div>
+              <h1>Leysa inn boð</h1>
+              <p>Fékkstu boðskóða eða QR frá húsfélagi eða vinnustað? Leystu hann inn hér til að fá aðgang. Þú getur líka beðið vinnustaðinn að greiða þína hleðslu.</p>
+            </div>
+          </div>
+
+          <div class="grid g2">
+            <div class="card" style="padding:18px;">
+              <div class="card-h" style="border:0;padding:0 0 14px;">Boðskóði</div>
+              <div class="field"><label>Sláðu inn kóða</label><input class="inp" placeholder="t.d. DAL-7Q4K" /></div>
+              <div class="field"><label>Lykilorðs-lykill <span class="sub">(ef við á)</span></label><input class="inp" placeholder="••••••" /></div>
+              <button class="btn primary full">Leysa inn</button>
+              <div class="note">Eftir innlausn gæti húsfélagið þurft að samþykkja aðganginn áður en hleðsla opnast.</div>
+              <div style="margin:16px 0;border-top:1px solid var(--border);"></div>
+              <div class="card-h" style="border:0;padding:0 0 12px;">…eða skannaðu QR</div>
+              <button class="btn full ghost">▦ Opna myndavél</button>
+            </div>
+
+            <div class="card" style="padding:18px;align-content:start;">
+              <div class="card-h" style="border:0;padding:0 0 12px;">Biðja vinnustað um að greiða</div>
+              <p class="sub" style="margin:0 0 14px;line-height:1.7;">Ef vinnustaðurinn þinn er hýsill hjá Straumvakt geturðu beðið hann að greiða þína hleðslu — annað hvort aðeins á hans stöðvum eða líka heima.</p>
+              <div class="field"><label>Vinnustaður</label><div class="ro-val">N1 hf. ▾</div></div>
+              <div class="field"><label>Hvaða hleðslur?</label>
+                <div class="seg">
+                  <div class="opt sel"><strong>Aðeins á vinnustað</strong><p>Stöðvar N1</p></div>
+                  <div class="opt"><strong>Líka heima</strong><p>þarf samþykki vinnuveitanda</p></div>
+                </div>
+              </div>
+              <button class="btn primary full">Senda beiðni til vinnuveitanda</button>
+              <div class="gate" style="margin-top:14px;">
+                <span class="lock">🔒</span>
+                <div>Vinnuveitandi <b>samþykkir</b> beiðnina og setur þak/skilyrði. Þangað til reiknast hleðslan á þína einingu (Íbúð 304).</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card" style="margin-top:16px;">
+            <div class="card-h">Beiðnir í bið <span class="sub">1</span></div>
+            <table>
+              <thead><tr><th>Til</th><th>Umfang</th><th>Sent</th><th>Staða</th><th></th></tr></thead>
+              <tbody>
+                <tr><td>N1 hf. <span class="sub">(vinnustaður)</span></td><td>Aðeins á vinnustað</td><td class="sub">2 d.</td><td><span class="badge2 s-warn"><span class="dot bg-warn"></span>Bíður samþykkis</span></td><td class="right"><button class="btn sm ghost">Afturkalla</button></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- ===================== ISSUES (my tickets) ===================== -->
+        <section class="screen" data-screen="issues">
+          <div class="head">
+            <div>
+              <h1>Mín mál <span class="newtag soon">soon · ADR 0032</span></h1>
+              <p>Tilkynntu vandamál með stöð og fáðu aðstoð. Fyrst svara sjálfboðaliðar úr húsinu — þú getur stigmagnað til verktaka ef á þarf að halda (kostnaður sýndur fyrst). <span class="sub">Háð kerfi: Issue Engine + ticket_chat_messages eru enn ósmíðuð (ADR 0032).</span></p>
+            </div>
+            <button class="btn primary"><span>＋</span> Tilkynna vandamál</button>
+          </div>
+
+          <div class="tabs">
+            <div class="tab active">Í vinnslu · 1</div>
+            <div class="tab">Lokið · 3</div>
+          </div>
+
+          <div class="grid g2">
+            <div class="card" style="align-content:start;">
+              <div class="card-h">
+                <span>ZPR074006 ræsir ekki hleðslu</span>
+                <span class="badge2 s-warn"><span class="dot bg-warn"></span>Hjálpari svaraði</span>
+              </div>
+              <div style="padding:6px 18px 12px;">
+                <div class="kv"><span class="k">Stöð</span><span class="mono">ZPR074006 · Dalvegur 10–14</span></div>
+                <div class="kv"><span class="k">Stofnað</span><span>í dag 14:02 · af þér</span></div>
+                <div class="kv"><span class="k">Lýsing</span><span class="right" style="max-width:60%">Tengill fer í en hleðsla byrjar ekki, ljós blikkar rautt.</span></div>
+              </div>
+              <div class="timeline">
+                <div class="tl"><span class="stamp">14:02</span><span class="pin bg-mut"></span><div>Þú stofnaðir málið.</div></div>
+                <div class="tl"><span class="stamp">14:09</span><span class="pin bg-live"></span><div>Stefán (hjálpari, Íbúð 201) tók málið að sér.</div></div>
+                <div class="tl"><span class="stamp">14:21</span><span class="pin bg-warn"></span><div>Beðið eftir svari þínu.</div></div>
+              </div>
+              <div style="padding:0 18px 16px;display:flex;gap:10px;">
+                <button class="btn danger sm">Stigmagna til verktaka</button>
+                <button class="btn ghost sm">Loka máli</button>
+              </div>
+              <div class="gate" style="margin:0 18px 16px;">
+                <span class="lock">💸</span>
+                <div>Verktaki (Tengill) rukkar <b>áætlað 12.900 kr.</b> fyrir útkall — þér er sýndur kostnaður og þú samþykkir áður en nokkuð er gert.</div>
+              </div>
+            </div>
+
+            <div class="card" style="align-content:start;">
+              <div class="card-h">Spjall <span class="sub">ZPR074006 · þú ↔ hjálpari</span></div>
+              <div class="chat">
+                <div class="bubble sys">Stefán Árnason gekk í málið sem hjálpari · 14:09</div>
+                <div class="bubble them"><div class="meta">Stefán (hjálpari) · 14:10</div>Sæl Alice — er bíllinn læstur við tengilinn? Stundum þarf að taka úr og setja aftur í.</div>
+                <div class="bubble me"><div class="meta">Þú · 14:18</div>Prófaði það, sama staða. Rautt ljós heldur áfram að blikka.</div>
+                <div class="bubble them"><div class="meta">Stefán (hjálpari) · 14:21</div>Ok, þá er þetta líklega stöðin sjálf. Ég endurræsi hana úr stýringunni — prófaðu eftir 2 mín.</div>
+              </div>
+              <div class="chatbar">
+                <input class="inp" placeholder="Skrifa skilaboð…" />
+                <button class="btn primary sm">Senda</button>
+              </div>
+              <div class="note" style="padding:0 18px 16px;">Hjálparar geta endurræst stöð úr fjarlægð en ekki séð greiðsluupplýsingar. Aðeins þú getur stigmagnað til verktaka.</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ===================== HELPER ===================== -->
+        <section class="screen" data-screen="helper">
+          <div class="head">
+            <div>
+              <h1>Verða hjálpari <span class="newtag soon">soon · ADR 0032</span></h1>
+              <p>Þú getur boðið nágrönnum aðstoð við hleðsluvandamál (nágrannahjálp). Sjálfboðið — þú ákveður hvenær þú ert til taks. Hjálparar geta stýrt stöð en sjá engar greiðsluupplýsingar. <span class="sub">Háð kerfi: is_helper getan á DriverGroupMembership er enn óskráð (ADR 0032).</span></p>
+            </div>
+          </div>
+
+          <div class="card" style="margin-bottom:16px;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+            <div class="toggle" style="padding:0;">
+              <div class="sw on" id="helperSw"></div>
+              <div><strong style="font-size:14px;">Ég er til taks sem hjálpari</strong><div class="sub">Dalvegur 10–14 · þú færð tilkynningu þegar nágranni þarf aðstoð</div></div>
+            </div>
+            <div style="display:flex;gap:18px;">
+              <div><div class="sub">Mál leyst</div><div style="font-weight:800;font-size:18px;">17</div></div>
+              <div><div class="sub">Taxti</div><div style="font-weight:800;font-size:18px;">0 kr. <span class="ro">sjálfboða</span></div></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-h">Opnar hjálparbeiðnir nálægt þér <span class="badge">2</span></div>
+            <table>
+              <thead><tr><th>Ökumaður</th><th>Stöð / svæði</th><th>Vandamál</th><th>Beðið</th><th class="right">Aðgerð</th></tr></thead>
+              <tbody>
+                <tr><td>Bjarni Þór <span class="sub">Íbúð 201</span></td><td class="mono">ZPR074007 · Dalvegur</td><td>Hleðsla rofnar eftir 5 mín</td><td class="sub">8 mín</td><td class="right"><button class="btn sm primary">Bjóða aðstoð</button></td></tr>
+                <tr><td>Katla S. <span class="sub">Íbúð 404</span></td><td class="mono">ZPR074011 · Dalvegur</td><td>Veit ekki hvernig á að ræsa</td><td class="sub">22 mín</td><td class="right"><button class="btn sm primary">Bjóða aðstoð</button></td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="card" style="margin-top:16px;">
+            <div class="card-h">Mál sem þú hefur hjálpað með <span class="sub">síðustu</span></div>
+            <table>
+              <thead><tr><th>Ökumaður</th><th>Vandamál</th><th>Niðurstaða</th><th>Dags.</th></tr></thead>
+              <tbody>
+                <tr><td>Óli Pétursson</td><td>Stöð svaraði ekki</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Leyst — endurræst</span></td><td class="sub">1. jún</td></tr>
+                <tr><td>Elín Ragnars</td><td>Rangur tengill</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Leyst — leiðbeint</span></td><td class="sub">28. maí</td></tr>
+                <tr><td>Þóra Dís</td><td>Hleðsla of hæg</td><td><span class="badge2 s-mut"><span class="dot bg-mut"></span>Vísað á verktaka</span></td><td class="sub">24. maí</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="note">Ef húsfélagið er með þjónustusamning (SLA) gildir taxti þess; annars er sjálfgefinn veitandi Tengill. Greiðsla milli ökumanns og verktaka fer fram fyrir utan sjálfboðaaðstoð.</div>
+        </section>
+
+        <!-- ===================== SETTINGS ===================== -->
+        <section class="screen" data-screen="settings">
+          <div class="head">
+            <div>
+              <h1>Stillingar</h1>
+              <p>Þínar upplýsingar og stillingar. Auðkenni er stofnað af húsfélaginu — hafðu samband við það til að breyta nafni eða kennitölu.</p>
+            </div>
+          </div>
+
+          <div class="grid g2">
+            <div class="card" style="padding:20px;">
+              <div class="card-h" style="border:0;padding:0 0 14px;">Auðkenni <span class="ro">Stofnað af húsfélagi</span></div>
+              <div class="field"><label>Nafn</label><div class="ro-val">Alice Jónsdóttir</div></div>
+              <div class="field"><label>Kennitala</label><div class="ro-val mono">120389-••••</div></div>
+              <div class="field"><label>Netfang</label><div class="ro-val">alice@dalvegur.is</div></div>
+              <div class="field" style="margin:0;"><label>Sími</label><input class="inp" value="+354 690 1234" /></div>
+              <div class="note">Nafn og kennitölu breytir húsfélagið. Netfang og síma getur þú uppfært sjálf(ur).</div>
+            </div>
+
+            <div style="display:grid;gap:16px;align-content:start;">
+              <div class="card" style="padding:20px;">
+                <div class="card-h" style="border:0;padding:0 0 12px;">Mínir bílar <span class="sub">2</span> <button class="btn sm primary">＋ Bæta við</button></div>
+                <div class="veh"><div><strong style="font-size:13px;">Tesla Model Y</strong><div class="sub mono">AB-123 · Type 2 / CCS</div></div><span class="badge2 s-ok"><span class="dot bg-ok"></span>Sjálfgefinn</span></div>
+                <div class="veh"><div><strong style="font-size:13px;">VW ID.4</strong><div class="sub mono">KE-456 · Type 2 / CCS</div></div><div style="display:flex;gap:8px;"><button class="btn sm ghost">Gera sjálfgefinn</button><button class="btn sm danger">Fjarlægja</button></div></div>
+                <div class="note">Sjálfgefinn bíll er forvalinn þegar þú ræsir hleðslu — þú getur valið annan í appinu við stöðina.</div>
+              </div>
+
+              <div class="card" style="padding:20px;">
+                <div class="card-h" style="border:0;padding:0 0 6px;">Stillingar</div>
+                <div class="toggle" style="border-bottom:1px solid rgba(30,42,68,.5);"><div class="sw on"></div><div><strong style="font-size:13px;">Tilkynningar um hleðslu</strong><div class="sub">Þegar hleðsla lýkur eða rofnar</div></div></div>
+                <div class="toggle" style="border-bottom:1px solid rgba(30,42,68,.5);"><div class="sw on"></div><div><strong style="font-size:13px;">Hjálparbeiðnir</strong><div class="sub">Láta vita þegar nágranni þarf aðstoð</div></div></div>
+                <div class="toggle"><div class="sw"></div><div><strong style="font-size:13px;">Mánaðarlegt yfirlit í pósti</strong><div class="sub">Samantekt um notkun og kostnað</div></div></div>
+                <div class="field" style="margin:14px 0 0;"><label>Tungumál</label><div class="ro-val">Íslenska ▾</div></div>
+              </div>
+
+              <button class="btn full">Vista breytingar</button>
+            </div>
+          </div>
+        </section>
+
+        <div class="legend">
+          <b>Stöðumerki / status legend</b> — <span class="tag new">new</span> nýtt yfirborð, bakland til staðar ·
+          <span class="tag soon">soon</span> ekki bakkað enn, háð ADR-vinnu. Í þessari ökumannssýn eru
+          <b>Fjölskylda</b> (ADR 0031, dependent-via-group), <b>Mín mál</b> og <b>Verða hjálpari</b>
+          (ADR 0032: Issue Engine, nágrannahjálp, ticket-spjall) og <b>billing-context skiptirinn</b> (heimili ↔ vinnustaður)
+          merkt <span class="tag soon">soon</span> — hönnun tilbúin, bakland ósmíðað. Orðalag: <b>eining</b> = billing-home,
+          <b>aðgangshópur</b> = access group.
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const items = [...document.querySelectorAll('.nav-item')];
+    const screens = [...document.querySelectorAll('.screen')];
+    function show(name) {
+      items.forEach(i => i.classList.toggle('active', i.dataset.screen === name));
+      screens.forEach(s => s.classList.toggle('active', s.dataset.screen === name));
+      window.scrollTo(0, 0);
+    }
+
+    // Sidebar navigation
+    document.getElementById('nav').addEventListener('click', e => {
+      const item = e.target.closest('.nav-item');
+      if (item) { show(item.dataset.screen); history.replaceState(null, '', '#' + item.dataset.screen); }
+    });
+
+    // In-page buttons
+    document.body.addEventListener('click', e => {
+      const b = e.target.closest('[data-goto]');
+      if (!b) return;
+      show(b.dataset.goto);
+      history.replaceState(null, '', '#' + b.dataset.goto);
+    });
+
+    // Tabs (visual only on driver screens)
+    document.body.addEventListener('click', e => {
+      const t = e.target.closest('.tab');
+      if (!t) return;
+      const set = t.parentNode;
+      [...set.children].forEach(x => x.classList.remove('active'));
+      t.classList.add('active');
+    });
+
+    // Toggle switches
+    document.body.addEventListener('click', e => {
+      const sw = e.target.closest('.sw');
+      if (sw) sw.classList.toggle('on');
+    });
+
+    // Billing-context switcher (home vs workplace)
+    const bs = document.getElementById('billSwitcher');
+    const bm = document.getElementById('billMenu');
+    bs.addEventListener('click', e => { e.stopPropagation(); bm.classList.toggle('open'); });
+    document.addEventListener('click', () => bm.classList.remove('open'));
+    bm.addEventListener('click', e => {
+      const it = e.target.closest('[data-bill]');
+      if (!it) return;
+      document.getElementById('billLabel').textContent = it.firstChild.textContent.trim();
+    });
+
+    if (location.hash) show(location.hash.slice(1));
+  </script>
+</body>
+</html>
