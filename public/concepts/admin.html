@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Straumvakt — Operator admin (full console concept)</title>
+  <!--
+    STRAUMVAKT STAFF operator-admin console concept.
+    NAV MIRRORS the live console (src/components/sidebar.tsx on hlada-staging):
+    Dashboard · Operations · Accounts · Billing · Onboard · Reference ·
+    Mobile App · Technical Read.
+    Going-public + deeper-design ADDITIONS are interleaved and tagged `new`.
+    Companion: straumvakt-admin-design.md. Standalone mock — open in a browser.
+  -->
+  <style>
+    :root{--bg:#070b16;--surface:#0b1220;--raised:#111a2e;--inset:#0e1626;--border:#1e2a44;--ring:#2b3a5e;--text:#f5f7fa;--muted:#97a3b8;--soft:#c8d1e0;--green:#3ee9a7;--teal:#2bd3c9;--blue:#2bb6e8;--sky:#6fb8f0;--amber:#f4c95d;--red:#ff6b6b;--violet:#a78bfa;font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+    *{box-sizing:border-box;} body{margin:0;min-height:100vh;color:var(--text);background:radial-gradient(1200px 600px at 80% -10%,rgba(43,182,232,.10),transparent 60%),radial-gradient(900px 500px at -10% 10%,rgba(62,233,167,.08),transparent 60%),var(--bg);background-attachment:fixed;}
+    a{color:inherit;text-decoration:none;} button{font-family:inherit;}
+    .shell{display:grid;grid-template-columns:256px 1fr;min-height:100vh;}
+    .sidebar{border-right:1px solid var(--border);background:rgba(11,18,32,.6);backdrop-filter:blur(8px);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;}
+    .brand{display:flex;align-items:center;gap:12px;padding:16px 18px 12px;border-bottom:1px solid var(--border);}
+    .brand .logo{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,var(--green),var(--teal) 55%,var(--blue));display:grid;place-items:center;color:#04121b;font-weight:900;}
+    .brand .word strong{display:block;font-size:15px;background:linear-gradient(135deg,var(--green),var(--teal) 55%,var(--blue));background-clip:text;-webkit-background-clip:text;color:transparent;}
+    .brand .word span{display:block;margin-top:1px;font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--sky);}
+    .nav{padding:8px 8px 16px;overflow-y:auto;flex:1;}
+    .nav-label{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);padding:12px 12px 4px;display:flex;align-items:center;gap:6px;}
+    .nav-item{display:flex;align-items:center;gap:10px;padding:6px 12px;border-radius:8px;cursor:pointer;color:var(--soft);font-size:13px;font-weight:500;border:1px solid transparent;}
+    .nav-item:hover{background:var(--raised);}
+    .nav-item.active{background:linear-gradient(135deg,rgba(62,233,167,.14),rgba(43,182,232,.12));border-color:rgba(43,182,232,.35);color:var(--text);}
+    .nav-item.sub{padding-left:22px;font-size:12.5px;color:var(--muted);}
+    .nav-item.sub.active{color:var(--text);}
+    .nav-item .ico{width:16px;text-align:center;opacity:.85;font-size:13px;}
+    .new{font-size:8.5px;font-weight:800;letter-spacing:.06em;color:var(--green);border:1px solid rgba(62,233,167,.4);background:rgba(62,233,167,.08);padding:0 5px;border-radius:5px;margin-left:auto;text-transform:uppercase;}
+    .badge{margin-left:auto;font-size:10px;font-weight:700;background:rgba(244,201,93,.16);color:var(--amber);border:1px solid rgba(244,201,93,.4);padding:0 6px;border-radius:999px;}
+    .badge.red{background:rgba(255,107,107,.16);color:var(--red);border-color:rgba(255,107,107,.4);}
+    .nav-foot{border-top:1px solid var(--border);padding:10px 14px;display:flex;align-items:center;gap:10px;font-size:11px;color:var(--muted);}
+    .avatar{width:28px;height:28px;border-radius:999px;flex:none;background:linear-gradient(135deg,#a78bfa,#2bb6e8);color:#04121b;display:grid;place-items:center;font-weight:800;font-size:11px;}
+    .main{min-width:0;} .topbar{height:54px;display:flex;align-items:center;gap:16px;padding:0 26px;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:5;background:rgba(7,11,22,.75);backdrop-filter:blur(14px);}
+    .topbar .role{display:flex;align-items:center;gap:10px;font-weight:700;font-size:14px;} .topbar .spacer{flex:1;} .topbar .tlink{font-size:12px;color:var(--muted);}
+    .pill{font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px;border:1px solid var(--border);color:var(--soft);background:var(--inset);}
+    .pill.staff{color:var(--violet);border-color:rgba(167,139,250,.4);background:rgba(167,139,250,.1);} .pill.mdu{color:var(--sky);border-color:rgba(111,184,240,.4);background:rgba(111,184,240,.08);} .pill.co{color:var(--teal);border-color:rgba(43,211,201,.4);background:rgba(43,211,201,.08);}
+    .search{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);background:var(--inset);border:1px solid var(--border);border-radius:9px;padding:6px 11px;width:300px;} .search input{background:transparent;border:0;color:var(--text);font-size:12px;outline:none;width:100%;}
+    .content{padding:22px 26px 60px;max-width:1180px;}
+    .screen{display:none;} .screen.active{display:block;animation:fade .16s ease;} @keyframes fade{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:none;}}
+    .crumb{font-size:12px;color:var(--muted);margin-bottom:9px;} .crumb a{color:var(--sky);}
+    .head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:16px;}
+    .head h1{font-size:21px;margin:0 0 4px;letter-spacing:-.01em;} .head .titlewrap{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+    .head p{margin:0;color:var(--muted);font-size:12.5px;max-width:74ch;}
+    .newtag{font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--green);border:1px solid rgba(62,233,167,.35);background:rgba(62,233,167,.07);padding:2px 7px;border-radius:6px;}
+    .lens{font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--violet);border:1px solid rgba(167,139,250,.3);background:rgba(167,139,250,.07);padding:2px 7px;border-radius:6px;}
+    .btn{display:inline-flex;align-items:center;gap:7px;padding:8px 14px;border-radius:10px;font-size:12.5px;font-weight:700;border:1px solid var(--border);background:var(--raised);color:var(--text);cursor:pointer;} .btn:hover{border-color:var(--ring);} .btn.primary{background:linear-gradient(135deg,var(--green),var(--blue));color:#04121b;border:0;} .btn.ghost{background:transparent;} .btn.sm{padding:5px 10px;font-size:11.5px;} .btn.danger{color:var(--red);border-color:rgba(255,107,107,.4);background:rgba(255,107,107,.07);} .btn[disabled]{opacity:.4;cursor:not-allowed;}
+    .tabs{display:flex;gap:4px;margin-bottom:14px;border-bottom:1px solid var(--border);flex-wrap:wrap;} .tab{padding:8px 13px;font-size:12.5px;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;} .tab.active{color:var(--text);border-color:var(--blue);}
+    .card{border:1px solid var(--border);border-radius:13px;background:linear-gradient(180deg,rgba(17,26,46,.5),rgba(11,18,32,.6));} .card+.card{margin-top:14px;}
+    .card .card-h{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;font-size:12.5px;font-weight:700;gap:10px;} .card .card-h .sub{color:var(--muted);font-weight:500;font-size:11.5px;}
+    .grid{display:grid;gap:14px;} .g4{grid-template-columns:repeat(4,1fr);} .g3{grid-template-columns:repeat(3,1fr);} .g2{grid-template-columns:1.6fr 1fr;} .g2e{grid-template-columns:1fr 1fr;}
+    .kpi{padding:14px 16px;} .kpi .lbl{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);} .kpi .val{font-size:24px;font-weight:800;margin:7px 0 2px;} .kpi .val.grad{background:linear-gradient(135deg,var(--green),var(--blue));background-clip:text;-webkit-background-clip:text;color:transparent;} .kpi .delta{font-size:11.5px;color:var(--green);} .kpi .delta.flat{color:var(--muted);} .kpi .delta.warn{color:var(--amber);} .kpi .delta.bad{color:var(--red);}
+    table{width:100%;border-collapse:collapse;font-size:12.5px;} thead th{text-align:left;font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:600;padding:10px 16px;border-bottom:1px solid var(--border);} tbody td{padding:11px 16px;border-bottom:1px solid rgba(30,42,68,.55);} tbody tr:last-child td{border-bottom:0;} tbody tr.clk{cursor:pointer;} tbody tr:hover{background:rgba(17,26,46,.45);}
+    .mono{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:11.5px;color:var(--soft);} .sub{color:var(--muted);font-size:11.5px;} .right{text-align:right;}
+    .badge2{font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px;display:inline-flex;align-items:center;gap:5px;} .dot{width:6px;height:6px;border-radius:999px;display:inline-block;}
+    .s-ok{color:var(--green);background:rgba(62,233,167,.1);border:1px solid rgba(62,233,167,.35);} .s-live{color:var(--blue);background:rgba(43,182,232,.1);border:1px solid rgba(43,182,232,.35);} .s-warn{color:var(--amber);background:rgba(244,201,93,.1);border:1px solid rgba(244,201,93,.35);} .s-mut{color:var(--muted);background:rgba(151,163,184,.08);border:1px solid rgba(151,163,184,.3);} .s-bad{color:var(--red);background:rgba(255,107,107,.08);border:1px solid rgba(255,107,107,.35);}
+    .bg-ok{background:var(--green);}.bg-live{background:var(--blue);}.bg-warn{background:var(--amber);}.bg-mut{background:var(--muted);}.bg-bad{background:var(--red);}
+    .ro{font-size:10.5px;color:var(--muted);border:1px dashed var(--border);padding:1px 7px;border-radius:6px;}
+    .cp{font-size:9.5px;font-weight:700;padding:1px 6px;border-radius:5px;border:1px solid;font-family:ui-monospace,monospace;white-space:nowrap;}
+    .cp-ocpp{color:var(--green);border-color:rgba(62,233,167,.4);background:rgba(62,233,167,.07);}.cp-zn{color:var(--sky);border-color:rgba(111,184,240,.4);background:rgba(111,184,240,.07);}.cp-zw{color:var(--amber);border-color:rgba(244,201,93,.4);background:rgba(244,201,93,.07);}.cp-easee{color:var(--teal);border-color:rgba(43,211,201,.4);background:rgba(43,211,201,.07);}.cp-ext{color:var(--violet);border-color:rgba(167,139,250,.4);background:rgba(167,139,250,.07);}.cp-ro{color:var(--muted);border-color:var(--border);background:var(--inset);}
+    .check{display:flex;gap:11px;align-items:flex-start;padding:11px 0;border-bottom:1px solid rgba(30,42,68,.5);} .check:last-child{border:0;} .check .ic{width:20px;height:20px;border-radius:999px;display:grid;place-items:center;font-size:11px;font-weight:800;flex:none;} .check.ok .ic{background:rgba(62,233,167,.15);color:var(--green);} .check.warn .ic{background:rgba(244,201,93,.15);color:var(--amber);} .check.bad .ic{background:rgba(255,107,107,.15);color:var(--red);} .check .t{font-size:12.5px;font-weight:600;} .check .d{font-size:11.5px;color:var(--muted);margin-top:2px;}
+    .sw{width:36px;height:21px;border-radius:999px;background:var(--ring);position:relative;flex:none;cursor:pointer;} .sw.on{background:linear-gradient(135deg,var(--green),var(--blue));} .sw::after{content:"";position:absolute;top:3px;left:3px;width:15px;height:15px;border-radius:999px;background:#fff;transition:.15s;} .sw.on::after{left:18px;} .sw.locked{opacity:.35;cursor:not-allowed;}
+    .toggle{display:flex;align-items:center;gap:11px;padding:11px 0;border-bottom:1px solid rgba(30,42,68,.5);} .toggle:last-child{border:0;}
+    .warnbox{display:flex;gap:11px;padding:12px 15px;border-radius:11px;background:rgba(255,107,107,.07);border:1px solid rgba(255,107,107,.35);font-size:12.5px;color:var(--soft);margin-bottom:14px;} .warnbox.amber{background:rgba(244,201,93,.07);border-color:rgba(244,201,93,.35);} .warnbox.sky{background:rgba(111,184,240,.07);border-color:rgba(111,184,240,.3);} .warnbox b{color:var(--red);} .warnbox.amber b{color:var(--amber);} .warnbox.sky b{color:var(--sky);}
+    .lvl{font-size:9.5px;font-weight:700;padding:1px 5px;border-radius:5px;font-family:ui-monospace,monospace;} .lvl-info{color:var(--sky);background:rgba(111,184,240,.1);}.lvl-warn{color:var(--amber);background:rgba(244,201,93,.1);}.lvl-err{color:var(--red);background:rgba(255,107,107,.1);}
+    .bgrid{border-collapse:collapse;font-size:11.5px;margin:0 16px 14px;width:calc(100% - 32px);} .bgrid th,.bgrid td{border:1px solid var(--border);padding:7px 9px;text-align:center;} .bgrid th{color:var(--muted);font-size:10.5px;text-transform:uppercase;} .bgrid td.scope{text-align:left;font-weight:600;color:var(--soft);} .bgrid .pays{color:var(--green);font-weight:700;} .bgrid .inherit{color:var(--muted);}
+    .ribbon{font-size:11px;color:var(--amber);background:rgba(244,201,93,.08);border:1px solid rgba(244,201,93,.3);border-radius:8px;padding:7px 12px;margin-bottom:14px;} .ribbon.blocked{color:var(--sky);background:rgba(111,184,240,.08);border-color:rgba(111,184,240,.3);} .ribbon.new{color:var(--green);background:rgba(62,233,167,.07);border-color:rgba(62,233,167,.3);}
+    .field{margin-bottom:12px;} .field label{display:block;font-size:11.5px;color:var(--muted);margin-bottom:5px;} .inp{width:100%;background:var(--inset);border:1px solid var(--border);border-radius:9px;color:var(--text);padding:8px 11px;font-size:12.5px;} .inp::placeholder{color:var(--muted);}
+    .note{font-size:11.5px;color:var(--muted);margin-top:8px;} .kv{display:flex;justify-content:space-between;font-size:12.5px;padding:6px 0;border-bottom:1px solid rgba(30,42,68,.5);} .kv:last-child{border:0;} .kv .k{color:var(--muted);}
+    .seg{display:flex;gap:8px;} .seg .opt{flex:1;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--inset);cursor:pointer;font-size:12.5px;} .seg .opt.sel{border-color:rgba(43,182,232,.5);background:rgba(43,182,232,.08);} .seg .opt strong{display:block;} .seg .opt p{margin:3px 0 0;font-size:10.5px;color:var(--muted);}
+    .stepper{display:flex;gap:14px;margin-bottom:16px;flex-wrap:wrap;} .step{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);} .step .n{width:22px;height:22px;border-radius:999px;border:1px solid var(--border);display:grid;place-items:center;font-weight:700;font-size:11px;} .step.on{color:var(--text);} .step.on .n{background:linear-gradient(135deg,var(--green),var(--blue));color:#04121b;border:0;}
+    details{margin:0;} summary{list-style:none;cursor:pointer;} summary::-webkit-details-marker{display:none;}
+    .stub{padding:16px;color:var(--muted);font-size:12.5px;line-height:1.7;} .stub b{color:var(--soft);}
+    .legend{margin-top:24px;padding:12px 16px;border:1px solid var(--border);border-radius:11px;background:var(--inset);font-size:11.5px;color:var(--muted);line-height:1.7;} .legend b{color:var(--soft);}
+    .legend .soonchip{font-size:8.5px;font-weight:800;letter-spacing:.06em;color:var(--amber);border:1px solid rgba(244,201,93,.45);background:rgba(244,201,93,.09);padding:0 5px;border-radius:5px;text-transform:uppercase;}
+    /* host context switcher */
+    .hostsw{position:relative;display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;color:var(--soft);background:var(--inset);border:1px solid var(--border);border-radius:9px;padding:6px 11px;cursor:pointer;}
+    .hostsw:hover{border-color:var(--ring);} .hostsw.scoped{border-color:rgba(111,184,240,.5);background:rgba(111,184,240,.08);color:var(--text);}
+    .menu{position:absolute;top:38px;left:0;min-width:250px;background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:6px;display:none;z-index:30;box-shadow:0 20px 44px rgba(2,6,16,.55);}
+    .menu.open{display:block;} .menu>div{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-radius:8px;font-size:12.5px;font-weight:500;color:var(--soft);cursor:pointer;} .menu>div:hover{background:var(--raised);} .menu .mini{font-size:11px;color:var(--muted);font-weight:400;}
+    .scopebar{display:flex;align-items:center;gap:11px;padding:8px 26px;border-bottom:1px solid var(--border);background:linear-gradient(90deg,rgba(111,184,240,.10),rgba(62,233,167,.05));font-size:12.5px;color:var(--soft);position:sticky;top:54px;z-index:4;}
+    .scopebar strong{color:var(--text);} .scopebar .btn{margin-left:auto;}
+    .onlyhost{display:none;} body.scoped .onlyhost{display:block;} body.scoped .allonly{display:none;}
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand"><div class="logo">S</div><div class="word"><strong>Straumvakt</strong><span>Operator · Admin</span></div></div>
+      <nav class="nav" id="nav">
+        <div class="nav-item active" data-screen="dashboard"><span class="ico">▦</span> Dashboard</div>
+
+        <div class="nav-label">Operations</div>
+        <div class="nav-item sub" data-screen="sites"><span class="ico">📍</span> Sites</div>
+        <div class="nav-item sub" data-screen="installations"><span class="ico">🔌</span> Installations</div>
+        <div class="nav-item sub" data-screen="circuits"><span class="ico">🧵</span> Circuits</div>
+        <div class="nav-item sub" data-screen="chargers"><span class="ico">⚡</span> Chargers</div>
+        <div class="nav-item sub" data-screen="chargelog"><span class="ico">📈</span> Charge log</div>
+        <div class="nav-item sub" data-screen="vehicleids"><span class="ico">🆔</span> Vehicle IDs</div>
+        <div class="nav-item sub" data-screen="diagnostics"><span class="ico">🩺</span> Diagnostics <span class="new">new</span></div>
+        <div class="nav-item sub" data-screen="access"><span class="ico">🔐</span> Access &amp; auth <span class="new">new</span></div>
+
+        <div class="nav-label">Accounts</div>
+        <div class="nav-item sub" data-screen="organizations"><span class="ico">🏛</span> Organizations</div>
+        <div class="nav-item sub" data-screen="hosts"><span class="ico">🏢</span> Hosts <span class="new">new</span></div>
+        <div class="nav-item sub" data-screen="properties"><span class="ico">🏗</span> Properties</div>
+        <div class="nav-item sub" data-screen="groups"><span class="ico">👪</span> Groups</div>
+        <div class="nav-item sub" data-screen="users"><span class="ico">🧑‍💼</span> Users</div>
+        <div class="nav-item sub" data-screen="drivers"><span class="ico">👤</span> Drivers <span class="new">new</span></div>
+
+        <div class="nav-label">Billing</div>
+        <div class="nav-item sub" data-screen="costfactors"><span class="ico">🧮</span> Cost factors</div>
+        <div class="nav-item sub" data-screen="tariffs"><span class="ico">🏷</span> Tariffs</div>
+        <div class="nav-item sub" data-screen="costcenters"><span class="ico">💼</span> Cost centers</div>
+        <div class="nav-item sub" data-screen="agreements"><span class="ico">🤝</span> Agreements</div>
+        <div class="nav-item sub" data-screen="contracts"><span class="ico">📄</span> Contracts (legacy)</div>
+        <div class="nav-item sub" data-screen="drivercontracts"><span class="ico">📑</span> Driver contracts</div>
+        <div class="nav-item sub" data-screen="dso"><span class="ico">🔋</span> DSO rates</div>
+        <div class="nav-item sub" data-screen="electricity"><span class="ico">💡</span> Electricity rates</div>
+        <div class="nav-item sub" data-screen="invoices"><span class="ico">🧾</span> Host invoices <span class="new">new</span></div>
+
+        <div class="nav-label">Onboard</div>
+        <div class="nav-item sub" data-screen="onboardhost"><span class="ico">🏢</span> Onboard host <span class="new">new</span></div>
+        <div class="nav-item sub" data-screen="applications"><span class="ico">✉</span> Applications <span class="badge">5</span></div>
+        <div class="nav-item sub" data-screen="vendorcreds"><span class="ico">🔑</span> Vendor credentials</div>
+        <div class="nav-item sub" data-screen="zaptec"><span class="ico">⚡</span> Zaptec wizard</div>
+        <div class="nav-item sub" data-screen="testchain"><span class="ico">🧪</span> Test chain (utility)</div>
+
+        <div class="nav-label">Reference</div>
+        <div class="nav-item sub" data-screen="reference"><span class="ico">📚</span> Catalogue</div>
+
+        <div class="nav-label">Tools</div>
+        <div class="nav-item sub" data-screen="technicalread"><span class="ico">🔧</span> Technical Read</div>
+        <div class="nav-item sub" data-screen="mobileapp"><span class="ico">📱</span> Mobile App</div>
+        <div class="nav-item sub" data-screen="platform"><span class="ico">⚙</span> Platform <span class="new">new</span></div>
+      </nav>
+      <div class="nav-foot"><div class="avatar">AÞ</div><div><div style="color:var(--soft);font-weight:600;">Andri Þór</div><div>Straumvakt staff</div></div></div>
+    </aside>
+
+    <div class="main">
+      <div class="topbar">
+        <div class="role">Operator console <span class="pill staff">Straumvakt staff</span></div>
+        <div class="hostsw" id="hostSw">🏢 <span id="hostLabel">All hosts</span> <span class="sub" id="hostCount">(18)</span> ▾
+          <div class="menu" id="hostMenu">
+            <div data-host="all">All hosts <span class="mini">global staff view</span></div>
+            <div data-host="dalvegur" data-kind="mdu" data-label="Dalvegur Húsfélag">Dalvegur Húsfélag <span class="mini">MDU · 18 chargers</span></div>
+            <div data-host="n1" data-kind="co" data-label="N1 hf.">N1 hf. <span class="mini">Company · 62</span></div>
+            <div data-host="lindir" data-kind="mdu" data-label="Lindir Húsfélag">Lindir Húsfélag <span class="mini">MDU · 14</span></div>
+            <div data-host="kronan" data-kind="co" data-label="Krónan Smáralind">Krónan Smáralind <span class="mini">Company · 8</span></div>
+          </div>
+        </div>
+        <div class="spacer"></div>
+        <div class="search">🔎 <input placeholder="host, charger, driver, kennitala, ZPR…"/></div>
+        <span class="tlink">EN</span><span class="tlink">Sign out</span>
+      </div>
+      <div class="scopebar" id="scopeBar" style="display:none;">
+        Scoped to <strong id="scopeName">—</strong> <span class="pill" id="scopeKind"></span> · showing only this host's items
+        <button class="btn sm ghost" id="scopeExit">All hosts ✕</button>
+      </div>
+      <div class="content">
+
+        <!-- DASHBOARD -->
+        <section class="screen active" data-screen="dashboard">
+          <div class="head"><div><h1>Dashboard</h1><p>Fleet-wide health and what needs you now, across every host. Existing surface — proposed to lead with operational health.</p></div><button class="btn primary" data-goto="onboardhost">＋ Onboard host</button></div>
+          <div class="grid g4" style="margin-bottom:14px;">
+            <div class="card kpi"><div class="lbl">Chargers online</div><div class="val">388<span class="sub" style="font-size:13px;"> / 412</span></div><div class="delta warn">24 offline · 3 faulted</div></div>
+            <div class="card kpi"><div class="lbl">Gateway lag</div><div class="val grad">0,4 s</div><div class="delta">DLQ empty</div></div>
+            <div class="card kpi"><div class="lbl">Sessions today</div><div class="val">418</div><div class="delta">97,1% complete</div></div>
+            <div class="card kpi"><div class="lbl">Hosts</div><div class="val">18</div><div class="delta flat">16 live · 2 onboarding</div></div>
+          </div>
+          <div class="card"><div class="card-h">Needs you now <span class="new">new — operator action queue</span></div><table><tbody>
+            <tr class="clk" data-host="dalvegur" data-goto="access"><td><span class="badge2 s-bad"><span class="dot bg-bad"></span>Auth</span></td><td><strong>Dalvegur — Geymslusvæði</strong> · enforce-auth requested with 0 IdTokens (lockout risk)</td><td class="right"><button class="btn sm">Go-live →</button></td></tr>
+            <tr class="clk" data-host="lindir" data-goto="diagnostics"><td><span class="badge2 s-bad"><span class="dot bg-bad"></span>Fleet</span></td><td><strong>Lindir</strong> · 4 chargers offline &gt; 6h</td><td class="right"><button class="btn sm">Diagnose →</button></td></tr>
+            <tr class="clk" data-host="ref" data-goto="applications"><td><span class="badge2 s-live"><span class="dot bg-live"></span>Lead</span></td><td><strong>2 new applications</strong> · Festi hf. · Sjáland</td><td class="right"><button class="btn sm">Inbox →</button></td></tr>
+          </tbody></table></div>
+        </section>
+
+        <!-- ===== OPERATIONS ===== -->
+        <section class="screen" data-screen="sites">
+          <div class="head"><div><h1>Sites</h1><p>Existing. Org → Property → Site → Installation → Circuit → Charger tree. Proposed: add control-plane badges + auth state per row.</p></div><button class="btn primary">＋ Add site</button></div>
+          <div class="card"><div class="card-h">All sites <span class="sub">grouped by org</span></div><table>
+            <thead><tr><th>Site / org</th><th>Installation</th><th>Plane <span class="new">new</span></th><th>Chargers</th><th>Online</th><th>Lifetime kWh</th></tr></thead><tbody>
+              <tr data-host="dalvegur"><td><strong>Dalvegur 10–14</strong><div class="sub">Dalvegur HOA · Kópavogur</div></td><td class="sub">Dalvegur 10–14</td><td><span class="cp cp-zw">ZAPTEC·WH</span></td><td>12</td><td>11</td><td>342.118</td></tr>
+              <tr data-host="dalvegur"><td><strong>Bílakjallari</strong><div class="sub">Dalvegur HOA</div></td><td class="sub">Bílakjallari</td><td><span class="cp cp-easee">EASEE</span></td><td>4</td><td>3</td><td>88.402</td></tr>
+              <tr data-host="n1"><td><strong>Reykjavík HQ</strong><div class="sub">N1 hf.</div></td><td class="sub">Reykjavík HQ</td><td><span class="cp cp-ocpp">OCPP 1.6J</span></td><td>22</td><td>22</td><td>1.204.880</td></tr>
+            </tbody></table></div>
+        </section>
+
+        <section class="screen" data-screen="installations">
+          <div class="head"><div><h1>Installations</h1><p>Existing. Vendor-managed groupings (one credential set each). Control plane, auth mode, OCPP identity counts, <span class="mono">acceptsVendorDefault</span> / <span class="mono">enforceAuthorize</span> toggles.</p></div><button class="btn primary">＋ New installation</button></div>
+          <div class="card"><div class="card-h">All installations</div><table>
+            <thead><tr><th>Installation</th><th>Org</th><th>Vendor</th><th>Plane</th><th>OCPP ids</th><th>Enforce</th><th>Free-vend</th></tr></thead><tbody>
+              <tr data-host="dalvegur"><td><strong>Dalvegur 10–14</strong></td><td class="sub">Dalvegur HOA</td><td>zaptec</td><td><span class="cp cp-zw">ZAPTEC·WH</span></td><td>12</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>On</span></td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>On</span></td></tr>
+              <tr data-host="dalvegur"><td><strong>Geymslusvæði</strong></td><td class="sub">Dalvegur HOA</td><td>zaptec</td><td><span class="cp cp-zw">ZAPTEC·WH</span></td><td>2</td><td><span class="badge2 s-warn"><span class="dot bg-warn"></span>Shadow</span></td><td><span class="badge2 s-mut"><span class="dot bg-mut"></span>Off</span></td></tr>
+              <tr data-host="n1"><td><strong>Reykjavík HQ</strong></td><td class="sub">N1 hf.</td><td>easee→ocpp</td><td><span class="cp cp-ocpp">OCPP 1.6J</span></td><td>22</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>On</span></td><td><span class="badge2 s-mut"><span class="dot bg-mut"></span>Off</span></td></tr>
+            </tbody></table></div>
+        </section>
+
+        <section class="screen" data-screen="circuits">
+          <div class="head"><div><h1>Circuits</h1><p>Existing. Breaker-bound charger groups for load-balancing (ADR 0007). Phase count, ampere ceiling, charger counts.</p></div></div>
+          <div class="card"><div class="card-h">Circuits</div><table><thead><tr><th>Circuit</th><th>Installation</th><th>Phases</th><th>Ceiling</th><th>Chargers</th></tr></thead><tbody>
+            <tr><td>Stairwell A</td><td class="sub">Dalvegur 10–14</td><td>3-phase</td><td>63 A</td><td>6</td></tr>
+            <tr><td>Stairwell B</td><td class="sub">Dalvegur 10–14</td><td>3-phase</td><td>63 A</td><td>6</td></tr>
+          </tbody></table></div>
+        </section>
+
+        <section class="screen" data-screen="chargers">
+          <div class="head"><div><h1>Chargers</h1><p>Existing. Fleet grid — status, signal, active session, model, OCPP identity. Per-charger page has technical-read, commands, config keys, sessions.</p></div></div>
+          <div class="card"><div class="card-h">Chargers <span class="sub">412</span> <input placeholder="ZPR / serial / status…" style="background:var(--inset);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:5px 9px;font-size:11.5px;width:220px;"/></div><table>
+            <thead><tr><th>Charger</th><th>Site</th><th>Plane</th><th>Status</th><th>Session</th><th class="right"></th></tr></thead><tbody>
+              <tr data-host="dalvegur"><td class="mono">ZPR074003</td><td class="sub">Dalvegur 10–14</td><td><span class="cp cp-zw">ZAPTEC·WH</span></td><td><span class="badge2 s-live"><span class="dot bg-live"></span>Charging</span></td><td class="sub">Alice · 16:48</td><td class="right"><button class="btn sm ghost">Open</button></td></tr>
+              <tr data-host="dalvegur"><td class="mono">ZPR074006</td><td class="sub">Dalvegur 10–14</td><td><span class="cp cp-zw">ZAPTEC·WH</span></td><td><span class="badge2 s-bad"><span class="dot bg-bad"></span>Offline</span></td><td class="sub">last seen 2h</td><td class="right"><button class="btn sm ghost">Open</button></td></tr>
+              <tr data-host="dalvegur"><td class="mono">EAS220104</td><td class="sub">Bílakjallari</td><td><span class="cp cp-easee">EASEE</span></td><td><span class="badge2 s-warn"><span class="dot bg-warn"></span>Unreachable</span></td><td class="sub">—</td><td class="right"><button class="btn sm ghost">Open</button></td></tr>
+            </tbody></table></div>
+          <div class="card"><div class="card-h">Pending chargers <span class="sub">awaiting onboarding</span></div><div class="stub">Existing <span class="mono">/chargers/pending</span> — discovery results not yet mapped to a site. Dismiss / clear-idle actions.</div></div>
+        </section>
+
+        <section class="screen" data-screen="chargelog">
+          <div class="head"><div><h1>Charge log</h1><p>Existing. Every session with filters (date, org, site, driver, cost status); session detail has meter values + billing-line cost breakdown. Proposed: add billing-home column.</p></div><button class="btn ghost">Export CSV</button></div>
+          <div class="card"><div class="card-h">Sessions</div><table><thead><tr><th>Started</th><th>Driver</th><th>Charger</th><th>Billing-home <span class="new">new</span></th><th>Energy</th><th>Cost</th><th>Status</th></tr></thead><tbody>
+            <tr data-host="dalvegur"><td class="sub">16:48</td><td>Alice Jónsdóttir</td><td class="mono">ZPR074003</td><td>Apt 304</td><td>18,4 kWh</td><td class="sub">accruing</td><td><span class="badge2 s-live"><span class="dot bg-live"></span>Charging</span></td></tr>
+            <tr data-host="n1"><td class="sub">15:12</td><td>Starfsm. 2241</td><td class="mono">EAS911042</td><td>N1 — fleet</td><td>31,2 kWh</td><td>1.716 kr.</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Complete</span></td></tr>
+          </tbody></table></div>
+        </section>
+
+        <section class="screen" data-screen="vehicleids">
+          <div class="head"><div><h1>Vehicle IDs</h1><p>Existing. EV PLC MAC identities seen across sessions (ADR 0021 autocharge groundwork). Per-vehicle session history; wake-fly keepalive.</p></div></div>
+          <div class="card"><div class="stub">Existing <span class="mono">/vehicle-ids</span> + <span class="mono">/vehicles/[mac]</span>. Searchable list of every EV MAC ever seen, linked from session detail. Post-pilot autocharge.</div></div>
+        </section>
+
+        <!-- DIAGNOSTICS (new) -->
+        <section class="screen" data-screen="diagnostics">
+          <div class="head"><div><div class="titlewrap"><h1>Diagnostics</h1><span class="newtag">new</span><span class="lens">ADR 0006 / 0032</span></div><p>Consolidates manual fault-finding (today scattered across Technical Read + Charge log + raw SQL). Issue Engine + nágrannahjálp slot in here later.</p></div></div>
+          <div class="grid g3" style="margin-bottom:14px;"><div class="card kpi"><div class="lbl">Faulted</div><div class="val" style="color:var(--red)">3</div></div><div class="card kpi"><div class="lbl">Offline &gt; 1h</div><div class="val" style="color:var(--amber)">24</div></div><div class="card kpi"><div class="lbl">Auth-fail bursts</div><div class="val">1</div></div></div>
+          <div class="card"><div class="card-h">Raw event log <span class="sub">events.event_log · ZPR221007 · 30 min</span></div><table><thead><tr><th>Time</th><th>Level</th><th>Type</th><th>Payload</th></tr></thead><tbody class="mono">
+            <tr><td>16:41:02</td><td><span class="lvl lvl-warn">WARN</span></td><td>StatusNotification</td><td>connectorId=1 Faulted GroundFailure</td></tr>
+            <tr><td>16:40:58</td><td><span class="lvl lvl-err">ERR</span></td><td>gateway.ws</td><td>close 1006 — heartbeat lost</td></tr>
+            <tr><td>16:30:04</td><td><span class="lvl lvl-info">INFO</span></td><td>MeterValues</td><td>kWh=12.481 signed ok</td></tr>
+          </tbody></table><div class="note" style="padding:0 16px 12px;">Ground-fault → WS drop = hardware fault. Route the ticket to the <b>owner</b> org (ADR 0008).</div></div>
+        </section>
+
+        <!-- ACCESS & AUTH (new) -->
+        <section class="screen" data-screen="access">
+          <div class="head"><div><div class="titlewrap"><h1>Access &amp; auth</h1><span class="newtag">new</span><span class="lens">ADR 0020</span></div><p>Pulls scattered auth controls (installation <span class="mono">enforceAuthorize</span> / <span class="mono">acceptsVendorDefault</span>, user IdTokens, DriverGroups) into one safety-railed surface. The two lockout traps live here.</p></div></div>
+          <div class="warnbox"><span>⚠️</span><div><b>1 install at risk.</b> Geymslusvæði: enforce-auth requested, <b>0 IdTokens</b>, empty DriverGroup. Flipping now rejects every plug-in (2026-05-04 Dalvegur lesson).</div></div>
+          <div class="card" style="margin-bottom:14px;"><div class="card-h">Installation auth state</div><table><thead><tr><th>Installation</th><th>Plane</th><th>Auth owner</th><th>Enforce</th><th>Free-vend</th><th>IdTokens</th><th>Groups</th></tr></thead><tbody>
+            <tr data-host="dalvegur"><td><strong>Dalvegur 10–14</strong></td><td><span class="cp cp-zw">ZAPTEC·WH</span></td><td>Straumvakt</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Enforced</span></td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>On</span></td><td>1+38</td><td>2</td></tr>
+            <tr data-host="dalvegur" style="background:rgba(255,107,107,.05)"><td><strong>Geymslusvæði</strong></td><td><span class="cp cp-zw">ZAPTEC·WH</span></td><td>Straumvakt</td><td><span class="badge2 s-warn"><span class="dot bg-warn"></span>Shadow→req</span></td><td><span class="badge2 s-mut"><span class="dot bg-mut"></span>Off</span></td><td style="color:var(--red)">0</td><td>1 (empty)</td></tr>
+            <tr data-host="n1"><td><strong>Reykjavík HQ</strong></td><td><span class="cp cp-ocpp">OCPP 1.6J</span></td><td>Straumvakt</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Enforced</span></td><td><span class="badge2 s-mut"><span class="dot bg-mut"></span>Off</span></td><td class="sub">auto · 140</td><td>3</td></tr>
+          </tbody></table></div>
+          <div class="card" style="border-color:rgba(244,201,93,.35);"><div class="card-h">Go-live · Geymslusvæði <span class="sub">guarded enforce-auth</span></div><div style="padding:4px 16px 14px;">
+            <div class="check bad"><div class="ic">✕</div><div><div class="t">Seed IdTokens</div><div class="d">0 RFID tokens — paste CSV or enable free-vend.</div></div></div>
+            <div class="check warn"><div class="ic">!</div><div><div class="t">Populate default DriverGroup</div><div class="d">Group has 0 members.</div></div></div>
+            <div class="check ok"><div class="ic">✓</div><div><div class="t">Mode bundles auth · Contract active</div></div></div>
+            <div class="toggle" style="margin-top:4px;"><div class="sw locked"></div><div><strong style="font-size:12.5px;">enforce-authorize</strong><div class="sub">Locked until checks pass.</div></div></div>
+            <div class="toggle"><div class="sw"></div><div><strong style="font-size:12.5px;">acceptsVendorDefault (free-vend)</strong><div class="sub">Accept Zaptec Default ID tag → anonymous per-org driver.</div></div></div>
+            <button class="btn primary" disabled style="margin-top:12px;">Go live</button>
+          </div></div>
+        </section>
+
+        <!-- ===== ACCOUNTS ===== -->
+        <section class="screen" data-screen="organizations">
+          <div class="head"><div><h1>Organizations</h1><p>Existing. Every org — multi-role (operator / owner / payer / DSO / retailer / vendor…, ADR 0010). Hosts, vendors, DSOs all live here. Detail page has sites, installations, agreements, driver-groups, agents, tariff-chain, email-domains.</p></div><button class="btn primary">＋ New organization</button></div>
+          <div class="card"><div class="card-h">Organizations <span class="sub">all roles</span></div><table><thead><tr><th>Org</th><th>Kennitala</th><th>Roles</th><th>Kind <span class="new">new</span></th><th>Sites</th><th>Status</th></tr></thead><tbody>
+            <tr class="clk" data-host="dalvegur" data-goto="hosts"><td><strong>Dalvegur Húsfélag</strong></td><td class="mono">540269-1234</td><td class="sub">site_host, owner, payer</td><td><span class="pill mdu">multi_dwelling</span></td><td>3</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Active</span></td></tr>
+            <tr data-host="n1"><td><strong>N1 hf.</strong></td><td class="mono">540269-1010</td><td class="sub">site_host, owner</td><td><span class="pill co">company</span></td><td>5</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Active</span></td></tr>
+            <tr data-host="ref"><td><strong>Veitur</strong></td><td class="mono">551298-2179</td><td class="sub">dso</td><td class="sub">—</td><td>—</td><td><span class="badge2 s-mut"><span class="dot bg-mut"></span>Reference</span></td></tr>
+            <tr data-host="ref"><td><strong>Zaptec AS</strong></td><td class="sub">—</td><td class="sub">vendor</td><td class="sub">—</td><td>—</td><td><span class="badge2 s-mut"><span class="dot bg-mut"></span>Reference</span></td></tr>
+          </tbody></table></div>
+          <div class="ribbon new">“Hosts” (next item) is a <b>filtered lens</b> on this list — orgs where <span class="mono">kind ∈ {multi_dwelling, company}</span> — not a separate object.</div>
+        </section>
+
+        <section class="screen" data-screen="hosts">
+          <div class="head"><div><div class="titlewrap"><h1>Hosts</h1><span class="newtag">new — lens on Organizations</span></div><p>Orgs filtered by <b>host type</b> (<span class="mono">kind</span>), with the going-public rollups (drivers, billing-homes, contract). Drill into a host to administer it.</p></div><button class="btn primary" data-goto="onboardhost">＋ Onboard host</button></div>
+          <div class="tabs"><div class="tab active">All · 18</div><div class="tab">Multi-dwelling · 11</div><div class="tab">Company · 5</div><div class="tab">Onboarding · 2</div></div>
+          <div class="card"><table><thead><tr><th>Host</th><th>Type</th><th>Sites</th><th>Chargers</th><th>Drivers</th><th>Auth</th><th>Contract</th><th>MRR</th></tr></thead><tbody>
+            <tr class="clk" data-host="dalvegur" data-goto="hostdetail"><td><strong>Dalvegur Húsfélag</strong></td><td><span class="pill mdu">MDU</span></td><td>3</td><td>18</td><td>48</td><td><span class="badge2 s-warn"><span class="dot bg-warn"></span>1 pending</span></td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Active</span></td><td>20.250 kr.</td></tr>
+            <tr class="clk" data-host="n1" data-goto="hostdetail"><td><strong>N1 hf.</strong></td><td><span class="pill co">Company</span></td><td>5</td><td>62</td><td>140</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Enforced</span></td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Active</span></td><td>74.400 kr.</td></tr>
+            <tr class="clk" data-host="kronan" data-goto="hostdetail"><td><strong>Krónan Smáralind</strong></td><td><span class="pill co">Company</span></td><td>1</td><td>8</td><td>0</td><td><span class="badge2 s-mut"><span class="dot bg-mut"></span>Shadow</span></td><td><span class="badge2 s-warn"><span class="dot bg-warn"></span>Unsigned</span></td><td class="sub">—</td></tr>
+          </tbody></table></div>
+        </section>
+
+        <section class="screen" data-screen="hostdetail">
+          <div class="crumb"><a data-goto="hosts">← Hosts</a> · Dalvegur Húsfélag</div>
+          <div class="head"><div><div class="titlewrap"><h1>Dalvegur Húsfélag</h1><span class="pill mdu">multi_dwelling</span><span class="badge2 s-ok"><span class="dot bg-ok"></span>Contract active</span></div><p class="mono" style="margin-top:4px;">540269-1234 · roles: site_host, owner, payer</p></div><button class="btn" data-goto="access">Auth state</button></div>
+          <div class="grid g4" style="margin-bottom:14px;"><div class="card kpi"><div class="lbl">Chargers</div><div class="val">18</div></div><div class="card kpi"><div class="lbl">Drivers</div><div class="val">48</div></div><div class="card kpi"><div class="lbl">Energy mo.</div><div class="val">1.284 kWh</div></div><div class="card kpi"><div class="lbl">Est. invoice</div><div class="val">71.400 kr.</div></div></div>
+          <div class="tabs" data-tabset><div class="tab active" data-inst="ov">Overview</div><div class="tab" data-inst="dr">Drivers</div><div class="tab" data-inst="bh">Billing-homes</div><div class="tab" data-inst="ha">Host-admins</div><div class="tab" data-inst="ct">Contract</div></div>
+          <div class="inst-panel" data-inst="ov"><div class="card"><div class="card-h">Installations</div><table><tbody><tr><td><strong>Dalvegur 10–14</strong></td><td><span class="cp cp-zw">ZAPTEC·WH</span></td><td>12</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Enforced</span></td></tr><tr><td><strong>Geymslusvæði</strong></td><td><span class="cp cp-zw">ZAPTEC·WH</span></td><td>2</td><td><span class="badge2 s-warn"><span class="dot bg-warn"></span>Pending go-live</span></td></tr></tbody></table></div></div>
+          <div class="inst-panel" data-inst="dr" style="display:none;"><div class="card"><div class="stub">48 drivers — name, kennitala, <b>billing-home</b> (BillObject), access group, status.</div></div></div>
+          <div class="inst-panel" data-inst="bh" style="display:none;"><div class="card"><div class="card-h">Billing-homes <span class="sub">ADR 0029 BillObject</span></div><table><tbody><tr><td><strong>Apt 304</strong></td><td>Alice Jónsdóttir</td><td>2 drivers</td><td>112 kWh</td></tr><tr><td><strong>Apt 102</strong></td><td>Eignasjóður ehf. <span class="sub">org-owner</span></td><td>1</td><td>61 kWh</td></tr></tbody></table></div></div>
+          <div class="inst-panel" data-inst="ha" style="display:none;"><div class="card"><div class="stub"><b>Host-admins</b> (role=host_admin, HOST_ADMIN_BUNDLE) — invite / suspend.</div></div></div>
+          <div class="inst-panel" data-inst="ct" style="display:none;"><div class="card"><div style="padding:6px 16px 12px;"><div class="kv"><span class="k">Service fee</span><span>12.000 kr./mo</span></div><div class="kv"><span class="k">Per-charger</span><span>450 kr./mo</span></div><div class="kv"><span class="k">Energy</span><span>55 kr/kWh</span></div><div class="kv"><span class="k">Driver access fee</span><span class="sub">pending P0.7</span></div></div></div></div>
+        </section>
+
+        <section class="screen" data-screen="properties"><div class="head"><div><h1>Properties</h1><p>Existing. Physical buildings/parcels under an org; sites attach to a property.</p></div><button class="btn primary">＋ New property</button></div><div class="card"><div class="stub">Existing <span class="mono">/accounts/properties</span>. List + detail/edit. Property → Sites hierarchy.</div></div></section>
+        <section class="screen" data-screen="groups"><div class="head"><div><h1>Groups</h1><p>Existing. Family groups + vendor user-group mirrors (and future contractor/fleet groups).</p></div></div><div class="card"><div class="stub">Existing <span class="mono">/accounts/groups</span>. FamilyGroup + VendorUserGroup. Going-public: family/HOA group billing carve-out (dependents) ties in here (ADR 0031 item 18).</div></div></section>
+        <section class="screen" data-screen="users"><div class="head"><div><h1>Users</h1><p>Existing. All users — agents (operator audience, with Membership role) and drivers (driver audience, DriverGroupMembership). Detail page: profile, credentials, IdTokens, driver-group memberships.</p></div><button class="btn primary">＋ New user</button></div><div class="card"><div class="card-h">Users</div><table><thead><tr><th>Email</th><th>Name</th><th>Audience</th><th>Sign-in</th><th>Status</th></tr></thead><tbody>
+          <tr><td class="sub">gudrun@…</td><td>Guðrún Björnsd.</td><td><span class="ro">operator · host_admin</span></td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Has credentials</span></td><td>Active</td></tr>
+          <tr><td class="sub">alice@dalvegur.is</td><td>Alice Jónsdóttir</td><td><span class="ro">driver</span></td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>App</span></td><td>Active</td></tr>
+        </tbody></table></div></section>
+
+        <section class="screen" data-screen="drivers"><div class="head"><div><div class="titlewrap"><h1>Drivers</h1><span class="newtag">new</span></div><p>Operator-wide driver view across all hosts (ADR 0026 §11) — a driver-filtered, host-rolled-up slice of Users.</p></div></div>
+          <div class="tabs"><div class="tab active">All · 1.360</div><div class="tab">Active · 1.204</div><div class="tab">Pending invite · 156</div></div>
+          <div class="card"><table><thead><tr><th>Kennitala</th><th>Name</th><th>Hosts</th><th>Access</th><th>Status</th><th>Last session</th></tr></thead><tbody>
+            <tr><td class="mono">120389-••••</td><td>Alice Jónsdóttir</td><td>2 <span class="sub">(Dalvegur, N1)</span></td><td class="sub">Residents · Employees</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Active</span></td><td class="sub">Now</td></tr>
+          </tbody></table></div></section>
+
+        <!-- ===== BILLING ===== -->
+        <section class="screen" data-screen="costfactors"><div class="head"><div><h1>Cost factors</h1><p>Existing · platform-staff only. The factor catalogue (DSO, ELE, MTR, TRF_CHG, TRF_IDLE, USRF, CHRGRF…) + default VAT. Pilot exposes 6 with a driver-pays toggle (ADR 0019 addendum); 15 in schema.</p></div><button class="btn primary">＋ Factor</button></div><div class="card"><div class="stub">Existing <span class="mono">/billing/cost-factors</span>. The vocabulary the BearerRule grid + tariffs reference.</div></div></section>
+        <section class="screen" data-screen="tariffs"><div class="head"><div><h1>Tariffs</h1><p>Existing. Tariff definitions per factor + org (rate + compute rule), grouped by org; orphan flag; usage counts.</p></div><button class="btn primary">＋ Tariff</button></div><div class="card"><div class="card-h">Tariffs</div><table><thead><tr><th>Factor</th><th>Org</th><th>Rate</th><th>VAT</th><th>Status</th></tr></thead><tbody>
+          <tr><td>ELE · energy</td><td class="sub">N1 retailer</td><td>14,90 kr/kWh</td><td>24%</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Active</span></td></tr>
+          <tr><td>DSO · distribution</td><td class="sub">Veitur</td><td>AD1 spot</td><td>24%</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Active</span></td></tr>
+        </tbody></table></div></section>
+        <section class="screen" data-screen="costcenters"><div class="head"><div><h1>Cost centers</h1><p>Existing. Who pays — payer org/user + optional beneficiary org (inter-org transfers, e.g. leased hardware, ADR 0008).</p></div><button class="btn primary">＋ Cost center</button></div><div class="card"><div class="stub">Existing <span class="mono">/billing/cost-centers</span>. Maps factors → payer/beneficiary.</div></div></section>
+        <section class="screen" data-screen="agreements"><div class="head"><div><div class="titlewrap"><h1>Agreements</h1><span class="lens">ADR 0019</span></div><p>Existing. The contract + BearerRule grid (scope × audience) that resolves who pays which factor at session-stop. Two types exposed in pilot (service_cpo, installation).</p></div></div>
+          <div class="card"><div class="card-h">BearerRule grid <span class="sub">Dalvegur 10–14 · scope × audience</span></div><table class="bgrid"><thead><tr><th>Factor</th><th>All</th><th>Residents</th><th>Apt 102</th></tr></thead><tbody>
+            <tr><td class="scope">DSO</td><td class="pays">unit-owner</td><td class="inherit">↑</td><td class="inherit">↑</td></tr>
+            <tr><td class="scope">ELE</td><td class="pays">unit-owner</td><td class="inherit">↑</td><td class="pays">landlord</td></tr>
+            <tr><td class="scope">TRF_IDLE</td><td class="pays">driver</td><td class="inherit">↑</td><td class="inherit">↑</td></tr>
+          </tbody></table><div class="note" style="padding:0 16px 12px;">Most-specific-first; first non-null wins. Resolver-debug page replays a real session → which rule won.</div></div></section>
+        <section class="screen" data-screen="contracts"><div class="head"><div><h1>Contracts (legacy)</h1><p>Existing. Pre-ADR-0019 contract rows, retained during the billing cutover (ADR 0025). Superseded by Agreements.</p></div></div><div class="card"><div class="stub">Existing <span class="mono">/billing/contracts</span>. Legacy — migration target is Agreements.</div></div></section>
+        <section class="screen" data-screen="drivercontracts"><div class="head"><div><h1>Driver contracts</h1><p>Existing. Driver-level overrides (workplace coverage, family caps) + factor overrides.</p></div></div><div class="card"><div class="stub">Existing <span class="mono">/billing/driver-contracts</span>.</div></div></section>
+        <section class="screen" data-screen="dso"><div class="head"><div><h1>DSO rates</h1><p>Existing. Operational DSO tariff table (Veitur AD1 etc.) + cost-factor mapping. Distinct from the read-only Reference → Electricity → DSO catalogue.</p></div></div><div class="card"><div class="stub">Existing <span class="mono">/billing/dso</span>.</div></div></section>
+        <section class="screen" data-screen="electricity"><div class="head"><div><h1>Electricity rates</h1><p>Existing. Retailer energy rates + spot references (e.g. Veitur AD1 enrichment).</p></div></div><div class="card"><div class="stub">Existing <span class="mono">/billing/electricity</span> (+ hidden <span class="mono">/billing/enrichment</span> cron sync).</div></div></section>
+        <section class="screen" data-screen="invoices"><div class="head"><div><div class="titlewrap"><h1>Host invoices</h1><span class="newtag">new</span></div><p>Going-public. Straumvakt invoices on behalf of each host (agent model, ADR 0031); per-host service fees + per-unit-owner driver invoices.</p></div><span class="ro">invoice engine · pending P0.7</span></div>
+          <div class="ribbon blocked">Real invoice generation blocked on the driver-access-fee mechanics (P0.7). Today: read-only shadow.</div>
+          <div class="card"><table><thead><tr><th>Host</th><th>Service fee</th><th>Driver energy</th><th>Unit-owners</th><th>Status</th></tr></thead><tbody>
+            <tr><td><strong>Dalvegur HOA</strong></td><td>20.250 kr.</td><td>71.400 kr.</td><td>24</td><td><span class="badge2 s-warn"><span class="dot bg-warn"></span>Accruing (shadow)</span></td></tr>
+          </tbody></table></div></section>
+
+        <!-- ===== ONBOARD ===== -->
+        <section class="screen" data-screen="onboardhost"><div class="head"><div><div class="titlewrap"><h1>Onboard host</h1><span class="newtag">new</span></div><p>Business onboarding (ADR 0026/0027): identity + <span class="mono">kind</span> + terms + host-admin invite. The wired create-form already sets kind + sends host_admin invite. Then → Vendor credentials for the technical half.</p></div></div>
+          <div class="stepper"><div class="step on"><span class="n">1</span> Identity</div><div class="step on"><span class="n">2</span> Terms</div><div class="step"><span class="n">3</span> Host-admin</div></div>
+          <div class="grid g2e"><div class="card" style="padding:16px;"><div class="field"><label>Host type</label><div class="seg"><div class="opt sel"><strong>🏠 Multi-dwelling</strong></div><div class="opt"><strong>🏢 Company</strong></div></div></div><div class="field"><label>Name</label><input class="inp" value="Sjáland Húsfélag"/></div><div class="field"><label>Kennitala</label><input class="inp" value="671019-0220"/></div></div>
+          <div class="card" style="padding:16px;"><div class="field"><label>Service fee /mo</label><input class="inp" value="9.900 kr."/></div><div class="field"><label>Host-admin email</label><input class="inp" value="formadur@sjaland.is"/></div><div class="ribbon blocked" style="margin:0;">Access-fee mechanics: open decision P0.7.</div></div></div>
+          <div style="margin-top:12px;"><button class="btn primary">Create host &amp; invite</button> <button class="btn ghost" data-goto="vendorcreds">Then: vendor credentials →</button></div></section>
+
+        <section class="screen" data-screen="applications"><div class="head"><div><div class="titlewrap"><h1>Applications</h1><span class="newtag">new</span></div><p>Inbound <span class="mono">/apply</span> RFQ leads (ADR 0026 §6, backend built). Convert a “won” lead → Onboard host.</p></div></div>
+          <div class="tabs"><div class="tab active">New · 2</div><div class="tab">In review · 2</div><div class="tab">Won</div></div>
+          <div class="card"><table><thead><tr><th>Company</th><th>Type</th><th>Sites</th><th>Chargers</th><th>Recv</th><th class="right"></th></tr></thead><tbody>
+            <tr><td><strong>Sjáland Húsfélag</strong></td><td><span class="pill mdu">MDU</span></td><td>1</td><td>6</td><td class="sub">2h</td><td class="right"><button class="btn sm primary" data-goto="onboardhost">Convert</button></td></tr>
+            <tr><td><strong>Festi hf.</strong></td><td><span class="pill co">Company</span></td><td>4</td><td>40</td><td class="sub">5h</td><td class="right"><button class="btn sm primary" data-goto="onboardhost">Convert</button></td></tr>
+          </tbody></table></div></section>
+
+        <section class="screen" data-screen="vendorcreds"><div class="head"><div><h1>Vendor credentials</h1><p>Existing. Saved Zaptec/Easee credentials per installation; discover + map chargers. Imported chargers land shadow-mode → go-live (Access &amp; auth).</p></div></div>
+          <div class="grid g2e"><div class="card" style="padding:16px;"><div class="card-h" style="border:0;padding:0 0 10px;">Add credential</div><div class="seg" style="margin-bottom:12px;"><div class="opt sel"><strong>⚡ Zaptec</strong></div><div class="opt"><strong>🔌 Easee</strong></div></div><div class="field"><label>Portal user</label><input class="inp" placeholder="installation@…"/></div><div class="field"><label>Password</label><input class="inp" type="password" placeholder="••••"/></div><button class="btn">Discover →</button></div>
+          <div class="card"><div class="card-h">Discovered</div><table><tbody><tr><td class="mono">ZPR074020</td><td>22 kW</td><td><span class="cp cp-zw">ZAPTEC·WH</span></td><td class="right"><div class="sw on" style="display:inline-block"></div></td></tr><tr><td class="mono">ZPR074021</td><td>22 kW</td><td><span class="cp cp-zw">ZAPTEC·WH</span></td><td class="right"><div class="sw on" style="display:inline-block"></div></td></tr></tbody></table><div style="padding:12px 16px;"><button class="btn primary">Import (shadow)</button></div></div></div></section>
+
+        <section class="screen" data-screen="zaptec"><div class="head"><div><h1>Zaptec wizard</h1><p>Existing (stub today). Zaptec OAuth discover → import flow. <span class="sub">Note: real OAuth wiring deferred to milestone 2.7.</span></p></div></div><div class="card"><div class="stub">Existing <span class="mono">/onboard/zaptec</span>.</div></div></section>
+        <section class="screen" data-screen="testchain"><div class="head"><div><h1>Test chain (utility)</h1><p>Existing. One-shot Org→Property→Site→Charger fixture creator. Dev utility; per-tier CRUD is the real path.</p></div></div><div class="card"><div class="stub">Existing <span class="mono">/onboard</span>.</div></div></section>
+
+        <!-- ===== REFERENCE ===== -->
+        <section class="screen" data-screen="reference"><div class="head"><div><h1>Reference catalogue</h1><p>Existing. Read-only lookups (distinct from operational tables). Electricity parties, vendor APIs, public-charging, rental-service.</p></div></div>
+          <div class="grid g3">
+            <div class="card"><div class="card-h">Electricity</div><div class="stub">DSO (Dreifiveitur) · Retailers (Söluaðilar) · TSO (Landsnet). 21 IS energy parties.</div></div>
+            <div class="card"><div class="card-h">API reference</div><div class="stub">Zaptec · Easee · Alfen · Teltonika RUT · UniFi.</div></div>
+            <div class="card"><div class="card-h">Markets</div><div class="stub">Public charging · Rental service.</div></div>
+          </div>
+          <div class="note">Reference parties (Veitur, etc.) are <span class="mono">tenancy.organizations</span> filtered by role — the same multi-role org model, read-only here.</div></section>
+
+        <!-- ===== TOOLS ===== -->
+        <section class="screen" data-screen="technicalread"><div class="head"><div><h1>Technical Read</h1><p>Existing. Fleet-wide live technical status grid (signal, comms, OCPP, firmware, temp), polled. Proposed: this becomes a tab inside Diagnostics.</p></div></div><div class="card"><div class="stub">Existing <span class="mono">/technical-read</span> + per-charger <span class="mono">/chargers/[id]/technical-read</span>.</div></div></section>
+        <section class="screen" data-screen="mobileapp"><div class="head"><div><h1>Mobile App</h1><p>Existing. Driver-app preview / build status (internal). Going-public: invite redemption (code/QR/email), Icelandic i18n, live session.</p></div></div><div class="card"><div class="stub">Existing <span class="mono">/mobile-app</span>. Flutter driver app surface.</div></div></section>
+        <section class="screen" data-screen="platform"><div class="head"><div><div class="titlewrap"><h1>Platform</h1><span class="newtag">new</span></div><p>Going-public / hardening (P4). Staff PlatformGrant + MFA, observability, deploys, RLS — currently no single home.</p></div></div>
+          <div class="grid g3" style="margin-bottom:14px;"><div class="card kpi"><div class="lbl">Gateway uptime</div><div class="val grad">99,96%</div></div><div class="card kpi"><div class="lbl">DLQ depth</div><div class="val">0</div></div><div class="card kpi"><div class="lbl">Staff MFA</div><div class="val">3/4</div></div></div>
+          <div class="card"><div class="card-h">Straumvakt staff <span class="sub">PlatformGrant + MFA</span></div><table><tbody><tr><td>Andri Þór</td><td><span class="ro">super_user</span></td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Passkey</span></td></tr></tbody></table></div></section>
+
+        <div class="legend">
+          <b>Status legend</b> — <span class="new">new</span> newly surfaced in this concept; backing exists today (gaps are
+          unbuilt UI, not schema). <span class="soonchip">soon</span> in the sibling host / driver / technician mocks means
+          <i>not backed yet</i> (ADR-gated). Control-plane badges are the canonical set used across all views:
+          <span class="cp cp-ocpp">OCPP 1.6J</span> <span class="cp cp-zn">ZAPTEC·N</span>
+          <span class="cp cp-zw">ZAPTEC·WH</span> <span class="cp cp-easee">EASEE</span>
+          <span class="cp cp-ext">EXT·CPMS</span>. Vocabulary: <b>billing-home</b> (IS <b>eining</b>) = BillObject ·
+          <b>access group</b> = DriverGroup · <b>host type</b> = Organization.kind.
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const items=[...document.querySelectorAll('.nav-item')];
+    const screens=[...document.querySelectorAll('.screen')];
+    function show(n){items.forEach(i=>i.classList.toggle('active',i.dataset.screen===n));screens.forEach(s=>s.classList.toggle('active',s.dataset.screen===n));window.scrollTo(0,0);}
+    document.getElementById('nav').addEventListener('click',e=>{const it=e.target.closest('.nav-item');if(it){show(it.dataset.screen);history.replaceState(null,'','#'+it.dataset.screen);}});
+    document.body.addEventListener('click',e=>{const b=e.target.closest('[data-goto]');if(b)show(b.dataset.goto);});
+    document.body.addEventListener('click',e=>{const t=e.target.closest('.tab');if(!t)return;const set=t.parentNode;[...set.children].forEach(x=>x.classList.remove('active'));t.classList.add('active');if(set.hasAttribute('data-tabset')){const scope=set.closest('.screen');scope.querySelectorAll('.inst-panel').forEach(p=>{p.style.display=(p.dataset.inst===t.dataset.inst)?'':'none';});}});
+    document.body.addEventListener('click',e=>{const s=e.target.closest('.sw');if(s&&!s.classList.contains('locked'))s.classList.toggle('on');});
+
+    // ---- host context switcher: scope the whole console to one host ----
+    const hostSw=document.getElementById('hostSw'), hostMenu=document.getElementById('hostMenu'), scopeBar=document.getElementById('scopeBar');
+    hostSw.addEventListener('click',e=>{e.stopPropagation();hostMenu.classList.toggle('open');});
+    document.addEventListener('click',()=>hostMenu.classList.remove('open'));
+    hostMenu.addEventListener('click',e=>{const it=e.target.closest('[data-host]');if(!it)return;applyHost(it.dataset.host,it.dataset.label||'All hosts',it.dataset.kind||'');});
+    document.getElementById('scopeExit').addEventListener('click',()=>applyHost('all','All hosts',''));
+    function applyHost(h,label,kind){
+      document.getElementById('hostLabel').textContent = h==='all'?'All hosts':label;
+      document.getElementById('hostCount').style.display = h==='all'?'':'none';
+      hostSw.classList.toggle('scoped',h!=='all');
+      if(h==='all'){ scopeBar.style.display='none'; document.body.classList.remove('scoped'); }
+      else{
+        scopeBar.style.display='flex'; document.body.classList.add('scoped');
+        document.getElementById('scopeName').textContent=label;
+        const sk=document.getElementById('scopeKind'); sk.className='pill '+(kind||''); sk.textContent=kind==='co'?'Company':kind==='mdu'?'Multi-dwelling':'';
+      }
+      // filter host-tagged rows everywhere (menu items excluded)
+      document.querySelectorAll('tr[data-host], [data-hostrow]').forEach(el=>{
+        el.style.display = (h==='all'||el.dataset.host===h)?'':'none';
+      });
+      hostMenu.classList.remove('open');
+    }
+
+    if(location.hash)show(location.hash.slice(1));
+  </script>
+</body>
+</html>

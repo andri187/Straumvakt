@@ -1,0 +1,1206 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Straumvakt — Host portal concept</title>
+  <style>
+    :root {
+      --bg: #070b16;
+      --surface: #0b1220;
+      --raised: #111a2e;
+      --inset: #0e1626;
+      --border: #1e2a44;
+      --ring: #2b3a5e;
+      --text: #f5f7fa;
+      --muted: #97a3b8;
+      --soft: #c8d1e0;
+      --green: #3ee9a7;
+      --teal: #2bd3c9;
+      --blue: #2bb6e8;
+      --sky: #6fb8f0;
+      --amber: #f4c95d;
+      --red: #ff6b6b;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      background:
+        radial-gradient(1200px 600px at 80% -10%, rgba(43, 182, 232, .10), transparent 60%),
+        radial-gradient(900px 500px at -10% 10%, rgba(62, 233, 167, .08), transparent 60%),
+        var(--bg);
+      background-attachment: fixed;
+    }
+
+    a { color: inherit; text-decoration: none; }
+    button { font-family: inherit; }
+
+    /* ---------- shell ---------- */
+    .shell { display: grid; grid-template-columns: 248px 1fr; min-height: 100vh; }
+
+    .sidebar {
+      border-right: 1px solid var(--border);
+      background: rgba(11, 18, 32, .6);
+      backdrop-filter: blur(8px);
+      display: flex;
+      flex-direction: column;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 18px 18px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .brand .logo {
+      width: 34px; height: 34px; border-radius: 9px;
+      background: linear-gradient(135deg, var(--green), var(--teal) 55%, var(--blue));
+      display: grid; place-items: center; color: #04121b; font-weight: 900;
+      box-shadow: 0 10px 26px rgba(43,182,232,.28);
+    }
+    .brand .word strong {
+      display: block; font-size: 16px; line-height: 1.1;
+      background: linear-gradient(135deg, var(--green), var(--teal) 55%, var(--blue));
+      background-clip: text; -webkit-background-clip: text; color: transparent;
+    }
+    .brand .word span {
+      display: block; margin-top: 2px; font-size: 10px; letter-spacing: .22em;
+      text-transform: uppercase; color: var(--sky);
+    }
+
+    .nav { padding: 12px 10px; overflow-y: auto; flex: 1; }
+    .nav-label {
+      font-size: 10px; letter-spacing: .16em; text-transform: uppercase;
+      color: var(--muted); padding: 14px 12px 6px;
+    }
+    .nav-item {
+      display: flex; align-items: center; gap: 11px;
+      padding: 9px 12px; border-radius: 9px; cursor: pointer;
+      color: var(--soft); font-size: 14px; font-weight: 500;
+      border: 1px solid transparent;
+    }
+    .nav-item:hover { background: var(--raised); }
+    .nav-item.active {
+      background: linear-gradient(135deg, rgba(62,233,167,.14), rgba(43,182,232,.12));
+      border-color: rgba(43,182,232,.35);
+      color: var(--text);
+    }
+    .nav-item .ico { width: 18px; text-align: center; opacity: .9; }
+    .nav-item .badge {
+      margin-left: auto; font-size: 11px; font-weight: 700;
+      background: rgba(244,201,93,.16); color: var(--amber);
+      border: 1px solid rgba(244,201,93,.4);
+      padding: 1px 7px; border-radius: 999px;
+    }
+
+    .nav-foot {
+      border-top: 1px solid var(--border); padding: 12px 14px;
+      display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--muted);
+    }
+    .avatar {
+      width: 30px; height: 30px; border-radius: 999px; flex: none;
+      background: linear-gradient(135deg, #2bd3c9, #2bb6e8); color: #04121b;
+      display: grid; place-items: center; font-weight: 800; font-size: 12px;
+    }
+
+    /* ---------- main ---------- */
+    .main { min-width: 0; }
+    .topbar {
+      height: 58px; display: flex; align-items: center; gap: 16px;
+      padding: 0 28px; border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 5;
+      background: rgba(7,11,22,.75); backdrop-filter: blur(14px);
+    }
+    .org {
+      display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 15px;
+    }
+    .pill {
+      font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 999px;
+      border: 1px solid var(--border); color: var(--soft); background: var(--inset);
+    }
+    .pill.host { color: var(--sky); border-color: rgba(111,184,240,.4); background: rgba(111,184,240,.08); }
+    .topbar .spacer { flex: 1; }
+    .topbar .tlink { font-size: 13px; color: var(--muted); }
+    .switcher { position: relative; display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--soft); background: var(--inset); border: 1px solid var(--border); border-radius: 9px; padding: 6px 12px; cursor: pointer; }
+    .switcher:hover { border-color: var(--ring); }
+    .switcher .sub { color: var(--muted); font-weight: 500; }
+    .menu { position: absolute; top: 40px; left: 0; min-width: 220px; background: var(--surface); border: 1px solid var(--border); border-radius: 11px; padding: 6px; display: none; z-index: 30; box-shadow: 0 20px 44px rgba(2,6,16,.55); }
+    .menu.open { display: block; }
+    .menu > div { display: flex; align-items: center; justify-content: space-between; padding: 9px 11px; border-radius: 8px; font-size: 13px; font-weight: 500; color: var(--soft); cursor: pointer; }
+    .menu > div:hover { background: var(--raised); }
+    .menu .mini { font-size: 11px; color: var(--muted); }
+
+    .content { padding: 26px 28px 60px; max-width: 1120px; }
+
+    .screen { display: none; }
+    .screen.active { display: block; animation: fade .18s ease; }
+    @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+    /* page head */
+    .head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+    .head h1 { font-size: 23px; margin: 0 0 4px; letter-spacing: -.01em; }
+    .head p { margin: 0; color: var(--muted); font-size: 13px; max-width: 60ch; }
+
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 9px 15px; border-radius: 10px; font-size: 13px; font-weight: 700;
+      border: 1px solid var(--border); background: var(--raised); color: var(--text); cursor: pointer;
+    }
+    .btn:hover { border-color: var(--ring); }
+    .btn.primary {
+      background: linear-gradient(135deg, var(--green), var(--blue)); color: #04121b; border: 0;
+      box-shadow: 0 10px 24px rgba(43,182,232,.22);
+    }
+    .btn.ghost { background: transparent; }
+    .btn.sm { padding: 6px 11px; font-size: 12px; }
+    .btn.danger { color: var(--red); border-color: rgba(255,107,107,.4); background: rgba(255,107,107,.07); }
+
+    /* tabs */
+    .tabs { display: flex; gap: 4px; margin-bottom: 18px; border-bottom: 1px solid var(--border); }
+    .tab { padding: 9px 14px; font-size: 13px; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; }
+    .tab.active { color: var(--text); border-color: var(--blue); }
+
+    /* cards / sections */
+    .card {
+      border: 1px solid var(--border); border-radius: 14px;
+      background: linear-gradient(180deg, rgba(17,26,46,.5), rgba(11,18,32,.6));
+      box-shadow: 0 18px 40px rgba(2,6,16,.35);
+    }
+    .card .card-h {
+      padding: 13px 18px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      font-size: 13px; font-weight: 700;
+    }
+    .card .card-h .sub { color: var(--muted); font-weight: 500; font-size: 12px; }
+
+    .grid { display: grid; gap: 16px; }
+    .g4 { grid-template-columns: repeat(4, 1fr); }
+    .g3 { grid-template-columns: repeat(3, 1fr); }
+    .g2 { grid-template-columns: 1.6fr 1fr; }
+
+    .kpi { padding: 16px 18px; }
+    .kpi .lbl { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+    .kpi .val { font-size: 28px; font-weight: 800; letter-spacing: -.02em; margin: 8px 0 2px; }
+    .kpi .val.grad {
+      background: linear-gradient(135deg, var(--green), var(--blue));
+      background-clip: text; -webkit-background-clip: text; color: transparent;
+    }
+    .kpi .delta { font-size: 12px; color: var(--green); }
+    .kpi .delta.flat { color: var(--muted); }
+
+    /* tables */
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead th {
+      text-align: left; font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
+      color: var(--muted); font-weight: 600; padding: 11px 18px; border-bottom: 1px solid var(--border);
+    }
+    tbody td { padding: 13px 18px; border-bottom: 1px solid rgba(30,42,68,.55); }
+    tbody tr:last-child td { border-bottom: 0; }
+    tbody tr:hover { background: rgba(17,26,46,.45); }
+    .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; color: var(--soft); }
+    .sub { color: var(--muted); font-size: 12px; }
+
+    .badge2 { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; display: inline-flex; align-items: center; gap: 6px; }
+    .dot { width: 7px; height: 7px; border-radius: 999px; display: inline-block; }
+    .s-ok    { color: var(--green); background: rgba(62,233,167,.1);  border: 1px solid rgba(62,233,167,.35); }
+    .s-live  { color: var(--blue);  background: rgba(43,182,232,.1);  border: 1px solid rgba(43,182,232,.35); }
+    .s-warn  { color: var(--amber); background: rgba(244,201,93,.1);  border: 1px solid rgba(244,201,93,.35); }
+    .s-mut   { color: var(--muted); background: rgba(151,163,184,.08);border: 1px solid rgba(151,163,184,.3); }
+    .s-bad   { color: var(--red);   background: rgba(255,107,107,.08);border: 1px solid rgba(255,107,107,.35); }
+    .bg-ok{background:var(--green);} .bg-live{background:var(--blue);} .bg-warn{background:var(--amber);}
+    .bg-mut{background:var(--muted);} .bg-bad{background:var(--red);}
+
+    .ro { font-size: 11px; color: var(--muted); border: 1px dashed var(--border); padding: 2px 8px; border-radius: 6px; }
+
+    /* status tags — shared convention across all four mocks.
+       .new = backed, newly surfaced · .soon = not backed yet (ADR/P-gated) */
+    .tag { font-size: 8.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; padding: 1px 6px; border-radius: 5px; border: 1px solid; white-space: nowrap; }
+    .tag.new { color: var(--green); border-color: rgba(62,233,167,.4); background: rgba(62,233,167,.08); }
+    .tag.soon { color: var(--amber); border-color: rgba(244,201,93,.45); background: rgba(244,201,93,.09); }
+    .nav-item .tag { margin-left: 6px; }
+    .nav-item .tag.solo { margin-left: auto; }
+    .newtag { font-size: 9px; letter-spacing: .1em; text-transform: uppercase; padding: 2px 7px; border-radius: 6px; border: 1px solid; }
+    .newtag.soon { color: var(--amber); border-color: rgba(244,201,93,.35); background: rgba(244,201,93,.07); }
+    .legend { margin-top: 26px; padding: 12px 16px; border: 1px solid var(--border); border-radius: 11px; background: var(--inset); font-size: 11.5px; color: var(--muted); line-height: 1.6; }
+    .legend b { color: var(--soft); }
+
+    /* charger status strip */
+    .conns { display: flex; flex-wrap: wrap; gap: 8px; padding: 16px 18px; }
+    .conn {
+      width: 58px; height: 58px; border-radius: 12px; border: 1px solid var(--border);
+      display: grid; place-items: center; background: var(--inset); position: relative;
+      font-size: 10px; color: var(--muted); text-align: center; line-height: 1.2;
+    }
+    .conn .id { font-weight: 800; color: var(--soft); font-size: 11px; }
+    .conn.ok   { border-color: rgba(62,233,167,.5);  box-shadow: 0 0 16px rgba(62,233,167,.18) inset; }
+    .conn.live { border-color: rgba(43,182,232,.6);  box-shadow: 0 0 18px rgba(43,182,232,.25) inset; }
+    .conn.warn { border-color: rgba(244,201,93,.5); }
+    .conn.bad  { border-color: rgba(255,107,107,.5); opacity: .8; }
+
+    /* invite builder */
+    .opt {
+      display: flex; gap: 12px; padding: 14px; border: 1px solid var(--border);
+      border-radius: 12px; background: var(--inset); cursor: pointer; align-items: flex-start;
+    }
+    .opt.sel { border-color: rgba(43,182,232,.5); background: rgba(43,182,232,.07); }
+    .opt .ico { font-size: 20px; }
+    .opt strong { font-size: 13px; }
+    .opt p { margin: 3px 0 0; font-size: 12px; color: var(--muted); }
+
+    .qr {
+      width: 150px; height: 150px; border-radius: 14px; background: #fff;
+      display: grid; place-items: center; margin: 0 auto;
+      background-image:
+        linear-gradient(45deg, #0b1220 25%, transparent 25%, transparent 75%, #0b1220 75%),
+        linear-gradient(45deg, #0b1220 25%, transparent 25%, transparent 75%, #0b1220 75%);
+      background-size: 18px 18px; background-position: 0 0, 9px 9px;
+    }
+    .code {
+      font-family: ui-monospace, monospace; font-size: 22px; letter-spacing: .22em;
+      text-align: center; padding: 14px; border: 1px dashed var(--ring); border-radius: 12px;
+      background: var(--inset); color: var(--green); font-weight: 700;
+    }
+    .toggle { display: flex; align-items: center; gap: 10px; padding: 11px 0; border-bottom: 1px solid rgba(30,42,68,.5); }
+    .sw { width: 38px; height: 22px; border-radius: 999px; background: var(--ring); position: relative; flex: none; }
+    .sw.on { background: linear-gradient(135deg, var(--green), var(--blue)); }
+    .sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 999px; background: #fff; transition: .15s; }
+    .sw.on::after { left: 19px; }
+
+    .ribbon {
+      font-size: 11px; color: var(--amber); background: rgba(244,201,93,.08);
+      border: 1px solid rgba(244,201,93,.3); border-radius: 8px; padding: 7px 12px; margin-bottom: 18px;
+    }
+    /* agreement cards — unit/owner contract with nested drivers */
+    .terms { display: flex; gap: 20px; flex-wrap: wrap; padding: 12px 18px; font-size: 12.5px; color: var(--muted); border-bottom: 1px solid var(--border); }
+    .terms b { color: var(--soft); }
+    .nest { display: flex; align-items: center; justify-content: space-between; padding: 11px 18px; border-top: 1px solid rgba(30,42,68,.5); font-size: 13px; }
+    .nest:first-of-type { border-top: 0; }
+    .nest .who { display: flex; align-items: center; gap: 10px; }
+    .field { margin-bottom: 14px; }
+    .field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+    .field .ro-val { padding: 10px 12px; border: 1px solid var(--border); border-radius: 9px; background: var(--inset); font-size: 13px; }
+    .note { font-size: 12px; color: var(--muted); margin-top: 8px; }
+    .right { text-align: right; }
+
+    /* onboarding */
+    .inp { width: 100%; background: var(--inset); border: 1px solid var(--border); border-radius: 9px; color: var(--text); padding: 9px 11px; font-size: 13px; }
+    .inp::placeholder { color: var(--muted); }
+    .stepper { display: flex; gap: 18px; margin-bottom: 20px; flex-wrap: wrap; }
+    .step { display: flex; align-items: center; gap: 9px; font-size: 12.5px; color: var(--muted); }
+    .step .n { width: 24px; height: 24px; border-radius: 999px; border: 1px solid var(--border); display: grid; place-items: center; font-weight: 700; font-size: 12px; }
+    .step.on { color: var(--text); }
+    .step.on .n { background: linear-gradient(135deg, var(--green), var(--blue)); color: #04121b; border: 0; }
+    .vendor { display: flex; align-items: center; gap: 10px; padding: 12px; border: 1px solid var(--border); border-radius: 11px; background: var(--inset); cursor: pointer; font-size: 13px; font-weight: 600; }
+    .vendor.sel { border-color: rgba(43,182,232,.5); background: rgba(43,182,232,.07); }
+    .gate {
+      display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; border-radius: 12px;
+      background: rgba(244,201,93,.07); border: 1px solid rgba(244,201,93,.35); font-size: 13px;
+    }
+    .gate .lock { font-size: 18px; }
+    .gate b { color: var(--amber); }
+    /* --- interactive layer --- */
+    .btn,.tab,.nav-item,.opt,.sw,.switcher,.menu>div,.modal-x,.hamb,#langToggle{cursor:pointer;}
+    .screen[data-screen="drivers"] tbody tr{cursor:pointer;}
+
+    /* toasts */
+    #toasts{position:fixed;right:20px;bottom:20px;display:flex;flex-direction:column;gap:10px;z-index:120;}
+    .toast{background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--green);border-radius:10px;padding:12px 16px;font-size:13px;color:var(--text);box-shadow:0 16px 40px rgba(2,6,16,.5);min-width:220px;animation:tIn .2s ease;}
+    @keyframes tIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
+
+    /* modal slide-over */
+    #modal{position:fixed;inset:0;background:rgba(2,6,16,.6);backdrop-filter:blur(4px);display:none;z-index:90;}
+    #modal.open{display:block;}
+    .modal-card{position:absolute;top:0;right:0;height:100%;width:min(560px,94vw);background:var(--bg);border-left:1px solid var(--border);box-shadow:-30px 0 60px rgba(0,0,0,.5);display:flex;flex-direction:column;animation:mIn .2s ease;}
+    @keyframes mIn{from{transform:translateX(28px);opacity:.5;}to{transform:none;opacity:1;}}
+    .modal-head{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--border);}
+    .modal-head h3{margin:0;font-size:18px;letter-spacing:-.01em;}
+    .modal-x{color:var(--muted);font-size:15px;border:1px solid var(--border);border-radius:8px;width:32px;height:32px;display:grid;place-items:center;}
+    .modal-x:hover{border-color:var(--ring);color:var(--text);}
+    .modal-body{padding:20px 22px;overflow-y:auto;}
+    .modal-body h4{margin:18px 0 8px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);}
+    .kv{display:flex;justify-content:space-between;gap:16px;padding:10px 0;border-bottom:1px solid rgba(30,42,68,.5);font-size:13px;}
+    .kv .k{color:var(--muted);} .kv .v{color:var(--text);font-weight:600;text-align:right;}
+
+    /* login */
+    #login{position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;background:radial-gradient(900px 500px at 78% -5%,rgba(43,182,232,.16),transparent 64%),radial-gradient(760px 440px at 0% 0%,rgba(62,233,167,.10),transparent 62%),var(--bg);}
+    #login.hidden{display:none;}
+    .login-card{width:380px;max-width:92vw;background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:28px;box-shadow:0 30px 80px rgba(0,0,0,.5);}
+
+    /* language toggle */
+    #langToggle .is{color:var(--text);font-weight:700;} #langToggle .en{color:var(--muted);}
+    #langToggle.en .is{color:var(--muted);font-weight:400;} #langToggle.en .en{color:var(--text);font-weight:700;}
+
+    /* hamburger + responsive */
+    .hamb{display:none;width:34px;height:34px;border:1px solid var(--border);border-radius:8px;place-items:center;color:var(--text);font-size:16px;}
+    @media (max-width:820px){
+      .shell{grid-template-columns:1fr;}
+      .sidebar{position:fixed;top:0;left:-260px;height:100vh;width:248px;z-index:80;transition:left .2s;}
+      .sidebar.open{left:0;box-shadow:24px 0 70px rgba(0,0,0,.6);}
+      .hamb{display:grid;}
+      .switcher{display:none;}
+      .grid.g4,.grid.g3,.grid.g2{grid-template-columns:1fr !important;}
+      .content{padding:20px 16px 56px;}
+      .modal-card{width:100vw;border-left:0;}
+    }
+  </style>
+</head>
+<body>
+  <div id="login">
+    <div class="login-card">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px;">
+        <div style="width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,var(--green),var(--teal) 55%,var(--blue));display:grid;place-items:center;color:#04121b;font-weight:900;">S</div>
+        <div><div style="font-weight:800;background:linear-gradient(135deg,var(--green),var(--teal) 55%,var(--blue));-webkit-background-clip:text;background-clip:text;color:transparent;">Straumvakt</div><div style="font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--sky);">Hýsill · Host</div></div>
+      </div>
+      <h2 style="margin:0 0 4px;font-size:20px;">Skrá inn</h2>
+      <p class="sub" style="margin:0 0 18px;">Hýsilgátt — fyrir húsfélög og fyrirtæki.</p>
+      <div class="field"><label>Netfang</label><input class="inp" value="gudrun@dalvegur.is" /></div>
+      <div class="field"><label>Lykilorð</label><input class="inp" type="password" value="lykilord" /></div>
+      <button class="btn primary" id="loginBtn" style="width:100%;justify-content:center;height:46px;margin-top:4px;">Skrá inn</button>
+      <div class="note" style="text-align:center;margin-top:14px;">Gleymt lykilorð?</div>
+    </div>
+  </div>
+
+  <div class="shell">
+    <!-- ============ SIDEBAR ============ -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="logo">S</div>
+        <div class="word"><strong>Straumvakt</strong><span>Hýsill · Host</span></div>
+      </div>
+      <nav class="nav" id="nav">
+        <div class="nav-label">Yfirlit</div>
+        <div class="nav-item active" data-screen="dashboard"><span class="ico">▦</span> Mælaborð</div>
+        <div class="nav-item" data-screen="chargers"><span class="ico">⚡</span> Hleðslustöðvar</div>
+        <div class="nav-item" data-screen="onboarding"><span class="ico">＋</span> Setja upp stöð</div>
+
+        <div class="nav-label">Ökumenn</div>
+        <div class="nav-item" data-screen="drivers"><span class="ico">👤</span> Ökumenn</div>
+        <div class="nav-item" data-screen="invite"><span class="ico">＋</span> Bjóða ökumanni</div>
+        <div class="nav-item" data-screen="requests"><span class="ico">✉</span> Aðgangsbeiðnir <span class="badge">3</span></div>
+
+        <div class="nav-label">Reikningar</div>
+        <div class="nav-item" data-screen="units"><span class="ico">🏠</span> Einingar &amp; eigendur</div>
+        <div class="nav-item" data-screen="agreements"><span class="ico">📄</span> Samningar</div>
+        <div class="nav-item" data-screen="invoices"><span class="ico">🧾</span> Reikningar <span class="tag soon solo">soon</span></div>
+
+        <div class="nav-label">Annað</div>
+        <div class="nav-item" data-screen="settings"><span class="ico">⚙</span> Stillingar</div>
+      </nav>
+      <div class="nav-foot">
+        <div class="avatar">GB</div>
+        <div>
+          <div style="color:var(--soft);font-weight:600;">Guðrún Björnsd.</div>
+          <div>Host admin</div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ============ MAIN ============ -->
+    <div class="main">
+      <div class="topbar">
+        <div class="hamb" id="hamb">☰</div>
+        <div class="org">
+          Dalvegur Húsfélag
+          <span class="pill host">Fjölbýli · HOA</span>
+        </div>
+        <div class="switcher" id="instSwitcher">📍 <span id="instLabel">Allar uppsetningar</span> <span class="sub">(3)</span> ▾
+          <div class="menu" id="instMenu">
+            <div data-inst="all">Allar uppsetningar <span class="mini">3</span></div>
+            <div data-inst="dalvegur">Stigagangur A–C <span class="mini">12 stöðvar</span></div>
+            <div data-inst="bilakjallari">Bílakjallari <span class="mini">4 stöðvar</span></div>
+            <div data-inst="geymsla">Geymslusvæði <span class="mini">í bið</span></div>
+          </div>
+        </div>
+        <div class="spacer"></div>
+        <span class="tlink" id="langToggle"><span class="is">IS</span> · <span class="en">EN</span></span>
+        <span class="tlink">Útskrá</span>
+      </div>
+
+      <div class="content">
+
+        <!-- ===================== DASHBOARD ===================== -->
+        <section class="screen active" data-screen="dashboard">
+          <div class="head">
+            <div>
+              <h1>Mælaborð</h1>
+              <p>Yfirlit yfir allar uppsetningar húsfélagsins — þennan mánuð.</p>
+            </div>
+            <button class="btn primary"><span>＋</span> Bjóða ökumanni</button>
+          </div>
+
+          <div class="grid g4" style="margin-bottom:16px;">
+            <div class="card kpi"><div class="lbl">Orka í mánuðinum</div><div class="val grad">1.284 kWh</div><div class="delta">▲ 9% frá fyrri mánuði</div></div>
+            <div class="card kpi"><div class="lbl">Hleðslur</div><div class="val">312</div><div class="delta">▲ 4%</div></div>
+            <div class="card kpi"><div class="lbl">Virkir ökumenn</div><div class="val">41<span class="sub" style="font-size:14px;"> / 48</span></div><div class="delta flat">7 með boð í bið</div></div>
+            <div class="card kpi"><div class="lbl">Áætlað uppgjör</div><div class="val">71.400 kr.</div><div class="delta flat">Reikningur 1. næsta mán.</div></div>
+          </div>
+
+          <div class="card" style="margin-bottom:16px;">
+            <div class="card-h">Uppsetningar <span class="sub">Svæði: Dalvegur 10–14 · 201 Kópavogur · DSO: Veitur</span></div>
+            <table>
+              <thead><tr><th>Uppsetning</th><th>Mælir / raforkusali</th><th>Stöðvar</th><th>Orka í mán.</th><th>Staða</th><th></th></tr></thead>
+              <tbody>
+                <tr><td><strong>Stigagangur A–C</strong></td><td class="sub">871234 · Orka náttúrunnar</td><td>12</td><td>1.012 kWh</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Samningur virkur</span></td><td class="right"><button class="btn sm ghost" data-goto="chargers" data-inst="dalvegur">Opna</button></td></tr>
+                <tr><td><strong>Bílakjallari</strong></td><td class="sub">871567 · N1 Rafmagn</td><td>4</td><td>272 kWh</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Samningur virkur</span></td><td class="right"><button class="btn sm ghost" data-goto="chargers" data-inst="bilakjallari">Opna</button></td></tr>
+                <tr><td><strong>Geymslusvæði</strong><div class="sub">ný</div></td><td class="sub">871890 · HS Orka</td><td>2</td><td>0 kWh</td><td><span class="badge2 s-warn"><span class="dot bg-warn"></span>Bíður virkjunar</span></td><td class="right"><button class="btn sm ghost" data-goto="onboarding">Klára</button></td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="grid g2">
+            <div class="card">
+              <div class="card-h">Nýlegar hleðslur <span class="sub">síðustu 24 klst.</span></div>
+              <table>
+                <thead><tr><th>Ökumaður</th><th>Stöð</th><th>Eining</th><th>Orka</th><th>Staða</th></tr></thead>
+                <tbody>
+                  <tr><td>Alice Jónsdóttir</td><td class="mono">ZPR074003</td><td>Íbúð 304</td><td>18,4 kWh</td><td><span class="badge2 s-live"><span class="dot bg-live"></span>Í hleðslu</span></td></tr>
+                  <tr><td>Bjarni Þór</td><td class="mono">ZPR074007</td><td>Íbúð 201</td><td>11,0 kWh</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Lokið</span></td></tr>
+                  <tr><td>Elín Ragnars</td><td class="mono">ZPR074002</td><td>Íbúð 102</td><td>7,7 kWh</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Lokið</span></td></tr>
+                  <tr><td>Katla S.</td><td class="mono">ZPR074011</td><td>Íbúð 404</td><td>24,9 kWh</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Lokið</span></td></tr>
+                  <tr><td>Óli Péturs</td><td class="mono">ZPR074005</td><td>Íbúð 303</td><td>3,2 kWh</td><td><span class="badge2 s-warn"><span class="dot bg-warn"></span>Hlé (bíll)</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="grid" style="align-content:start;">
+              <div class="card">
+                <div class="card-h">Staða stöðva <span class="sub">12 stöðvar</span></div>
+                <div class="conns">
+                  <div class="conn ok"><div><div class="id">02</div>Laus</div></div>
+                  <div class="conn live"><div><div class="id">03</div>Hleður</div></div>
+                  <div class="conn ok"><div><div class="id">04</div>Laus</div></div>
+                  <div class="conn ok"><div><div class="id">05</div>Laus</div></div>
+                  <div class="conn live"><div><div class="id">07</div>Hleður</div></div>
+                  <div class="conn warn"><div><div class="id">08</div>Undirb.</div></div>
+                  <div class="conn ok"><div><div class="id">09</div>Laus</div></div>
+                  <div class="conn live"><div><div class="id">11</div>Hleður</div></div>
+                  <div class="conn bad"><div><div class="id">06</div>Óteng.</div></div>
+                </div>
+              </div>
+              <div class="card" style="border-color:rgba(244,201,93,.35);">
+                <div class="card-h">Aðgangsbeiðnir í bið <span class="badge">3</span></div>
+                <div style="padding:14px 18px;font-size:13px;color:var(--soft);">
+                  3 ökumenn skönnuðu QR-kóða sem krefst samþykkis.
+                  <div style="margin-top:12px;"><button class="btn sm" data-goto="requests">Skoða beiðnir →</button></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ===================== CHARGERS ===================== -->
+        <section class="screen" data-screen="chargers">
+          <div class="head">
+            <div>
+              <h1>Hleðslustöðvar</h1>
+              <p>Uppsetningar og stöðvar á þínu neti. Þú getur búið til uppsetningar og tengt stöðvar sjálf(ur) — verðskrá og samningur eru í höndum Straumvaktar.</p>
+            </div>
+            <div style="display:flex;gap:10px;">
+              <button class="btn" data-goto="onboarding">＋ Ný uppsetning</button>
+              <button class="btn primary" data-goto="onboarding">＋ Tengja stöð</button>
+            </div>
+          </div>
+
+          <div class="card" style="margin-bottom:14px;padding:13px 18px;display:flex;gap:28px;align-items:center;flex-wrap:wrap;">
+            <div><div style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);">Svæði</div><div style="font-weight:700;">Dalvegur 10–14</div></div>
+            <div><div style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);">Heimilisfang</div><div class="sub" style="color:var(--soft);">201 Kópavogur</div></div>
+            <div><div style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);">Dreifiveita (DSO)</div><div class="sub" style="color:var(--soft);">Veitur · sameiginleg fyrir allar uppsetningar á svæðinu</div></div>
+          </div>
+
+          <div class="tabs" data-tabset>
+            <div class="tab active" data-inst="dalvegur">Stigagangur A–C · 12 stöðvar</div>
+            <div class="tab" data-inst="bilakjallari">Bílakjallari · 4 stöðvar</div>
+            <div class="tab" data-inst="geymsla">Geymslusvæði · 2 · <span style="color:var(--amber)">í bið</span></div>
+          </div>
+
+          <div class="inst-panel" data-inst="dalvegur">
+          <div class="card">
+            <div class="card-h">
+              Stöðvar <span class="sub">Stigagangur A–C · Mælir 871234 · Orka náttúrunnar</span>
+              <span class="badge2 s-ok"><span class="dot bg-ok"></span>Samningur virkur — hleðsla opin</span>
+            </div>
+            <table>
+              <thead><tr><th>Stöð</th><th>Tengi</th><th>Afl</th><th>Staða</th><th>Núverandi hleðsla</th><th></th></tr></thead>
+              <tbody>
+                <tr><td class="mono">ZPR074002</td><td>Type 2 · 22 kW</td><td>22 kW</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Laus</span></td><td class="sub">—</td><td class="right"><button class="btn sm ghost">Skoða</button></td></tr>
+                <tr><td class="mono">ZPR074003</td><td>Type 2 · 22 kW</td><td>11,2 kW</td><td><span class="badge2 s-live"><span class="dot bg-live"></span>Í hleðslu</span></td><td>Alice J. · Íbúð 304 · 16:48</td><td class="right"><button class="btn sm ghost">Skoða</button></td></tr>
+                <tr><td class="mono">ZPR074006</td><td>Type 2 · 22 kW</td><td>—</td><td><span class="badge2 s-bad"><span class="dot bg-bad"></span>Ótengd</span></td><td class="sub">Síðast séð 2 klst.</td><td class="right"><button class="btn sm ghost">Skoða</button></td></tr>
+                <tr><td class="mono">ZPR074007</td><td>Type 2 · 22 kW</td><td>10,9 kW</td><td><span class="badge2 s-live"><span class="dot bg-live"></span>Í hleðslu</span></td><td>Bjarni Þ. · Íbúð 201 · 04:12</td><td class="right"><button class="btn sm ghost">Skoða</button></td></tr>
+                <tr><td class="mono">ZPR074008</td><td>Type 2 · 22 kW</td><td>22 kW</td><td><span class="badge2 s-warn"><span class="dot bg-warn"></span>Undirbýr</span></td><td class="sub">Tengill settur í</td><td class="right"><button class="btn sm ghost">Skoða</button></td></tr>
+                <tr><td class="mono">ZPR074011</td><td>CCS · 50 kW</td><td>48 kW</td><td><span class="badge2 s-live"><span class="dot bg-live"></span>Í hleðslu</span></td><td>Katla S. · Íbúð 404 · 22:01</td><td class="right"><button class="btn sm ghost">Skoða</button></td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          </div><!-- /dalvegur panel -->
+
+          <div class="inst-panel" data-inst="bilakjallari" style="display:none;">
+          <div class="card">
+            <div class="card-h">
+              Stöðvar <span class="sub">Bílakjallari · Mælir 871567 · N1 Rafmagn · Easee</span>
+              <span class="badge2 s-ok"><span class="dot bg-ok"></span>Samningur virkur — hleðsla opin</span>
+            </div>
+            <table>
+              <thead><tr><th>Stöð</th><th>Tengi</th><th>Afl</th><th>Staða</th><th>Núverandi hleðsla</th><th></th></tr></thead>
+              <tbody>
+                <tr><td class="mono">EAS220101</td><td>Type 2 · 22 kW</td><td>22 kW</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Laus</span></td><td class="sub">—</td><td class="right"><button class="btn sm ghost">Skoða</button></td></tr>
+                <tr><td class="mono">EAS220102</td><td>Type 2 · 22 kW</td><td>7,4 kW</td><td><span class="badge2 s-live"><span class="dot bg-live"></span>Í hleðslu</span></td><td>Magnús H. · Stæði B2 · 41:09</td><td class="right"><button class="btn sm ghost">Skoða</button></td></tr>
+                <tr><td class="mono">EAS220103</td><td>Type 2 · 22 kW</td><td>22 kW</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Laus</span></td><td class="sub">—</td><td class="right"><button class="btn sm ghost">Skoða</button></td></tr>
+                <tr><td class="mono">EAS220104</td><td>Type 2 · 22 kW</td><td>—</td><td><span class="badge2 s-bad"><span class="dot bg-bad"></span>Ótengd</span></td><td class="sub">Síðast séð 5 klst.</td><td class="right"><button class="btn sm ghost">Skoða</button></td></tr>
+              </tbody>
+            </table>
+          </div>
+          </div><!-- /bilakjallari panel -->
+
+          <div class="inst-panel" data-inst="geymsla" style="display:none;">
+          <div class="card" style="border-color:rgba(244,201,93,.35);">
+            <div class="card-h">
+              Nýlega tengt — bíður virkjunar <span class="sub">Geymslusvæði · Mælir 871890 · HS Orka</span>
+              <span class="badge2 s-warn"><span class="dot bg-warn"></span>Hleðsla læst</span>
+            </div>
+            <div class="gate" style="margin:14px 18px 0;">
+              <span class="lock">🔒</span>
+              <div>Þessar stöðvar eru tengdar og <b>falla undir gildandi samning húsfélagsins við Straumvakt</b> — kostnaðarþættir voru ákveðnir við stofnun og breytast ekki. Hleðsla opnast þegar Straumvakt hefur virkjað stöðvarnar; ökumenn geta ekki hafið hleðslu fyrr en þá.</div>
+            </div>
+            <table>
+              <thead><tr><th>Stöð</th><th>Tengi</th><th>Tengd</th><th>Staða</th><th></th></tr></thead>
+              <tbody>
+                <tr><td class="mono">ZPR074020</td><td>Type 2 · 22 kW</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Nettengd</span></td><td><span class="badge2 s-warn"><span class="dot bg-warn"></span>Læst · bíður virkjunar</span></td><td class="right"><button class="btn sm ghost">Skoða</button></td></tr>
+                <tr><td class="mono">ZPR074021</td><td>Type 2 · 22 kW</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Nettengd</span></td><td><span class="badge2 s-warn"><span class="dot bg-warn"></span>Læst · bíður virkjunar</span></td><td class="right"><button class="btn sm ghost">Skoða</button></td></tr>
+              </tbody>
+            </table>
+          </div>
+          </div><!-- /geymsla panel -->
+        </section>
+
+        <!-- ===================== ONBOARDING ===================== -->
+        <section class="screen" data-screen="onboarding">
+          <div class="head">
+            <div>
+              <h1>Setja upp stöð</h1>
+              <p>Búðu til uppsetningu og tengdu hleðslustöðvar. Stöðvar verða tengdar strax — hleðsla opnast þegar samningur við Straumvakt er virkur.</p>
+            </div>
+          </div>
+
+          <div class="stepper">
+            <div class="step on"><span class="n">1</span> Svæði (DSO)</div>
+            <div class="step on"><span class="n">2</span> Uppsetning (mælir + sali)</div>
+            <div class="step on"><span class="n">3</span> Tengja stöðvar</div>
+            <div class="step"><span class="n">4</span> Staðfesta</div>
+          </div>
+
+          <div class="grid g2">
+            <div style="display:grid;gap:16px;align-content:start;">
+              <div class="card" style="padding:18px;">
+                <div class="card-h" style="border:0;padding:0 0 14px;">1 · Svæði (Site)</div>
+                <div class="field"><label>Heiti svæðis</label><input class="inp" value="Dalvegur 10–14" /></div>
+                <div class="field"><label>Heimilisfang</label><input class="inp" value="Dalvegur 10–14, 201 Kópavogur" /></div>
+                <div class="field" style="margin:0;"><label>Dreifiveita (DSO)</label><div class="ro-val">Veitur ▾</div><div class="note" style="margin-top:6px;">Sama dreifiveita gildir fyrir <b style="color:var(--soft)">allar uppsetningar</b> á þessu svæði.</div></div>
+              </div>
+
+              <div class="card" style="padding:18px;">
+                <div class="card-h" style="border:0;padding:0 0 14px;">2 · Uppsetning (Installation)</div>
+                <div class="field"><label>Heiti uppsetningar</label><input class="inp" value="Geymslusvæði" /></div>
+                <div class="grid g2" style="gap:12px;">
+                  <div class="field" style="margin:0;"><label>Eigin mælir (e-meter)</label><input class="inp" value="871890" /></div>
+                  <div class="field" style="margin:0;"><label>Raforkusali</label><div class="ro-val">HS Orka ▾</div></div>
+                </div>
+                <div class="note" style="margin-top:10px;">Hver uppsetning getur haft <b style="color:var(--soft)">eigin mæli og raforkusala</b> — óháð öðrum uppsetningum á sama svæði.</div>
+              </div>
+
+              <div class="card" style="padding:18px;">
+                <div class="card-h" style="border:0;padding:0 0 14px;">3 · Tengja stöðvar</div>
+                <label class="sub" style="display:block;margin-bottom:8px;">Veldu framleiðanda / aðgang</label>
+                <div class="grid g3" style="gap:10px;margin-bottom:14px;">
+                  <div class="vendor sel">⚡ Zaptec</div>
+                  <div class="vendor">🔌 Easee</div>
+                  <div class="vendor">🅰 Alfen</div>
+                </div>
+                <div class="field"><label>Zaptec API — netfang</label><input class="inp" placeholder="installation@…" /></div>
+                <div class="field"><label>Lykilorð / API-lykill</label><input class="inp" type="password" placeholder="••••••••" /></div>
+                <button class="btn">Finna stöðvar →</button>
+
+                <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px;">
+                  <div class="sub" style="margin-bottom:8px;">Fundnar stöðvar — veldu þær sem tilheyra þessari uppsetningu:</div>
+                  <div class="toggle"><div class="sw on"></div><div><strong style="font-size:13px;" class="mono">ZPR074020</strong> <span class="sub">· Type 2 · 22 kW</span></div></div>
+                  <div class="toggle"><div class="sw on"></div><div><strong style="font-size:13px;" class="mono">ZPR074021</strong> <span class="sub">· Type 2 · 22 kW</span></div></div>
+                </div>
+              </div>
+
+              <div style="display:flex;gap:10px;">
+                <button class="btn primary">Tengja 2 stöðvar</button>
+                <button class="btn ghost" data-goto="chargers">Hætta við</button>
+              </div>
+            </div>
+
+            <div style="display:grid;gap:16px;align-content:start;">
+              <div class="card" style="padding:18px;">
+                <div class="card-h" style="border:0;padding:0 0 12px;">Samningur við Straumvakt</div>
+                <div class="gate">
+                  <span class="lock">🔒</span>
+                  <div>Kostnaðarþættir (þjónustugjald, gjald á stöð, verð á orku) voru <b>ákveðnir við stofnun húsfélagsins</b> og gilda áfram. Nýjar stöðvar falla undir sama samning — Straumvakt virkjar þær og þá opnast hleðsla.</div>
+                </div>
+                <div style="margin-top:16px;display:grid;gap:10px;">
+                  <div style="display:flex;justify-content:space-between;font-size:13px;"><span class="sub">Stigagangur A–C</span><span class="badge2 s-ok"><span class="dot bg-ok"></span>Samningur virkur</span></div>
+                  <div style="display:flex;justify-content:space-between;font-size:13px;"><span class="sub">Bílakjallari</span><span class="badge2 s-ok"><span class="dot bg-ok"></span>Samningur virkur</span></div>
+                  <div style="display:flex;justify-content:space-between;font-size:13px;"><span class="sub">Geymslusvæði (ný)</span><span class="badge2 s-warn"><span class="dot bg-warn"></span>Bíður virkjunar</span></div>
+                </div>
+              </div>
+
+              <div class="card" style="padding:18px;">
+                <div class="card-h" style="border:0;padding:0 0 10px;">Hvað gerist næst?</div>
+                <ol class="sub" style="margin:0;padding-left:18px;line-height:1.9;">
+                  <li>Þú tengir stöðvarnar (skref 1–3).</li>
+                  <li>Straumvakt fær tilkynningu og yfirfer uppsetninguna.</li>
+                  <li>Straumvakt virkjar stöðvarnar undir gildandi samningi (kostnaðarþættir þegar ákveðnir).</li>
+                  <li>Hleðsla opnast — ökumenn geta hafið hleðslu.</li>
+                </ol>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ===================== DRIVERS ===================== -->
+        <section class="screen" data-screen="drivers">
+          <div class="head">
+            <div>
+              <h1>Ökumenn</h1>
+              <p>Ökumenn með aðgang að hleðslunetinu þínu. Þú stýrir hverjir hafa aðgang.</p>
+            </div>
+            <button class="btn primary" data-goto="invite"><span>＋</span> Bjóða ökumanni</button>
+          </div>
+
+          <div class="tabs">
+            <div class="tab active">Allir · 48</div>
+            <div class="tab">Virkir · 41</div>
+            <div class="tab">Boð í bið · 7</div>
+            <div class="tab">Lokað á · 2</div>
+          </div>
+
+          <div class="card">
+            <div class="card-h">
+              Ökumenn
+              <input id="drvSearch" placeholder="Leita að nafni, netfangi, kennitölu…" style="background:var(--inset);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 11px;font-size:12px;width:280px;" />
+            </div>
+            <table>
+              <thead><tr><th>Nafn</th><th>Kennitala</th><th>Netfang</th><th>Eining</th><th>Staða</th><th>Síðast virkur</th><th></th></tr></thead>
+              <tbody>
+                <tr><td>Alice Jónsdóttir</td><td class="mono">120389-••••</td><td class="sub">alice@dalvegur.is</td><td>Íbúð 304</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Virkur</span></td><td class="sub">Núna</td><td class="right"><button class="btn sm danger">Loka á</button></td></tr>
+                <tr><td>Bjarni Þór Gunnars</td><td class="mono">240777-••••</td><td class="sub">bjarni@…</td><td>Íbúð 201</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Virkur</span></td><td class="sub">12 mín.</td><td class="right"><button class="btn sm danger">Loka á</button></td></tr>
+                <tr><td>Elín Ragnarsdóttir</td><td class="mono">050990-••••</td><td class="sub">elin@…</td><td>Íbúð 102</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Virkur</span></td><td class="sub">2 klst.</td><td class="right"><button class="btn sm danger">Loka á</button></td></tr>
+                <tr><td>— (boð sent)</td><td class="sub">—</td><td class="sub">jon@…</td><td>Íbúð 103</td><td><span class="badge2 s-warn"><span class="dot bg-warn"></span>Boð í bið</span></td><td class="sub">Sent 2 d.</td><td class="right"><button class="btn sm ghost">Endursenda</button></td></tr>
+                <tr><td>Katla Sveinsdóttir</td><td class="mono">311295-••••</td><td class="sub">katla@…</td><td>Íbúð 404</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Virkur</span></td><td class="sub">Núna</td><td class="right"><button class="btn sm danger">Loka á</button></td></tr>
+                <tr><td>Óli Pétursson</td><td class="mono">190284-••••</td><td class="sub">oli@…</td><td>Íbúð 303</td><td><span class="badge2 s-mut"><span class="dot bg-mut"></span>Lokað á</span></td><td class="sub">14 d.</td><td class="right"><button class="btn sm ghost">Opna aftur</button></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- ===================== INVITE ===================== -->
+        <section class="screen" data-screen="invite">
+          <div class="head">
+            <div>
+              <h1>Bjóða ökumanni</h1>
+              <p>Veldu hvernig ökumaður fær aðgang. Allar leiðir skila sama boði — ökumaður innleysir í appinu.</p>
+            </div>
+          </div>
+
+          <div class="grid g2">
+            <div class="card" style="padding:18px;">
+              <div class="grid g3" style="margin-bottom:18px;">
+                <div class="opt sel"><div class="ico">🔢</div><div><strong>Boðskóði</strong><p>Stuttur kóði sem þú deilir.</p></div></div>
+                <div class="opt"><div class="ico">▦</div><div><strong>QR-kóði</strong><p>Til að prenta eða hengja upp.</p></div></div>
+                <div class="opt"><div class="ico">✉</div><div><strong>Tölvupóstur</strong><p>Bein sending með tengli.</p></div></div>
+              </div>
+
+              <div class="field">
+                <label>Tengja við einingu (valkvætt)</label>
+                <div class="ro-val">Íbúð 304 ▾</div>
+                <div class="note">Hleðslur ökumanns leggjast á eiganda þessarar einingar.</div>
+              </div>
+
+              <div style="margin:18px 0 8px;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);">Öryggi QR-kóða</div>
+              <div class="toggle"><div class="sw on"></div><div><strong style="font-size:13px;">Lykilorðs-lykill</strong><div class="sub">Aukastrengur sem þú deilir sérstaklega. Ver gegn ljósmynd af kóða á vegg.</div></div></div>
+              <div class="toggle"><div class="sw"></div><div><strong style="font-size:13px;">Krefjast samþykkis</strong><div class="sub">Innlausn lendir í aðgangsbeiðnum og bíður samþykkis þíns.</div></div></div>
+
+              <div style="margin-top:18px;display:flex;gap:10px;">
+                <button class="btn primary">Búa til boð</button>
+                <button class="btn ghost">Hætta við</button>
+              </div>
+            </div>
+
+            <div class="card" style="padding:20px;text-align:center;">
+              <div class="card-h" style="border:0;justify-content:center;padding:0 0 14px;">Forskoðun</div>
+              <div class="qr"></div>
+              <div class="code" style="margin-top:16px;">DAL-7Q4K</div>
+              <div class="note">Rennur út eftir 7 daga · einnota á hvern ökumann</div>
+              <div style="margin-top:16px;display:flex;gap:8px;justify-content:center;">
+                <button class="btn sm">Afrita</button>
+                <button class="btn sm">Hlaða niður QR</button>
+                <button class="btn sm">Prenta skilti</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card" style="margin-top:18px;">
+            <div class="card-h">Boð í bið <span class="sub">7</span></div>
+            <table>
+              <thead><tr><th>Aðferð</th><th>Móttakandi / staður</th><th>Eining</th><th>Öryggi</th><th>Sent</th><th></th></tr></thead>
+              <tbody>
+                <tr><td>✉ Tölvupóstur</td><td class="sub">jon@…</td><td>Íbúð 103</td><td><span class="ro">Lykill</span></td><td class="sub">2 d.</td><td class="right"><button class="btn sm ghost">Afturkalla</button></td></tr>
+                <tr><td>▦ QR</td><td class="sub">Stigagangur A</td><td>—</td><td><span class="ro">Lykill + samþykki</span></td><td class="sub">9 d.</td><td class="right"><button class="btn sm ghost">Afturkalla</button></td></tr>
+                <tr><td>🔢 Kóði</td><td class="sub">DAL-7Q4K</td><td>Íbúð 304</td><td><span class="ro">Opinn</span></td><td class="sub">Núna</td><td class="right"><button class="btn sm ghost">Afturkalla</button></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- ===================== REQUESTS ===================== -->
+        <section class="screen" data-screen="requests">
+          <div class="head">
+            <div>
+              <h1>Aðgangsbeiðnir</h1>
+              <p>Ökumenn sem skönnuðu QR-kóða sem krefst samþykkis. Samþykktu til að virkja aðgang.</p>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-h">Í bið <span class="badge">3</span></div>
+            <table>
+              <thead><tr><th>Ökumaður</th><th>Kennitala</th><th>Skannaður kóði</th><th>Beðið</th><th class="right">Aðgerð</th></tr></thead>
+              <tbody>
+                <tr><td>Sara Lind Ólafsd.<div class="sub">sara@…</div></td><td class="mono">070596-••••</td><td>Stigagangur A</td><td class="sub">3 klst.</td><td class="right"><button class="btn sm primary">Samþykkja</button> <button class="btn sm danger">Hafna</button></td></tr>
+                <tr><td>Magnús Helgason<div class="sub">maggi@…</div></td><td class="mono">220181-••••</td><td>Bílakjallari</td><td class="sub">1 d.</td><td class="right"><button class="btn sm primary">Samþykkja</button> <button class="btn sm danger">Hafna</button></td></tr>
+                <tr><td>Þóra Dís<div class="sub">thora@…</div></td><td class="mono">120300-••••</td><td>Stigagangur A</td><td class="sub">2 d.</td><td class="right"><button class="btn sm primary">Samþykkja</button> <button class="btn sm danger">Hafna</button></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="note">Þegar þú samþykkir tengist ökumaður þeirri einingu sem þú velur — það ræður hvert reikningurinn fer.</div>
+        </section>
+
+        <!-- ===================== UNITS ===================== -->
+        <section class="screen" data-screen="units">
+          <div class="head">
+            <div>
+              <h1>Einingar &amp; eigendur <span class="sub" style="font-size:13px;font-weight:500;">· billing-home</span></h1>
+              <p>Hver eining (billing-home) — íbúð, stæði eða deild — hefur eiganda; það er sá sem fær reikninginn fyrir hleðslur tengdar einingunni. Sama hugtak og „billing-home“ í ökumannssýn og operator-borðinu.</p>
+            </div>
+            <button class="btn primary"><span>＋</span> Ný eining</button>
+          </div>
+
+          <div class="ribbon">Fjölbýli sýnir íbúðir/stæði · fyrirtæki sýnir deildir/kostnaðarstöðvar — sama skjámynd, munurinn liggur í samningnum.</div>
+
+          <div class="card">
+            <div class="card-h">Einingar <span class="sub">24</span></div>
+            <table>
+              <thead><tr><th>Eining</th><th>Eigandi (reikningsmóttakandi)</th><th>Ökumenn</th><th>Orka í mán.</th><th>Áætlað</th><th></th></tr></thead>
+              <tbody>
+                <tr><td><strong>Íbúð 304</strong></td><td>Alice Jónsdóttir<div class="sub mono">120389-••••</div></td><td>2 <span class="sub">(Alice, barn)</span></td><td>112 kWh</td><td>6.160 kr.</td><td class="right"><button class="btn sm ghost">Skoða</button></td></tr>
+                <tr><td><strong>Íbúð 201</strong></td><td>Bjarni Þór Gunnars</td><td>1</td><td>74 kWh</td><td>4.070 kr.</td><td class="right"><button class="btn sm ghost">Skoða</button></td></tr>
+                <tr><td><strong>Íbúð 102</strong></td><td>Eignasjóður Dalvegs ehf.<div class="sub">leiguíbúð</div></td><td>1 <span class="sub">(Elín, leigjandi)</span></td><td>61 kWh</td><td>3.355 kr.</td><td class="right"><button class="btn sm ghost">Skoða</button></td></tr>
+                <tr><td><strong>Íbúð 404</strong></td><td>Katla Sveinsdóttir</td><td>1</td><td>148 kWh</td><td>8.140 kr.</td><td class="right"><button class="btn sm ghost">Skoða</button></td></tr>
+                <tr><td><strong>Sameign</strong></td><td>Dalvegur Húsfélag<div class="sub">gestastæði</div></td><td>—</td><td>39 kWh</td><td>2.145 kr.</td><td class="right"><button class="btn sm ghost">Skoða</button></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- ===================== AGREEMENTS ===================== -->
+        <section class="screen" data-screen="agreements">
+          <div class="head">
+            <div>
+              <h1>Samningar</h1>
+              <p>Samningur húsfélagsins við Straumvakt — og hvað hver eining og ökumaður er skráð(ur) á.</p>
+            </div>
+          </div>
+
+          <div class="tabs" data-tabset>
+            <div class="tab active" data-inst="straumvakt">Við Straumvakt</div>
+            <div class="tab" data-inst="drivers">Ökumenn &amp; einingar</div>
+          </div>
+
+          <!-- Layer 1 — the host ↔ Straumvakt commercial contract -->
+          <div class="inst-panel" data-inst="straumvakt">
+            <div class="grid g2">
+              <div class="card" style="padding:20px;">
+                <div class="card-h" style="border:0;padding:0 0 12px;">Samningur við Straumvakt <span class="ro">Ákveðið við stofnun</span></div>
+                <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:14px;"><span class="sub">Staða</span><span class="badge2 s-ok"><span class="dot bg-ok"></span>Virkur frá 8. maí 2026</span></div>
+                <div style="display:grid;gap:9px;font-size:13px;color:var(--muted);line-height:1.5;">
+                  <div>Þjónustugjald: <b style="color:var(--soft)">12.000 kr./mán</b></div>
+                  <div>Gjald á stöð: <b style="color:var(--soft)">450 kr./stöð/mán</b></div>
+                  <div>Verð á orku: <b style="color:var(--soft)">55 kr/kWh</b> · <b style="color:var(--soft)">15 kr/klst</b> eftir frítíma</div>
+                  <div>Kostnaðarþættir: <b style="color:var(--soft)">IS-VEITA-2026 · VSK-24</b></div>
+                  <div>Uppgjör: <b style="color:var(--soft)">eftirá, mánaðarlega</b> — á eiganda einingar</div>
+                  <div>Gildistími: <b style="color:var(--soft)">ótímabundinn</b> · uppsögn 3 mán.</div>
+                </div>
+                <div style="margin-top:18px;display:flex;gap:8px;">
+                  <button class="btn sm">Sækja PDF</button>
+                  <button class="btn sm ghost">Saga breytinga</button>
+                </div>
+                <div class="note">Kostnaðarþættir eru ákveðnir milli húsfélagsins og Straumvaktar við stofnun. Breytingar fara í gegnum Straumvakt.</div>
+              </div>
+
+              <div class="card" style="padding:20px;align-content:start;">
+                <div class="card-h" style="border:0;padding:0 0 12px;">Nær yfir <span class="sub">uppsetningar á svæðinu</span></div>
+                <div style="display:grid;gap:11px;font-size:13px;">
+                  <div style="display:flex;justify-content:space-between;"><span class="sub">Stigagangur A–C</span><span class="badge2 s-ok"><span class="dot bg-ok"></span>Virk</span></div>
+                  <div style="display:flex;justify-content:space-between;"><span class="sub">Bílakjallari</span><span class="badge2 s-ok"><span class="dot bg-ok"></span>Virk</span></div>
+                  <div style="display:flex;justify-content:space-between;"><span class="sub">Geymslusvæði</span><span class="badge2 s-warn"><span class="dot bg-warn"></span>Bíður virkjunar</span></div>
+                </div>
+                <div class="gate" style="margin-top:18px;">
+                  <span class="lock">🔒</span>
+                  <div>Hleðsla er aðeins virk á uppsetningum sem falla undir virkan samning. Án samnings er hleðsla læst fyrir alla ökumenn.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Layer 2 — owner/unit billing record with drivers nested under it -->
+          <div class="inst-panel" data-inst="drivers" style="display:none;">
+            <div class="ribbon">Reikningurinn fer á eiganda einingar (efsta lína hvers korts). Ökumenn undir hverri einingu hafa aðgang — hver með eigin auðkenni, en hleðslur þeirra leggjast á eininguna.</div>
+
+            <div class="card" style="margin-bottom:14px;">
+              <div class="card-h">
+                <span>Íbúð 304 · <span class="sub">reikningsmóttakandi:</span> Alice Jónsdóttir</span>
+                <span class="badge2 s-ok"><span class="dot bg-ok"></span>Skilmálar samþykktir</span>
+              </div>
+              <div class="terms">
+                <span>Reikningur til: <b>Alice Jónsdóttir</b> <span class="mono">120389-••••</span></span>
+                <span>Verð: <b>55 kr/kWh</b></span>
+                <span>Uppgjör: <b>eftirá, mán.</b></span>
+                <span>Frá: <b>8. maí 2026</b></span>
+              </div>
+              <div class="nest"><div class="who"><span class="badge2 s-ok"><span class="dot bg-ok"></span>Virkur</span> Alice Jónsdóttir</div><span class="sub">Aðgangur: allar uppsetningar</span></div>
+              <div class="nest"><div class="who"><span class="badge2 s-ok"><span class="dot bg-ok"></span>Virkur</span> Barn (á framfæri)</div><span class="sub">Aðgangur: Dalvegur 10–14 · án kennitölu, undir Alice</span></div>
+            </div>
+
+            <div class="card" style="margin-bottom:14px;">
+              <div class="card-h">
+                <span>Íbúð 201 · <span class="sub">reikningsmóttakandi:</span> Bjarni Þór Gunnars</span>
+                <span class="badge2 s-ok"><span class="dot bg-ok"></span>Skilmálar samþykktir</span>
+              </div>
+              <div class="terms">
+                <span>Reikningur til: <b>Bjarni Þór Gunnars</b></span>
+                <span>Verð: <b>55 kr/kWh</b></span>
+                <span>Uppgjör: <b>eftirá, mán.</b></span>
+                <span>Frá: <b>12. maí 2026</b></span>
+              </div>
+              <div class="nest"><div class="who"><span class="badge2 s-ok"><span class="dot bg-ok"></span>Virkur</span> Bjarni Þór Gunnars</div><span class="sub">Aðgangur: Dalvegur 10–14, Bílakjallari</span></div>
+            </div>
+
+            <div class="card">
+              <div class="card-h">
+                <span>Íbúð 102 · <span class="sub">reikningsmóttakandi:</span> Eignasjóður Dalvegs ehf. <span class="ro">leiguíbúð</span></span>
+                <span class="badge2 s-warn"><span class="dot bg-warn"></span>Skilmálar í bið</span>
+              </div>
+              <div class="terms">
+                <span>Reikningur til: <b>Eignasjóður Dalvegs ehf.</b></span>
+                <span>Verð: <b>55 kr/kWh</b></span>
+                <span>Uppgjör: <b>eftirá, mán.</b></span>
+                <span>Frá: <b>—</b></span>
+              </div>
+              <div class="nest"><div class="who"><span class="badge2 s-warn"><span class="dot bg-warn"></span>Boð í bið</span> Elín Ragnarsdóttir <span class="sub">(leigjandi)</span></div><span class="sub">Aðgangur: Dalvegur 10–14</span></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ===================== INVOICES ===================== -->
+        <section class="screen" data-screen="invoices">
+          <div class="head">
+            <div>
+              <h1>Reikningar <span class="newtag soon">soon · P0.7</span></h1>
+              <p>Straumvakt gefur út reikninga fyrir hönd húsfélagsins. Eftirágreitt, mánaðarlega, á hvern eiganda einingar (billing-home). <span class="sub">Háð kerfi: reikningavélin og ökumanns-aðgangsgjaldið (P0.7) eru enn óákveðin — þetta er skrifvarin forsýn.</span></p>
+            </div>
+            <span class="ro">Skrifvarið · skoðun · P0.7</span>
+          </div>
+
+          <div class="tabs">
+            <div class="tab active">Yfirlit</div>
+            <div class="tab">Eftir einingu</div>
+            <div class="tab">Verðskrá (skv. samningi)</div>
+          </div>
+
+          <div class="grid g3" style="margin-bottom:16px;">
+            <div class="card kpi"><div class="lbl">Yfirstandandi tímabil</div><div class="val">71.400 kr.</div><div class="delta flat">Júní 2026 · í söfnun</div></div>
+            <div class="card kpi"><div class="lbl">Síðasti reikningur</div><div class="val">64.900 kr.</div><div class="delta flat">Maí · greiddur</div></div>
+            <div class="card kpi"><div class="lbl">Þjónustugjald</div><div class="val">12.000 kr.</div><div class="delta flat">/mán · skv. samningi</div></div>
+          </div>
+
+          <div class="card">
+            <div class="card-h">Reikningar</div>
+            <table>
+              <thead><tr><th>Tímabil</th><th>Móttakandi</th><th>Orka</th><th>Upphæð</th><th>Staða</th><th></th></tr></thead>
+              <tbody>
+                <tr><td>Jún 2026</td><td>Margir (24 einingar)</td><td>1.284 kWh</td><td>71.400 kr.</td><td><span class="badge2 s-warn"><span class="dot bg-warn"></span>Í söfnun</span></td><td class="right"><button class="btn sm ghost">Sundurliðun</button></td></tr>
+                <tr><td>Maí 2026</td><td>Margir (23 einingar)</td><td>1.178 kWh</td><td>64.900 kr.</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Greiddur</span></td><td class="right"><button class="btn sm ghost">PDF</button></td></tr>
+                <tr><td>Apr 2026</td><td>Margir (22 einingar)</td><td>1.030 kWh</td><td>56.650 kr.</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Greiddur</span></td><td class="right"><button class="btn sm ghost">PDF</button></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="note">Verðskrá (55 kr/kWh · þjónustugjald) er samningsbundin og stillt af Straumvakt — host getur skoðað en ekki breytt.</div>
+        </section>
+
+        <!-- ===================== SETTINGS ===================== -->
+        <section class="screen" data-screen="settings">
+          <div class="head">
+            <div>
+              <h1>Stillingar</h1>
+              <p>Upplýsingar um húsfélagið og þeir sem stýra því í Straumvakt.</p>
+            </div>
+          </div>
+
+          <div class="grid g2">
+            <div class="card" style="padding:20px;">
+              <div class="card-h" style="border:0;padding:0 0 14px;">Auðkenni <span class="ro">Stillt af operator</span></div>
+              <div class="field"><label>Nafn</label><div class="ro-val">Dalvegur Húsfélag</div></div>
+              <div class="field"><label>Kennitala</label><div class="ro-val mono">540269-1234</div></div>
+              <div class="field"><label>Tegund</label><div class="ro-val">Fjölbýli (HOA)</div></div>
+              <div class="field"><label>Heimilisfang</label><div class="ro-val">Dalvegur 10–14, 201 Kópavogur</div></div>
+              <div class="note">Þarftu að breyta? Hafðu samband við Straumvakt.</div>
+            </div>
+
+            <div class="card">
+              <div class="card-h">Host admins <button class="btn sm primary">＋ Bjóða</button></div>
+              <table>
+                <thead><tr><th>Nafn</th><th>Netfang</th><th>Staða</th><th></th></tr></thead>
+                <tbody>
+                  <tr><td>Guðrún Björnsd.<div class="sub">þú</div></td><td class="sub">gudrun@…</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Virk</span></td><td></td></tr>
+                  <tr><td>Stefán Árnason</td><td class="sub">stefan@…</td><td><span class="badge2 s-ok"><span class="dot bg-ok"></span>Virkur</span></td><td class="right"><button class="btn sm danger">Fjarlægja</button></td></tr>
+                  <tr><td>— (boð sent)</td><td class="sub">formadur@…</td><td><span class="badge2 s-warn"><span class="dot bg-warn"></span>Í bið</span></td><td class="right"><button class="btn sm ghost">Endursenda</button></td></tr>
+                </tbody>
+              </table>
+              <div style="padding:14px 18px;"><div class="card-h" style="border:0;padding:0 0 8px;">Samningur við Straumvakt</div>
+                <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px;"><span class="sub">Staða</span><span class="badge2 s-ok"><span class="dot bg-ok"></span>Virkur</span></div>
+                <div class="sub">Þjónustugjald 12.000 kr./mán · 55 kr/kWh · eftirá.</div>
+                <div style="margin-top:12px;"><button class="btn sm" data-goto="agreements">Sjá samning →</button></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <div class="legend">
+          <b>Stöðumerki / status legend</b> — <span class="tag new">new</span> nýtt yfirborð, bakland til staðar ·
+          <span class="tag soon">soon</span> ekki bakkað enn, háð ákvörðun/ADR. Í þessari hýsil-sýn eru
+          <b>Reikningar</b> merktir <span class="tag soon">soon · P0.7</span> — reikningavélin og ökumanns-aðgangsgjaldið eru
+          enn óákveðin (skrifvarin forsýn). Orðalag: <b>eining</b> = billing-home, <b>aðgangshópur</b> = access group,
+          <b>tegund</b> (Fjölbýli / Fyrirtæki) = host type.
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <div id="modal"><div class="modal-card"><div class="modal-head"><h3 id="modalTitle"></h3><div class="modal-x" id="modalX">✕</div></div><div class="modal-body" id="modalBody"></div></div></div>
+  <div id="toasts"></div>
+
+  <script>
+    const items = [...document.querySelectorAll('.nav-item')];
+    const screens = [...document.querySelectorAll('.screen')];
+    const sidebar = document.querySelector('.sidebar');
+
+    function show(name) {
+      items.forEach(i => i.classList.toggle('active', i.dataset.screen === name));
+      screens.forEach(s => s.classList.toggle('active', s.dataset.screen === name));
+      sidebar.classList.remove('open');
+      window.scrollTo(0, 0);
+    }
+    function activateInst(screenName, inst) {
+      const scope = document.querySelector('.screen[data-screen="' + screenName + '"]');
+      if (!scope) return;
+      const set = scope.querySelector('.tabs[data-tabset]');
+      if (set) [...set.children].forEach(t => t.classList.toggle('active', t.dataset.inst === inst));
+      scope.querySelectorAll('.inst-panel').forEach(p => {
+        p.style.display = (inst === 'all' || p.dataset.inst === inst) ? '' : 'none';
+      });
+    }
+
+    // ---- toast ----
+    function toast(msg) {
+      const c = document.getElementById('toasts');
+      const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg;
+      c.appendChild(t);
+      setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity .3s'; setTimeout(() => t.remove(), 300); }, 2300);
+    }
+
+    // ---- modal (slide-over detail views) ----
+    const modal = document.getElementById('modal');
+    const modalBody = document.getElementById('modalBody');
+    const modalTitle = document.getElementById('modalTitle');
+    function openModal(type, data) {
+      data = data || {};
+      const m = MODALS[type]; if (!m) return;
+      modalTitle.textContent = m.title(data);
+      modalBody.innerHTML = m.body(data);
+      modal.classList.add('open');
+    }
+    function closeModal() { modal.classList.remove('open'); }
+    document.getElementById('modalX').onclick = closeModal;
+    modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+
+    const MODALS = {
+      charger: { title: d => 'Stöð ' + (d.title || ''), body: d => `
+        <div class="kv"><span class="k">Svæði</span><span class="v">Dalvegur 10–14</span></div>
+        <div class="kv"><span class="k">Uppsetning</span><span class="v">Stigagangur A–C</span></div>
+        <div class="kv"><span class="k">Mælir · raforkusali</span><span class="v">871234 · Orka náttúrunnar</span></div>
+        <div class="kv"><span class="k">Dreifiveita (DSO)</span><span class="v">Veitur</span></div>
+        <div class="kv"><span class="k">Tengi</span><span class="v">Type 2 · 22 kW</span></div>
+        <div class="kv"><span class="k">Staða</span><span class="v">Í hleðslu · Alice J. · Íbúð 304</span></div>
+        <div class="kv"><span class="k">Afl núna</span><span class="v">11,2 kW</span></div>
+        <h4>Síðustu hleðslur</h4>
+        <table><thead><tr><th>Dags.</th><th>Ökumaður</th><th class="right">Orka</th></tr></thead><tbody>
+          <tr><td class="sub">Í dag 16:48</td><td>Alice J.</td><td class="right">18,4 kWh</td></tr>
+          <tr><td class="sub">Í gær 21:02</td><td>Alice J.</td><td class="right">22,1 kWh</td></tr>
+          <tr><td class="sub">2 d.</td><td>Bjarni Þór</td><td class="right">9,7 kWh</td></tr>
+        </tbody></table>
+        <div style="margin-top:18px;display:flex;gap:8px;"><button class="btn sm">Skoða í Zaptec</button><button class="btn sm ghost">Endurræsa stöð</button></div>` },
+      driver: { title: d => d.title || 'Ökumaður', body: d => `
+        <div class="kv"><span class="k">Kennitala</span><span class="v mono">120389-••••</span></div>
+        <div class="kv"><span class="k">Netfang</span><span class="v">alice@dalvegur.is</span></div>
+        <div class="kv"><span class="k">Eining (reikningur)</span><span class="v">Íbúð 304</span></div>
+        <div class="kv"><span class="k">Aðgangur</span><span class="v">Allar uppsetningar</span></div>
+        <div class="kv"><span class="k">Staða</span><span class="v">Virkur</span></div>
+        <div class="kv"><span class="k">Síðast virkur</span><span class="v">Núna</span></div>
+        <h4>Síðustu hleðslur</h4>
+        <table><thead><tr><th>Dags.</th><th>Stöð</th><th class="right">Orka</th><th class="right">Kostn.</th></tr></thead><tbody>
+          <tr><td class="sub">Í dag</td><td class="mono">ZPR074003</td><td class="right">18,4 kWh</td><td class="right">1.012 kr.</td></tr>
+          <tr><td class="sub">Í gær</td><td class="mono">ZPR074003</td><td class="right">22,1 kWh</td><td class="right">1.216 kr.</td></tr>
+        </tbody></table>
+        <div style="margin-top:18px;display:flex;gap:8px;"><button class="btn sm danger">Loka á aðgang</button><button class="btn sm ghost">Endurstilla lykilorð</button></div>` },
+      unit: { title: d => d.title || 'Eining', body: d => `
+        <div class="kv"><span class="k">Reikningsmóttakandi</span><span class="v">Alice Jónsdóttir</span></div>
+        <div class="kv"><span class="k">Kennitala</span><span class="v mono">120389-••••</span></div>
+        <div class="kv"><span class="k">Verð</span><span class="v">55 kr/kWh · eftirá</span></div>
+        <div class="kv"><span class="k">Orka í mánuðinum</span><span class="v">112 kWh</span></div>
+        <div class="kv"><span class="k">Áætlað</span><span class="v">6.160 kr.</span></div>
+        <h4>Ökumenn á einingu</h4>
+        <div class="nest"><div class="who"><span class="badge2 s-ok"><span class="dot bg-ok"></span>Virkur</span> Alice Jónsdóttir</div><span class="sub">allar uppsetningar</span></div>
+        <div class="nest"><div class="who"><span class="badge2 s-ok"><span class="dot bg-ok"></span>Virkur</span> Barn (á framfæri)</div><span class="sub">Dalvegur 10–14</span></div>
+        <div style="margin-top:18px;display:flex;gap:8px;"><button class="btn sm">Breyta eiganda</button><button class="btn sm ghost">Bæta ökumanni</button></div>` },
+      invoice: { title: d => 'Reikningur · ' + (d.title || 'Júní 2026'), body: d => `
+        <div class="kv"><span class="k">Útgefandi</span><span class="v">Straumvakt f.h. Dalvegur Húsfélag</span></div>
+        <div class="kv"><span class="k">Tímabil</span><span class="v">${d.title || 'Júní 2026'}</span></div>
+        <div class="kv"><span class="k">Staða</span><span class="v">Í söfnun</span></div>
+        <h4>Sundurliðun eftir einingu</h4>
+        <table><thead><tr><th>Eining</th><th>Eigandi</th><th class="right">Orka</th><th class="right">Samtals</th></tr></thead><tbody>
+          <tr><td>Íbúð 304</td><td class="sub">Alice J.</td><td class="right">112 kWh</td><td class="right">6.160 kr.</td></tr>
+          <tr><td>Íbúð 201</td><td class="sub">Bjarni Þór</td><td class="right">74 kWh</td><td class="right">4.070 kr.</td></tr>
+          <tr><td>Íbúð 102</td><td class="sub">Eignasjóður</td><td class="right">61 kWh</td><td class="right">3.355 kr.</td></tr>
+          <tr><td>Íbúð 404</td><td class="sub">Katla S.</td><td class="right">148 kWh</td><td class="right">8.140 kr.</td></tr>
+          <tr><td>Sameign</td><td class="sub">Húsfélag</td><td class="right">39 kWh</td><td class="right">2.145 kr.</td></tr>
+        </tbody></table>
+        <div class="kv" style="margin-top:6px;"><span class="k">Þjónustugjald + gjald á stöð</span><span class="v">47.530 kr.</span></div>
+        <div class="kv" style="font-size:15px;"><span class="k" style="color:var(--text);font-weight:700;">Samtals</span><span class="v" style="color:var(--green);">71.400 kr.</span></div>
+        <div class="note">Verð á orku (55 kr/kWh) skiptist í dreifingu (Veitur), raforku (söluaðili per uppsetningu) og þjónustu Straumvaktar. Auk þess þjónustugjald og gjald á stöð skv. samningi.</div>
+        <div style="margin-top:16px;display:flex;gap:8px;"><button class="btn sm">Sækja PDF</button></div>` }
+    };
+
+    // ---- sidebar nav ----
+    document.getElementById('nav').addEventListener('click', e => {
+      const item = e.target.closest('.nav-item');
+      if (item) { show(item.dataset.screen); history.replaceState(null, '', '#' + item.dataset.screen); }
+    });
+
+    // ---- master click handler ----
+    const TOASTS = ['Sækja PDF','PDF','Afrita','Hlaða niður QR','Prenta skilti','Saga breytinga','Endursenda',
+      'Bjóða','Breyta eiganda','Bæta ökumanni','Endurstilla lykilorð','Endurræsa stöð','Skoða í Zaptec',
+      'Fjarlægja','Ný eining','Afturkalla','Loka á aðgang','Finna stöðvar →','Tengja 2 stöðvar'];
+    document.body.addEventListener('click', e => {
+      // navigate
+      const goto = e.target.closest('[data-goto]');
+      if (goto) { show(goto.dataset.goto); if (goto.dataset.inst) activateInst(goto.dataset.goto, goto.dataset.inst); return; }
+
+      // tabs
+      const tab = e.target.closest('.tab');
+      if (tab) {
+        const set = tab.parentNode;
+        [...set.children].forEach(x => x.classList.remove('active'));
+        tab.classList.add('active');
+        if (set.hasAttribute('data-tabset')) {
+          const scope = set.closest('.screen');
+          scope.querySelectorAll('.inst-panel').forEach(p => { p.style.display = (p.dataset.inst === tab.dataset.inst) ? '' : 'none'; });
+        }
+        return;
+      }
+
+      // invite method + toggles
+      const opt = e.target.closest('.opt');
+      if (opt) { [...opt.parentNode.children].forEach(o => o.classList.remove('sel')); opt.classList.add('sel'); return; }
+      const swc = e.target.closest('.sw');
+      if (swc) { swc.classList.toggle('on'); return; }
+
+      // buttons with behaviour
+      const btn = e.target.closest('.btn');
+      if (btn) {
+        const txt = btn.textContent.trim();
+        const scr = btn.closest('.screen') ? btn.closest('.screen').dataset.screen : null;
+        if (txt === 'Skoða') {
+          if (scr === 'chargers') openModal('charger', { title: btn.closest('tr')?.querySelector('.mono')?.textContent.trim() });
+          else if (scr === 'units') openModal('unit', { title: btn.closest('tr')?.querySelector('strong')?.textContent.trim() });
+          else openModal('driver', {});
+          return;
+        }
+        if (txt === 'Sundurliðun' || (scr === 'invoices' && txt === 'PDF')) { openModal('invoice', { title: btn.closest('tr')?.querySelector('td')?.textContent.trim() }); return; }
+        if (txt === 'Loka á') { const b = btn.closest('tr').querySelector('.badge2'); if (b) b.outerHTML = '<span class="badge2 s-mut"><span class="dot bg-mut"></span>Lokað á</span>'; btn.textContent = 'Opna aftur'; btn.classList.remove('danger'); toast('Lokað á ökumann'); return; }
+        if (txt === 'Opna aftur') { const b = btn.closest('tr').querySelector('.badge2'); if (b) b.outerHTML = '<span class="badge2 s-ok"><span class="dot bg-ok"></span>Virkur</span>'; btn.textContent = 'Loka á'; btn.classList.add('danger'); toast('Aðgangur opnaður'); return; }
+        if (txt === 'Samþykkja' || txt === 'Hafna') { const tr = btn.closest('tr'); if (tr) tr.remove(); updateReqBadge(); toast(txt === 'Samþykkja' ? 'Aðgangur samþykktur' : 'Beiðni hafnað'); return; }
+        if (txt === 'Búa til boð') { toast('Boð búið til ✓'); return; }
+        if (TOASTS.includes(txt)) { toast(txt + ' ✓'); return; }
+      }
+
+      // driver row → detail
+      const drow = e.target.closest('.screen[data-screen="drivers"] tbody tr');
+      if (drow && !e.target.closest('button')) { openModal('driver', { title: drow.querySelector('td')?.textContent.trim() }); return; }
+    });
+
+    function updateReqBadge() {
+      const rows = document.querySelectorAll('.screen[data-screen="requests"] tbody tr').length;
+      document.querySelectorAll('.nav-item[data-screen="requests"] .badge').forEach(b => { if (rows > 0) { b.textContent = rows; b.style.display = ''; } else b.style.display = 'none'; });
+    }
+
+    // ---- drivers search ----
+    const ds = document.getElementById('drvSearch');
+    if (ds) ds.addEventListener('input', () => {
+      const q = ds.value.toLowerCase();
+      document.querySelectorAll('.screen[data-screen="drivers"] tbody tr').forEach(tr => { tr.style.display = tr.textContent.toLowerCase().includes(q) ? '' : 'none'; });
+    });
+
+    // ---- installation switcher ----
+    const sw = document.getElementById('instSwitcher');
+    const menu = document.getElementById('instMenu');
+    sw.addEventListener('click', e => { e.stopPropagation(); menu.classList.toggle('open'); });
+    document.addEventListener('click', () => menu.classList.remove('open'));
+    menu.addEventListener('click', e => {
+      const it = e.target.closest('[data-inst]'); if (!it) return;
+      const inst = it.dataset.inst;
+      document.getElementById('instLabel').textContent = it.firstChild.textContent.trim();
+      if (inst === 'all') show('dashboard'); else { show('chargers'); activateInst('chargers', inst); }
+    });
+
+    // ---- login / hamburger / language ----
+    document.getElementById('loginBtn').onclick = () => document.getElementById('login').classList.add('hidden');
+    document.getElementById('hamb').onclick = () => sidebar.classList.toggle('open');
+    const lt = document.getElementById('langToggle');
+    if (lt) lt.addEventListener('click', () => lt.classList.toggle('en'));
+
+    // ---- deep link (skip login when targeting a screen directly) ----
+    // Forms: #screen  ·  #screen/installation  ·  #screen~modalType
+    if (location.hash) {
+      document.getElementById('login').classList.add('hidden');
+      const raw = location.hash.slice(1);
+      const modalType = raw.includes('~') ? raw.split('~')[1] : null;
+      const [scr, inst] = raw.split('~')[0].split('/');
+      show(scr); if (inst) activateInst(scr, inst);
+      if (modalType) openModal(modalType, {});
+    }
+  </script>
+</body>
+</html>

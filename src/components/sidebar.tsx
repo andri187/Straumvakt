@@ -32,6 +32,7 @@ import {
   Fingerprint,
   Handshake,
   Inbox,
+  Palette,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -339,6 +340,15 @@ const nav: NavItem[] = [
     href: "/technical-read",
     label: { is: "Technical Read", en: "Technical Read" },
     icon: Wrench,
+  },
+  {
+    // Internal persona mockups (admin/host/driver/technician), served from
+    // /public/concepts/*.html and viewed in-console. Admin-gated by the
+    // (app) layout.
+    kind: "leaf",
+    href: "/concepts",
+    label: { is: "Hönnunardrög", en: "Design concepts" },
+    icon: Palette,
   },
 ];
 
