@@ -1,0 +1,450 @@
+<!doctype html>
+<html lang="is">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Straumvakt-driver — interactive app</title>
+  <!--
+    Interactive web port of the Straumvakt driver mobile app
+    (E:/Claude/CPMS/mobile-app-driver, Flutter `straumvakt_driver` v0.3.0).
+    One phone you can click through: Innskráning → Hlaða (staðir → stöðvar) →
+    Símatap / ræsing → Lifandi hleðsla; valmynd → Greiðsluskilmálar / Hleðslusaga;
+    bottom nav Hlaða / Aðstoð.
+
+    Faithful to lib/main.dart (palette + Icelandic copy + seed data). It is a
+    visual mock — no BLE, no API; flows are simulated. Open in a browser.
+  -->
+  <style>
+    :root {
+      --midnight:#010B13; --deep-navy:#061522; --surface:#0A2130; --surface-hi:#0E2A3D;
+      --border:#1E5B70; --mint:#69F2A6; --cyan:#25C9C9; --blue:#2098E4; --muted:#A7BBC8;
+      --danger:#FF3864; --amber:#F6A532;
+      --cs-text:#F5F7FA; --cs-muted:#A8B2BC; --cs-divider:rgba(255,255,255,.14);
+      --cs-mint:#52F0A0; --cs-cyan:#14C7D9; --cs-blue:#1E9BFF; --cs-track:#13242E;
+      font-family: Roboto, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin:0; min-height:100vh; color:#fff; display:flex; flex-direction:column; align-items:center;
+      background:
+        radial-gradient(900px 480px at 82% -8%, rgba(37,201,201,.10), transparent 60%),
+        radial-gradient(760px 420px at -8% 6%, rgba(105,242,166,.08), transparent 60%),
+        #04080e;
+      background-attachment: fixed; padding: 26px 16px 50px;
+    }
+    .hint { color: var(--muted); font-size: 12.5px; margin: 0 0 18px; text-align: center; max-width: 60ch; }
+    .hint b { color: var(--cyan); }
+
+    .phone { width: 360px; height: 740px; border-radius: 52px; padding: 10px; background: linear-gradient(160deg,#1a2632,#0a121b); box-shadow: 0 36px 70px rgba(0,0,0,.6), 0 0 0 1px rgba(120,150,170,.16) inset; position: relative; }
+    .screen { position: relative; width: 100%; height: 100%; border-radius: 42px; overflow: hidden; background: var(--midnight); display: flex; flex-direction: column; }
+    .phone::before { content:""; position:absolute; top:10px; left:50%; transform:translateX(-50%); width:132px; height:26px; background:#05080d; border-radius:0 0 18px 18px; z-index:30; }
+    .statusbar { height:40px; flex:none; display:flex; align-items:center; justify-content:space-between; padding:0 24px; font-size:12px; font-weight:700; z-index:20; }
+    .bars { display:inline-flex; gap:2px; align-items:flex-end; height:10px; }
+    .bars i { width:3px; background:#fff; border-radius:1px; }
+    .bars i:nth-child(1){height:4px}.bars i:nth-child(2){height:6px}.bars i:nth-child(3){height:8px}.bars i:nth-child(4){height:10px}
+    .batt { width:23px; height:11px; border:1px solid rgba(255,255,255,.8); border-radius:3px; padding:1px; display:inline-block; margin-left:6px; vertical-align:middle; }
+    .batt i { display:block; height:100%; width:80%; background:var(--mint); border-radius:1px; }
+
+    .app { flex:1; display:flex; flex-direction:column; min-height:0; position:relative; }
+    .scroll { flex:1; overflow:auto; }
+    .scroll::-webkit-scrollbar { width:0; }
+    .pad { padding:0 20px; }
+
+    .apphdr { display:flex; align-items:center; gap:10px; padding:12px 12px 8px 20px; }
+    .apphdr .mark { width:38px; height:38px; border-radius:12px; background:linear-gradient(135deg,var(--mint),var(--blue)); display:grid; place-items:center; color:var(--midnight); font-weight:900; font-size:18px; flex:none; }
+    .apphdr .ttl { flex:1; font-size:20px; font-weight:900; letter-spacing:-.03em; }
+    .iconbtn { color:#fff; font-size:23px; background:none; border:0; cursor:pointer; padding:4px 6px; line-height:1; }
+
+    .h2 { font-size:22px; font-weight:900; letter-spacing:-.02em; }
+    .sub { color:var(--muted); font-size:13px; line-height:1.45; }
+    .dot { width:6px; height:6px; border-radius:999px; display:inline-block; }
+
+    .bnav { flex:none; height:66px; background:var(--deep-navy); display:flex; z-index:10; }
+    .bnav .it { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; color:var(--muted); font-size:11px; font-weight:700; cursor:pointer; background:none; border:0; }
+    .bnav .it .ic { width:58px; height:28px; border-radius:999px; display:grid; place-items:center; font-size:18px; }
+    .bnav .it.on { color:#fff; }
+    .bnav .it.on .ic { background:rgba(37,201,201,.18); }
+
+    .card-btn { cursor:pointer; }
+    .sitecard { display:flex; align-items:center; gap:10px; background:var(--surface); border:1px solid var(--border); border-radius:18px; padding:13px; margin-bottom:8px; }
+    .sitecard .pin { width:40px; height:40px; border-radius:12px; display:grid; place-items:center; font-size:19px; flex:none; }
+    .sitecard .nm { font-size:15px; font-weight:900; letter-spacing:-.01em; }
+    .sitecard .row2 { display:flex; align-items:center; gap:8px; margin-top:3px; font-size:11px; font-weight:700; color:var(--muted); }
+    .sitecard .dist { font-size:12px; font-weight:900; }
+    .sitecard .chev { color:var(--muted); font-size:20px; }
+
+    .locsel { display:flex; align-items:center; gap:12px; border-radius:20px; padding:12px 12px 12px 14px; margin:6px 20px 4px; }
+    .locsel .pin { width:42px; height:42px; border-radius:12px; display:grid; place-items:center; font-size:22px; flex:none; }
+    .locsel .nm { font-size:18px; font-weight:900; letter-spacing:-.02em; }
+    .locsel .mt { font-size:12px; font-weight:700; color:var(--muted); margin-top:2px; }
+    .skipta { display:inline-flex; align-items:center; gap:4px; padding:7px 11px; border-radius:99px; background:rgba(1,11,19,.4); font-size:11px; font-weight:900; cursor:pointer; }
+
+    .chips { display:flex; gap:8px; padding:8px 20px 4px; overflow-x:auto; }
+    .chips::-webkit-scrollbar { height:0; }
+    .chip { padding:8px 14px; border-radius:99px; font-size:12px; font-weight:900; border:1px solid var(--border); background:var(--surface); color:var(--muted); white-space:nowrap; cursor:pointer; }
+    .chip.on { border-color:var(--cyan); background:rgba(37,201,201,.18); color:var(--cyan); }
+
+    .crow { display:flex; align-items:center; gap:12px; background:var(--surface); border:1px solid var(--border); border-radius:18px; padding:12px 12px 12px 14px; margin-bottom:8px; }
+    .crow.use { border-color:rgba(37,201,201,.45); cursor:pointer; }
+    .crow .ev { width:44px; height:44px; border-radius:13px; display:grid; place-items:center; font-size:21px; flex:none; }
+    .crow .nm { font-size:15px; font-weight:900; }
+    .crow .mt { font-size:12px; font-weight:700; color:var(--muted); margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .crow .chev { font-size:20px; }
+    .pill { display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:99px; font-size:11px; font-weight:900; }
+
+    .simatap { display:flex; align-items:center; gap:12px; background:var(--surface); border:1px solid rgba(37,201,201,.5); border-radius:18px; padding:12px 14px; margin:8px 18px; cursor:pointer; }
+    .simatap .bt { width:38px; height:38px; border-radius:999px; background:rgba(37,201,201,.3); display:grid; place-items:center; color:var(--cyan); font-size:18px; flex:none; animation:pulse 1.5s infinite; }
+    @keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(37,201,201,.45)} 70%{box-shadow:0 0 0 11px rgba(37,201,201,0)} 100%{box-shadow:0 0 0 0 rgba(37,201,201,0)} }
+
+    /* login */
+    .lfield { display:flex; align-items:center; gap:10px; background:var(--deep-navy); border:1px solid var(--border); border-radius:18px; padding:15px; color:#fff; font-size:14px; }
+    .lfield.focus { border-color:var(--cyan); }
+    .lfield .ic { color:var(--muted); font-size:16px; width:18px; text-align:center; }
+    .btn { display:flex; align-items:center; justify-content:center; gap:9px; border:0; border-radius:18px; padding:16px; font-size:16px; font-weight:900; cursor:pointer; width:100%; }
+    .btn.cyan { background:var(--cyan); color:var(--midnight); }
+
+    /* live charging */
+    .cs-loc { display:flex; align-items:center; justify-content:center; gap:6px; color:var(--cs-muted); font-size:14px; }
+    .cs-metrics { display:flex; }
+    .cs-metric { flex:1; text-align:center; }
+    .cs-metric .l { color:var(--cs-muted); font-size:12px; font-weight:700; letter-spacing:.14em; }
+    .cs-metric .v { color:var(--cs-text); font-size:24px; font-weight:700; letter-spacing:-.02em; margin-top:6px; font-variant-numeric:tabular-nums; }
+    .soc { width:230px; height:230px; margin:6px auto; border-radius:999px; display:grid; place-items:center; background:conic-gradient(from -90deg, var(--cs-blue), var(--cs-cyan) 33%, var(--cs-mint) 67%, var(--cs-track) 67%, var(--cs-track) 100%); }
+    .soc .hole { width:204px; height:204px; border-radius:999px; background:var(--midnight); display:grid; place-items:center; }
+    .soc .pct { font-size:66px; font-weight:800; letter-spacing:-.04em; line-height:1; color:var(--cs-text); }
+    .soc .lab { font-size:13px; font-weight:700; letter-spacing:.24em; color:var(--cs-muted); margin-top:6px; }
+    .cs-summary { display:flex; }
+    .cs-summary .c { flex:1; text-align:center; }
+    .cs-summary .v { font-size:22px; font-weight:700; color:var(--cs-text); letter-spacing:-.02em; font-variant-numeric:tabular-nums; }
+    .cs-summary .l { font-size:12px; color:var(--cs-muted); margin-top:3px; }
+    .pricecard { border:1px solid var(--cs-divider); border-radius:20px; padding:16px 18px; }
+    .pricecard .top { display:flex; align-items:center; gap:14px; }
+    .pricecard .ic { width:38px; height:38px; border-radius:11px; background:rgba(82,240,160,.12); display:grid; place-items:center; color:var(--cs-mint); font-size:18px; }
+    .pricecard .hr { height:1px; background:var(--cs-divider); margin:14px 0; }
+    .stopbtn { height:60px; border-radius:20px; display:flex; align-items:center; justify-content:center; gap:12px; background:linear-gradient(90deg,var(--cs-mint),var(--cs-blue)); color:var(--midnight); font-size:17px; font-weight:800; cursor:pointer; }
+    .stopbtn .sq { width:15px; height:15px; border-radius:3px; background:var(--midnight); }
+
+    .spin { width:80px; height:80px; border-radius:999px; border:5px solid var(--border); border-top-color:var(--cyan); animation:rot .9s linear infinite; margin:0 auto; }
+    @keyframes rot { to { transform:rotate(360deg) } }
+
+    .tile { display:flex; align-items:center; gap:12px; background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:14px; margin-bottom:10px; }
+    .tile .ic { width:42px; height:42px; border-radius:13px; display:grid; place-items:center; font-size:20px; flex:none; }
+    .tile .tt { font-size:15px; font-weight:900; }
+    .tile .ts { font-size:12px; font-weight:700; color:var(--muted); margin-top:2px; }
+    .tile .chev { margin-left:auto; color:var(--muted); font-size:18px; }
+
+    /* drawer overlay */
+    .scrim { position:absolute; inset:0; background:rgba(1,7,12,.5); z-index:40; opacity:0; pointer-events:none; transition:opacity .2s; }
+    .scrim.show { opacity:1; pointer-events:auto; }
+    .drawer { position:absolute; top:0; left:0; bottom:0; width:300px; background:var(--midnight); border-right:1px solid var(--border); transform:translateX(-105%); transition:transform .24s ease; z-index:41; overflow:auto; }
+    .drawer.show { transform:none; }
+    .drawer-inner { padding:48px 18px 28px; }
+    .drawer-card { display:flex; align-items:center; gap:14px; padding:18px; border-radius:24px; border:1px solid var(--border); background:linear-gradient(135deg,var(--surface-hi),var(--surface)); }
+    .drawer-card .pa { width:58px; height:58px; border-radius:20px; background:rgba(37,201,201,.15); display:grid; place-items:center; color:var(--cyan); font-size:28px; flex:none; }
+    .srow { display:flex; align-items:center; gap:12px; background:var(--surface); border:1px solid var(--border); border-radius:18px; padding:14px; margin-bottom:10px; }
+    .srow.tap { cursor:pointer; }
+    .srow .ic { color:var(--cyan); font-size:19px; width:22px; text-align:center; }
+    .srow .t { flex:1; font-size:14px; font-weight:900; }
+    .srow .v { font-size:12px; font-weight:800; color:var(--muted); }
+    .toggle { width:42px; height:24px; border-radius:999px; position:relative; flex:none; cursor:pointer; transition:background .15s; }
+    .toggle.on { background:var(--cyan); } .toggle.off { background:var(--border); }
+    .toggle::after { content:""; position:absolute; top:3px; width:18px; height:18px; border-radius:999px; background:#fff; transition:left .15s; }
+    .toggle.on::after { left:21px; } .toggle.off::after { left:3px; }
+    .outline-danger { border:1px solid var(--danger); color:var(--danger); border-radius:18px; padding:15px; text-align:center; font-size:16px; font-weight:900; display:flex; align-items:center; justify-content:center; gap:8px; cursor:pointer; }
+
+    /* detected sheet */
+    .sheet { position:absolute; inset:0; background:rgba(1,7,12,.55); display:grid; place-items:end center; padding:16px; z-index:35; }
+    .sheet .card { width:100%; background:var(--surface); border:1.2px solid rgba(37,201,201,.55); border-radius:28px; padding:22px 20px 18px; text-align:center; box-shadow:0 20px 50px rgba(37,201,201,.22); }
+    .ringspin { width:110px; height:110px; margin:0 auto; border-radius:999px; display:grid; place-items:center; background:conic-gradient(var(--cyan) var(--p,0%), var(--border) 0); transition:none; }
+    .ringspin .hole { width:92px; height:92px; border-radius:999px; background:var(--surface); display:grid; place-items:center; color:var(--cyan); font-size:42px; }
+    .sheet .actions { display:flex; gap:10px; margin-top:16px; }
+    .sheet .actions > div { flex:1; border-radius:16px; padding:14px; font-weight:900; cursor:pointer; }
+  </style>
+</head>
+<body>
+  <p class="hint">Interactive mock of <b>Straumvakt-driver</b> (Flutter v0.3.0). Tap <b>Skrá inn</b>, open a site, start a
+    <b>Laus</b> charger (or the <b>Símatap</b> banner), and use the <b>☰</b> menu. Visual only — no BLE/API.</p>
+
+  <div class="phone"><div class="screen">
+    <div class="statusbar"><span>9:41</span><span><span class="bars"><i></i><i></i><i></i><i></i></span><span class="batt"><i></i></span></span></div>
+    <div class="app" id="app"></div>
+    <!-- drawer -->
+    <div class="scrim" id="scrim" data-act="closeDrawer"></div>
+    <div class="drawer" id="drawer"></div>
+  </div></div>
+
+  <script>
+  // ---------- seed data (from lib/main.dart) ----------
+  const C = { mint:'#69F2A6', cyan:'#25C9C9', blue:'#2098E4', amber:'#F6A532', muted:'#A7BBC8' };
+  const STATUS = {
+    available:{ label:'Laus',     color:C.mint },
+    inUse:    { label:'I notkun', color:C.amber },
+    offline:  { label:'Otengd',   color:C.muted },
+  };
+  function dalvegurChargers(){
+    return Array.from({length:12}, (_,i)=>{
+      const n=i+1; const serial='ZPR0740'+String(n+1).padStart(2,'0');
+      const status = (i%5===3)?'inUse' : (i%5===4)?'offline' : 'available';
+      const fast = i>=9;
+      return { id:'dalv-'+n, serial, status, priceLabel: fast?'46 kr/kWh':'39 kr/kWh', maxPowerKw: fast?50:22, connectorType: fast?'CCS':'Type 2' };
+    });
+  }
+  const n1 = ['742','743','744','745'].map((s,i)=>({ id:'art-'+i, serial:'N1-'+s, status:i===2?'inUse':'available', priceLabel:'Innifalid', maxPowerKw:11, connectorType:'Type 2' }));
+  const isorka = ['306','307','308','309'].map((s,i)=>({ id:'is-'+i, serial:'IS-'+s, status:i===0?'inUse':(i===3?'offline':'available'), priceLabel:'46 kr/kWh', maxPowerKw:50, connectorType:'CCS' }));
+  const SITES = [
+    { id:'dalvegur', name:'Dalvegur 10 - 14', dist:'Her', accent:C.cyan, chargers:dalvegurChargers() },
+    { id:'artun', name:'N1 Artunsbrekka', dist:'4 km', accent:C.mint, chargers:n1 },
+    { id:'isorka', name:'Isorka midborg', dist:'6 km', accent:C.blue, chargers:isorka },
+    { id:'heim', name:'Heim', dist:'12 km', accent:C.amber, chargers:[{id:'home-1',serial:'Heimahledsla',status:'offline',priceLabel:'Eigin orka',maxPowerKw:7,connectorType:'Type 2'}] },
+  ];
+  const SESSIONS = [
+    { label:'ZPR074002 - Dalvegur', when:'I gaer 18:42', kwh:32.4, cost:1264 },
+    { label:'N1-742 - Artunsbrekka', when:'29. mai 09:11', kwh:18.0, cost:0 },
+    { label:'IS-306 - Midborg', when:'25. mai 14:33', kwh:41.8, cost:1923 },
+  ];
+  const FILTERS = { Allar:()=>true, Lausar:c=>c.status==='available', Hradar:c=>c.maxPowerKw>=22, CCS:c=>c.connectorType==='CCS' };
+  const cnt = (s,st)=> s.chargers.filter(c=>c.status===st).length;
+  const site = id => SITES.find(s=>s.id===id);
+  const rgba = (hex,a)=>{ const n=parseInt(hex.slice(1),16); return `rgba(${n>>16&255},${n>>8&255},${n&255},${a})`; };
+
+  // ---------- state ----------
+  let S = { screen:'login', tab:'charge', view:'sites', siteId:null, filter:'Allar',
+            drawer:false, sheet:false, push:null, simatap:true, sec:3 };
+  let timers = [];
+  const clearTimers = ()=>{ timers.forEach(clearTimeout); timers.forEach(clearInterval); timers=[]; };
+
+  // ---------- screens ----------
+  function loginHTML(){
+    return `<div class="scroll pad" style="display:flex;flex-direction:column;justify-content:center;">
+      <div style="text-align:center;"><div style="font-size:72px;line-height:1;">🚗</div>
+        <div style="font-size:40px;font-weight:900;letter-spacing:-.04em;margin-top:10px;">Straumvakt</div></div>
+      <div style="height:28px;"></div>
+      <div class="lfield"><span class="ic">✉</span><span>n1@n1.is</span></div>
+      <div style="height:14px;"></div>
+      <div class="lfield focus"><span class="ic">🔒</span><span style="letter-spacing:3px;">••••••••</span></div>
+      <div style="height:26px;"></div>
+      <button class="btn cyan" data-act="login">⇲ Skrá inn</button>
+      <div style="text-align:center;margin-top:14px;"><span style="color:var(--cyan);font-size:13px;">Gleymt lykilorð?</span></div>
+      <div style="text-align:center;margin-top:14px;font-size:11px;color:var(--muted);">hlada-api-staging.straumvakt.workers.dev</div>
+    </div>`;
+  }
+  function header(back){
+    const left = back ? `<button class="iconbtn" data-act="back">←</button>` : `<div class="mark">S</div>`;
+    return `<div class="apphdr">${left}<div class="ttl">N1</div><button class="iconbtn" data-act="openDrawer">☰</button></div>`;
+  }
+  function bnav(){
+    return `<div class="bnav">
+      <button class="it ${S.tab==='charge'?'on':''}" data-act="tab" data-arg="charge"><div class="ic">⚡</div>Hlaða</button>
+      <button class="it ${S.tab==='support'?'on':''}" data-act="tab" data-arg="support"><div class="ic">🛟</div>Aðstoð</button></div>`;
+  }
+  function sitesHTML(){
+    const cards = SITES.map(s=>{
+      const a=s.accent, av=cnt(s,'available'), iu=cnt(s,'inUse');
+      return `<div class="sitecard card-btn" data-act="openSite" data-arg="${s.id}">
+        <div class="pin" style="background:${rgba(a,.15)};color:${a};">📍</div>
+        <div style="flex:1;min-width:0;"><div class="nm">${s.name}</div>
+          <div class="row2"><span>${s.chargers.length} stöðvar</span>
+            <span class="dot" style="background:${C.mint};"></span><span style="color:${C.mint};font-weight:900;">${av}</span>
+            <span class="dot" style="background:${C.amber};"></span><span style="color:${C.amber};font-weight:900;">${iu}</span></div></div>
+        <div class="dist" style="color:${a};">${s.dist}</div><div class="chev">›</div></div>`;
+    }).join('');
+    const banner = `<div class="simatap" data-act="simatap"><div class="bt">ᛒ</div>
+      <div style="flex:1;min-width:0;"><div style="font-size:14px;font-weight:900;">Símatap virkt</div>
+      <div class="sub" style="font-size:12px;">Smelltu til að líkja eftir tappi (demo).</div></div></div>`;
+    return `<div class="app">${header(false)}${banner}
+      <div class="scroll pad" style="padding-top:4px;"><div class="h2">Veldu staðsetningu</div>
+      <div class="sub" style="margin-top:4px;">Hleðslustaðir sem þinn aðgangur nær til.</div>
+      <div style="height:16px;"></div>${cards}<div style="height:8px;"></div></div>${bnav()}</div>`;
+  }
+  function chargersHTML(){
+    const s = site(S.siteId), a = s.accent;
+    const av=cnt(s,'available'), iu=cnt(s,'inUse');
+    const chips = Object.keys(FILTERS).map(f=>`<div class="chip ${S.filter===f?'on':''}" data-act="filter" data-arg="${f}">${f}</div>`).join('');
+    const rows = s.chargers.filter(FILTERS[S.filter]).map(c=>{
+      const st=STATUS[c.status], usable=c.status==='available';
+      return `<div class="crow ${usable?'use':''}" ${usable?`data-act="startCharger" data-arg="${c.id}"`:''}>
+        <div class="ev" style="background:${rgba(a,.13)};color:${usable?a:C.muted};">🔌</div>
+        <div style="flex:1;min-width:0;"><div class="nm">${c.serial}</div><div class="mt">${c.maxPowerKw} kW - ${c.connectorType} - ${c.priceLabel}</div></div>
+        <div class="pill" style="color:${st.color};background:${rgba(st.color,.13)};border:1px solid ${rgba(st.color,.45)};"><span class="dot" style="background:${st.color};"></span>${st.label}</div>
+        <div class="chev" style="color:${usable?a:C.muted};">›</div></div>`;
+    }).join('') || `<div style="text-align:center;color:var(--muted);font-weight:700;padding:40px 20px;">Engar hleðslustöðvar passa við síu.</div>`;
+    return `<div class="app">${header(true)}
+      <div class="locsel" style="border:1.2px solid ${rgba(a,.55)};background:linear-gradient(135deg,${rgba(a,.18)},var(--surface));">
+        <div class="pin" style="background:${rgba(a,.18)};color:${a};">📍</div>
+        <div style="flex:1;min-width:0;"><div class="nm">${s.name}</div><div class="mt">${s.chargers.length} stöðvar - ${av} lausar - ${iu} í notkun</div></div>
+        <div class="skipta" style="border:1px solid ${rgba(a,.4)};color:${a};" data-act="back">Skipta ⇄</div></div>
+      <div class="chips">${chips}</div>
+      <div class="scroll pad" style="padding-top:6px;">${rows}<div style="height:8px;"></div></div>${bnav()}</div>`;
+  }
+  function preparingHTML(){
+    return `<div class="app">${header(false)}
+      <div class="scroll" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;">
+        <div class="spin"></div><div style="height:20px;"></div>
+        <div style="font-size:18px;font-weight:900;">Tengist hleðslustöð…</div>
+        <div class="sub" style="margin-top:6px;">Bíddu meðan við opnum tengilinn.</div>
+        <div style="height:30px;"></div>
+        <div class="stopbtn" style="width:100%;max-width:300px;" data-act="stop"><span class="sq"></span> Hætta við</div>
+      </div></div>`;
+  }
+  function chargingHTML(){
+    const s = site(S.siteId);
+    return `<div class="app">${header(false)}
+      <div class="scroll" style="padding:4px 24px 14px;display:flex;flex-direction:column;">
+        <div class="cs-loc">📍 ${s.name}</div><div style="height:18px;"></div>
+        <div class="cs-metrics"><div class="cs-metric"><div class="l">AFL</div><div class="v">⚡ 11,2 kW</div></div>
+          <div class="cs-metric"><div class="l">TÍMI</div><div class="v">🕓 00:16:48</div></div></div>
+        <div style="height:16px;"></div>
+        <div class="soc"><div class="hole"><div style="text-align:center;"><div class="pct">67%</div><div class="lab">HLAÐIÐ</div></div></div></div>
+        <div style="height:16px;"></div>
+        <div class="cs-summary"><div class="c"><div class="v">18,42 kWh</div><div class="l">bætt í rafhlöðu</div></div>
+          <div class="c"><div class="v">1.017 kr.</div><div class="l">kostnaður</div></div></div>
+        <div style="height:18px;"></div>
+        <div class="pricecard"><div class="top"><div class="ic">🏷</div>
+          <div><div style="font-size:18px;font-weight:700;letter-spacing:-.02em;">55 kr/kWh</div>
+          <div style="color:var(--cs-muted);font-size:12.5px;">15 kr/klst eftir frítíma</div></div></div>
+          <div class="hr"></div>
+          <div style="display:flex;align-items:center;justify-content:space-between;"><span style="color:var(--cs-muted);font-size:14px;">Frítími eftir:</span>
+          <span style="color:var(--cs-mint);font-size:22px;font-weight:800;letter-spacing:-.02em;">07:43</span></div></div>
+        <div style="height:16px;"></div>
+        <div class="stopbtn" data-act="stop"><span class="sq"></span> Stöðva hleðslu</div></div></div>`;
+  }
+  function supportHTML(){
+    return `<div class="app">${header(false)}
+      <div class="scroll pad" style="padding-top:8px;"><div class="h2">Aðstoð</div>
+      <div class="sub" style="margin-top:4px;">Tilkynna vandamál eða biðja um aðstoð.</div><div style="height:18px;"></div>
+      <div class="tile"><div class="ic" style="background:${rgba(C.amber,.13)};color:${C.amber};">⚠</div><div style="flex:1;"><div class="tt">Tilkynna bilun</div><div class="ts">Hleðslustöðin svarar ekki eða er biluð.</div></div><div class="chev">›</div></div>
+      <div class="tile"><div class="ic" style="background:${rgba(C.cyan,.13)};color:${C.cyan};">？</div><div style="flex:1;"><div class="tt">Reikningur eða verð</div><div class="ts">Spurningar um reikning, verðskrá eða notkun.</div></div><div class="chev">›</div></div>
+      <div class="tile"><div class="ic" style="background:${rgba(C.blue,.13)};color:${C.blue};">▦</div><div style="flex:1;"><div class="tt">Skanna QR á hleðslustöð</div><div class="ts">Finna stöð með QR-kóða (kemur fljótlega).</div></div><div class="chev">›</div></div>
+      <div style="height:12px;"></div>
+      <div class="tile" style="margin-bottom:0;"><div style="color:var(--muted);font-size:18px;">ⓘ</div><div class="ts" style="margin:0;">Mál sem tilkynnt eru hér rata sjálfkrafa í rekstrarteymið.</div></div>
+      </div>${bnav()}</div>`;
+  }
+  function historyHTML(){
+    const kwh = SESSIONS.reduce((a,s)=>a+s.kwh,0), cost = SESSIONS.reduce((a,s)=>a+s.cost,0);
+    const rows = SESSIONS.map(s=>`<div class="tile" style="margin-bottom:10px;"><div class="ic" style="background:${rgba(C.mint,.13)};color:${C.mint};">⚡</div>
+      <div style="flex:1;min-width:0;"><div class="tt" style="font-size:14px;">${s.label}</div><div class="ts">${s.when} - ${s.kwh.toFixed(1)} kWh</div></div>
+      <div style="color:${C.mint};font-size:13px;font-weight:900;">${s.cost===0?'Innifalið':s.cost+' kr.'}</div></div>`).join('');
+    return `<div class="app"><div class="apphdr"><button class="iconbtn" data-act="popPush">←</button><div class="ttl" style="font-size:18px;">Hleðslusaga</div></div>
+      <div class="scroll pad" style="padding-top:8px;"><div class="h2">Hleðslur</div><div class="sub" style="margin-top:4px;">Yfirlit yfir nýlegar hleðslur og kostnað.</div>
+      <div style="height:18px;"></div>
+      <div style="display:flex;background:var(--surface);border:1px solid var(--border);border-radius:22px;padding:18px;">
+        <div style="flex:1;"><div style="color:var(--muted);font-size:11px;font-weight:800;">Síðustu 30 dagar</div><div style="font-size:20px;font-weight:900;margin-top:4px;">${kwh.toFixed(1)} kWh</div></div>
+        <div style="width:1px;background:var(--border);margin:0 14px;"></div>
+        <div style="flex:1;"><div style="color:var(--muted);font-size:11px;font-weight:800;">Heildarkostnaður</div><div style="font-size:20px;font-weight:900;margin-top:4px;">${cost} kr.</div></div></div>
+      <div style="height:18px;"></div>${rows}</div></div>`;
+  }
+  function termsHTML(){
+    const term = (active,label,detail,scope)=>{
+      const col = active?C.mint:C.muted, lab = active?'Virkur':'Óvirkur';
+      return `<div style="background:var(--surface);border:1px solid ${active?rgba(C.cyan,.4):'var(--border)'};border-radius:20px;padding:14px;margin-bottom:10px;">
+        <div style="display:flex;align-items:center;gap:12px;"><div style="width:40px;height:40px;border-radius:12px;background:${rgba(C.cyan,.13)};color:${C.cyan};display:grid;place-items:center;font-size:19px;">🧾</div>
+          <div style="flex:1;font-size:15px;font-weight:900;letter-spacing:-.01em;">${label}</div>
+          <div class="pill" style="color:${col};background:${rgba(col,.13)};border:1px solid ${rgba(col,.45)};"><span class="dot" style="background:${col};"></span>${lab}</div></div>
+        <div class="sub" style="font-weight:700;margin-top:10px;">${detail}</div>
+        <div style="color:var(--muted);font-size:11px;font-weight:800;margin-top:8px;">▤ ${scope}</div></div>`;
+    };
+    return `<div class="app"><div class="apphdr"><button class="iconbtn" data-act="popPush">←</button><div class="ttl" style="font-size:18px;">Greiðsluskilmálar</div></div>
+      <div class="scroll pad" style="padding-top:8px;">
+      <div style="font-size:16px;font-weight:900;">Skilmálar tengdir þínum aðgangi</div>
+      <div class="sub" style="margin-top:4px;">Yfirlit yfir hverjir greiða fyrir hverja hleðslu.</div><div style="height:14px;"></div>
+      ${term(true,'N1 fyrirtækjareikningur','Mánaðarleg innheimta á kennitölu N1 ehf.','Allar hleðslur')}
+      ${term(false,'Persónulegur kortahald','Visa **** 4291 - sjálfgefin greiðsluleið.','Heimahleðsla og opin svæði')}
+      <div style="height:8px;"></div>
+      <div style="border-radius:22px;padding:18px;border:1.2px solid ${rgba(C.cyan,.5)};background:linear-gradient(135deg,${rgba(C.cyan,.18)},var(--surface));">
+        <div style="display:flex;align-items:center;gap:12px;"><div style="width:40px;height:40px;border-radius:12px;background:${rgba(C.cyan,.18)};color:${C.cyan};display:grid;place-items:center;font-size:19px;">💼</div>
+          <div style="flex:1;font-size:16px;font-weight:900;letter-spacing:-.02em;">Láttu fyrirtækið borga</div></div>
+        <div class="sub" style="margin-top:10px;">Biðja vinnuveitanda þinn um að taka yfir reikninga fyrir hleðslur á starfstengdum ferðum.</div>
+        <div style="height:14px;"></div>
+        <button class="btn cyan" style="border-radius:16px;padding:14px;font-size:15px;" data-act="companyReq" id="creq">➤ Senda beiðni</button></div>
+      <div style="height:18px;"></div></div></div>`;
+  }
+  function drawerHTML(){
+    return `<div class="drawer-inner">
+      <div class="drawer-card"><div class="pa">👤</div><div><div style="font-size:20px;font-weight:900;letter-spacing:-.02em;">N1 Drivers</div><div class="sub" style="font-weight:700;">n1@n1.is</div></div></div>
+      <div style="height:22px;"></div><div style="font-size:18px;font-weight:900;">Stillingar</div><div style="height:10px;"></div>
+      <div class="srow" style="border-color:${S.simatap?rgba(C.cyan,.5):'var(--border)'};">
+        <div class="ic" style="color:${S.simatap?C.cyan:C.muted};">ᛒ</div>
+        <div style="flex:1;"><div class="t">Símatap (BLE)</div><div class="ts" style="font-size:11px;font-weight:700;color:var(--muted);margin-top:2px;">Sjálfvirkt: haltu símanum að lesara til að hefja hleðslu.</div></div>
+        <div class="toggle ${S.simatap?'on':'off'}" data-act="toggleSimatap"></div></div>
+      <div class="srow tap" data-act="push" data-arg="history"><div class="ic">🧾</div><div class="t">Hleðslusaga</div><div class="v">3 hleðslur</div><div style="color:var(--muted);">›</div></div>
+      <div class="srow tap" data-act="push" data-arg="terms"><div class="ic">💳</div><div class="t">Greiðsluskilmálar</div><div class="v">1 virkur</div><div style="color:var(--muted);">›</div></div>
+      <div class="srow"><div class="ic">🌐</div><div class="t">Tungumál</div><div class="v">Íslenska</div></div>
+      <div class="srow"><div class="ic">📡</div><div class="t">RFID</div><div class="v" style="font-family:ui-monospace,monospace;">EE43C609263CC7</div></div>
+      <div style="height:14px;"></div><div class="outline-danger" data-act="logout">⎋ Útskrá</div>
+      <div style="text-align:center;margin-top:14px;font-size:11px;color:var(--muted);font-weight:700;">Straumvakt-driver - v0.3.0</div></div>`;
+  }
+  function sheetHTML(){
+    const c = site(S.siteId).chargers.find(x=>x.status==='available') || site(S.siteId).chargers[0];
+    const a = site(S.siteId).accent, p = ((3-S.sec)/3*100);
+    return `<div class="sheet"><div class="card">
+      <div class="ringspin" style="--p:${p}%;"><div class="hole">⚡</div></div>
+      <div style="font-size:22px;font-weight:900;letter-spacing:-.02em;margin-top:18px;">${c.serial}</div>
+      <div class="sub" style="margin-top:4px;">${site(S.siteId).name}</div>
+      <div style="color:${a};font-size:14px;font-weight:900;margin-top:14px;">Hef hleðslu eftir ${S.sec}...</div>
+      <div class="actions"><div style="border:1px solid var(--border);color:var(--muted);" data-act="sheetCancel">Hætta við</div>
+        <div style="background:${a};color:var(--midnight);" data-act="sheetStart">Hefja núna</div></div></div></div>`;
+  }
+
+  // ---------- render ----------
+  function bodyHTML(){
+    if (S.screen==='login') return loginHTML();
+    if (S.push==='history') return historyHTML();
+    if (S.push==='terms') return termsHTML();
+    if (S.tab==='support') return supportHTML();
+    switch(S.view){
+      case 'sites': return sitesHTML();
+      case 'chargers': return chargersHTML();
+      case 'preparing': return preparingHTML();
+      case 'charging': return chargingHTML();
+    }
+  }
+  function render(){
+    let html = bodyHTML();
+    if (S.sheet) html += sheetHTML();
+    document.getElementById('app').innerHTML = html;
+    document.getElementById('drawer').innerHTML = S.screen==='app' ? drawerHTML() : '';
+    document.getElementById('drawer').classList.toggle('show', S.drawer);
+    document.getElementById('scrim').classList.toggle('show', S.drawer);
+  }
+
+  // ---------- actions ----------
+  const startPreparing = ()=>{
+    clearTimers(); S.sheet=false; S.view='preparing'; render();
+    timers.push(setTimeout(()=>{ S.view='charging'; render(); }, 1500));
+  };
+  const openSheet = ()=>{
+    S.sheet=true; S.sec=3; render();
+    const iv = setInterval(()=>{
+      S.sec--; if (!S.sheet){ clearInterval(iv); return; }
+      if (S.sec<=0){ clearInterval(iv); startPreparing(); } else render();
+    },1000);
+    timers.push(iv);
+  };
+  const ACT = {
+    login:()=>{ S.screen='app'; S.tab='charge'; S.view='sites'; render(); },
+    openDrawer:()=>{ S.drawer=true; render(); },
+    closeDrawer:()=>{ S.drawer=false; render(); },
+    tab:(a)=>{ S.tab=a; S.view='sites'; render(); },
+    openSite:(a)=>{ S.siteId=a; S.filter='Allar'; S.view='chargers'; render(); },
+    back:()=>{ S.view='sites'; S.siteId=null; render(); },
+    filter:(a)=>{ S.filter=a; render(); },
+    startCharger:(a)=>{ const c=site(S.siteId).chargers.find(x=>x.id===a); if(c&&c.status==='available') startPreparing(); },
+    simatap:()=>{ if(!S.simatap) return; openSheet(); },
+    sheetCancel:()=>{ clearTimers(); S.sheet=false; render(); },
+    sheetStart:()=>{ startPreparing(); },
+    stop:()=>{ clearTimers(); S.view='sites'; S.siteId=null; render(); },
+    push:(a)=>{ S.push=a; S.drawer=false; render(); },
+    popPush:()=>{ S.push=null; render(); },
+    toggleSimatap:()=>{ S.simatap=!S.simatap; render(); },
+    logout:()=>{ clearTimers(); S={ screen:'login', tab:'charge', view:'sites', siteId:null, filter:'Allar', drawer:false, sheet:false, push:null, simatap:true, sec:3 }; render(); },
+    companyReq:()=>{ const b=document.getElementById('creq'); if(b){ b.textContent='✔ Beiðni send'; b.style.opacity='.6'; } },
+  };
+  document.body.addEventListener('click', e=>{
+    const el = e.target.closest('[data-act]'); if(!el) return;
+    const fn = ACT[el.dataset.act]; if(fn) fn(el.dataset.arg);
+  });
+
+  render();
+  </script>
+</body>
+</html>

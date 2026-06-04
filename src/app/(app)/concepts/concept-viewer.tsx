@@ -11,6 +11,7 @@ const VIEWS = [
   { key: "admin", label: "Operator admin", src: "/concepts/admin.html" },
   { key: "host", label: "Host portal", src: "/concepts/host.html" },
   { key: "driver", label: "Driver portal", src: "/concepts/driver.html" },
+  { key: "driver-app", label: "Driver app", src: "/concepts/driver-app.html" },
   { key: "technician", label: "Technician", src: "/concepts/technician.html" },
 ] as const;
 
