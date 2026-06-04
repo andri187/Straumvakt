@@ -144,6 +144,18 @@ and Issue Engine sprints. Tags match the
   history, operator console issue pages, advanced detection, smart
   routing, ML categorization, helper reputation scoring. Pilot
   operator diagnoses by hand from the raw event log.
+  > **Partially re-sequenced into go-live by [ADR 0032](../adr/0032-neighbour-helper-and-issue-engine-go-live.md).**
+  > Pulled forward into the going-public production push: the five basic
+  > detection rules, ticket workflow + console issue pages, and the
+  > **neighbour-helper (*nágrannahjálp*)** capability — modelled as a
+  > flag on `agreements.driver_group_memberships`, **not** the deprecated
+  > `tenancy.MembershipRole.helper` staff enum (removed in the Sprint 9
+  > RLS rebuild). **Still deferred post-pilot:** advanced detection, smart
+  > multi-tier routing automation, ML categorization, helper reputation
+  > scoring, charger lifetime-history analytics, and the contractor /
+  > marketplace ops layer. Owner-routing (ADR 0008) and the
+  > `assignedToContractorId` contractor path are unchanged / still
+  > deferred.
 - **E · Real billing** — monthly invoice generation, billing
   transactions as ledger entries, statements, employer
   reimbursement workflow, PDF invoices
