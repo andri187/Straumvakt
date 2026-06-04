@@ -1,6 +1,8 @@
 # ADR 0029 — Child-object model for billing attribution
 
-**Status:** Proposed
+**Status:** Accepted (2026-06-04) — core model is canon; the 6 open
+questions below resolve during P1 implementation and any single call is
+reversible by supersession.
 **Date:** 2026-06-04
 **Sprint:** Going-public critical path P1.0 (gates P1 billing —
 [GOING_PUBLIC_CRITICAL_PATH.md](../architecture/GOING_PUBLIC_CRITICAL_PATH.md))

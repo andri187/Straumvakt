@@ -9,6 +9,22 @@
 > what order, with what exit criteria. Sprints slip; milestones don't
 > change shape.
 
+> [!IMPORTANT]
+> **Going-public re-sequencing (2026-06-04).** The 2026-06-03 going-public
+> pivot (ADR 0026/0031) supersedes the *pilot* framing of the tail of this
+> plan. Execution canon for everything from here to **public** launch is
+> **[GOING_PUBLIC_CRITICAL_PATH.md](./GOING_PUBLIC_CRITICAL_PATH.md)**
+> (phases P0–P6). Mapping:
+> - The **enablement** track (P1 billing → P2 onboarding → P3 mobile) is
+>   **new** and lands *before* launch.
+> - Old **Sprint 10** (observability + security) → **P4** (runs parallel).
+> - Old **Sprint 11** (cutover) → **P5** (now a *public* launch, not pilot).
+> - ADR 0032 nágrannahjálp re-placed **post-launch** (P6).
+>
+> Prerequisite ADRs accepted 2026-06-04: 0026, 0027, 0028, 0029, 0031, 0032.
+> Where this plan still says "pilot go-live (end of Sprint 10)" below, read
+> it as historical context; the live target is P5 public launch.
+
 ---
 
 ## 0. How to read this plan

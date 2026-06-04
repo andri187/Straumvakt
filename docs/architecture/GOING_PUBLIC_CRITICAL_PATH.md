@@ -1,8 +1,9 @@
 # Going-Public Critical Path — Sprint Plan
 
 **Date:** 2026-06-04
-**Status:** Draft for operator ratification (then fold into
-[STRAUMVAKT_V3_DELIVERY_PLAN.md](./STRAUMVAKT_V3_DELIVERY_PLAN.md))
+**Status:** Ratified 2026-06-04 — folded into
+[STRAUMVAKT_V3_DELIVERY_PLAN.md](./STRAUMVAKT_V3_DELIVERY_PLAN.md) (top
+banner). Execution canon for the going-public tail.
 **Anchored on:**
 [ADR 0026](../adr/0026-host-managed-driver-enrollment-and-billing-model.md)
 (host-managed enrollment),

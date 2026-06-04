@@ -1,6 +1,7 @@
 # ADR 0027 — Host onboarding (operator-initiated create + host-admin invite)
 
-**Status:** Proposed
+**Status:** Accepted (2026-06-04) — core model is canon; the open
+questions resolve during P2 implementation, reversible by supersession.
 **Date:** 2026-06-04
 **Sprint:** Going-public critical path P2.0 (gates P2 onboarding —
 [GOING_PUBLIC_CRITICAL_PATH.md](../architecture/GOING_PUBLIC_CRITICAL_PATH.md))
