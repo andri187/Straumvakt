@@ -1,0 +1,306 @@
+/* Public /apply RFQ funnel — shares the landing visual language
+   (dark brand canvas, gradient CTA) but laid out as a scrollable form
+   rather than a centred lockup. Scoped under .straumvakt-apply so it
+   never leaks into the Tailwind-driven admin shell. */
+
+.straumvakt-apply {
+  --apply-bg: #020d1a;
+  --apply-text: #f4f1ea;
+  --apply-blue: #2f8ce5;
+  --apply-muted: rgba(244, 241, 234, 0.62);
+  --apply-border: rgba(244, 241, 234, 0.14);
+
+  position: relative;
+  min-height: 100vh;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  padding: 56px 24px 80px;
+  color: var(--apply-text);
+  background: var(--apply-bg);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", Arial, sans-serif;
+  color-scheme: dark;
+}
+
+.straumvakt-apply,
+.straumvakt-apply *,
+.straumvakt-apply *::before,
+.straumvakt-apply *::after {
+  box-sizing: border-box;
+}
+
+.straumvakt-apply .admin-link {
+  position: absolute;
+  top: 22px;
+  right: 26px;
+  color: rgba(244, 241, 234, 0.5);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.straumvakt-apply .admin-link:hover,
+.straumvakt-apply .admin-link:focus-visible {
+  color: var(--apply-text);
+  outline: none;
+}
+
+.straumvakt-apply .shell {
+  width: min(760px, 100%);
+  margin: 0 auto;
+  display: grid;
+  gap: 26px;
+}
+
+.straumvakt-apply .intro {
+  display: grid;
+  gap: 8px;
+  text-align: left;
+}
+
+.straumvakt-apply .intro h1 {
+  margin: 0;
+  font-size: clamp(30px, 6vw, 52px);
+  font-weight: 500;
+  line-height: 0.98;
+  letter-spacing: -0.03em;
+}
+
+.straumvakt-apply .intro .eyebrow {
+  margin: 0;
+  color: var(--apply-blue);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+}
+
+.straumvakt-apply .intro p {
+  margin: 4px 0 0;
+  max-width: 60ch;
+  color: var(--apply-muted);
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.straumvakt-apply form {
+  display: grid;
+  gap: 22px;
+}
+
+.straumvakt-apply fieldset {
+  border: 1px solid var(--apply-border);
+  border-radius: 16px;
+  padding: 18px 18px 20px;
+  background: rgba(255, 255, 255, 0.02);
+  display: grid;
+  gap: 14px;
+}
+
+.straumvakt-apply legend {
+  padding: 0 8px;
+  color: var(--apply-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.straumvakt-apply .grid-2 {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.straumvakt-apply .grid-3 {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 2fr 1fr 1fr;
+}
+
+@media (max-width: 560px) {
+  .straumvakt-apply .grid-2,
+  .straumvakt-apply .grid-3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.straumvakt-apply label {
+  display: grid;
+  gap: 7px;
+  text-align: left;
+}
+
+.straumvakt-apply label > span {
+  color: var(--apply-muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.straumvakt-apply input,
+.straumvakt-apply select,
+.straumvakt-apply textarea {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 1px solid var(--apply-border);
+  border-radius: 12px;
+  color: var(--apply-text);
+  background: rgba(255, 255, 255, 0.035);
+  font: inherit;
+  outline: none;
+}
+
+.straumvakt-apply textarea {
+  min-height: 100px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.straumvakt-apply input:focus,
+.straumvakt-apply select:focus,
+.straumvakt-apply textarea:focus {
+  border-color: rgba(47, 140, 229, 0.72);
+  box-shadow: 0 0 0 3px rgba(47, 140, 229, 0.12);
+}
+
+.straumvakt-apply .site-card {
+  border: 1px solid var(--apply-border);
+  border-radius: 14px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.015);
+  display: grid;
+  gap: 12px;
+}
+
+.straumvakt-apply .site-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.straumvakt-apply .site-card-head h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--apply-text);
+}
+
+.straumvakt-apply .link-button {
+  border: 0;
+  background: transparent;
+  color: rgba(244, 241, 234, 0.6);
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+  padding: 0;
+}
+
+.straumvakt-apply .link-button:hover {
+  color: var(--apply-text);
+}
+
+.straumvakt-apply .link-button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.straumvakt-apply .add-site {
+  justify-self: start;
+  border: 1px dashed var(--apply-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--apply-text);
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.straumvakt-apply .add-site:hover {
+  border-color: rgba(47, 140, 229, 0.6);
+}
+
+.straumvakt-apply .button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0 22px;
+  border: 0;
+  border-radius: 999px;
+  color: #06121b;
+  background: linear-gradient(135deg, #64efa0, #28bdd4 58%, #2f8ce5);
+  font-size: 15px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.straumvakt-apply .button:hover {
+  background: linear-gradient(135deg, #73f7ad, #34c9dd 58%, #3b96ed);
+}
+
+.straumvakt-apply .button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.straumvakt-apply .error {
+  border: 1px solid rgba(244, 90, 110, 0.4);
+  background: rgba(244, 90, 110, 0.08);
+  border-radius: 12px;
+  padding: 12px 14px;
+  color: #ffc4cc;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.straumvakt-apply .success {
+  width: min(620px, 100%);
+  margin: 0 auto;
+  display: grid;
+  gap: 16px;
+  text-align: center;
+  padding: 48px 28px;
+  border: 1px solid var(--apply-border);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.straumvakt-apply .success h1 {
+  margin: 0;
+  font-size: clamp(28px, 5vw, 44px);
+  font-weight: 500;
+  letter-spacing: -0.03em;
+}
+
+.straumvakt-apply .success p {
+  margin: 0 auto;
+  max-width: 48ch;
+  color: var(--apply-muted);
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.straumvakt-apply .success .check {
+  justify-self: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: rgba(100, 239, 160, 0.14);
+  color: #64efa0;
+  font-size: 28px;
+}
+
+.straumvakt-apply .foot-hint {
+  text-align: center;
+  color: rgba(244, 241, 234, 0.45);
+  font-size: 12px;
+  margin: 0;
+}

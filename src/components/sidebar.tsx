@@ -31,6 +31,7 @@ import {
   Activity,
   Fingerprint,
   Handshake,
+  Inbox,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -126,6 +127,14 @@ const nav: NavItem[] = [
         icon: Network,
       },
       {
+        // ADR 0026 — going-public "Hosts" lens (orgs where kind ∈
+        // {multi_dwelling, company}).
+        kind: "leaf",
+        href: "/hosts",
+        label: { is: "Hosts", en: "Hosts" },
+        icon: Building2,
+      },
+      {
         kind: "leaf",
         href: "/accounts/properties",
         label: { is: "Properties", en: "Properties" },
@@ -208,6 +217,13 @@ const nav: NavItem[] = [
     label: { is: "Onboard", en: "Onboard" },
     icon: PlusCircle,
     children: [
+      {
+        // ADR 0026 §6 — inbound /apply RFQ lead inbox.
+        kind: "leaf",
+        href: "/applications",
+        label: { is: "Umsóknir", en: "Applications" },
+        icon: Inbox,
+      },
       {
         kind: "leaf",
         href: "/onboard",
