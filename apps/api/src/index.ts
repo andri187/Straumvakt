@@ -38,6 +38,7 @@ import { adminAgreementsResolve } from "./routes/admin/agreements-resolve";
 import { adminDriverGroupMemberships } from "./routes/admin/driver-group-memberships";
 import { adminAccessRequests } from "./routes/admin/access-requests";
 import { adminHostApplications } from "./routes/admin/host-applications";
+import { adminBillObjects } from "./routes/admin/bill-objects";
 import { publicDriver } from "./routes/public/driver";
 import { publicInvites } from "./routes/public/invites";
 import { publicRegister } from "./routes/public/register";
@@ -138,6 +139,12 @@ app.route("/api/admin/orgs", adminOrgInvites);
 // Creates an access grant. Idempotent on (driverGroupId, userId).
 // Cross-tenant guard: DriverGroup.ownerOrgId must equal URL :orgId.
 app.route("/api/admin/orgs", adminDriverGroupMemberships);
+
+// ADR 0029 — billing-home (BillObject) management.
+//   POST/GET /api/admin/orgs/:orgId/bill-objects[/:id][/members]
+// Org-scoped; billing.read / billing.write on :orgId. The attribution
+// spine (who pays), orthogonal to DriverGroup access.
+app.route("/api/admin/orgs", adminBillObjects);
 
 // Sprint 8.4 — billing dashboard read surface.
 //   GET /api/admin/billing/sessions[?orgId|siteId|chargingStationId|driverUserId][&startedAfter&startedBefore&limit&offset]
