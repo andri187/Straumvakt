@@ -19,6 +19,7 @@ import { Hono, type Context } from "hono";
 import { makePrisma } from "../../lib/prisma";
 import { requireAdmin, type AuthVars } from "../../lib/auth-middleware";
 import { requirePermission } from "../../lib/auth/require-permission";
+import { resolveOrgScope } from "../../lib/auth/org-scope";
 import {
   listSessionLedger,
   totalSessionLedger,
@@ -176,9 +177,13 @@ adminBilling.get(
  */
 adminBilling.get("/tariffs", requirePermission("billing.read"), async (c) => {
   const db = makePrisma(c.env);
+  const orgScope = await resolveOrgScope(db, c.get("session"));
 
-  // Tariff rows + their costFactor codes
+  // Tariff rows + their costFactor codes. TariffDefinition is per-org;
+  // a scoped caller (e.g. host_admin) only sees their orgs' tariffs.
+  // Read-scope only — tariff resolution / compute is untouched (Rule 5).
   const tariffs = await db.tariffDefinition.findMany({
+    where: orgScope.all === false ? { orgId: { in: orgScope.orgIds } } : undefined,
     include: {
       organization: { select: { id: true, displayName: true } },
       costFactor: { select: { code: true, displayName: true } },
