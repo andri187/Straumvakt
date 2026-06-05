@@ -11,7 +11,10 @@ export default function RootPage() {
 
   return (
     <main className="straumvakt-landing" aria-label="Straumvakt">
-      <a className="admin-link" href="/login" aria-label="Admin login">
+      {/* Brand domain is a public-only surface (no /api/admin/login on the UI
+          worker, no straumvakt.org in HOSTNAME_TO_API/ALLOWED_ORIGINS). Point
+          Admin at the API-wired Worker login so it works from straumvakt.org. */}
+      <a className="admin-link" href="https://hlada-staging.straumvakt.workers.dev/login" aria-label="Admin login">
         Admin
       </a>
       <section className="lockup" aria-label="Straumvakt">
