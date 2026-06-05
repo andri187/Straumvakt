@@ -141,3 +141,16 @@ driver has 1 active membership; CDRs 7 / sessions 639 / imported 617 unchanged.
 
 **Still open (by design):** other orgs unclassified (onboard via UI); no
 `bill_objects` yet; drivers still the shared account; `enforce_authorize=false`.
+
+### Redundancy cleanup (same session, operator-approved)
+Reference-checked (all 0 inbound refs) and captured-before-delete:
+1. **Test `Festi` org** `fa7ae544…` (fake kt `0101015522`, archived, 0 refs across
+   memberships/sites/installations/properties/stations/agreements/groups/bill_objects/sessions)
+   — the real `Festi ehf` (`5402062010`) is kept.
+2. **Expired orphan agreement** `b6771541…` (VCP-Lab/N1 sandbox; 0 clauses, 0
+   bearer_rules, 0 billing_lines, 0 groups).
+3. **Stray `tenancy.memberships role='driver'`** (n1@n1.is) — now 0 tenancy
+   memberships.
+Verified after: orgs 8→7, agreements 6→5 (0 expired), memberships 1→0; CDRs (7)
+/ sessions (640) unchanged. Full pre-delete row JSON retained for targeted
+re-INSERT; snapshot branch `backup-2026-06-05-pre-n1-fix` covers all.
