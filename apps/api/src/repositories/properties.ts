@@ -1,4 +1,5 @@
 import type { PrismaClient, Prisma } from "../generated/prisma/client";
+import type { OrgScope } from "../lib/auth/org-scope";
 import type { PropertySummary } from "@straumvakt/shared/domain/properties";
 import type {
   PropertyCreateInput,
@@ -37,8 +38,15 @@ function toSummary(r: Row): PropertySummary {
 
 const include = { organization: { select: { displayName: true } } } as const;
 
-export async function listAllProperties(db: PrismaClient): Promise<PropertySummary[]> {
-  const rows = await db.property.findMany({ orderBy: [{ updatedAt: "desc" }], include });
+export async function listAllProperties(
+  db: PrismaClient,
+  orgScope?: OrgScope,
+): Promise<PropertySummary[]> {
+  const rows = await db.property.findMany({
+    where: orgScope && orgScope.all === false ? { orgId: { in: orgScope.orgIds } } : undefined,
+    orderBy: [{ updatedAt: "desc" }],
+    include,
+  });
   return rows.map(toSummary);
 }
 
@@ -57,9 +65,12 @@ export async function listPropertiesByOrg(
 export async function getPropertyById(
   db: PrismaClient,
   id: string,
+  orgScope?: OrgScope,
 ): Promise<PropertySummary | null> {
   const r = await db.property.findUnique({ where: { id }, include });
-  return r ? toSummary(r) : null;
+  if (!r) return null;
+  if (orgScope && orgScope.all === false && !orgScope.orgIds.includes(r.orgId)) return null;
+  return toSummary(r);
 }
 
 export async function createProperty(

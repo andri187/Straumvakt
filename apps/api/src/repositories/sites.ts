@@ -1,4 +1,5 @@
 import type { PrismaClient, Prisma } from "../generated/prisma/client";
+import type { OrgScope } from "../lib/auth/org-scope";
 import type { SiteSummary } from "@straumvakt/shared/domain/sites";
 import type { SiteCreateInput, SiteUpdateInput } from "@straumvakt/shared/inputs/sites";
 import { recordAuditAction } from "../lib/audit";
@@ -58,8 +59,15 @@ function toSummary(r: Row): SiteSummary {
   };
 }
 
-export async function listAllSites(db: PrismaClient): Promise<SiteSummary[]> {
-  const rows = await db.site.findMany({ orderBy: [{ updatedAt: "desc" }], include });
+export async function listAllSites(
+  db: PrismaClient,
+  orgScope?: OrgScope,
+): Promise<SiteSummary[]> {
+  const rows = await db.site.findMany({
+    where: orgScope && orgScope.all === false ? { orgId: { in: orgScope.orgIds } } : undefined,
+    orderBy: [{ updatedAt: "desc" }],
+    include,
+  });
   return rows.map(toSummary);
 }
 
@@ -78,9 +86,12 @@ export async function listSitesByOrg(
 export async function getSiteById(
   db: PrismaClient,
   id: string,
+  orgScope?: OrgScope,
 ): Promise<SiteSummary | null> {
   const r = await db.site.findUnique({ where: { id }, include });
-  return r ? toSummary(r) : null;
+  if (!r) return null;
+  if (orgScope && orgScope.all === false && !orgScope.orgIds.includes(r.orgId)) return null;
+  return toSummary(r);
 }
 
 export async function createSite(

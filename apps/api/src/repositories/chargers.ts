@@ -14,6 +14,7 @@ import type {
   ChargerCreateInput,
   ChargerUpdateInput,
 } from "@straumvakt/shared/inputs/chargers";
+import type { OrgScope } from "../lib/auth/org-scope";
 import { sha256Hex } from "../lib/sha256";
 import { recordAuditAction } from "../lib/audit";
 import { listChargers as zaptecListChargers } from "../lib/zaptec";
@@ -81,6 +82,10 @@ export interface ListChargersOptions {
    *  decommissioned set. When undefined we skip the live check and
    *  return all rows with decommissioned=null. */
   kek?: string;
+  /** Tenant row-scope. When provided and not `all`, the result is
+   *  filtered to the caller's orgs (defense-in-depth, Rule 7). Omitted
+   *  (undefined) preserves the legacy unscoped behaviour. */
+  orgScope?: OrgScope;
 }
 
 export async function listAllChargers(
@@ -88,6 +93,10 @@ export async function listAllChargers(
   options: ListChargersOptions = {},
 ): Promise<ChargerSummary[]> {
   const rows = await db.chargingStation.findMany({
+    where:
+      options.orgScope && options.orgScope.all === false
+        ? { orgId: { in: options.orgScope.orgIds } }
+        : undefined,
     orderBy: [{ updatedAt: "desc" }],
     include: {
       organization: { select: { displayName: true } },
@@ -191,6 +200,7 @@ export async function listSiteCircuits(
 export async function getChargerById(
   db: PrismaClient,
   chargingStationId: string,
+  orgScope?: OrgScope,
 ): Promise<ChargerDetail | null> {
   const r = await db.chargingStation.findUnique({
     where: { siteAssetId: chargingStationId },
@@ -207,6 +217,11 @@ export async function getChargerById(
     },
   });
   if (!r) return null;
+  // Row-scope guard: a scoped caller (e.g. host_admin) only sees chargers
+  // in their orgs. Treated as not-found to avoid leaking existence.
+  if (orgScope && orgScope.all === false && !orgScope.orgIds.includes(r.orgId)) {
+    return null;
+  }
   return {
     chargingStationId: r.siteAssetId,
     orgId: r.orgId,

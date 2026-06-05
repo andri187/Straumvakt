@@ -6,6 +6,7 @@ import { Hono } from "hono";
 import { makePrisma } from "../../lib/prisma";
 import { requireAdmin, type AuthVars } from "../../lib/auth-middleware";
 import { requirePermission } from "../../lib/auth/require-permission";
+import { resolveOrgScope } from "../../lib/auth/org-scope";
 import type { Env } from "../../bindings";
 
 export const adminActiveSessions = new Hono<{ Bindings: Env; Variables: AuthVars }>();
@@ -14,7 +15,10 @@ adminActiveSessions.use("*", requireAdmin);
 
 adminActiveSessions.get("/", requirePermission("charger.read"), async (c) => {
   const db = makePrisma(c.env);
+  const orgScope = await resolveOrgScope(db, c.get("session"));
   const rows = await db.liveSession.findMany({
+    where:
+      orgScope.all === false ? { orgId: { in: orgScope.orgIds } } : undefined,
     select: {
       chargingStationId: true,
       orgId: true,

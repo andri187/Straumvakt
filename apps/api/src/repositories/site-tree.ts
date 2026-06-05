@@ -22,6 +22,7 @@ import {
   listChargers,
 } from "../lib/zaptec";
 import { openPassword } from "../lib/credential-crypto";
+import type { OrgScope } from "../lib/auth/org-scope";
 
 // 12 min: API status pollers (Sprint 8.8) tick every */5, so a 5-min
 // window races the cron. 12 min gives ~2 ticks of buffer before a row
@@ -359,9 +360,10 @@ async function buildApiActiveMap(
 export async function listSiteTree(
   db: PrismaClient,
   kek?: string,
-  options?: { includeDecommissioned?: boolean },
+  options?: { includeDecommissioned?: boolean; orgScope?: OrgScope },
 ): Promise<SiteTreeNode[]> {
   const includeDecommissioned = options?.includeDecommissioned ?? false;
+  const orgScope = options?.orgScope;
   // pending_discoveries is the second source of "online" — populated
   // by the gateway's no-auth hook when a charger connects but doesn't
   // present valid Basic-Auth. Without this, a charger connecting
@@ -375,6 +377,10 @@ export async function listSiteTree(
   // than sum().
   const [sites, installations, circuits, chargers, pending, apiActiveMap] = await Promise.all([
     db.site.findMany({
+      where:
+        orgScope && orgScope.all === false
+          ? { orgId: { in: orgScope.orgIds } }
+          : undefined,
       orderBy: [{ displayName: "asc" }],
       include: {
         organization: { select: { id: true, displayName: true } },

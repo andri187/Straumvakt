@@ -144,7 +144,7 @@ export async function assertPermission(
  * flow extends SessionPayload with a real userId; once that lands,
  * sessions with `sub === "admin"` AND no userId are still bootstrap.
  */
-function isBootstrapSession(session: SessionPayload): boolean {
+export function isBootstrapSession(session: SessionPayload): boolean {
   if (session.sub !== "admin") return false;
   // Multi-user sessions (future) will carry userId. Bootstrap doesn't.
   return sessionUserId(session) === null;
@@ -158,7 +158,7 @@ function isBootstrapSession(session: SessionPayload): boolean {
  * type without forcing a schema change. When Sprint 5 extends
  * SessionPayload, this helper updates to read the proper field.
  */
-function sessionUserId(session: SessionPayload): string | null {
+export function sessionUserId(session: SessionPayload): string | null {
   const maybe = (session as SessionPayload & { userId?: string }).userId;
   return typeof maybe === "string" && maybe.length > 0 ? maybe : null;
 }

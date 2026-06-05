@@ -3,6 +3,7 @@ import { CircuitCreateInput, CircuitUpdateInput } from "@straumvakt/shared/input
 import { makePrisma } from "../../lib/prisma";
 import { requireAdmin, type AuthVars } from "../../lib/auth-middleware";
 import { requirePermission } from "../../lib/auth/require-permission";
+import { resolveOrgScope } from "../../lib/auth/org-scope";
 import {
   createCircuit,
   deleteCircuit,
@@ -19,7 +20,8 @@ adminCircuits.use("*", requireAdmin);
 // Circuits are site-level children; site.read/write covers them.
 adminCircuits.get("/", requirePermission("platform.tenant.read"), async (c) => {
   const db = makePrisma(c.env);
-  const circuits = await listAllCircuits(db);
+  const orgScope = await resolveOrgScope(db, c.get("session"));
+  const circuits = await listAllCircuits(db, orgScope);
   return c.json({ circuits });
 });
 
@@ -34,7 +36,8 @@ adminCircuits.post("/", requirePermission("site.write"), async (c) => {
 
 adminCircuits.get("/:id", requirePermission("site.read"), async (c) => {
   const db = makePrisma(c.env);
-  const circuit = await getCircuitById(db, c.req.param("id"));
+  const orgScope = await resolveOrgScope(db, c.get("session"));
+  const circuit = await getCircuitById(db, c.req.param("id"), orgScope);
   if (!circuit) return c.json({ error: "not_found" }, 404);
   return c.json({ circuit });
 });

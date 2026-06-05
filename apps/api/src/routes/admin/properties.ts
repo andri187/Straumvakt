@@ -3,6 +3,7 @@ import { PropertyCreateInput, PropertyUpdateInput } from "@straumvakt/shared/inp
 import { makePrisma } from "../../lib/prisma";
 import { requireAdmin, type AuthVars } from "../../lib/auth-middleware";
 import { requirePermission } from "../../lib/auth/require-permission";
+import { resolveOrgScope } from "../../lib/auth/org-scope";
 import {
   createProperty,
   deleteProperty,
@@ -26,7 +27,8 @@ adminProperties.get(
   requirePermission("platform.tenant.read"),
   async (c) => {
     const db = makePrisma(c.env);
-    const properties = await listAllProperties(db);
+    const orgScope = await resolveOrgScope(db, c.get("session"));
+    const properties = await listAllProperties(db, orgScope);
     return c.json({ properties });
   },
 );
@@ -49,7 +51,8 @@ adminProperties.get(
   requirePermission("property.read"),
   async (c) => {
     const db = makePrisma(c.env);
-    const property = await getPropertyById(db, c.req.param("id"));
+    const orgScope = await resolveOrgScope(db, c.get("session"));
+    const property = await getPropertyById(db, c.req.param("id"), orgScope);
     if (!property) return c.json({ error: "not_found" }, 404);
     return c.json({ property });
   },

@@ -1,4 +1,5 @@
 import type { PrismaClient, Prisma } from "../generated/prisma/client";
+import type { OrgScope } from "../lib/auth/org-scope";
 import type { CircuitSummary } from "@straumvakt/shared/domain/circuits";
 import type {
   CircuitCreateInput,
@@ -47,8 +48,15 @@ function toSummary(r: Row): CircuitSummary {
   };
 }
 
-export async function listAllCircuits(db: PrismaClient): Promise<CircuitSummary[]> {
-  const rows = await db.circuit.findMany({ orderBy: [{ updatedAt: "desc" }], include });
+export async function listAllCircuits(
+  db: PrismaClient,
+  orgScope?: OrgScope,
+): Promise<CircuitSummary[]> {
+  const rows = await db.circuit.findMany({
+    where: orgScope && orgScope.all === false ? { orgId: { in: orgScope.orgIds } } : undefined,
+    orderBy: [{ updatedAt: "desc" }],
+    include,
+  });
   return rows.map(toSummary);
 }
 
@@ -67,9 +75,12 @@ export async function listCircuitsBySite(
 export async function getCircuitById(
   db: PrismaClient,
   id: string,
+  orgScope?: OrgScope,
 ): Promise<CircuitSummary | null> {
   const r = await db.circuit.findUnique({ where: { id }, include });
-  return r ? toSummary(r) : null;
+  if (!r) return null;
+  if (orgScope && orgScope.all === false && !orgScope.orgIds.includes(r.orgId)) return null;
+  return toSummary(r);
 }
 
 export async function createCircuit(

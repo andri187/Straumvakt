@@ -3,6 +3,7 @@ import { InstallationCreateInput, InstallationUpdateInput } from "@straumvakt/sh
 import { makePrisma } from "../../lib/prisma";
 import { requireAdmin, type AuthVars } from "../../lib/auth-middleware";
 import { requirePermission } from "../../lib/auth/require-permission";
+import { resolveOrgScope } from "../../lib/auth/org-scope";
 import {
   createInstallation,
   deleteInstallation,
@@ -31,8 +32,9 @@ adminInstallations.get(
   requirePermission("platform.tenant.read"),
   async (c) => {
     const db = makePrisma(c.env);
+    const orgScope = await resolveOrgScope(db, c.get("session"));
     const [installations, vendors, ocppMap] = await Promise.all([
-      listAllInstallations(db),
+      listAllInstallations(db, orgScope),
       listVendors(db),
       listInstallationOcppSummaries(db),
     ]);
@@ -72,7 +74,8 @@ adminInstallations.get(
   requirePermission("site.read"),
   async (c) => {
     const db = makePrisma(c.env);
-    const installation = await getInstallationById(db, c.req.param("id"));
+    const orgScope = await resolveOrgScope(db, c.get("session"));
+    const installation = await getInstallationById(db, c.req.param("id"), orgScope);
     if (!installation) return c.json({ error: "not_found" }, 404);
     return c.json({ installation });
   },

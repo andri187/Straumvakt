@@ -1,4 +1,5 @@
 import type { PrismaClient } from "../generated/prisma/client";
+import type { OrgScope } from "../lib/auth/org-scope";
 import type { InstallationSummary } from "@straumvakt/shared/domain/installations";
 import type {
   InstallationCreateInput,
@@ -56,8 +57,15 @@ function toSummary(r: Row): InstallationSummary {
   };
 }
 
-export async function listAllInstallations(db: PrismaClient): Promise<InstallationSummary[]> {
-  const rows = await db.installation.findMany({ orderBy: [{ updatedAt: "desc" }], include });
+export async function listAllInstallations(
+  db: PrismaClient,
+  orgScope?: OrgScope,
+): Promise<InstallationSummary[]> {
+  const rows = await db.installation.findMany({
+    where: orgScope && orgScope.all === false ? { orgId: { in: orgScope.orgIds } } : undefined,
+    orderBy: [{ updatedAt: "desc" }],
+    include,
+  });
   return rows.map(toSummary);
 }
 
@@ -87,9 +95,12 @@ export async function listInstallationsByOrg(
 export async function getInstallationById(
   db: PrismaClient,
   id: string,
+  orgScope?: OrgScope,
 ): Promise<InstallationSummary | null> {
   const r = await db.installation.findUnique({ where: { id }, include });
-  return r ? toSummary(r) : null;
+  if (!r) return null;
+  if (orgScope && orgScope.all === false && !orgScope.orgIds.includes(r.orgId)) return null;
+  return toSummary(r);
 }
 
 export async function listVendors(

@@ -15,6 +15,7 @@ import {
 import { makePrisma } from "../../lib/prisma";
 import { requireAdmin, type AuthVars } from "../../lib/auth-middleware";
 import { requirePermission } from "../../lib/auth/require-permission";
+import { resolveOrgScope } from "../../lib/auth/org-scope";
 import {
   attachVendorToOcppIdentity,
   AttachVendorError,
@@ -49,9 +50,11 @@ adminChargers.get("/", requirePermission("platform.tenant.read"), async (c) => {
   const includeDecommissioned =
     c.req.query("includeDecommissioned") === "1" ||
     c.req.query("includeDecommissioned") === "true";
+  const orgScope = await resolveOrgScope(db, c.get("session"));
   const chargers = await listAllChargers(db, {
     includeDecommissioned,
     kek: c.env.OCPP_CRED_KEK,
+    orgScope,
   });
   return c.json({ chargers });
 });
@@ -74,7 +77,8 @@ adminChargers.post("/", requirePermission("charger.write"), async (c) => {
 
 adminChargers.get("/:id", requirePermission("charger.read"), async (c) => {
   const db = makePrisma(c.env);
-  const charger = await getChargerById(db, c.req.param("id"));
+  const orgScope = await resolveOrgScope(db, c.get("session"));
+  const charger = await getChargerById(db, c.req.param("id"), orgScope);
   if (!charger) return c.json({ error: "not_found" }, 404);
   return c.json({ charger });
 });

@@ -3,6 +3,7 @@ import { SiteCreateInput, SiteUpdateInput } from "@straumvakt/shared/inputs/site
 import { makePrisma } from "../../lib/prisma";
 import { requireAdmin, type AuthVars } from "../../lib/auth-middleware";
 import { requirePermission } from "../../lib/auth/require-permission";
+import { resolveOrgScope } from "../../lib/auth/org-scope";
 import {
   createSite,
   deleteSite,
@@ -23,18 +24,21 @@ adminSites.use("*", requireAdmin);
 
 adminSites.get("/", requirePermission("platform.tenant.read"), async (c) => {
   const db = makePrisma(c.env);
-  const sites = await listAllSites(db);
+  const orgScope = await resolveOrgScope(db, c.get("session"));
+  const sites = await listAllSites(db, orgScope);
   return c.json({ sites });
 });
 
 adminSites.get("/tree", requirePermission("platform.tenant.read"), async (c) => {
   const db = makePrisma(c.env);
   const includeDecommissioned = c.req.query("includeDecommissioned") === "1";
+  const orgScope = await resolveOrgScope(db, c.get("session"));
   // KEK is required to decrypt vendor credentials for the per-charger
   // API-active fetch. Without it the repo skips the Zaptec leg and
   // returns apiActive=null on every charger.
   const tree = await listSiteTree(db, c.env.OCPP_CRED_KEK, {
     includeDecommissioned,
+    orgScope,
   });
   return c.json({ tree });
 });
@@ -50,7 +54,8 @@ adminSites.post("/", requirePermission("site.write"), async (c) => {
 
 adminSites.get("/:siteId", requirePermission("site.read"), async (c) => {
   const db = makePrisma(c.env);
-  const site = await getSiteById(db, c.req.param("siteId"));
+  const orgScope = await resolveOrgScope(db, c.get("session"));
+  const site = await getSiteById(db, c.req.param("siteId"), orgScope);
   if (!site) return c.json({ error: "not_found" }, 404);
   return c.json({ site });
 });
