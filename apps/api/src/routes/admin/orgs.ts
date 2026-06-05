@@ -13,6 +13,7 @@ import {
 import { listPropertiesByOrg } from "../../repositories/properties";
 import { listSitesByOrg } from "../../repositories/sites";
 import { listInstallationsByOrg } from "../../repositories/installations";
+import { listAllChargers } from "../../repositories/chargers";
 import {
   listContractsByOrg,
 } from "../../repositories/contracts";
@@ -129,6 +130,26 @@ adminOrgs.get(
     const db = makePrisma(c.env);
     const installations = await listInstallationsByOrg(db, c.req.param("id"));
     return c.json({ installations });
+  },
+);
+
+// Host-reachable chargers list — the platform-only /api/admin/chargers
+// list (platform.tenant.read) isn't reachable by a host_admin, so this
+// orgIdParam route lets a host read their own org's chargers. Membership
+// is validated by requirePermission(charger.read, orgIdParam); data is
+// scoped to that org via the org-scope helper. No resolution change.
+adminOrgs.get(
+  "/:id/chargers",
+  requirePermission("charger.read", { orgIdParam: "id" }),
+  async (c) => {
+    const db = makePrisma(c.env);
+    const includeDecommissioned = c.req.query("includeDecommissioned") === "true";
+    const chargers = await listAllChargers(db, {
+      includeDecommissioned,
+      kek: c.env.OCPP_CRED_KEK,
+      orgScope: { all: false, orgIds: [c.req.param("id")] },
+    });
+    return c.json({ chargers });
   },
 );
 
