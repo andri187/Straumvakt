@@ -61,7 +61,7 @@
 
     .bnav { flex:none; height:66px; background:var(--deep-navy); display:flex; z-index:10; }
     .bnav .it { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; color:var(--muted); font-size:11px; font-weight:700; cursor:pointer; background:none; border:0; }
-    .bnav .it .ic { width:58px; height:28px; border-radius:999px; display:grid; place-items:center; font-size:18px; }
+    .bnav .it .ic { width:58px; height:28px; border-radius:999px; display:grid; place-items:center; font-size:18px; filter:grayscale(1) brightness(1.15); }
     .bnav .it.on { color:#fff; }
     .bnav .it.on .ic { background:rgba(37,201,201,.18); }
 
@@ -446,5 +446,6 @@
 
   render();
   </script>
+  <script src="icons.js"></script>
 </body>
 </html>

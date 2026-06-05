@@ -94,7 +94,7 @@
       border-color: rgba(43,182,232,.35);
       color: var(--text);
     }
-    .nav-item .ico { width: 18px; text-align: center; opacity: .9; }
+    .nav-item .ico { width: 18px; text-align: center; filter: grayscale(1) brightness(1.15); opacity: .8; }
     .nav-item .badge {
       margin-left: auto; font-size: 11px; font-weight: 700;
       background: rgba(244,201,93,.16); color: var(--amber);
@@ -1202,5 +1202,6 @@
       if (modalType) openModal(modalType, {});
     }
   </script>
+  <script src="icons.js"></script>
 </body>
 </html>
