@@ -18,6 +18,9 @@ import { cookies, headers } from "next/headers";
 const HOSTNAME_TO_API: Record<string, string> = {
   "hlada-staging.straumvakt.workers.dev": "https://hlada-api-staging.straumvakt.workers.dev",
   "hlada.straumvakt.workers.dev": "https://hlada-api.straumvakt.workers.dev",
+  // Brand domain (Option B) → dedicated API subdomain (staging worker today).
+  "straumvakt.org": "https://api.straumvakt.org",
+  "www.straumvakt.org": "https://api.straumvakt.org",
 };
 
 export async function apiFetchServer(path: string, init?: RequestInit): Promise<Response> {

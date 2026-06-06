@@ -92,6 +92,10 @@ const ALLOWED_ORIGINS = [
   "http://localhost:3000",
   "https://hlada-staging.straumvakt.workers.dev",
   "https://hlada.straumvakt.workers.dev",
+  // Brand domain (Option B) — the UI runs on straumvakt.org and calls the
+  // API at api.straumvakt.org (same-site, credentialed).
+  "https://straumvakt.org",
+  "https://www.straumvakt.org",
 ];
 
 app.use(

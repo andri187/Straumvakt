@@ -29,14 +29,23 @@
 const HOSTNAME_TO_API: Record<string, string> = {
   "hlada-staging.straumvakt.workers.dev": "https://hlada-api-staging.straumvakt.workers.dev",
   "hlada.straumvakt.workers.dev": "https://hlada-api.straumvakt.workers.dev",
+  // Brand domain (Option B) → dedicated API subdomain (staging worker today).
+  "straumvakt.org": "https://api.straumvakt.org",
+  "www.straumvakt.org": "https://api.straumvakt.org",
 };
 
 function resolveBaseUrl(): string {
+  // In the browser, the explicit host map wins so each UI host always lands
+  // on its own API — robust even when NEXT_PUBLIC_* isn't inlined by the CF
+  // build runner, and required so straumvakt.org targets api.straumvakt.org
+  // rather than the env-var default. Falls back to the env var, then
+  // same-origin relative.
+  if (typeof window !== "undefined") {
+    const mapped = HOSTNAME_TO_API[window.location.hostname];
+    if (mapped) return mapped;
+  }
   const envBase = process.env.NEXT_PUBLIC_API_BASE_URL;
   if (envBase) return envBase;
-  if (typeof window !== "undefined") {
-    return HOSTNAME_TO_API[window.location.hostname] ?? "";
-  }
   return "";
 }
 
