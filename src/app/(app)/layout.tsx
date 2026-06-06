@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { headers } from "next/headers";
+import type { Route } from "next";
 import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/sidebar";
 import { SidebarProvider } from "@/components/sidebar-context";
@@ -22,14 +22,14 @@ export default async function AppLayout({
   // middleware did fire — but the deployed OpenNext webpack build
   // ships an empty middleware-manifest at the moment, so the /me
   // round-trip carries the load.
-  const reqHeaders = await headers();
-  let isAdmin = reqHeaders.get("x-straumvakt-admin-verified") === "1";
-  if (!isAdmin) {
-    const res = await apiFetchServer("/api/admin/me");
-    if (!res.ok) redirect("/login");
-    isAdmin = true;
-  }
-  void isAdmin;
+  // Always resolve /me here (not just for auth) so we can route by persona:
+  // a host_admin who lands on the operator console gets redirected to their
+  // own /host portal (the operator pages are platform-gated and 403 for them).
+  const res = await apiFetchServer("/api/admin/me");
+  if (!res.ok) redirect("/login");
+  const me = (await res.json().catch(() => ({}))) as { persona?: string };
+  if (me.persona === "host_admin") redirect("/host" as Route);
+  // operators / platform staff / others stay in the cross-tenant console
 
   return (
     <SidebarProvider>
