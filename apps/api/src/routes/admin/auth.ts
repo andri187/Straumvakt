@@ -130,12 +130,22 @@ adminAuth.post(
   // fetches in modern browsers.
   const host = new URL(c.req.url).host;
   const isLocal = host.startsWith("localhost") || host.startsWith("127.0.0.1");
+  // Host-aware cookie domain so the session works on BOTH the workers.dev
+  // hosts and the brand domain (Option B). A straumvakt.org login gets a
+  // .straumvakt.org cookie (covers apex + www + the same-origin /api route);
+  // workers.dev keeps the existing shared-parent cookie; localhost/unknown
+  // falls back to a host-only cookie. Backward-compatible.
+  const cookieDomain = host.endsWith("straumvakt.org")
+    ? "straumvakt.org"
+    : host.endsWith("workers.dev")
+      ? "straumvakt.workers.dev"
+      : undefined;
   setCookie(c, adminSessionConfig.SESSION_COOKIE_NAME, token, {
     path: "/",
     httpOnly: true,
     secure: !isLocal,
     sameSite: isLocal ? "Lax" : "None",
-    domain: isLocal ? undefined : "straumvakt.workers.dev",
+    domain: cookieDomain,
     maxAge: adminSessionConfig.SESSION_TTL_SECONDS,
   });
   return c.json({ ok: true, email });
@@ -143,10 +153,14 @@ adminAuth.post(
 
 adminAuth.post("/logout", (c) => {
   const host = new URL(c.req.url).host;
-  const isLocal = host.startsWith("localhost") || host.startsWith("127.0.0.1");
+  const cookieDomain = host.endsWith("straumvakt.org")
+    ? "straumvakt.org"
+    : host.endsWith("workers.dev")
+      ? "straumvakt.workers.dev"
+      : undefined;
   deleteCookie(c, adminSessionConfig.SESSION_COOKIE_NAME, {
     path: "/",
-    domain: isLocal ? undefined : "straumvakt.workers.dev",
+    domain: cookieDomain,
   });
   return c.json({ ok: true });
 });
