@@ -51,8 +51,8 @@ const DEV_PASSWORD = "Hladan-N1-2026!";
       console.log(`User exists: ${EMAIL} -> ${userId}`);
     } else {
       const ins = await c.query(
-        `insert into identity.users (email, display_name, audience, status)
-         values ($1, $2, 'operator', 'active') returning id`,
+        `insert into identity.users (id, email, display_name, audience, status, updated_at)
+         values (gen_random_uuid(), $1, $2, 'operator', 'active', now()) returning id`,
         [EMAIL, DISPLAY_NAME],
       );
       userId = ins.rows[0].id;
