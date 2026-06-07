@@ -64,6 +64,9 @@ function isAllowedDriverOrigin(origin: string | undefined | null): string | null
   const allowed = [
     "https://hlada-staging.straumvakt.workers.dev",
     "https://hlada.straumvakt.workers.dev",
+    // Driver WEB portal on the brand domain (ADR 0033) — bearer-token, no cookies.
+    "https://straumvakt.org",
+    "https://www.straumvakt.org",
     "http://localhost:3000",
   ];
   return allowed.includes(origin) ? origin : null;

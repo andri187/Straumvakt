@@ -14,6 +14,28 @@ function isPublicInvitePath(pathname: string): boolean {
   );
 }
 
+// Sprint 9 — host application (lead capture) public surface.
+// /apply is a public form for prospective customers (multi-dwelling
+// or company) to request a charging-network offer. The matching
+// POST /api/public/applications endpoint is rate-limited and
+// anonymous; bypasses the admin-session check.
+function isPublicApplyPath(pathname: string): boolean {
+  return (
+    pathname === "/apply" ||
+    pathname === "/api/public/applications" ||
+    pathname.startsWith("/api/public/applications/")
+  );
+}
+
+// Sprint 9 — driver WEB portal (ADR 0033). The /driver/* surface uses
+// bearer-token auth (driver access token in the browser, calls /api/driver/*)
+// and gates itself client-side — it is NOT behind the admin-session cookie.
+// Pages are inert shells; all data stays behind requireDriver on the API
+// Worker, so exposing the routes here leaks nothing.
+function isDriverPortalPath(pathname: string): boolean {
+  return pathname === "/driver" || pathname.startsWith("/driver/");
+}
+
 // Trusted internal header — stripped from all incoming requests so clients
 // cannot spoof it, then re-set by middleware after successful verification.
 const ADMIN_HEADER = "x-straumvakt-admin-verified";
@@ -33,6 +55,12 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
   if (isPublicInvitePath(pathname)) {
+    return NextResponse.next();
+  }
+  if (isPublicApplyPath(pathname)) {
+    return NextResponse.next();
+  }
+  if (isDriverPortalPath(pathname)) {
     return NextResponse.next();
   }
 
