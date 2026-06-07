@@ -40,16 +40,16 @@ const SECTIONS: { label: string; items: Item[] }[] = [
     { label: "Hleðsla", icon: I.bolt, soon: true },
   ]},
   { label: "Mín notkun", items: [
-    { label: "Hleðslusaga", icon: I.cal, soon: true },
-    { label: "Kostnaður", icon: I.receipt, soon: true },
+    { label: "Hleðslusaga", href: "/driver/history" as Route, icon: I.cal },
+    { label: "Kostnaður", href: "/driver/cost" as Route, icon: I.receipt },
     { label: "Fjölskylda", icon: I.users, soon: true },
   ]},
   { label: "Aðgangur", items: [
-    { label: "Mínir aðgangar", icon: I.key, soon: true },
+    { label: "Mínir aðgangar", href: "/driver/access" as Route, icon: I.key },
     { label: "Leysa inn boð", icon: I.plus, soon: true },
   ]},
   { label: "Annað", items: [
-    { label: "Stillingar", icon: I.gear, soon: true },
+    { label: "Stillingar", href: "/driver/settings" as Route, icon: I.gear },
   ]},
 ];
 

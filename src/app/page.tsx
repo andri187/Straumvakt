@@ -13,6 +13,9 @@ export default function RootPage() {
     <main className="straumvakt-landing" aria-label="Straumvakt">
       {/* Option B live: straumvakt.org's app calls api.straumvakt.org (CORS +
           .straumvakt.org cookie), so login works on the brand domain itself. */}
+      <a className="driver-link" href="/driver/login" aria-label="Driver login">
+        Ökumaður
+      </a>
       <a className="admin-link" href="/login" aria-label="Admin login">
         Admin
       </a>
