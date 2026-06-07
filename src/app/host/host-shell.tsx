@@ -51,7 +51,7 @@ const SECTIONS: Section[] = [
   {
     label: "Ökumenn",
     items: [
-      { label: "Ökumenn", icon: I.users, soon: true },
+      { label: "Ökumenn", href: "/host/drivers" as Route, icon: I.users },
       { label: "Bjóða ökumanni", icon: I.userplus, soon: true },
       { label: "Aðgangsbeiðnir", icon: I.mail, soon: true },
     ],
@@ -60,7 +60,7 @@ const SECTIONS: Section[] = [
     label: "Reikningar",
     items: [
       { label: "Einingar & eigendur", icon: I.building, soon: true },
-      { label: "Samningar", icon: I.file, soon: true },
+      { label: "Samningar", href: "/host/agreements" as Route, icon: I.file },
       { label: "Reikningar", icon: I.receipt, soon: true },
     ],
   },

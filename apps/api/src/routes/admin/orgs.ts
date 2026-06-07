@@ -14,6 +14,7 @@ import { listPropertiesByOrg } from "../../repositories/properties";
 import { listSitesByOrg } from "../../repositories/sites";
 import { listInstallationsByOrg } from "../../repositories/installations";
 import { listAllChargers } from "../../repositories/chargers";
+import { listOrgDrivers, listOrgAgreements } from "../../repositories/host-views";
 import {
   listContractsByOrg,
 } from "../../repositories/contracts";
@@ -150,6 +151,29 @@ adminOrgs.get(
       orgScope: { all: false, orgIds: [c.req.param("id")] },
     });
     return c.json({ chargers });
+  },
+);
+
+// Host-reachable drivers — members of the org's driver groups. member.read +
+// orgIdParam (host_admin has member.read via its bundle).
+adminOrgs.get(
+  "/:id/drivers",
+  requirePermission("member.read", { orgIdParam: "id" }),
+  async (c) => {
+    const db = makePrisma(c.env);
+    const drivers = await listOrgDrivers(db, c.req.param("id"));
+    return c.json({ drivers });
+  },
+);
+
+// Host-reachable agreements — agreements.agreements the org is party to.
+adminOrgs.get(
+  "/:id/agreements",
+  requirePermission("contract.read", { orgIdParam: "id" }),
+  async (c) => {
+    const db = makePrisma(c.env);
+    const agreements = await listOrgAgreements(db, c.req.param("id"));
+    return c.json({ agreements });
   },
 );
 
