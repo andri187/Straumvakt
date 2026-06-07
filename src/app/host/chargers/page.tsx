@@ -64,18 +64,31 @@ export default function HostChargers() {
       <div className="head">
         <div>
           <h1>Hleðslustöðvar</h1>
-          <p>Stöðvar á þínu neti. Uppsetning og verðskrá eru í höndum Straumvaktar.</p>
+          <p>
+            Stöðvar á þínu neti. Uppsetning og verðskrá eru í höndum
+            Straumvaktar.
+          </p>
         </div>
       </div>
 
       {err && (
-        <div className="card" style={{ padding: "14px 18px", marginBottom: 16, borderColor: "rgba(255,107,107,.4)", color: "var(--red)" }}>
+        <div
+          className="card"
+          style={{
+            padding: "14px 18px",
+            marginBottom: 16,
+            borderColor: "rgba(255,107,107,.4)",
+            color: "var(--red)",
+          }}
+        >
           {err}
         </div>
       )}
 
       {rows === null ? (
-        <div className="card"><div className="empty">Hleð…</div></div>
+        <div className="card">
+          <div className="empty">Hleð…</div>
+        </div>
       ) : (
         <>
           {names.length > 1 && (
@@ -94,8 +107,14 @@ export default function HostChargers() {
 
           <div className="card">
             <div className="card-h">
-              Stöðvar <span className="sub">{active ?? ""} · {list.length} stöðvar</span>
-              <span className="badge2 s-ok"><span className="dot bg-ok" />Samningur virkur</span>
+              Stöðvar{" "}
+              <span className="sub">
+                {active ?? ""} · {list.length} stöðvar
+              </span>
+              <span className="badge2 s-ok">
+                <span className="dot bg-ok" />
+                Samningur virkur
+              </span>
             </div>
             <table>
               <thead>
@@ -109,19 +128,29 @@ export default function HostChargers() {
               <tbody>
                 {list.map((c) => (
                   <tr key={c.chargingStationId}>
-                    <td className="mono">{c.identityString ?? c.chargingStationId.slice(0, 8)}</td>
+                    <td className="mono">
+                      {c.identityString ?? c.chargingStationId.slice(0, 8)}
+                    </td>
                     <td className="sub">{c.connectorType ?? "Type 2"}</td>
                     <td>{c.maxPowerKw ? `${c.maxPowerKw} kW` : "—"}</td>
                     <td>
-                      <span className={"badge2 " + (c.online ? "s-ok" : "s-bad")}>
-                        <span className={"dot " + (c.online ? "bg-ok" : "bg-bad")} />
+                      <span
+                        className={"badge2 " + (c.online ? "s-ok" : "s-bad")}
+                      >
+                        <span
+                          className={"dot " + (c.online ? "bg-ok" : "bg-bad")}
+                        />
                         {c.online ? "Nettengd" : (c.status ?? "Ótengd")}
                       </span>
                     </td>
                   </tr>
                 ))}
                 {list.length === 0 && (
-                  <tr><td colSpan={4} className="empty">Engar stöðvar.</td></tr>
+                  <tr>
+                    <td colSpan={4} className="empty">
+                      Engar stöðvar.
+                    </td>
+                  </tr>
                 )}
               </tbody>
             </table>

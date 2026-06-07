@@ -40,7 +40,9 @@ export function AdminLoginForm({ compact = false }: { compact?: boolean }) {
           return;
         } catch {
           setError(
-            language === "is" ? "Rangt netfang eða lykilorð." : "Wrong email or password.",
+            language === "is"
+              ? "Rangt netfang eða lykilorð."
+              : "Wrong email or password.",
           );
           return;
         }
@@ -53,7 +55,8 @@ export function AdminLoginForm({ compact = false }: { compact?: boolean }) {
         data = {};
       }
       setError(
-        data.error ?? (language === "is" ? "Innskráning mistókst" : "Login failed"),
+        data.error ??
+          (language === "is" ? "Innskráning mistókst" : "Login failed"),
       );
     } catch {
       setError(

@@ -15,7 +15,8 @@ const TOKEN_KEY = "sv_driver_access";
 const HOSTMAP: Record<string, string> = {
   "straumvakt.org": "https://api.straumvakt.org",
   "www.straumvakt.org": "https://api.straumvakt.org",
-  "hlada-staging.straumvakt.workers.dev": "https://hlada-api-staging.straumvakt.workers.dev",
+  "hlada-staging.straumvakt.workers.dev":
+    "https://hlada-api-staging.straumvakt.workers.dev",
   "hlada.straumvakt.workers.dev": "https://hlada-api.straumvakt.workers.dev",
 };
 
@@ -97,7 +98,12 @@ export default function DriverRedeem() {
       {err && (
         <div
           className="card"
-          style={{ padding: "14px 18px", marginBottom: 16, borderColor: "rgba(255,107,107,.4)", color: "var(--red)" }}
+          style={{
+            padding: "14px 18px",
+            marginBottom: 16,
+            borderColor: "rgba(255,107,107,.4)",
+            color: "var(--red)",
+          }}
         >
           {err}
         </div>
@@ -112,7 +118,9 @@ export default function DriverRedeem() {
                 className="card"
                 style={{ padding: 16, borderColor: "rgba(53,224,167,.45)" }}
               >
-                <div style={{ fontWeight: 700, marginBottom: 6 }}>Aðgangur veittur ✓</div>
+                <div style={{ fontWeight: 700, marginBottom: 6 }}>
+                  Aðgangur veittur ✓
+                </div>
                 <div className="sub">
                   Þú hefur nú aðgang að hópnum{" "}
                   <strong>{done.driverGroupDisplayName}</strong>
@@ -167,8 +175,9 @@ export default function DriverRedeem() {
               hleðslur þínar fara á réttan reikning.
             </p>
             <p style={{ marginBottom: 0 }}>
-              Ef hlekkurinn inniheldur <span className="mono">/invite/&lt;kóði&gt;</span>{" "}
-              dugar að líma allan hlekkinn eða bara kóðann hér.
+              Ef hlekkurinn inniheldur{" "}
+              <span className="mono">/invite/&lt;kóði&gt;</span> dugar að líma
+              allan hlekkinn eða bara kóðann hér.
             </p>
           </div>
         </div>

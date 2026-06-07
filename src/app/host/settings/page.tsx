@@ -34,7 +34,9 @@ export default function HostSettings() {
     let cancelled = false;
     (async () => {
       try {
-        const r = await apiFetchJson<{ org: Org }>(`/api/admin/orgs/${org.orgId}`);
+        const r = await apiFetchJson<{ org: Org }>(
+          `/api/admin/orgs/${org.orgId}`,
+        );
         if (!cancelled) setData(r.org);
       } catch (e) {
         if (!cancelled) setErr(e instanceof Error ? e.message : String(e));
@@ -46,7 +48,11 @@ export default function HostSettings() {
   }, [org]);
 
   const kindLabel =
-    data?.kind === "company" ? "Fyrirtæki" : data?.kind === "multi_dwelling" ? "Fjölbýli (HOA)" : "—";
+    data?.kind === "company"
+      ? "Fyrirtæki"
+      : data?.kind === "multi_dwelling"
+        ? "Fjölbýli (HOA)"
+        : "—";
   const addr = data?.postalAddress
     ? `${data.postalAddress.street}, ${data.postalAddress.postalCode} ${data.postalAddress.city}`
     : "—";
@@ -56,12 +62,23 @@ export default function HostSettings() {
       <div className="head">
         <div>
           <h1>Stillingar</h1>
-          <p>Upplýsingar um hýsilinn. Breytingar á skráningu eru í höndum Straumvaktar.</p>
+          <p>
+            Upplýsingar um hýsilinn. Breytingar á skráningu eru í höndum
+            Straumvaktar.
+          </p>
         </div>
       </div>
 
       {err && (
-        <div className="card" style={{ padding: "14px 18px", marginBottom: 16, borderColor: "rgba(255,107,107,.4)", color: "var(--red)" }}>
+        <div
+          className="card"
+          style={{
+            padding: "14px 18px",
+            marginBottom: 16,
+            borderColor: "rgba(255,107,107,.4)",
+            color: "var(--red)",
+          }}
+        >
           {err}
         </div>
       )}
@@ -78,7 +95,10 @@ export default function HostSettings() {
             <Kv k="VSK-nr." v={data?.vskNr ?? "—"} />
             <Kv k="Gjaldmiðill" v={data?.defaultCurrency ?? "—"} />
             <Kv k="Heimilisfang" v={data ? addr : undefined} />
-            <Kv k="Hlutverk" v={data ? (data.roles.join(", ") || "—") : undefined} />
+            <Kv
+              k="Hlutverk"
+              v={data ? data.roles.join(", ") || "—" : undefined}
+            />
           </div>
         </div>
 
@@ -86,19 +106,25 @@ export default function HostSettings() {
           <div className="card">
             <div className="card-h">Tengiliður</div>
             <div style={{ padding: "6px 18px 14px" }}>
-              <Kv k="Aðaltengiliður" v={data?.mainContact?.displayName ?? "—"} />
+              <Kv
+                k="Aðaltengiliður"
+                v={data?.mainContact?.displayName ?? "—"}
+              />
               <Kv k="Netfang" v={data?.mainContact?.email ?? "—"} />
             </div>
           </div>
 
           <div className="card" style={{ padding: 18 }}>
-            <div className="card-h" style={{ border: 0, padding: "0 0 12px" }}>Samningur við Straumvakt</div>
+            <div className="card-h" style={{ border: 0, padding: "0 0 12px" }}>
+              Samningur við Straumvakt
+            </div>
             <div className="gate">
               <span className="lock">🔒</span>
               <div>
                 Kostnaðarþættir (þjónustugjald, gjald á stöð, verð á orku) voru{" "}
-                <b>ákveðnir við stofnun</b> og gilda áfram. Nýjar stöðvar falla undir sama samning —
-                Straumvakt virkjar þær og þá opnast hleðsla.
+                <b>ákveðnir við stofnun</b> og gilda áfram. Nýjar stöðvar falla
+                undir sama samning — Straumvakt virkjar þær og þá opnast
+                hleðsla.
               </div>
             </div>
           </div>

@@ -27,7 +27,8 @@ export default function DriverSettings() {
       </div>
 
       <p className="sub" style={{ marginTop: 14 }}>
-        Til að breyta nafni eða lykilorði, hafðu samband við hýsilinn þinn eða notaðu Straumvakt appið.
+        Til að breyta nafni eða lykilorði, hafðu samband við hýsilinn þinn eða
+        notaðu Straumvakt appið.
       </p>
     </>
   );

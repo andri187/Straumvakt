@@ -31,7 +31,13 @@ function statusDot(s: string): string {
   return s === "active" ? "bg-ok" : s === "draft" ? "bg-warn" : "bg-mut";
 }
 function statusLabel(s: string): string {
-  return s === "active" ? "Virkur" : s === "expired" ? "Útrunninn" : s === "draft" ? "Drög" : s;
+  return s === "active"
+    ? "Virkur"
+    : s === "expired"
+      ? "Útrunninn"
+      : s === "draft"
+        ? "Drög"
+        : s;
 }
 
 export default function HostAgreements() {
@@ -62,12 +68,23 @@ export default function HostAgreements() {
       <div className="head">
         <div>
           <h1>Samningar</h1>
-          <p>Samningar þínir við Straumvakt. Kostnaðarþættir eru ákveðnir við stofnun og gilda áfram.</p>
+          <p>
+            Samningar þínir við Straumvakt. Kostnaðarþættir eru ákveðnir við
+            stofnun og gilda áfram.
+          </p>
         </div>
       </div>
 
       {err && (
-        <div className="card" style={{ padding: "14px 18px", marginBottom: 16, borderColor: "rgba(255,107,107,.4)", color: "var(--red)" }}>
+        <div
+          className="card"
+          style={{
+            padding: "14px 18px",
+            marginBottom: 16,
+            borderColor: "rgba(255,107,107,.4)",
+            color: "var(--red)",
+          }}
+        >
           {err}
         </div>
       )}
@@ -87,14 +104,28 @@ export default function HostAgreements() {
             </tr>
           </thead>
           <tbody>
-            {rows === null && <tr><td colSpan={5} className="empty">Hleð…</td></tr>}
+            {rows === null && (
+              <tr>
+                <td colSpan={5} className="empty">
+                  Hleð…
+                </td>
+              </tr>
+            )}
             {rows?.length === 0 && (
-              <tr><td colSpan={5} className="empty">Engir samningar.</td></tr>
+              <tr>
+                <td colSpan={5} className="empty">
+                  Engir samningar.
+                </td>
+              </tr>
             )}
             {rows?.map((a) => (
               <tr key={a.id}>
-                <td><strong>{a.displayName}</strong></td>
-                <td className="sub">{TYPE_LABEL[a.agreementType] ?? a.agreementType}</td>
+                <td>
+                  <strong>{a.displayName}</strong>
+                </td>
+                <td className="sub">
+                  {TYPE_LABEL[a.agreementType] ?? a.agreementType}
+                </td>
                 <td className="sub">{a.installationDisplayName ?? "—"}</td>
                 <td className="sub">{a.effectiveFrom.slice(0, 10)}</td>
                 <td>

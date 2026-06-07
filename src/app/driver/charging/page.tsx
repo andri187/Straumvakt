@@ -32,7 +32,8 @@ function fmtDuration(startedAt: string, now: number): string {
   secs -= h * 3600;
   const m = Math.floor(secs / 60);
   const s = secs - m * 60;
-  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  if (h > 0)
+    return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
   if (m > 0) return `${m}m ${String(s).padStart(2, "0")}s`;
   return `${s}s`;
 }
@@ -58,7 +59,9 @@ export default function DriverCharging() {
   const load = useCallback(
     async (signal?: { cancelled: boolean }) => {
       try {
-        const cur = await driverFetch<{ sessions: ActiveSession[] }>("/api/driver/sessions/current");
+        const cur = await driverFetch<{ sessions: ActiveSession[] }>(
+          "/api/driver/sessions/current",
+        );
         if (signal?.cancelled) return;
         setSessions(cur.sessions);
         setErr(null);
@@ -112,14 +115,22 @@ export default function DriverCharging() {
       <div className="head">
         <div>
           <h1>Hleðsla</h1>
-          <p>Fylgstu með virkri hleðslu í rauntíma. Hleðsla er hafin í Straumvakt appinu.</p>
+          <p>
+            Fylgstu með virkri hleðslu í rauntíma. Hleðsla er hafin í Straumvakt
+            appinu.
+          </p>
         </div>
       </div>
 
       {err && (
         <div
           className="card"
-          style={{ padding: "14px 18px", marginBottom: 16, borderColor: "rgba(255,107,107,.4)", color: "var(--red)" }}
+          style={{
+            padding: "14px 18px",
+            marginBottom: 16,
+            borderColor: "rgba(255,107,107,.4)",
+            color: "var(--red)",
+          }}
         >
           {err}
         </div>
@@ -132,7 +143,10 @@ export default function DriverCharging() {
       )}
 
       {sessions !== null && active.length === 0 && (
-        <div className="card empty" style={{ padding: "40px 18px", textAlign: "center" }}>
+        <div
+          className="card empty"
+          style={{ padding: "40px 18px", textAlign: "center" }}
+        >
           Engin virk hleðsla. Notaðu Straumvakt appið til að hefja hleðslu.
         </div>
       )}
@@ -140,7 +154,11 @@ export default function DriverCharging() {
       {active.map((a) => {
         const busy = stopping === a.sessionId;
         return (
-          <div key={a.sessionId} className="card" style={{ marginBottom: 16, borderColor: "rgba(43,182,232,.4)" }}>
+          <div
+            key={a.sessionId}
+            className="card"
+            style={{ marginBottom: 16, borderColor: "rgba(43,182,232,.4)" }}
+          >
             <div className="card-h">
               {a.chargerName}
               <span className="badge2 s-live">
@@ -178,7 +196,11 @@ export default function DriverCharging() {
             >
               <span className="sub">Hófst kl. {a.startedAt.slice(11, 16)}</span>
               <div style={{ flex: 1 }} />
-              <button className="btn primary" disabled={busy} onClick={() => void stopSession(a.sessionId)}>
+              <button
+                className="btn primary"
+                disabled={busy}
+                onClick={() => void stopSession(a.sessionId)}
+              >
                 {busy ? "Stöðva…" : "Stöðva hleðslu"}
               </button>
             </div>

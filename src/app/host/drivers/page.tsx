@@ -44,19 +44,31 @@ export default function HostDrivers() {
       <div className="head">
         <div>
           <h1>Ökumenn</h1>
-          <p>Ökumenn með aðgang að hleðslunetinu þínu. Þú stýrir hverjir hafa aðgang.</p>
+          <p>
+            Ökumenn með aðgang að hleðslunetinu þínu. Þú stýrir hverjir hafa
+            aðgang.
+          </p>
         </div>
       </div>
 
       {err && (
-        <div className="card" style={{ padding: "14px 18px", marginBottom: 16, borderColor: "rgba(255,107,107,.4)", color: "var(--red)" }}>
+        <div
+          className="card"
+          style={{
+            padding: "14px 18px",
+            marginBottom: 16,
+            borderColor: "rgba(255,107,107,.4)",
+            color: "var(--red)",
+          }}
+        >
           {err}
         </div>
       )}
 
       <div className="card">
         <div className="card-h">
-          Ökumenn <span className="sub">{rows ? `${rows.length} með aðgang` : ""}</span>
+          Ökumenn{" "}
+          <span className="sub">{rows ? `${rows.length} með aðgang` : ""}</span>
         </div>
         <table>
           <thead>
@@ -68,9 +80,19 @@ export default function HostDrivers() {
             </tr>
           </thead>
           <tbody>
-            {rows === null && <tr><td colSpan={4} className="empty">Hleð…</td></tr>}
+            {rows === null && (
+              <tr>
+                <td colSpan={4} className="empty">
+                  Hleð…
+                </td>
+              </tr>
+            )}
             {rows?.length === 0 && (
-              <tr><td colSpan={4} className="empty">Engir ökumenn með aðgang enn.</td></tr>
+              <tr>
+                <td colSpan={4} className="empty">
+                  Engir ökumenn með aðgang enn.
+                </td>
+              </tr>
             )}
             {rows?.map((d) => (
               <tr key={d.userId}>
@@ -80,8 +102,16 @@ export default function HostDrivers() {
                 </td>
                 <td className="sub">{d.groups.join(", ") || "—"}</td>
                 <td>
-                  <span className={"badge2 " + (d.status === "active" ? "s-ok" : "s-mut")}>
-                    <span className={"dot " + (d.status === "active" ? "bg-ok" : "bg-mut")} />
+                  <span
+                    className={
+                      "badge2 " + (d.status === "active" ? "s-ok" : "s-mut")
+                    }
+                  >
+                    <span
+                      className={
+                        "dot " + (d.status === "active" ? "bg-ok" : "bg-mut")
+                      }
+                    />
                     {d.status === "active" ? "Virkur" : d.status}
                   </span>
                 </td>

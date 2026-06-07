@@ -35,7 +35,11 @@ type CreatedInvite = {
   email: string;
 };
 
-function statusBadge(s: Invite["status"]): { cls: string; dot: string; label: string } {
+function statusBadge(s: Invite["status"]): {
+  cls: string;
+  dot: string;
+  label: string;
+} {
   if (s === "pending") return { cls: "s-ok", dot: "bg-ok", label: "Bíður" };
   if (s === "used") return { cls: "s-mut", dot: "bg-mut", label: "Leyst inn" };
   return { cls: "s-bad", dot: "bg-bad", label: "Útrunnið" };
@@ -95,10 +99,13 @@ export default function HostInvite() {
     setCreated(null);
     setCopied(false);
     try {
-      const res = await apiFetch(`/api/admin/orgs/${org.orgId}/driver-invites`, {
-        method: "POST",
-        body: JSON.stringify({ driverGroupId: groupId, email: email.trim() }),
-      });
+      const res = await apiFetch(
+        `/api/admin/orgs/${org.orgId}/driver-invites`,
+        {
+          method: "POST",
+          body: JSON.stringify({ driverGroupId: groupId, email: email.trim() }),
+        },
+      );
       const body = (await res.json().catch(() => null)) as
         | { invite: CreatedInvite }
         | { error?: string }
@@ -120,7 +127,7 @@ export default function HostInvite() {
   const fullLink =
     created && typeof window !== "undefined"
       ? `${window.location.origin}${created.inviteUrl}`
-      : created?.inviteUrl ?? "";
+      : (created?.inviteUrl ?? "");
 
   async function copyLink() {
     if (!fullLink) return;
@@ -148,7 +155,12 @@ export default function HostInvite() {
       {err && (
         <div
           className="card"
-          style={{ padding: "14px 18px", marginBottom: 16, borderColor: "rgba(255,107,107,.4)", color: "var(--red)" }}
+          style={{
+            padding: "14px 18px",
+            marginBottom: 16,
+            borderColor: "rgba(255,107,107,.4)",
+            color: "var(--red)",
+          }}
         >
           {err}
         </div>
@@ -164,7 +176,9 @@ export default function HostInvite() {
                 {groups === null ? (
                   <div className="sub">Hleð…</div>
                 ) : groups.length === 0 ? (
-                  <div className="sub">Engir aðgangshópar til. Hafðu samband við rekstraraðila.</div>
+                  <div className="sub">
+                    Engir aðgangshópar til. Hafðu samband við rekstraraðila.
+                  </div>
                 ) : (
                   <select
                     id="dg"
@@ -175,7 +189,9 @@ export default function HostInvite() {
                     {groups.map((g) => (
                       <option key={g.id} value={g.id}>
                         {g.displayName}
-                        {g.installationDisplayName ? ` · ${g.installationDisplayName}` : ""}
+                        {g.installationDisplayName
+                          ? ` · ${g.installationDisplayName}`
+                          : ""}
                       </option>
                     ))}
                   </select>
@@ -198,7 +214,12 @@ export default function HostInvite() {
               <button
                 className="btn primary"
                 type="submit"
-                disabled={submitting || !groupId || !email.trim() || groups?.length === 0}
+                disabled={
+                  submitting ||
+                  !groupId ||
+                  !email.trim() ||
+                  groups?.length === 0
+                }
               >
                 {submitting ? "Bý til…" : "Búa til boð"}
               </button>
@@ -207,7 +228,11 @@ export default function HostInvite() {
             {created && (
               <div
                 className="card"
-                style={{ marginTop: 18, padding: 16, borderColor: "rgba(43,182,232,.4)" }}
+                style={{
+                  marginTop: 18,
+                  padding: 16,
+                  borderColor: "rgba(43,182,232,.4)",
+                }}
               >
                 <div style={{ fontWeight: 700, marginBottom: 6 }}>
                   Boð tilbúið fyrir {created.email}
@@ -218,11 +243,21 @@ export default function HostInvite() {
                 </div>
                 <div className="field">
                   <label>Kóði</label>
-                  <input className="inp mono" readOnly value={created.token} onFocus={(e) => e.currentTarget.select()} />
+                  <input
+                    className="inp mono"
+                    readOnly
+                    value={created.token}
+                    onFocus={(e) => e.currentTarget.select()}
+                  />
                 </div>
                 <div className="field">
                   <label>Hlekkur</label>
-                  <input className="inp mono" readOnly value={fullLink} onFocus={(e) => e.currentTarget.select()} />
+                  <input
+                    className="inp mono"
+                    readOnly
+                    value={fullLink}
+                    onFocus={(e) => e.currentTarget.select()}
+                  />
                 </div>
                 <button type="button" className="btn sm" onClick={copyLink}>
                   {copied ? "Afritað ✓" : "Afrita hlekk"}
@@ -248,16 +283,26 @@ export default function HostInvite() {
             </thead>
             <tbody>
               {invites === null && (
-                <tr><td colSpan={4} className="empty">Hleð…</td></tr>
+                <tr>
+                  <td colSpan={4} className="empty">
+                    Hleð…
+                  </td>
+                </tr>
               )}
               {invites?.length === 0 && (
-                <tr><td colSpan={4} className="empty">Engin boð gefin út enn.</td></tr>
+                <tr>
+                  <td colSpan={4} className="empty">
+                    Engin boð gefin út enn.
+                  </td>
+                </tr>
               )}
               {invites?.map((i) => {
                 const b = statusBadge(i.status);
                 return (
                   <tr key={i.tokenId}>
-                    <td><strong>{i.email || "—"}</strong></td>
+                    <td>
+                      <strong>{i.email || "—"}</strong>
+                    </td>
                     <td className="sub">{i.driverGroupDisplayName}</td>
                     <td>
                       <span className={"badge2 " + b.cls}>

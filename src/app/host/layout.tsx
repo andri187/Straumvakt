@@ -17,7 +17,11 @@ type Me = {
   orgs: HostOrg[];
 };
 
-export default async function HostLayout({ children }: { children: React.ReactNode }) {
+export default async function HostLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const res = await apiFetchServer("/api/admin/me");
   if (!res.ok) redirect("/login");
   const me = (await res.json()) as Me;

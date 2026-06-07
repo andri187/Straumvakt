@@ -119,7 +119,11 @@ export default function RootPage() {
               />
             </label>
             {error ? (
-              <p className="register-message" role="alert" style={{ color: "#ff6b6b" }}>
+              <p
+                className="register-message"
+                role="alert"
+                style={{ color: "#ff6b6b" }}
+              >
                 {error}
               </p>
             ) : null}
@@ -136,7 +140,12 @@ export default function RootPage() {
           >
             <label>
               <span>Símanúmer</span>
-              <input type="tel" name="phone" autoComplete="tel" placeholder="+354" />
+              <input
+                type="tel"
+                name="phone"
+                autoComplete="tel"
+                placeholder="+354"
+              />
             </label>
             <button className="button primary" type="submit">
               Skrá inn með Auðkenni

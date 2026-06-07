@@ -36,17 +36,70 @@ type Section = { label: string; items: Item[] };
 
 const I = {
   dash: (
-    <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /></svg>
+    <svg viewBox="0 0 24 24">
+      <rect x="3" y="3" width="7" height="7" rx="1.5" />
+      <rect x="14" y="3" width="7" height="7" rx="1.5" />
+      <rect x="14" y="14" width="7" height="7" rx="1.5" />
+      <rect x="3" y="14" width="7" height="7" rx="1.5" />
+    </svg>
   ),
-  bolt: <svg viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" /></svg>,
-  plus: <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M12 8v8M8 12h8" /></svg>,
-  users: <svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>,
-  userplus: <svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M19 8v6M22 11h-6" /></svg>,
-  mail: <svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2" /><path d="m22 7-10 5L2 7" /></svg>,
-  building: <svg viewBox="0 0 24 24"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><path d="M9 22V12h6v10" /></svg>,
-  file: <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /><path d="M16 13H8M16 17H8M10 9H8" /></svg>,
-  receipt: <svg viewBox="0 0 24 24"><path d="M5 2h14a1 1 0 0 1 1 1v18l-3-2-3 2-3-2-3 2V3a1 1 0 0 1 1-1Z" /><path d="M8 7h8M8 11h8M8 15h5" /></svg>,
-  gear: <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>,
+  bolt: (
+    <svg viewBox="0 0 24 24">
+      <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" />
+    </svg>
+  ),
+  plus: (
+    <svg viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 8v8M8 12h8" />
+    </svg>
+  ),
+  users: (
+    <svg viewBox="0 0 24 24">
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  ),
+  userplus: (
+    <svg viewBox="0 0 24 24">
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M19 8v6M22 11h-6" />
+    </svg>
+  ),
+  mail: (
+    <svg viewBox="0 0 24 24">
+      <rect x="2" y="4" width="20" height="16" rx="2" />
+      <path d="m22 7-10 5L2 7" />
+    </svg>
+  ),
+  building: (
+    <svg viewBox="0 0 24 24">
+      <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+      <path d="M9 22V12h6v10" />
+    </svg>
+  ),
+  file: (
+    <svg viewBox="0 0 24 24">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <path d="M14 2v6h6" />
+      <path d="M16 13H8M16 17H8M10 9H8" />
+    </svg>
+  ),
+  receipt: (
+    <svg viewBox="0 0 24 24">
+      <path d="M5 2h14a1 1 0 0 1 1 1v18l-3-2-3 2-3-2-3 2V3a1 1 0 0 1 1-1Z" />
+      <path d="M8 7h8M8 11h8M8 15h5" />
+    </svg>
+  ),
+  gear: (
+    <svg viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  ),
 };
 
 const SECTIONS: Section[] = [
@@ -54,7 +107,11 @@ const SECTIONS: Section[] = [
     label: "Yfirlit",
     items: [
       { label: "Mælaborð", href: "/host" as Route, icon: I.dash },
-      { label: "Hleðslustöðvar", href: "/host/chargers" as Route, icon: I.bolt },
+      {
+        label: "Hleðslustöðvar",
+        href: "/host/chargers" as Route,
+        icon: I.bolt,
+      },
       { label: "Setja upp stöð", icon: I.plus, soon: true },
     ],
   },
@@ -62,7 +119,11 @@ const SECTIONS: Section[] = [
     label: "Ökumenn",
     items: [
       { label: "Ökumenn", href: "/host/drivers" as Route, icon: I.users },
-      { label: "Bjóða ökumanni", href: "/host/invite" as Route, icon: I.userplus },
+      {
+        label: "Bjóða ökumanni",
+        href: "/host/invite" as Route,
+        icon: I.userplus,
+      },
       { label: "Aðgangsbeiðnir", icon: I.mail, soon: true },
     ],
   },
@@ -76,7 +137,9 @@ const SECTIONS: Section[] = [
   },
   {
     label: "Annað",
-    items: [{ label: "Stillingar", href: "/host/settings" as Route, icon: I.gear }],
+    items: [
+      { label: "Stillingar", href: "/host/settings" as Route, icon: I.gear },
+    ],
   },
 ];
 
@@ -96,7 +159,11 @@ export function HostShell({
   const pathname = usePathname();
   const initials = org.displayName.slice(0, 2).toUpperCase();
   const kindLabel =
-    org.kind === "company" ? "Fyrirtæki" : org.kind === "multi_dwelling" ? "Fjölbýli · HOA" : "Hýsill";
+    org.kind === "company"
+      ? "Fyrirtæki"
+      : org.kind === "multi_dwelling"
+        ? "Fjölbýli · HOA"
+        : "Hýsill";
 
   return (
     <div className="host-root">
@@ -131,7 +198,11 @@ export function HostShell({
                       {inner}
                     </Link>
                   ) : (
-                    <div key={it.label} className="nav-item" style={{ opacity: 0.65 }}>
+                    <div
+                      key={it.label}
+                      className="nav-item"
+                      style={{ opacity: 0.65 }}
+                    >
                       {inner}
                     </div>
                   );
@@ -142,7 +213,9 @@ export function HostShell({
           <div className="nav-foot">
             <div className="avatar">{initials}</div>
             <div>
-              <div style={{ color: "var(--soft)", fontWeight: 600 }}>{email}</div>
+              <div style={{ color: "var(--soft)", fontWeight: 600 }}>
+                {email}
+              </div>
               <div>Hýsilstjóri</div>
             </div>
           </div>
@@ -155,7 +228,14 @@ export function HostShell({
               <span className="pill host">{kindLabel}</span>
             </div>
             <div className="spacer" />
-            <button className="tlink" type="button" onClick={hostLogout} style={{ background: "none", border: 0, cursor: "pointer" }}>Útskrá</button>
+            <button
+              className="tlink"
+              type="button"
+              onClick={hostLogout}
+              style={{ background: "none", border: 0, cursor: "pointer" }}
+            >
+              Útskrá
+            </button>
           </div>
           <div className="content">
             <OrgCtx.Provider value={org}>{children}</OrgCtx.Provider>

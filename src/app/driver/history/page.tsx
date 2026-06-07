@@ -20,7 +20,9 @@ type H = {
 
 // costIsk is aurar (1/100 króna); ÷100 + 2 decimals (is-IS), matching mobile.
 const kr = (n: number | null) =>
-  n === null ? "—" : `${(n / 100).toLocaleString("is-IS", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kr.`;
+  n === null
+    ? "—"
+    : `${(n / 100).toLocaleString("is-IS", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kr.`;
 
 export default function DriverHistory() {
   const [rows, setRows] = useState<H[] | null>(null);
@@ -30,7 +32,9 @@ export default function DriverHistory() {
     let cancelled = false;
     (async () => {
       try {
-        const r = await driverFetch<{ sessions: H[] }>("/api/driver/sessions/history?limit=100");
+        const r = await driverFetch<{ sessions: H[] }>(
+          "/api/driver/sessions/history?limit=100",
+        );
         if (!cancelled) setRows(r.sessions);
       } catch (e) {
         if (!cancelled) setErr(e instanceof Error ? e.message : String(e));
@@ -51,23 +55,54 @@ export default function DriverHistory() {
       </div>
 
       {err && (
-        <div className="card" style={{ padding: "14px 18px", marginBottom: 16, borderColor: "rgba(255,107,107,.4)", color: "var(--red)" }}>
+        <div
+          className="card"
+          style={{
+            padding: "14px 18px",
+            marginBottom: 16,
+            borderColor: "rgba(255,107,107,.4)",
+            color: "var(--red)",
+          }}
+        >
           {err}
         </div>
       )}
 
       <div className="card">
-        <div className="card-h">Hleðslur <span className="sub">{rows ? `${rows.length}` : ""}</span></div>
+        <div className="card-h">
+          Hleðslur <span className="sub">{rows ? `${rows.length}` : ""}</span>
+        </div>
         <table>
           <thead>
-            <tr><th>Dagsetning</th><th>Stöð</th><th>Svæði</th><th>Greiðsluheimili</th><th>Orka</th><th>Kostnaður</th></tr>
+            <tr>
+              <th>Dagsetning</th>
+              <th>Stöð</th>
+              <th>Svæði</th>
+              <th>Greiðsluheimili</th>
+              <th>Orka</th>
+              <th>Kostnaður</th>
+            </tr>
           </thead>
           <tbody>
-            {rows === null && <tr><td colSpan={6} className="empty">Hleð…</td></tr>}
-            {rows?.length === 0 && <tr><td colSpan={6} className="empty">Engar hleðslur enn.</td></tr>}
+            {rows === null && (
+              <tr>
+                <td colSpan={6} className="empty">
+                  Hleð…
+                </td>
+              </tr>
+            )}
+            {rows?.length === 0 && (
+              <tr>
+                <td colSpan={6} className="empty">
+                  Engar hleðslur enn.
+                </td>
+              </tr>
+            )}
             {rows?.map((h) => (
               <tr key={h.sessionId}>
-                <td className="sub">{h.startedAt.slice(0, 16).replace("T", " ")}</td>
+                <td className="sub">
+                  {h.startedAt.slice(0, 16).replace("T", " ")}
+                </td>
                 <td className="mono">{h.chargerName ?? "—"}</td>
                 <td className="sub">{h.siteName ?? "—"}</td>
                 <td className="sub">{h.billingHomeName ?? "—"}</td>

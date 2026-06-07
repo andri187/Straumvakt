@@ -9,7 +9,8 @@ const TOKEN_KEY = "sv_driver_access";
 const HOSTMAP: Record<string, string> = {
   "straumvakt.org": "https://api.straumvakt.org",
   "www.straumvakt.org": "https://api.straumvakt.org",
-  "hlada-staging.straumvakt.workers.dev": "https://hlada-api-staging.straumvakt.workers.dev",
+  "hlada-staging.straumvakt.workers.dev":
+    "https://hlada-api-staging.straumvakt.workers.dev",
   "hlada.straumvakt.workers.dev": "https://hlada-api.straumvakt.workers.dev",
 };
 
@@ -44,7 +45,10 @@ export type DriverProfile = {
   organizationName?: string | null;
 };
 
-export async function driverLogin(email: string, password: string): Promise<DriverProfile> {
+export async function driverLogin(
+  email: string,
+  password: string,
+): Promise<DriverProfile> {
   const res = await fetch(`${apiBase()}/api/driver/login`, {
     method: "POST",
     headers: { "content-type": "application/json" },

@@ -32,29 +32,97 @@ export default function DriverLoginPage() {
   return (
     <div className="host-root">
       <div className="login-wrap">
-        <form onSubmit={submit} className="card login-card" style={{ padding: 28 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18 }}>
-            <div style={{ width: 38, height: 38, borderRadius: 10, background: "linear-gradient(135deg,var(--green),var(--teal) 55%,var(--blue))", display: "grid", placeItems: "center", color: "#04121b", fontWeight: 900 }}>S</div>
+        <form
+          onSubmit={submit}
+          className="card login-card"
+          style={{ padding: 28 }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+              marginBottom: 18,
+            }}
+          >
+            <div
+              style={{
+                width: 38,
+                height: 38,
+                borderRadius: 10,
+                background:
+                  "linear-gradient(135deg,var(--green),var(--teal) 55%,var(--blue))",
+                display: "grid",
+                placeItems: "center",
+                color: "#04121b",
+                fontWeight: 900,
+              }}
+            >
+              S
+            </div>
             <div>
-              <div className="sv-wordmark" style={{ fontWeight: 800 }}>Straumvakt</div>
-              <div style={{ fontSize: 10, letterSpacing: ".22em", textTransform: "uppercase", color: "var(--sky)" }}>Ökumaður · Driver</div>
+              <div className="sv-wordmark" style={{ fontWeight: 800 }}>
+                Straumvakt
+              </div>
+              <div
+                style={{
+                  fontSize: 10,
+                  letterSpacing: ".22em",
+                  textTransform: "uppercase",
+                  color: "var(--sky)",
+                }}
+              >
+                Ökumaður · Driver
+              </div>
             </div>
           </div>
           <h2 style={{ margin: "0 0 4px", fontSize: 20 }}>Skrá inn</h2>
-          <p className="sub" style={{ margin: "0 0 18px" }}>Ökumannagátt — yfirlit, saga og aðgangur.</p>
+          <p className="sub" style={{ margin: "0 0 18px" }}>
+            Ökumannagátt — yfirlit, saga og aðgangur.
+          </p>
 
           <div className="field">
             <label>Netfang</label>
-            <input className="inp" type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="netfang@…" />
+            <input
+              className="inp"
+              type="email"
+              autoComplete="username"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="netfang@…"
+            />
           </div>
           <div className="field">
             <label>Lykilorð</label>
-            <input className="inp" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
+            <input
+              className="inp"
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+            />
           </div>
 
-          {err && <div style={{ color: "var(--red)", fontSize: 13, marginBottom: 12 }}>{err}</div>}
+          {err && (
+            <div
+              style={{ color: "var(--red)", fontSize: 13, marginBottom: 12 }}
+            >
+              {err}
+            </div>
+          )}
 
-          <button className="btn primary" type="submit" disabled={busy} style={{ width: "100%", justifyContent: "center", height: 46, marginTop: 2 }}>
+          <button
+            className="btn primary"
+            type="submit"
+            disabled={busy}
+            style={{
+              width: "100%",
+              justifyContent: "center",
+              height: 46,
+              marginTop: 2,
+            }}
+          >
             {busy ? "…" : "Skrá inn"}
           </button>
           <div className="sub" style={{ textAlign: "center", marginTop: 14 }}>
