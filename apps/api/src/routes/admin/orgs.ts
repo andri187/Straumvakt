@@ -14,7 +14,7 @@ import { listPropertiesByOrg } from "../../repositories/properties";
 import { listSitesByOrg } from "../../repositories/sites";
 import { listInstallationsByOrg } from "../../repositories/installations";
 import { listAllChargers } from "../../repositories/chargers";
-import { listOrgDrivers, listOrgAgreements } from "../../repositories/host-views";
+import { listOrgDrivers, listOrgAgreements, getOrgSessionSummary } from "../../repositories/host-views";
 import {
   listContractsByOrg,
 } from "../../repositories/contracts";
@@ -176,6 +176,18 @@ adminOrgs.get(
     const db = makePrisma(c.env);
     const agreements = await listOrgAgreements(db, c.req.param("id"));
     return c.json({ agreements });
+  },
+);
+
+// Host-reachable session summary — aggregates + recent activity for the
+// dashboard. billing.read (host_admin has it); org-scoped by the param.
+adminOrgs.get(
+  "/:id/sessions",
+  requirePermission("billing.read", { orgIdParam: "id" }),
+  async (c) => {
+    const db = makePrisma(c.env);
+    const summary = await getOrgSessionSummary(db, c.req.param("id"), new Date());
+    return c.json({ summary });
   },
 );
 

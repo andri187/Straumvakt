@@ -64,6 +64,82 @@ export async function listOrgDrivers(
   return [...byUser.values()].sort((a, b) => a.displayName.localeCompare(b.displayName));
 }
 
+export interface HostRecentSession {
+  id: string;
+  startedAt: string;
+  station: string;
+  energyKwh: number | null;
+  status: string;
+}
+export interface HostSessionSummary {
+  totalCount: number;
+  totalEnergyKwh: number;
+  monthCount: number;
+  monthEnergyKwh: number;
+  recent: HostRecentSession[];
+}
+
+function whToKwh(wh: bigint | null): number | null {
+  if (wh === null) return null;
+  return Math.round(Number(wh) / 100) / 10; // kWh, 1 decimal
+}
+
+/** Charging-session aggregates + recent activity for the org's dashboard. */
+export async function getOrgSessionSummary(
+  db: PrismaClient,
+  orgId: string,
+  now: Date,
+): Promise<HostSessionSummary> {
+  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  const [agg, monthAgg, recent] = await Promise.all([
+    db.chargeSession.aggregate({ where: { orgId }, _count: { _all: true }, _sum: { energyWh: true } }),
+    db.chargeSession.aggregate({
+      where: { orgId, startedAt: { gte: monthStart } },
+      _count: { _all: true },
+      _sum: { energyWh: true },
+    }),
+    db.chargeSession.findMany({
+      where: { orgId },
+      orderBy: { startedAt: "desc" },
+      take: 10,
+      select: {
+        id: true,
+        startedAt: true,
+        energyWh: true,
+        status: true,
+        ocppIdentityId: true,
+        chargingStationId: true,
+      },
+    }),
+  ]);
+
+  const idIds = [
+    ...new Set(recent.map((r) => r.ocppIdentityId).filter((x): x is string => !!x)),
+  ];
+  const idMap = new Map<string, string>();
+  if (idIds.length > 0) {
+    const ids = await db.ocppIdentity.findMany({
+      where: { id: { in: idIds } },
+      select: { id: true, identityString: true },
+    });
+    for (const i of ids) idMap.set(i.id, i.identityString);
+  }
+
+  return {
+    totalCount: agg._count._all,
+    totalEnergyKwh: whToKwh(agg._sum.energyWh) ?? 0,
+    monthCount: monthAgg._count._all,
+    monthEnergyKwh: whToKwh(monthAgg._sum.energyWh) ?? 0,
+    recent: recent.map((r) => ({
+      id: r.id,
+      startedAt: r.startedAt.toISOString(),
+      station: (r.ocppIdentityId && idMap.get(r.ocppIdentityId)) || r.chargingStationId.slice(0, 8),
+      energyKwh: whToKwh(r.energyWh),
+      status: r.status,
+    })),
+  };
+}
+
 /** Agreements the org is party to (either counterparty or CPO side). */
 export async function listOrgAgreements(
   db: PrismaClient,
