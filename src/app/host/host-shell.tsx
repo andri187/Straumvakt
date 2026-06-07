@@ -62,7 +62,7 @@ const SECTIONS: Section[] = [
     label: "Ökumenn",
     items: [
       { label: "Ökumenn", href: "/host/drivers" as Route, icon: I.users },
-      { label: "Bjóða ökumanni", icon: I.userplus, soon: true },
+      { label: "Bjóða ökumanni", href: "/host/invite" as Route, icon: I.userplus },
       { label: "Aðgangsbeiðnir", icon: I.mail, soon: true },
     ],
   },
@@ -143,7 +143,7 @@ export function HostShell({
             <div className="avatar">{initials}</div>
             <div>
               <div style={{ color: "var(--soft)", fontWeight: 600 }}>{email}</div>
-              <div>Host admin</div>
+              <div>Hýsilstjóri</div>
             </div>
           </div>
         </aside>

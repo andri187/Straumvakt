@@ -37,7 +37,7 @@ type Item = { label: string; href?: Route; icon: ReactNode; soon?: boolean };
 const SECTIONS: { label: string; items: Item[] }[] = [
   { label: "Yfirlit", items: [
     { label: "Mælaborð", href: "/driver" as Route, icon: I.dash },
-    { label: "Hleðsla", icon: I.bolt, soon: true },
+    { label: "Hleðsla", href: "/driver/charging" as Route, icon: I.bolt },
   ]},
   { label: "Mín notkun", items: [
     { label: "Hleðslusaga", href: "/driver/history" as Route, icon: I.cal },
@@ -46,7 +46,7 @@ const SECTIONS: { label: string; items: Item[] }[] = [
   ]},
   { label: "Aðgangur", items: [
     { label: "Mínir aðgangar", href: "/driver/access" as Route, icon: I.key },
-    { label: "Leysa inn boð", icon: I.plus, soon: true },
+    { label: "Leysa inn boð", href: "/driver/redeem" as Route, icon: I.plus },
   ]},
   { label: "Annað", items: [
     { label: "Stillingar", href: "/driver/settings" as Route, icon: I.gear },

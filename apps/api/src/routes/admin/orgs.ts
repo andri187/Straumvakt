@@ -16,6 +16,13 @@ import { listInstallationsByOrg } from "../../repositories/installations";
 import { listAllChargers } from "../../repositories/chargers";
 import { listOrgDrivers, listOrgAgreements, getOrgSessionSummary } from "../../repositories/host-views";
 import {
+  listOrgDriverGroups,
+  listOrgDriverInvites,
+  createDriverInvite,
+} from "../../repositories/host-invites";
+import { sessionUserId } from "../../lib/auth/require-permission";
+import { z } from "zod";
+import {
   listContractsByOrg,
 } from "../../repositories/contracts";
 import { getOrgTariffChainSummary } from "../../repositories/org-tariff-chain";
@@ -163,6 +170,89 @@ adminOrgs.get(
     const db = makePrisma(c.env);
     const drivers = await listOrgDrivers(db, c.req.param("id"));
     return c.json({ drivers });
+  },
+);
+
+// ── ADR 0028 — host↔driver INVITE loop ──────────────────────────────────
+//
+// The host_admin picks one of their org's DriverGroups, enters a driver
+// email, and mints a single-use invite code. Gated on member.read (list)
+// and member.invite (create) — both in HOST_ADMIN_BUNDLE. The orgIdParam
+// guard plus DriverGroup.ownerOrgId === :id check (in the repo) stop a
+// host_admin for org A from inviting into org B's group.
+
+// Driver groups the org owns — the pick list for "invite into which group".
+adminOrgs.get(
+  "/:id/driver-groups",
+  requirePermission("member.read", { orgIdParam: "id" }),
+  async (c) => {
+    const db = makePrisma(c.env);
+    const groups = await listOrgDriverGroups(db, c.req.param("id"));
+    return c.json({ groups });
+  },
+);
+
+// Pending/used driver invites for the org's groups.
+adminOrgs.get(
+  "/:id/driver-invites",
+  requirePermission("member.read", { orgIdParam: "id" }),
+  async (c) => {
+    const db = makePrisma(c.env);
+    const invites = await listOrgDriverInvites(db, c.req.param("id"));
+    return c.json({ invites });
+  },
+);
+
+// Mint a driver invite into one of the org's groups.
+const DriverInviteCreateBody = z.object({
+  driverGroupId: z.string().uuid(),
+  email: z.string().email().max(200),
+  ttlHours: z
+    .number()
+    .int()
+    .min(1)
+    .max(24 * 30) // 30 days max
+    .optional(),
+});
+
+adminOrgs.post(
+  "/:id/driver-invites",
+  requirePermission("member.invite", { orgIdParam: "id" }),
+  async (c) => {
+    const raw = (await c.req.json().catch(() => null)) as unknown;
+    const parsed = DriverInviteCreateBody.safeParse(raw);
+    if (!parsed.success) {
+      return c.json({ error: "validation", issues: parsed.error.issues }, 400);
+    }
+    // invitedByUserId comes from the session. Bootstrap admin (no userId)
+    // has god-mode through requirePermission but carries no real User row;
+    // attribute the invite to null-safe value by requiring a real userId.
+    const session = c.get("session");
+    const invitedByUserId = sessionUserId(session);
+    if (!invitedByUserId) {
+      return c.json(
+        { error: "session_missing_userid_relogin_required" },
+        401,
+      );
+    }
+    const db = makePrisma(c.env);
+    const result = await createDriverInvite(db, {
+      orgId: c.req.param("id"),
+      driverGroupId: parsed.data.driverGroupId,
+      email: parsed.data.email,
+      invitedByUserId,
+      ttlHours: parsed.data.ttlHours ?? 168, // 7d default (printed/shared code)
+    });
+    if (!result.ok) {
+      const status =
+        result.reason === "driver_group_not_found"
+          ? 404
+          : result.reason === "driver_group_wrong_org"
+            ? 403
+            : 400;
+      return c.json({ error: result.reason }, status);
+    }
+    return c.json({ invite: result.invite }, 201);
   },
 );
 

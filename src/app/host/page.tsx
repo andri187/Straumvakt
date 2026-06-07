@@ -34,8 +34,9 @@ type SessionSummary = {
 function sessionBadge(status: string): { cls: string; dot: string; label: string } {
   if (status === "in_progress") return { cls: "s-live", dot: "bg-live", label: "Í hleðslu" };
   if (status === "completed") return { cls: "s-ok", dot: "bg-ok", label: "Lokið" };
-  if (status === "faulted" || status === "aborted") return { cls: "s-bad", dot: "bg-bad", label: status };
-  return { cls: "s-mut", dot: "bg-mut", label: status };
+  if (status === "faulted") return { cls: "s-bad", dot: "bg-bad", label: "Bilun" };
+  if (status === "aborted") return { cls: "s-bad", dot: "bg-bad", label: "Hætt við" };
+  return { cls: "s-mut", dot: "bg-mut", label: "Óþekkt" };
 }
 
 export default function HostDashboard() {

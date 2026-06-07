@@ -27,8 +27,9 @@ type History = {
   billingHomeName: string | null;
 };
 
+// costIsk values from the API are in aurar (1/100 króna) — divide for display.
 const kr = (n: number | null | undefined) =>
-  n === null || n === undefined ? "—" : `${Math.round(n).toLocaleString("is-IS")} kr.`;
+  n === null || n === undefined ? "—" : `${Math.round(n / 100).toLocaleString("is-IS")} kr.`;
 
 export default function DriverDashboard() {
   const me: DriverProfile | null = useDriverMe();
@@ -105,7 +106,7 @@ export default function DriverDashboard() {
         <div className="card-h">Nýlegar hleðslur <span className="sub">síðustu 10</span></div>
         <table>
           <thead>
-            <tr><th>Stöð</th><th>Svæði</th><th>Greitt til</th><th>Orka</th><th>Kostnaður</th><th>Tími</th></tr>
+            <tr><th>Stöð</th><th>Svæði</th><th>Greiðsluheimili</th><th>Orka</th><th>Kostnaður</th><th>Tími</th></tr>
           </thead>
           <tbody>
             {history === null && <tr><td colSpan={6} className="empty">Hleð…</td></tr>}

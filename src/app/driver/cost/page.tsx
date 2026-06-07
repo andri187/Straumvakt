@@ -13,7 +13,8 @@ type H = {
   billingHomeName: string | null;
 };
 
-const kr = (n: number) => `${Math.round(n).toLocaleString("is-IS")} kr.`;
+// costIsk values are aurar (1/100 króna); aggregate raw, divide at display.
+const kr = (n: number) => `${Math.round(n / 100).toLocaleString("is-IS")} kr.`;
 
 export default function DriverCost() {
   const [rows, setRows] = useState<H[] | null>(null);

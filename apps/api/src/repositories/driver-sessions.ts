@@ -129,7 +129,7 @@ export async function getDriverActiveSessions(
   return rows.map((r) => ({
     sessionId: r.id,
     connectorId: r.connectorId,
-    chargerName: r.chargingStation?.siteAsset?.displayName ?? "Charger",
+    chargerName: r.chargingStation?.siteAsset?.displayName ?? "Hleðslustöð",
     status: "Charging",
     startedAt: r.startedAt.toISOString(),
     powerKw: 0,
@@ -186,7 +186,7 @@ export async function resolveStoppableSession(
       identityId: session.ocppIdentityId,
       transactionId: txn,
       connectorId: session.connectorId,
-      chargerName: session.chargingStation?.siteAsset?.displayName ?? "Charger",
+      chargerName: session.chargingStation?.siteAsset?.displayName ?? "Hleðslustöð",
       startedAt: session.startedAt.toISOString(),
     },
   };

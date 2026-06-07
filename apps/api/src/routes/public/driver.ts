@@ -38,6 +38,8 @@ import {
   getDriverChargerPricing,
 } from "../../repositories/driver-pricing";
 import { createSelfRequest } from "../../repositories/driver-access-requests";
+import { sha256Hex } from "../../lib/sha256";
+import { recordAuditAction } from "../../lib/audit";
 import {
   getDriverActiveSessions,
   resolveStoppableSession,
@@ -881,6 +883,159 @@ publicDriver.post("/access-requests", requireDriver, async (c) => {
   }
 
   return c.json({ accessRequest: result.accessRequest }, 201);
+});
+
+// ── POST /api/driver/redeem-invite ──────────────────────────────────
+//
+// ADR 0028 §4 — the logged-in-driver redemption path. The driver pastes
+// an invite code (the kind='driver' UserToken plaintext) in the web/mobile
+// app while already authenticated (bearer). We:
+//
+//   1. Hash the code, look up the kind='driver' token. 404 if absent.
+//   2. Validate it's not expired and not already consumed (single-use).
+//   3. Resolve the bound DriverGroup (token.driverGroupId).
+//   4. ACCESS write: create the DriverGroupMembership for THIS authenticated
+//      driver + the bound group (idempotent — re-redeem of an already-granted
+//      group is a no-op). The membership is granted to the *redeeming* driver,
+//      not the token's placeholder invitee row — the bearer is the canonical
+//      identity (ADR 0026 §10A: the User redeeming is who gets access).
+//   5. Claim the token (usedAt = now, conditional on usedAt IS NULL) so
+//      concurrent redeems race deterministically — only one wins the claim.
+//   6. Audit the enrollment under the group's owner org.
+//
+// All in one tx: a partial redemption must not leave a consumed token with no
+// membership. BILLING (BillObjectMember, ADR 0029) is NOT written here — the
+// token's billObjectId is null in this milestone, so the driver lands in the
+// host's "Unattributed" bill-object per ADR 0028 §5 (access is never blocked
+// on billing-home assignment).
+//
+// QR security layers (password_key / allow_term, ADR 0028 §3) are not handled
+// in this milestone; the host-portal create path only mints security='none'
+// codes today, so any token reaching here is the bare code path.
+
+const redeemInviteSchema = z.object({
+  // Accept a generously-sized opaque code; the alphabet is base32-ish.
+  token: z.string().trim().min(8).max(256),
+});
+
+publicDriver.post("/redeem-invite", requireDriver, async (c) => {
+  const raw = await c.req.json().catch(() => null);
+  const parsed = redeemInviteSchema.safeParse(raw);
+  if (!parsed.success) {
+    return c.json({ error: "validation", message: "Invite code required." }, 400);
+  }
+
+  const { userId } = c.get("driverPayload");
+  const prisma = makePrisma(c.env);
+  const tokenHash = await sha256Hex(parsed.data.token);
+
+  const result = await prisma.$transaction(async (tx) => {
+    const row = await tx.userToken.findUnique({
+      where: { tokenHash },
+      select: {
+        id: true,
+        kind: true,
+        usedAt: true,
+        expiresAt: true,
+        driverGroupId: true,
+        security: true,
+        driverGroup: {
+          select: {
+            id: true,
+            displayName: true,
+            ownerOrgId: true,
+            agreement: {
+              select: { installation: { select: { displayName: true } } },
+            },
+          },
+        },
+      },
+    });
+
+    if (!row || row.kind !== "driver") {
+      return { ok: false as const, reason: "not_found" as const };
+    }
+    if (row.usedAt !== null) {
+      return { ok: false as const, reason: "already_used" as const };
+    }
+    if (row.expiresAt.getTime() <= Date.now()) {
+      return { ok: false as const, reason: "expired" as const };
+    }
+    if (!row.driverGroupId || !row.driverGroup) {
+      return { ok: false as const, reason: "malformed" as const };
+    }
+    // ADR 0028 §3 — security gates not implemented this milestone. A
+    // non-'none' token can't be safely redeemed via this bare path.
+    if (row.security !== "none") {
+      return { ok: false as const, reason: "security_unsupported" as const };
+    }
+
+    // ACCESS write — idempotent grant for the authenticated driver.
+    const existing = await tx.driverGroupMembership.findUnique({
+      where: {
+        driverGroupId_userId: { driverGroupId: row.driverGroupId, userId },
+      },
+      select: { id: true },
+    });
+    if (!existing) {
+      await tx.driverGroupMembership.create({
+        data: { driverGroupId: row.driverGroupId, userId },
+      });
+    }
+
+    // Conditional token claim — loser of a concurrent race sees count=0.
+    const claimed = await tx.userToken.updateMany({
+      where: { id: row.id, usedAt: null },
+      data: { usedAt: new Date() },
+    });
+    if (claimed.count === 0) {
+      return { ok: false as const, reason: "already_used" as const };
+    }
+
+    await recordAuditAction(tx, {
+      orgId: row.driverGroup.ownerOrgId,
+      actorUserId: userId,
+      actorKind: "user",
+      action: "driver_invite.redeemed",
+      targetType: "driver_group",
+      targetId: row.driverGroupId,
+      metadata: { tokenId: row.id, driverGroupId: row.driverGroupId },
+    });
+
+    return {
+      ok: true as const,
+      driverGroupId: row.driverGroupId,
+      driverGroupDisplayName: row.driverGroup.displayName,
+      installationDisplayName:
+        row.driverGroup.agreement?.installation?.displayName ?? null,
+    };
+  });
+
+  if (!result.ok) {
+    if (result.reason === "not_found") {
+      return c.json({ error: "not_found", message: "Boð fannst ekki." }, 404);
+    }
+    if (result.reason === "already_used") {
+      return c.json({ error: "already_used", message: "Boðið hefur þegar verið leyst inn." }, 410);
+    }
+    if (result.reason === "expired") {
+      return c.json({ error: "expired", message: "Boðið er útrunnið." }, 410);
+    }
+    if (result.reason === "security_unsupported") {
+      return c.json(
+        { error: "security_unsupported", message: "Þetta boð krefst auka öryggisþreps sem er ekki stutt enn." },
+        409,
+      );
+    }
+    return c.json({ error: "malformed", message: "Boðið er ógilt." }, 500);
+  }
+
+  return c.json({
+    ok: true,
+    driverGroupId: result.driverGroupId,
+    driverGroupDisplayName: result.driverGroupDisplayName,
+    installationDisplayName: result.installationDisplayName,
+  });
 });
 
 // ── Health ──────────────────────────────────────────────────────────

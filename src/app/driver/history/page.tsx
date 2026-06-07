@@ -18,7 +18,8 @@ type H = {
   billingHomeName: string | null;
 };
 
-const kr = (n: number | null) => (n === null ? "—" : `${Math.round(n).toLocaleString("is-IS")} kr.`);
+// costIsk is in aurar (1/100 króna) — divide for display.
+const kr = (n: number | null) => (n === null ? "—" : `${Math.round(n / 100).toLocaleString("is-IS")} kr.`);
 
 export default function DriverHistory() {
   const [rows, setRows] = useState<H[] | null>(null);
@@ -58,7 +59,7 @@ export default function DriverHistory() {
         <div className="card-h">Hleðslur <span className="sub">{rows ? `${rows.length}` : ""}</span></div>
         <table>
           <thead>
-            <tr><th>Dagsetning</th><th>Stöð</th><th>Svæði</th><th>Greitt til</th><th>Orka</th><th>Kostnaður</th></tr>
+            <tr><th>Dagsetning</th><th>Stöð</th><th>Svæði</th><th>Greiðsluheimili</th><th>Orka</th><th>Kostnaður</th></tr>
           </thead>
           <tbody>
             {rows === null && <tr><td colSpan={6} className="empty">Hleð…</td></tr>}

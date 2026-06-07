@@ -78,3 +78,25 @@ export async function driverFetch<T>(path: string): Promise<T> {
   }
   return body as T;
 }
+
+export async function driverPost<T>(path: string, body: unknown): Promise<T> {
+  const token = getDriverToken();
+  const res = await fetch(`${apiBase()}${path}`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  if (res.status === 401) {
+    clearDriverToken();
+    throw new DriverAuthError();
+  }
+  const parsed = (await res.json().catch(() => null)) as unknown;
+  if (!res.ok) {
+    const e = parsed as { error?: string; message?: string } | null;
+    throw new Error(e?.message || e?.error || `HTTP ${res.status}`);
+  }
+  return parsed as T;
+}
