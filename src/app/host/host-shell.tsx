@@ -8,6 +8,16 @@ import Link from "next/link";
 import type { Route } from "next";
 import { usePathname } from "next/navigation";
 import { createContext, useContext, type ReactNode } from "react";
+import { apiFetch } from "@/lib/api-client";
+
+async function hostLogout() {
+  try {
+    await apiFetch("/api/admin/logout", { method: "POST" });
+  } catch {
+    // ignore — clear client state regardless
+  }
+  window.location.href = "/login";
+}
 
 export type HostOrg = {
   orgId: string;
@@ -145,7 +155,7 @@ export function HostShell({
               <span className="pill host">{kindLabel}</span>
             </div>
             <div className="spacer" />
-            <a className="tlink" href="/api/admin/logout">Útskrá</a>
+            <button className="tlink" type="button" onClick={hostLogout} style={{ background: "none", border: 0, cursor: "pointer" }}>Útskrá</button>
           </div>
           <div className="content">
             <OrgCtx.Provider value={org}>{children}</OrgCtx.Provider>
