@@ -104,7 +104,10 @@ app.use(
     origin: (origin) => (ALLOWED_ORIGINS.includes(origin) ? origin : null),
     credentials: true,
     allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-    allowHeaders: ["Content-Type"],
+    // Authorization is required for the driver web portal's bearer-token calls
+    // (/api/driver/*). This global /api/* CORS handles their preflight first,
+    // so it must allow it — otherwise the browser blocks every driver request.
+    allowHeaders: ["Content-Type", "Authorization"],
   }),
 );
 
