@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/components/language-provider";
 import { apiFetch } from "@/lib/api-client";
+import { driverLogin } from "@/app/driver/driver-auth";
 
 export function AdminLoginForm({ compact = false }: { compact?: boolean }) {
   const { language } = useLanguage();
@@ -18,33 +19,42 @@ export function AdminLoginForm({ compact = false }: { compact?: boolean }) {
     setError(null);
     setLoading(true);
     try {
+      // Unified login: try the admin/host (cookie) path first. On success the
+      // (app) layout routes host_admin -> /host and operators stay on the
+      // console. A 401 means "not an admin/host" — fall back to the driver
+      // (bearer) path and route into /driver.
       const res = await apiFetch("/api/admin/login", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
+      if (res.ok) {
+        router.push("/dashboard");
+        router.refresh();
+        return;
+      }
+      if (res.status === 401) {
+        try {
+          await driverLogin(email.trim(), password); // stores the bearer token
+          window.location.href = "/driver"; // bearer SPA — full navigation
+          return;
+        } catch {
+          setError(
+            language === "is" ? "Rangt netfang eða lykilorð." : "Wrong email or password.",
+          );
+          return;
+        }
+      }
       const raw = await res.text();
       let data: { error?: string } = {};
       try {
         data = raw ? (JSON.parse(raw) as { error?: string }) : {};
       } catch {
-        data = {
-          error:
-            raw ||
-            (language === "is"
-              ? "Óvænt svar frá innskráningu"
-              : "Unexpected login response"),
-        };
+        data = {};
       }
-      if (!res.ok) {
-        setError(
-          data.error ??
-            (language === "is" ? "Innskráning mistókst" : "Login failed"),
-        );
-        return;
-      }
-      router.push("/dashboard");
-      router.refresh();
+      setError(
+        data.error ?? (language === "is" ? "Innskráning mistókst" : "Login failed"),
+      );
     } catch {
       setError(
         language === "is"
@@ -66,7 +76,7 @@ export function AdminLoginForm({ compact = false }: { compact?: boolean }) {
           htmlFor="email"
           className="mb-1 block text-xs font-medium text-ink-200"
         >
-          {language === "is" ? "Stjórnandanotandi" : "Admin user"}
+          {language === "is" ? "Netfang" : "Email"}
         </label>
         <input
           id="email"
@@ -75,7 +85,7 @@ export function AdminLoginForm({ compact = false }: { compact?: boolean }) {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           className="w-full rounded-md border border-bg-border bg-bg-inset px-3 py-2 text-sm text-ink-50 outline-none ring-0 placeholder:text-ink-400 focus:border-brand-500/50"
-          placeholder="admin"
+          placeholder="netfang@…"
           required
         />
       </div>
@@ -84,7 +94,7 @@ export function AdminLoginForm({ compact = false }: { compact?: boolean }) {
           htmlFor="password"
           className="mb-1 block text-xs font-medium text-ink-200"
         >
-          {language === "is" ? "Lykilorð stjórnanda" : "Admin password"}
+          {language === "is" ? "Lykilorð" : "Password"}
         </label>
         <input
           id="password"
@@ -114,8 +124,8 @@ export function AdminLoginForm({ compact = false }: { compact?: boolean }) {
             ? "Skrái inn..."
             : "Signing in..."
           : language === "is"
-            ? "Skrá inn sem stjórnandi"
-            : "Sign in as admin"}
+            ? "Skrá inn"
+            : "Sign in"}
       </button>
     </form>
   );

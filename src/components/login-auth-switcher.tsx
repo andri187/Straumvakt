@@ -7,7 +7,9 @@ import { useLanguage } from "@/components/language-provider";
 
 export function LoginAuthSwitcher() {
   const { language } = useLanguage();
-  const [adminMode, setAdminMode] = useState(false);
+  // Default to email + password — the unified login that routes admin, host
+  // and driver to their own view. Electronic (eID) stays as the alt toggle.
+  const [adminMode, setAdminMode] = useState(true);
 
   return (
     <>
@@ -29,8 +31,8 @@ export function LoginAuthSwitcher() {
       <p className="mt-1 text-sm text-ink-300">
         {adminMode
           ? language === "is"
-            ? "Skráðu þig inn sem stjórnandi með notandanafni og lykilorði."
-            : "Sign in as an administrator with username and password."
+            ? "Skráðu þig inn með netfangi og lykilorði."
+            : "Sign in with your email and password."
           : language === "is"
             ? "Skráðu símanúmer og staðfestu með íslenskum rafrænum skilríkjum."
             : "Enter a phone number and confirm with Icelandic electronic ID."}
@@ -41,11 +43,11 @@ export function LoginAuthSwitcher() {
       <p className="mt-8 text-center text-xs text-ink-400">
         {adminMode
           ? language === "is"
-            ? "Smelltu á Rafræn efst til hægri til að fara aftur í símanúmers-innskráningu."
-            : "Click Electronic in the top-right corner to return to phone-number sign-in."
+            ? "Innskráning með rafrænum skilríkjum er aðgengileg efst til hægri."
+            : "Electronic-ID sign-in is available in the top-right corner."
           : language === "is"
-            ? "Stjórnandainnskráning er aðgengileg með litla hnappnum efst til hægri."
-            : "Admin sign-in is available from the small button in the top-right corner."}
+            ? "Innskráning með netfangi og lykilorði er aðgengileg efst til hægri."
+            : "Email + password sign-in is available in the top-right corner."}
       </p>
     </>
   );
