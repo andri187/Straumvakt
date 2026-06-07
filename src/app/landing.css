@@ -38,25 +38,6 @@
   outline: none;
 }
 
-/* Driver web portal entry (top-left), mirroring the Admin link (top-right). */
-.straumvakt-landing .driver-link {
-  position: absolute;
-  top: 22px;
-  left: 26px;
-  color: rgba(244, 241, 234, 0.5);
-  font-size: 12px;
-  font-weight: 650;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  text-decoration: none;
-  transition: color 0.15s ease;
-}
-.straumvakt-landing .driver-link:hover,
-.straumvakt-landing .driver-link:focus-visible {
-  color: var(--landing-text);
-  outline: none;
-}
-
 .straumvakt-landing,
 .straumvakt-landing *,
 .straumvakt-landing *::before,
