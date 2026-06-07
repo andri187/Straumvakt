@@ -57,16 +57,16 @@ const SECTIONS: Section[] = [
     ],
   },
   {
-    label: "Samningar & reikningar",
+    label: "Reikningar",
     items: [
-      { label: "Samningar", icon: I.file, soon: true },
       { label: "Einingar & eigendur", icon: I.building, soon: true },
+      { label: "Samningar", icon: I.file, soon: true },
       { label: "Reikningar", icon: I.receipt, soon: true },
     ],
   },
   {
     label: "Annað",
-    items: [{ label: "Stillingar", icon: I.gear, soon: true }],
+    items: [{ label: "Stillingar", href: "/host/settings" as Route, icon: I.gear }],
   },
 ];
 
