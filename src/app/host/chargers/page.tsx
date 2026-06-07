@@ -1,8 +1,7 @@
 "use client";
 
-// Host chargers — the host's own org's chargers, read-only (config/tariff
-// stay operator-set per ADR 0027). Client-fetched via the org-scoped
-// /api/admin/orgs/:id/chargers endpoint.
+// Host chargers — concept look (host.css), real N1 chargers grouped by
+// installation with tabs. Read-only; config/tariff stay operator-set.
 
 import { useEffect, useState } from "react";
 import { apiFetchJson } from "@/lib/api-client";
@@ -10,17 +9,29 @@ import { useHostOrg } from "../host-shell";
 
 type Charger = {
   chargingStationId: string;
+  identityString?: string;
   siteDisplayName?: string;
   installationDisplayName?: string | null;
   connectorType?: string;
+  maxPowerKw?: number | null;
   online?: boolean;
   status?: string | null;
 };
 
+function groupBy<T>(arr: T[], key: (t: T) => string): Record<string, T[]> {
+  const out: Record<string, T[]> = {};
+  for (const x of arr) {
+    const k = key(x);
+    (out[k] ??= []).push(x);
+  }
+  return out;
+}
+
 export default function HostChargers() {
   const org = useHostOrg();
   const [rows, setRows] = useState<Charger[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [tab, setTab] = useState<string | null>(null);
 
   useEffect(() => {
     if (!org) return;
@@ -32,7 +43,7 @@ export default function HostChargers() {
         );
         if (!cancelled) setRows(r.chargers);
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
+        if (!cancelled) setErr(e instanceof Error ? e.message : String(e));
       }
     })();
     return () => {
@@ -40,66 +51,83 @@ export default function HostChargers() {
     };
   }, [org]);
 
-  return (
-    <div className="mx-auto max-w-5xl">
-      <h1 className="text-2xl font-bold tracking-tight">Hleðslustöðvar</h1>
-      <p className="mt-1 text-sm text-ink-300">
-        Stöðvar á þínu neti. Uppsetning og verðskrá eru í höndum Straumvaktar.
-      </p>
+  const groups = groupBy(
+    rows ?? [],
+    (c) => c.installationDisplayName || c.siteDisplayName || "Hleðslustöðvar",
+  );
+  const names = Object.keys(groups);
+  const active = tab && names.includes(tab) ? tab : names[0];
+  const list = active ? groups[active] : [];
 
-      {error && (
-        <div className="mt-5 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-          {error}
+  return (
+    <>
+      <div className="head">
+        <div>
+          <h1>Hleðslustöðvar</h1>
+          <p>Stöðvar á þínu neti. Uppsetning og verðskrá eru í höndum Straumvaktar.</p>
+        </div>
+      </div>
+
+      {err && (
+        <div className="card" style={{ padding: "14px 18px", marginBottom: 16, borderColor: "rgba(255,107,107,.4)", color: "var(--red)" }}>
+          {err}
         </div>
       )}
 
-      <div className="mt-6 overflow-hidden rounded-lg border border-bg-border bg-bg-surface/70 shadow-card">
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="border-b border-bg-border text-[11px] uppercase tracking-wider text-ink-400">
-              <th className="px-4 py-3">Stöð</th>
-              <th className="px-4 py-3">Svæði</th>
-              <th className="px-4 py-3">Tengi</th>
-              <th className="px-4 py-3">Staða</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows === null && (
-              <tr>
-                <td className="px-4 py-6 text-ink-500" colSpan={4}>
-                  Hleð…
-                </td>
-              </tr>
-            )}
-            {rows?.length === 0 && (
-              <tr>
-                <td className="px-4 py-6 text-ink-400" colSpan={4}>
-                  Engar stöðvar.
-                </td>
-              </tr>
-            )}
-            {rows?.map((c) => (
-              <tr key={c.chargingStationId} className="border-b border-bg-border/60 last:border-0">
-                <td className="px-4 py-3 font-mono text-xs text-ink-100">{c.chargingStationId}</td>
-                <td className="px-4 py-3 text-ink-300">{c.siteDisplayName ?? "—"}</td>
-                <td className="px-4 py-3 text-ink-300">{c.connectorType ?? "—"}</td>
-                <td className="px-4 py-3">
-                  <span
-                    className={
-                      "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-bold " +
-                      (c.online
-                        ? "border-sv-green/35 bg-sv-green/10 text-sv-green"
-                        : "border-ink-500/30 bg-ink-500/10 text-ink-400")
-                    }
-                  >
-                    {c.online ? "Nettengd" : (c.status ?? "Óþekkt")}
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+      {rows === null ? (
+        <div className="card"><div className="empty">Hleð…</div></div>
+      ) : (
+        <>
+          {names.length > 1 && (
+            <div className="tabs">
+              {names.map((n) => (
+                <div
+                  key={n}
+                  className={"tab" + (n === active ? " active" : "")}
+                  onClick={() => setTab(n)}
+                >
+                  {n} · {groups[n].length}
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="card">
+            <div className="card-h">
+              Stöðvar <span className="sub">{active ?? ""} · {list.length} stöðvar</span>
+              <span className="badge2 s-ok"><span className="dot bg-ok" />Samningur virkur</span>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Stöð</th>
+                  <th>Tengi</th>
+                  <th>Afl</th>
+                  <th>Staða</th>
+                </tr>
+              </thead>
+              <tbody>
+                {list.map((c) => (
+                  <tr key={c.chargingStationId}>
+                    <td className="mono">{c.identityString ?? c.chargingStationId.slice(0, 8)}</td>
+                    <td className="sub">{c.connectorType ?? "Type 2"}</td>
+                    <td>{c.maxPowerKw ? `${c.maxPowerKw} kW` : "—"}</td>
+                    <td>
+                      <span className={"badge2 " + (c.online ? "s-ok" : "s-bad")}>
+                        <span className={"dot " + (c.online ? "bg-ok" : "bg-bad")} />
+                        {c.online ? "Nettengd" : (c.status ?? "Ótengd")}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+                {list.length === 0 && (
+                  <tr><td colSpan={4} className="empty">Engar stöðvar.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </>
   );
 }

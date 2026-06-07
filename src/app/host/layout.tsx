@@ -6,6 +6,7 @@
 import { redirect } from "next/navigation";
 import { apiFetchServer } from "@/lib/api-client-server";
 import { HostShell, type HostOrg } from "./host-shell";
+import "./host.css";
 
 type Me = {
   email: string;
