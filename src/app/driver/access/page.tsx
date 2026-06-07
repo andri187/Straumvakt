@@ -72,7 +72,7 @@ export default function DriverAccess() {
                 </td>
                 <td className="sub">
                   {i.pricingSummary?.perKwhMinor
-                    ? `${(Number(i.pricingSummary.perKwhMinor) / 100).toLocaleString("is-IS", { maximumFractionDigits: 2 })} kr/kWh${i.pricingSummary.vatInclusive ? "" : " + VSK"}`
+                    ? `${(Number(i.pricingSummary.perKwhMinor) / 100).toLocaleString("is-IS", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kr/kWh${i.pricingSummary.vatInclusive ? "" : " + VSK"}`
                     : "—"}
                 </td>
               </tr>

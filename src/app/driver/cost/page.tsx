@@ -13,8 +13,10 @@ type H = {
   billingHomeName: string | null;
 };
 
-// costIsk values are aurar (1/100 króna); aggregate raw, divide at display.
-const kr = (n: number) => `${Math.round(n / 100).toLocaleString("is-IS")} kr.`;
+// costIsk values are aurar (1/100 króna); aggregate raw, ÷100 + 2 decimals
+// (is-IS) at display, matching the mobile app.
+const kr = (n: number) =>
+  `${(n / 100).toLocaleString("is-IS", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kr.`;
 
 export default function DriverCost() {
   const [rows, setRows] = useState<H[] | null>(null);

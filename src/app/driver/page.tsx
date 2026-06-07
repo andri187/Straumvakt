@@ -27,9 +27,12 @@ type History = {
   billingHomeName: string | null;
 };
 
-// costIsk values from the API are in aurar (1/100 króna) — divide for display.
+// costIsk values from the API are in aurar (1/100 króna). Divide for display
+// and show 2 decimals with the Icelandic comma, matching the mobile app.
 const kr = (n: number | null | undefined) =>
-  n === null || n === undefined ? "—" : `${Math.round(n / 100).toLocaleString("is-IS")} kr.`;
+  n === null || n === undefined
+    ? "—"
+    : `${(n / 100).toLocaleString("is-IS", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kr.`;
 
 export default function DriverDashboard() {
   const me: DriverProfile | null = useDriverMe();

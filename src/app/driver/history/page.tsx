@@ -18,8 +18,9 @@ type H = {
   billingHomeName: string | null;
 };
 
-// costIsk is in aurar (1/100 króna) — divide for display.
-const kr = (n: number | null) => (n === null ? "—" : `${Math.round(n / 100).toLocaleString("is-IS")} kr.`);
+// costIsk is aurar (1/100 króna); ÷100 + 2 decimals (is-IS), matching mobile.
+const kr = (n: number | null) =>
+  n === null ? "—" : `${(n / 100).toLocaleString("is-IS", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kr.`;
 
 export default function DriverHistory() {
   const [rows, setRows] = useState<H[] | null>(null);

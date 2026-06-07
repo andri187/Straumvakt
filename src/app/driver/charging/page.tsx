@@ -20,8 +20,9 @@ type ActiveSession = {
   costIsk: number;
 };
 
-// costIsk is in aurar (1/100 króna) — divide for display.
-const kr = (n: number) => `${Math.round(n / 100).toLocaleString("is-IS")} kr.`;
+// costIsk is aurar (1/100 króna); ÷100 + 2 decimals (is-IS), matching mobile.
+const kr = (n: number) =>
+  `${(n / 100).toLocaleString("is-IS", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kr.`;
 
 function fmtDuration(startedAt: string, now: number): string {
   const start = new Date(startedAt).getTime();
