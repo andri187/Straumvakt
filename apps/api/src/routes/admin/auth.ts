@@ -97,6 +97,7 @@ adminAuth.post(
       select: {
         id: true,
         status: true,
+        audience: true,
         credentials: { select: { passwordHash: true } },
       },
     });
@@ -105,6 +106,10 @@ adminAuth.post(
       passwordHash !== null &&
       passwordHash !== undefined &&
       user?.status === "active" &&
+      // Drivers belong in the mobile app + (future) driver web portal, NOT the
+      // admin/host console. Reject them here so they fail cleanly rather than
+      // landing on an empty, permission-denied operator console.
+      user?.audience !== "driver" &&
       (await verifyPassword(password, passwordHash));
     if (!ok) {
       // Burn ~equivalent CPU on miss to defeat user-enumeration
