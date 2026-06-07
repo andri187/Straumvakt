@@ -167,9 +167,11 @@ adminOrgs.get(
 );
 
 // Host-reachable agreements — agreements.agreements the org is party to.
+// Gated on billing.read: it's the host's own commercial data and host_admin
+// has billing.read (not contract.read, which is manager/finance and up).
 adminOrgs.get(
   "/:id/agreements",
-  requirePermission("contract.read", { orgIdParam: "id" }),
+  requirePermission("billing.read", { orgIdParam: "id" }),
   async (c) => {
     const db = makePrisma(c.env);
     const agreements = await listOrgAgreements(db, c.req.param("id"));
