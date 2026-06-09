@@ -6,6 +6,8 @@
 // /api/admin/orgs/:id/* endpoints.
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import type { Route } from "next";
 import { apiFetchJson } from "@/lib/api-client";
 import { useHostOrg } from "./host-shell";
 
@@ -48,6 +50,7 @@ function sessionBadge(status: string): {
 }
 
 export default function HostDashboard() {
+  const router = useRouter();
   const org = useHostOrg();
   const [chargers, setChargers] = useState<Charger[] | null>(null);
   const [sites, setSites] = useState<Named[] | null>(null);
@@ -226,7 +229,13 @@ export default function HostDashboard() {
               {sessions?.recent.map((s) => {
                 const b = sessionBadge(s.status);
                 return (
-                  <tr key={s.id}>
+                  <tr
+                    key={s.id}
+                    style={{ cursor: "pointer" }}
+                    onClick={() =>
+                      router.push(`/host/sessions/${s.id}` as Route)
+                    }
+                  >
                     <td className="mono">{s.station}</td>
                     <td>{s.energyKwh === null ? "—" : `${s.energyKwh} kWh`}</td>
                     <td>

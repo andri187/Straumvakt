@@ -46,6 +46,7 @@ import {
   listDriverSessionHistory,
   updateDriverProfile,
 } from "../../repositories/driver-sessions";
+import { getSessionFullDetail } from "../../repositories/session-full-detail";
 import type { Env } from "../../bindings";
 
 type Vars = { driverPayload: DriverTokenPayload };
@@ -722,6 +723,30 @@ publicDriver.get("/sessions/history", requireDriver, async (c) => {
     limit: parsed.data.limit,
   });
   return c.json({ sessions });
+});
+
+// ── GET /api/driver/sessions/:id ────────────────────────────────────
+//
+// Full enriched detail for ONE of the driver's own sessions. Reuses the
+// operator-grade getSessionFullDetail repo, then enforces driver scope:
+// if the session doesn't exist OR belongs to another driver we return
+// 404 (never 403 — don't leak existence of another driver's session).
+// includeRaw is deliberately omitted: drivers never see the raw 723 /
+// OCMF envelope blobs (operator-only). Registered AFTER /sessions/current
+// and /sessions/history so Hono matches the literal routes first.
+
+publicDriver.get("/sessions/:id", requireDriver, async (c) => {
+  const { userId } = c.get("driverPayload");
+  const id = c.req.param("id");
+  if (!id) {
+    return c.json({ error: "validation", message: "Session id required." }, 400);
+  }
+  const prisma = makePrisma(c.env);
+  const detail = await getSessionFullDetail(prisma, id);
+  if (!detail || detail.driverUserId !== userId) {
+    return c.json({ error: "not_found" }, 404);
+  }
+  return c.json({ session: detail });
 });
 
 // ── PATCH /api/driver/me ────────────────────────────────────────────

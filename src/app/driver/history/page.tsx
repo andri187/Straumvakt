@@ -4,6 +4,8 @@
 // /api/driver/sessions/history.
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import type { Route } from "next";
 import { driverFetch } from "../driver-auth";
 
 type H = {
@@ -24,7 +26,21 @@ const kr = (n: number | null) =>
     ? "—"
     : `${(n / 100).toLocaleString("is-IS", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kr.`;
 
+// seconds → "1 klst 23 mín" (compact, drops zero leading units)
+const dur = (sec: number | null): string => {
+  if (sec === null || sec < 0) return "—";
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = Math.floor(sec % 60);
+  const parts: string[] = [];
+  if (h) parts.push(`${h} klst`);
+  if (m) parts.push(`${m} mín`);
+  if (s || parts.length === 0) parts.push(`${s} sek`);
+  return parts.join(" ");
+};
+
 export default function DriverHistory() {
+  const router = useRouter();
   const [rows, setRows] = useState<H[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
@@ -79,6 +95,7 @@ export default function DriverHistory() {
               <th>Stöð</th>
               <th>Svæði</th>
               <th>Greiðsluheimili</th>
+              <th>Lengd</th>
               <th>Orka</th>
               <th>Kostnaður</th>
             </tr>
@@ -86,26 +103,33 @@ export default function DriverHistory() {
           <tbody>
             {rows === null && (
               <tr>
-                <td colSpan={6} className="empty">
+                <td colSpan={7} className="empty">
                   Hleð…
                 </td>
               </tr>
             )}
             {rows?.length === 0 && (
               <tr>
-                <td colSpan={6} className="empty">
+                <td colSpan={7} className="empty">
                   Engar hleðslur enn.
                 </td>
               </tr>
             )}
             {rows?.map((h) => (
-              <tr key={h.sessionId}>
+              <tr
+                key={h.sessionId}
+                style={{ cursor: "pointer" }}
+                onClick={() =>
+                  router.push(`/driver/history/${h.sessionId}` as Route)
+                }
+              >
                 <td className="sub">
                   {h.startedAt.slice(0, 16).replace("T", " ")}
                 </td>
                 <td className="mono">{h.chargerName ?? "—"}</td>
                 <td className="sub">{h.siteName ?? "—"}</td>
                 <td className="sub">{h.billingHomeName ?? "—"}</td>
+                <td className="sub">{dur(h.durationSec)}</td>
                 <td>{h.energyKwh} kWh</td>
                 <td>{kr(h.costIsk)}</td>
               </tr>

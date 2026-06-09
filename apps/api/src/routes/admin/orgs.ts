@@ -15,6 +15,7 @@ import { listSitesByOrg } from "../../repositories/sites";
 import { listInstallationsByOrg } from "../../repositories/installations";
 import { listAllChargers } from "../../repositories/chargers";
 import { listOrgDrivers, listOrgAgreements, getOrgSessionSummary } from "../../repositories/host-views";
+import { getSessionFullDetail } from "../../repositories/session-full-detail";
 import {
   listOrgDriverGroups,
   listOrgDriverInvites,
@@ -278,6 +279,25 @@ adminOrgs.get(
     const db = makePrisma(c.env);
     const summary = await getOrgSessionSummary(db, c.req.param("id"), new Date());
     return c.json({ summary });
+  },
+);
+
+// Full enriched detail for ONE session under this org. Reuses the
+// operator-grade getSessionFullDetail repo, gated billing.read (host_admin
+// has it) and org-scoped by the :id param. Tenant isolation: if the
+// session doesn't exist OR belongs to another org we return 404 (never
+// leak a cross-tenant session). includeRaw omitted — heavy raw blobs are
+// operator-only via the /admin/billing/sessions/:id/full route.
+adminOrgs.get(
+  "/:id/sessions/:sessionId",
+  requirePermission("billing.read", { orgIdParam: "id" }),
+  async (c) => {
+    const db = makePrisma(c.env);
+    const detail = await getSessionFullDetail(db, c.req.param("sessionId"));
+    if (!detail || detail.orgId !== c.req.param("id")) {
+      return c.json({ error: "not_found" }, 404);
+    }
+    return c.json({ session: detail });
   },
 );
 

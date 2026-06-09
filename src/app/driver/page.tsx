@@ -5,6 +5,8 @@
 // starting a charge stays in the app (ADR 0033).
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import type { Route } from "next";
 import { driverFetch, type DriverProfile } from "./driver-auth";
 import { useDriverMe } from "./layout";
 
@@ -35,6 +37,7 @@ const kr = (n: number | null | undefined) =>
     : `${(n / 100).toLocaleString("is-IS", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kr.`;
 
 export default function DriverDashboard() {
+  const router = useRouter();
   const me: DriverProfile | null = useDriverMe();
   const [active, setActive] = useState<Active[] | null>(null);
   const [history, setHistory] = useState<History[] | null>(null);
@@ -166,7 +169,13 @@ export default function DriverDashboard() {
               </tr>
             )}
             {recent.map((h) => (
-              <tr key={h.sessionId}>
+              <tr
+                key={h.sessionId}
+                style={{ cursor: "pointer" }}
+                onClick={() =>
+                  router.push(`/driver/history/${h.sessionId}` as Route)
+                }
+              >
                 <td className="mono">{h.chargerName ?? "—"}</td>
                 <td className="sub">{h.siteName ?? "—"}</td>
                 <td className="sub">{h.billingHomeName ?? "—"}</td>
