@@ -403,16 +403,89 @@ Two clarifications that override earlier wording in this ADR and ADR 0019:
    bearer/terms; `Site.siteType` is descriptive only). `installation_type`
    does **not** gate factor enlistment; `BearerType.trd` is **not** MDU-only.
 
-2. **Forward-with-markup.** Every cost item's rate is *decided in the
-   Straumvakt ↔ Host contract* (the base). The host may then **forward** an
-   item to drivers and **add its own markup** on top — the markup is host
-   margin. Canonical case: `USRF` — the Straumvakt→host USRF is fixed by the
-   `service_cpo` agreement; the host may bill the driver USRF **+ a host
-   addition**. Mechanically this is the base clause on the Straumvakt↔host
-   agreement plus a host-authored clause/BearerRule on the host↔driver
-   agreement carrying the host's (≥ base) rate. No new schema — two agreements,
-   two rates. (Resolver realignment is part of the P1 cutover; no code change
-   here.)
+2. **Forward, with per-factor markup rules.** Every cost item's rate is
+   *decided in the Straumvakt ↔ Host contract* (the base). The host may
+   **forward** an item to drivers; whether a **markup** is allowed is
+   per-factor:
+   - **`USRF` — markup allowed.** Straumvakt→host USRF is fixed; the host may
+     bill the driver USRF **+ a host addition** (host margin).
+   - **`PRM` — no markup.** Set by the `service_cpo` agreement; the host may
+     **not** add to it. The host may only choose to **forward it at the agreed
+     rate**, and can target the forward **down to a single driver**.
+   Mechanically: the base clause on the Straumvakt↔host agreement + a
+   host-authored clause/BearerRule on the host↔driver agreement carrying the
+   host's rate (= base for no-markup factors, ≥ base where markup is allowed).
+   No new schema — two agreements, two rates.
+
+3. **Each cost item has its own factor code — no umbrella factors.** `TRF`
+   (generic "Álag") is **archived**; use the purpose-specific `TRF_CHG`
+   (charge-time) and `TRF_IDLE` (idle-time).
+
+4. **`AGN` redefined.** It is **not** a contractor fee. `AGN` =
+   per-additional-host-admin-user (extra admin seat) Straumvakt invoices the
+   host; it lives on the `service_cpo` agreement.
+
+(Resolver realignment is part of the P1 cutover; no code change here.)
+
+### Stakeholder structure (2026-06-14)
+
+The full set of parties and the contracts (edges) between them. Base
+economics are set Straumvakt↔counterparty; the host decides what reaches
+the driver.
+
+**Parties — roles are composable.** Straumvakt (platform/agent), Host
+(CPO), Driver, Contractor, plus Workplace as a payer variant. An
+`Organization` can wear several hats at once — **role = which `service_*`
+agreements it holds** (`service_cpo` → host, `service_workplace` →
+workplace, `service_contractor` → contractor). A workplace may also be a
+host, or be workplace-only. (Build note: `Organization.kind` as a single
+enum may need to give way to role-derived-from-agreements.)
+
+**Agreements (edges):**
+
+| Edge | Agreement | Purpose | Money |
+|---|---|---|---|
+| Straumvakt ↔ Host | `service_cpo` | host's platform contract; INT, USRF, CNR, PRM, RVN, AGN | Host → Straumvakt |
+| Straumvakt ↔ Contractor | `service_contractor` (per-contractor) | contractor's platform contract; terms negotiated per contractor (no fixed catalogue) | Contractor → Straumvakt |
+| Straumvakt ↔ Workplace | `service_workplace` | employer-payer contract; WRK + workplace factors; **workplace must be a registered org to be invoiced** | Workplace → Straumvakt |
+| Host ↔ itself | `installation` | per-installation operating-cost basis (DSO, ELE, MTR, IDL, NET, RNT, TRF_CHG, TRF_IDLE) | — (cost basis) |
+| Host ↔ Workplace | `workplace` | BearerRule overrides; workplace absorbs chosen driver-borne factors | Workplace covers driver |
+| Host ↔ Driver | clauses + BearerRules (not its own type) | what the driver actually pays: forwarded operating + commercial fees, host-set fees | Driver → Host (Straumvakt collects as agent) |
+
+**Forwarding (per-factor).** Host forwards host↔driver costs; markup is
+per-factor — `USRF` markup-allowed, `PRM` forward-at-rate-only (targetable
+down to a single driver).
+
+**Workplace coverage — driver-pull + acquisition loop.**
+1. Driver requests coverage from their workplace (app/web), naming the
+   workplace + a contact.
+2. Workplace already a Straumvakt org → request routes to it → it approves
+   and **absorbs chosen factors** (all/some/none of the driver's
+   host-applied factors; only what the host actually charges the driver is
+   absorbable). Absorbed → `BearerRule` redirects bearer driver→workplace.
+3. Workplace not yet on Straumvakt → the request is sent as an
+   **invitation to that recipient to register** (onboard as org + sign
+   `service_workplace`). Coverage begins once they register + approve.
+
+**Service-cost bearer resolution** (who pays a contractor job), in order:
+1. **Warranty** → covered, no charge.
+2. **Rented charger** (`RNT`) → rental/owner covers.
+3. **Host SLA** → host pays per its contractor SLA.
+4. **Driver escalation with cost** → gated: **host approval** (host pays)
+   **or** **host forward-to-driver policy** (driver pays, price shown
+   first). Else it cannot proceed — no silent charge.
+
+**Transparency — the "may incur a cost" rule.** Reporting is always free.
+The moment a path could cost money it is disclosed and consented to before
+any billable work — including that **diagnosis may reveal a non-covered
+(e.g. non-warranty) fault, which is billable**. Price shown first; who-pays
+shown per the chain above; consent + decision recorded on the ticket. See
+ADR 0032.
+
+**Contractor settlement** (how the contractor is actually paid out, and
+Straumvakt's cut mechanics) is **deferred to the issues engine — ADR 0032**.
+Today **Tengill** is the only onboarded contractor (the default provider /
+general price when there's no host SLA).
 
 ## Open questions
 

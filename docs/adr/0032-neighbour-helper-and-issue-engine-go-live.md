@@ -426,3 +426,33 @@ Open chat decisions (flagged, not yet locked):
 - **Route `physical` tickets to a contractor first** — wrong for the
   multi-dwelling case where a present resident resolves a power-cycle in
   minutes; contractor dispatch is the escalation, not the first hop.
+
+## Addendum 2026-06-14 — cost transparency, bearer gate, contractor settlement
+
+Three things the cost-model work (ADR 0031 Stakeholder structure) hands to
+the issue engine:
+
+**1. "May incur a cost" transparency (mandatory).** Reporting an issue is
+always free. The moment any path could cost money, the flow shows a
+**cost-disclosure card before any billable step**, stating: that
+**diagnosis/resolution may reveal a non-covered (e.g. non-warranty) fault,
+which is billable**; the **price** (host SLA rate if set, else the default
+provider's general price); **who would pay** per the bearer chain; and the
+**action required** (acknowledge → host approval, or driver confirm under a
+host forward policy). A persistent label — *"Getur haft kostnað í för með
+sér"* — marks any action that can lead to a charge. Consent + the who-pays
+decision are **recorded on the ticket**.
+
+**2. Service-cost bearer resolution + host gate.** Who pays a contractor
+job, in order: warranty → rented charger (`RNT`) → host SLA → driver
+escalation. A **driver can never trigger a billable job alone**: a costed
+escalation requires **host per-incident approval** (host pays) OR a
+standing **host forward-to-driver policy** (driver pays, price shown
+first). Otherwise it cannot proceed.
+
+**3. Contractor settlement lives here.** The payout mechanics — how the
+contractor is paid, and Straumvakt's cut (`SRF` line + the
+`service_contractor` contract terms) — are **defined by this engine**, not
+in ADR 0031. Today **Tengill** is the only onboarded contractor (the
+default provider). More are added as additional `service_contractor`
+agreements.

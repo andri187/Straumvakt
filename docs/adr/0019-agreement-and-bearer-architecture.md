@@ -314,8 +314,8 @@ authors contracts.
 
 | Type | Parties | Anchored to | Holds |
 |---|---|---|---|
-| **service_cpo** | Straumvakt ↔ CPO | CPO ORG | Straumvakt's per-CPO revenue (INT, USRF, CNR, RVN, PRM). |
-| **service_contractor** | Straumvakt ↔ Contractor | Contractor ORG | Straumvakt's per-contractor revenue (AGN, RVN). |
+| **service_cpo** | Straumvakt ↔ CPO | CPO ORG | Straumvakt's per-CPO revenue (INT, USRF, CNR, RVN, PRM, AGN). |
+| **service_contractor** | Straumvakt ↔ Contractor | Contractor ORG | Straumvakt's per-contractor revenue (RVN). |
 | **service_workplace** | Straumvakt ↔ Workplace ORG | Workplace ORG | Straumvakt's per-workplace revenue (WRK). |
 | **installation** | CPO ↔ themselves | An Installation row | Operational cost factors (DSO, ELE, MTR, RNT, TRF + IDL/NET in MDU). |
 | **workplace** | CPO ↔ Workplace, mediated by Straumvakt | An Installation (or set thereof) | No new factors — only `BearerRule` overrides on installation factors that the workplace absorbs. |
@@ -336,14 +336,14 @@ Drop ACS (replaced by USRF on the commercial side) and STR
 | **USRF** | Notendagjald | Per-user-on-installation | service_cpo | ORG (CPO) — CPO can forward | Straumvakt |
 | **CNR** | Tenglagjald | Per-connector | service_cpo | ORG (CPO) | Straumvakt |
 | **RVN** | Veltutengd gjöld | % of kWh charges | service_cpo + service_contractor | ORG | Straumvakt |
-| **PRM** | Premium | Premium user fee (opt-in) | service_cpo | ORG (CPO) or USR | Straumvakt |
-| **AGN** | Per Contractor Agent access | Per-agent | service_contractor | ORG (Contractor) | Straumvakt |
+| **PRM** | Premium | Premium user fee — no host markup; host may forward to driver (down to one) | service_cpo | ORG (CPO) or USR | Straumvakt |
+| **AGN** | Aukastjórnandi | Per extra host admin user | service_cpo | ORG (CPO) | Straumvakt |
 | **WRK** | Vinnan | Workplace service fee | service_workplace | ORG (Workplace) | Straumvakt |
 | **DSO** | Dreifing | DSO grid fee | installation | USR | DSO supplier |
 | **ELE** | Rafmagn | Retailer energy | installation | USR | Retailer |
 | **MTR** | Mælagjald | E-meter daily fee | installation | ORG (CPO) — CPO can split | DSO supplier |
 | **RNT** | Leiga | Charger rental | installation | ORG (CPO) | Hardware owner |
-| **TRF** | Álag | Idle / extra tariff | installation | USR | CPO |
+| ~~**TRF**~~ | Álag | Idle / extra tariff | **archived 2026-06-14** — use TRF_CHG / TRF_IDLE | — | — |
 | **IDL** | Idlepower | Idle power loss | installation | ORG (CPO) — host may forward | CPO |
 | **NET** | Internet | Internet / SIM cost | installation | ORG (CPO) — host may forward | CPO |
 | **SRF** | Þjónustugjald | Service line item | issues engine (deferred) | ORG (CPO) | Contractor |
@@ -757,4 +757,19 @@ type.
 
 Supersedes the site-type-as-billing-archetype reading. Related: ADR 0031
 (cost model), ADR 0025 (billing cutover).
+
+## Amendment 2026-06-14 — composable org roles
+
+An `Organization`'s role is **not** a single fixed attribute — it is
+**which `service_*` agreements the org holds**: `service_cpo` → host (CPO),
+`service_workplace` → workplace, `service_contractor` → contractor. An org
+can hold several at once (e.g. a company that is both a host and a
+workplace), or just one (a workplace-only employer that covers staff at
+*other* hosts). A workplace must exist as a registered org with a
+`service_workplace` agreement before it can be invoiced or absorb costs.
+
+Build note: if `Organization.kind` is a single enum today, composable
+roles likely mean deriving role from agreements rather than from a fixed
+`kind` field. Full stakeholder structure + money flow: ADR 0031
+(Stakeholder structure 2026-06-14).
 
