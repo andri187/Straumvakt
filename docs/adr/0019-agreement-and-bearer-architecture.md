@@ -722,3 +722,31 @@ application layer. Extending requires:
 - `apps/api/src/lib/permissions.ts` — `billing.read` / `billing.write` slugs
 - Sprint 9 commits: Phase 1 Tracks A–D landed 2026-05-31
 
+## Amendment 2026-06-14 — agreements are the sole determinant of bearer/terms
+
+Decision (operator, 2026-06-14): the economic terms of every session are
+defined **entirely by the contracts**, never by a property of the site.
+
+- The **Straumvakt ↔ Host** agreement (`service_cpo` / `service_contractor`
+  / `service_workplace`) sets Straumvakt's terms with the host.
+- The **Host ↔ Driver** agreement (host-authored) sets what the driver
+  bears, the **bearer** (driver / a covering org / a third party), the
+  rates, and the scope (clauses, bearer rules, driver groups).
+
+`Site.siteType` (`standard` / `workplace` / `mdu` / `hotel` / `fleet` /
+`retail`) is therefore **descriptive metadata only** — reporting / UX
+labels. It has **no role** in billing or access resolution. The bearer is
+whatever an `AgreementClause` / `BearerRule` names, regardless of site
+type.
+
+**Resolver realignment (do during the P1 cutover — no code change yet):**
+
+1. `lib/agreement/persist.ts` — find the covering party by "an agreement
+   whose clause names a bearer org," not by an `agreementType: "workplace"`
+   lookup keyed off site type.
+2. `BearerType.trd` — drop the "MDU only" constraint; third-party billing
+   is valid whenever the host's contract specifies it.
+
+Supersedes the site-type-as-billing-archetype reading. Related: ADR 0031
+(cost model), ADR 0025 (billing cutover).
+
