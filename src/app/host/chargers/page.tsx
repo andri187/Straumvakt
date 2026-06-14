@@ -25,6 +25,18 @@ function fmtKwh(v: number | null): string {
 }
 const norm = (s: string) => s.trim().toLowerCase();
 
+// All chargers under a site, across installations / circuits / orphans.
+function flatChargers(site: SiteTreeNode): SiteTreeChargerNode[] {
+  return [
+    ...site.installations.flatMap((i) => [
+      ...i.circuits.flatMap((c) => c.chargers),
+      ...i.directChargers,
+    ]),
+    ...site.orphanCircuits.flatMap((c) => c.chargers),
+    ...site.orphanChargers,
+  ];
+}
+
 function chargerCategory(c: SiteTreeChargerNode): "faulted" | "offline" | "in-use" | "available" {
   const real = c.connectors.filter((k) => k.source != null);
   if (real.some((k) => k.status === "Faulted")) return "faulted";
@@ -139,6 +151,34 @@ function Chevron({ open }: { open: boolean }) {
   );
 }
 // Lifetime kWh is a PREMIUM feature — hidden unless the Premium preview is on.
+// One dot per charger, tinted by status (green available · blue in-use ·
+// grey offline · red faulted) — the at-a-glance fleet health on the site row.
+// Wraps to two rows when there are many chargers so it never blows up the row.
+function StatusDots({ chargers }: { chargers: SiteTreeChargerNode[] }) {
+  if (chargers.length === 0) return null;
+  const cats = chargers.map(chargerCategory);
+  const twoLines = cats.length > 10;
+  const sz = twoLines ? (cats.length > 30 ? 4 : 6) : 8;
+  const dots = cats.map((cat, i) => (
+    <span key={i} title={cat} style={{ width: sz, height: sz, borderRadius: 99, background: DOT[cat], flexShrink: 0 }} />
+  ));
+  if (twoLines) {
+    return (
+      <span
+        title={`${cats.length} stöðvar`}
+        style={{ display: "grid", gridTemplateRows: "repeat(2,1fr)", gridAutoFlow: "column", gridAutoColumns: "min-content", gap: 2, flexShrink: 0 }}
+      >
+        {dots}
+      </span>
+    );
+  }
+  return (
+    <span title={`${cats.length} stöðvar`} style={{ display: "flex", alignItems: "center", gap: 3, flexShrink: 0 }}>
+      {dots}
+    </span>
+  );
+}
+
 function KwhPill({ value }: { value: number | null }) {
   const { enabled } = usePremium();
   if (!enabled) return null;
@@ -184,13 +224,9 @@ function SiteRow({ site, open, toggle }: { site: SiteTreeNode; open: Set<string>
       <div style={{ ...ROW, borderTop: "none" }} onClick={() => toggle(site.id)}>
         <Chevron open={isOpen} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <span style={{ fontWeight: 700 }}>{site.displayName}</span>{" "}
-          <span className="sub" style={{ fontSize: 12 }}>
-            {site.orgDisplayName} · {site.propertyDisplayName} · <span className="mono">{site.siteType}/{site.accessLevel}</span>
-            {merged?.vendorSlug ? <> · <span className="mono">{merged.vendorSlug}</span></> : null}
-            {merged ? <> · <span className="mono">{merged.onboardingStatus}</span></> : null}
-          </span>
+          <span style={{ fontWeight: 700 }}>{site.displayName}</span>
         </div>
+        <StatusDots chargers={flatChargers(site)} />
         <KwhPill value={site.lifetimeEnergyKWhTotal} />
         <CountPill online={site.chargersOnline} offline={site.chargersOffline} />
       </div>
