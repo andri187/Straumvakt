@@ -354,23 +354,42 @@ the "recommended starting point" notes that follow.
      pays this *to access the charger*, distinct from the energy cost
      they already bear.
 
-### New — driver access fee (open mechanics, Rule 5)
+### New — driver access fee (mechanics) — **RESOLVED 2026-06-14**
 
-The driver access fee is **decided in principle** but its mechanics are
-**not yet pinned** and must be before the billing module (P1) is built:
+The driver access fee is decided in principle (above) and its mechanics
+are now pinned:
 
-- **Who collects it** — Straumvakt (consumer-side Straumvakt revenue) or
-  the host (host revenue, Straumvakt invoices as agent)? This fork
-  changes the money-flow and the agent/principal posture.
-- **Cadence / shape** — per-session, monthly access subscription, or
-  flat per-grant? Set by whom (host vs Straumvakt), negotiated or fixed?
-- **Relationship to energy cost** — additive line on the same driver
-  invoice, or a separate charge? How it renders in the mobile app.
-- **Free-vend interaction** — does the access fee still apply when the
-  host covers electricity ("Innifalið")?
+- **Who collects it → Host is principal; Straumvakt is agent.** The fee
+  is **host revenue**. Straumvakt invoices the driver *on the host's
+  behalf* (presents the bank claim / greiðsluseðill) and remits to the
+  host. Straumvakt's own revenue stays the separate Straumvakt → Host
+  service fee (Q2.1). Invoice posture: kröfuhafi is the host (rendered
+  "Straumvakt f.h. <host>"), **not** Straumvakt as principal.
+- **Cadence / shape → agreement-dependent.** There is no single fixed
+  shape. The access fee — whether per-session, per-kWh, monthly, or
+  flat-per-grant, and its rate — is defined by the **driver's
+  agreement/contract** (ADR 0019 factor codes), negotiated per host.
+  It is resolved per driver from the agreement model, not hard-coded.
+- **Relationship to energy cost → additive line on the same invoice.**
+  One driver invoice; the access fee shows as its own line (e.g.
+  "Aðgangsgjald" / host service line) alongside the DSO + retailer
+  electricity lines, with VAT. Mobile app renders it as an extra line.
+- **Free-vend interaction → still applies.** The access fee is charged
+  even when the host covers electricity ("Innifalið" covers *energy*,
+  not *access*). A host that wants access free too omits the fee from
+  the agreement.
 
-> This does not block P0 commit or ADR 0029 (attribution). It **does**
-> gate the P1 billing-module design — resolve before P1.3/P1.6.
+**Implementation consequence (Rule 5):** because the fee is
+agreement-dependent and additive on the driver invoice, the driver
+billing path must move from the legacy DSO+retailer tariff chain
+(`lib/tariff/*`) to the **ADR 0019 agreement resolver**
+(`lib/agreement/resolveBillingLines`), which already produces per-line
+billing output from the driver's agreement. The legacy chain remains
+the electricity sub-computation; the agreement model layers the
+contract-defined fee lines on top. This IS the P1 billing engine.
+
+> This does not block P0 commit or ADR 0029 (attribution). It gated the
+> P1 billing-module design — now resolved; P1.3/P1.6 unblocked.
 
 ## Open questions
 
