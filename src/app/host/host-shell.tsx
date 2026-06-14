@@ -9,6 +9,7 @@ import type { Route } from "next";
 import { usePathname } from "next/navigation";
 import { createContext, useContext, useState, type ReactNode } from "react";
 import { apiFetch } from "@/lib/api-client";
+import { PremiumProvider, PremiumToggle } from "@/lib/premium";
 
 async function hostLogout() {
   try {
@@ -167,6 +168,7 @@ export function HostShell({
         : "Hýsill";
 
   return (
+    <PremiumProvider>
     <div className="host-root">
       <div className="shell">
         <aside className={"sidebar" + (navOpen ? " open" : "")}>
@@ -244,11 +246,12 @@ export function HostShell({
               <span className="pill host">{kindLabel}</span>
             </div>
             <div className="spacer" />
+            <PremiumToggle />
             <button
               className="tlink"
               type="button"
               onClick={hostLogout}
-              style={{ background: "none", border: 0, cursor: "pointer" }}
+              style={{ background: "none", border: 0, cursor: "pointer", marginLeft: 12 }}
             >
               Útskrá
             </button>
@@ -259,5 +262,6 @@ export function HostShell({
         </div>
       </div>
     </div>
+    </PremiumProvider>
   );
 }

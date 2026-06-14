@@ -9,6 +9,7 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import { apiFetchJson } from "@/lib/api-client";
 import { useHostOrg } from "../host-shell";
+import { usePremium } from "@/lib/premium";
 import type {
   SiteTreeNode,
   SiteTreeInstallationNode,
@@ -137,7 +138,10 @@ function Chevron({ open }: { open: boolean }) {
     </span>
   );
 }
+// Lifetime kWh is a PREMIUM feature — hidden unless the Premium preview is on.
 function KwhPill({ value }: { value: number | null }) {
+  const { enabled } = usePremium();
+  if (!enabled) return null;
   return (
     <span className="mono" style={{ fontSize: 11, padding: "2px 7px", borderRadius: 6, background: "rgba(43,211,201,.1)", color: "var(--teal)", border: "1px solid rgba(43,211,201,.3)", whiteSpace: "nowrap" }}>
       {fmtKwh(value)} kWh
@@ -266,6 +270,7 @@ function CircuitRow({ circuit, open, toggle, depth }: { circuit: SiteTreeCircuit
 }
 
 function ChargerLine({ charger, depth }: { charger: SiteTreeChargerNode; depth: number }) {
+  const { enabled: premium } = usePremium();
   const primary = charger.displayName || charger.serialNumber || charger.identityString || charger.chargingStationId.slice(0, 8);
   const secondary =
     charger.serialNumber && charger.serialNumber !== primary ? charger.serialNumber : null;
@@ -282,7 +287,9 @@ function ChargerLine({ charger, depth }: { charger: SiteTreeChargerNode; depth: 
         )}
       </div>
       <span className="sub" style={{ fontSize: 11 }}>{statusText}</span>
-      <span className="mono sub" style={{ fontSize: 11, whiteSpace: "nowrap" }}>{fmtKwh(charger.lifetimeEnergyKWh)} kWh</span>
+      {premium && (
+        <span className="mono sub" style={{ fontSize: 11, whiteSpace: "nowrap" }}>{fmtKwh(charger.lifetimeEnergyKWh)} kWh</span>
+      )}
     </div>
   );
 }
