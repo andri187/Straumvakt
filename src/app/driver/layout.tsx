@@ -86,7 +86,6 @@ const SECTIONS: { label: string; items: Item[] }[] = [
     label: "Yfirlit",
     items: [
       { label: "Mælaborð", href: "/driver" as Route, icon: I.dash },
-      { label: "Hleðsla", href: "/driver/charging" as Route, icon: I.bolt },
     ],
   },
   {
