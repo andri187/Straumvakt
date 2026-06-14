@@ -14,6 +14,7 @@ import { listPropertiesByOrg } from "../../repositories/properties";
 import { listSitesByOrg } from "../../repositories/sites";
 import { listInstallationsByOrg } from "../../repositories/installations";
 import { listAllChargers } from "../../repositories/chargers";
+import { listSiteTree } from "../../repositories/site-tree";
 import { listOrgDrivers, listOrgAgreements, getOrgSessionSummary } from "../../repositories/host-views";
 import { getSessionFullDetail } from "../../repositories/session-full-detail";
 import {
@@ -159,6 +160,24 @@ adminOrgs.get(
       orgScope: { all: false, orgIds: [c.req.param("id")] },
     });
     return c.json({ chargers });
+  },
+);
+
+// Host-reachable site tree — the org's Site → Installation → Circuit →
+// Charger hierarchy with lifetime-kWh + online/offline aggregates. Same
+// builder as the operator /sites tree, scoped to this org. charger.read +
+// orgIdParam (host_admin has charger.read via its bundle).
+adminOrgs.get(
+  "/:id/sites/tree",
+  requirePermission("charger.read", { orgIdParam: "id" }),
+  async (c) => {
+    const db = makePrisma(c.env);
+    const includeDecommissioned = c.req.query("includeDecommissioned") === "true";
+    const tree = await listSiteTree(db, c.env.OCPP_CRED_KEK, {
+      includeDecommissioned,
+      orgScope: { all: false, orgIds: [c.req.param("id")] },
+    });
+    return c.json({ tree });
   },
 );
 
