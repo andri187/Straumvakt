@@ -88,7 +88,7 @@ export default function DriverHistory() {
         <div className="card-h">
           Hleðslur <span className="sub">{rows ? `${rows.length}` : ""}</span>
         </div>
-        <table>
+        <table className="rtable">
           <thead>
             <tr>
               <th>Dagsetning</th>
@@ -123,15 +123,15 @@ export default function DriverHistory() {
                   router.push(`/driver/history/${h.sessionId}` as Route)
                 }
               >
-                <td className="sub">
+                <td className="sub" data-label="Dagsetning">
                   {h.startedAt.slice(0, 16).replace("T", " ")}
                 </td>
-                <td className="mono">{h.chargerName ?? "—"}</td>
-                <td className="sub">{h.siteName ?? "—"}</td>
-                <td className="sub">{h.billingHomeName ?? "—"}</td>
-                <td className="sub">{dur(h.durationSec)}</td>
-                <td>{h.energyKwh} kWh</td>
-                <td>{kr(h.costIsk)}</td>
+                <td className="mono" data-label="Stöð">{h.chargerName ?? "—"}</td>
+                <td className="sub" data-label="Svæði">{h.siteName ?? "—"}</td>
+                <td className="sub" data-label="Greiðsluheimili">{h.billingHomeName ?? "—"}</td>
+                <td className="sub" data-label="Lengd">{dur(h.durationSec)}</td>
+                <td data-label="Orka">{h.energyKwh} kWh</td>
+                <td data-label="Kostnaður">{kr(h.costIsk)}</td>
               </tr>
             ))}
           </tbody>

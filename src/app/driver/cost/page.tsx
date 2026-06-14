@@ -104,7 +104,7 @@ export default function DriverCost() {
 
       <div className="card">
         <div className="card-h">Eftir greiðsluheimili</div>
-        <table>
+        <table className="rtable">
           <thead>
             <tr>
               <th>Greiðsluheimili</th>
@@ -130,12 +130,12 @@ export default function DriverCost() {
             )}
             {homes.map(([name, v]) => (
               <tr key={name}>
-                <td>
+                <td data-label="Greiðsluheimili">
                   <strong>{name}</strong>
                 </td>
-                <td>{v.count}</td>
-                <td>{Math.round(v.energy * 10) / 10} kWh</td>
-                <td>{kr(v.cost)}</td>
+                <td data-label="Hleðslur">{v.count}</td>
+                <td data-label="Orka">{Math.round(v.energy * 10) / 10} kWh</td>
+                <td data-label="Kostnaður">{kr(v.cost)}</td>
               </tr>
             ))}
           </tbody>

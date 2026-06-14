@@ -73,7 +73,7 @@ export default function DriverAccess() {
           Aðgangar{" "}
           <span className="sub">{rows ? `${rows.length} staðir` : ""}</span>
         </div>
-        <table>
+        <table className="rtable">
           <thead>
             <tr>
               <th>Staður</th>
@@ -100,15 +100,15 @@ export default function DriverAccess() {
             )}
             {rows?.map((i) => (
               <tr key={i.id}>
-                <td>
+                <td data-label="Staður">
                   <strong>{i.displayName}</strong>
                 </td>
-                <td className="sub">
+                <td className="sub" data-label="Svæði">
                   {i.siteDisplayName}
                   {i.siteAddress ? ` · ${i.siteAddress}` : ""}
                 </td>
-                <td>{i.chargerCount}</td>
-                <td>
+                <td data-label="Stöðvar">{i.chargerCount}</td>
+                <td data-label="Lausar">
                   <span
                     className={
                       "badge2 " +
@@ -124,7 +124,7 @@ export default function DriverAccess() {
                     {i.availableConnectorCount}
                   </span>
                 </td>
-                <td className="sub">
+                <td className="sub" data-label="Verð">
                   {i.pricingSummary?.perKwhMinor
                     ? `${(Number(i.pricingSummary.perKwhMinor) / 100).toLocaleString("is-IS", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kr/kWh${i.pricingSummary.vatInclusive ? "" : " + VSK"}`
                     : "—"}

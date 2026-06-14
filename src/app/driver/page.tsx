@@ -142,7 +142,7 @@ export default function DriverDashboard() {
         <div className="card-h">
           Nýlegar hleðslur <span className="sub">síðustu 10</span>
         </div>
-        <table>
+        <table className="rtable">
           <thead>
             <tr>
               <th>Stöð</th>
@@ -176,12 +176,12 @@ export default function DriverDashboard() {
                   router.push(`/driver/history/${h.sessionId}` as Route)
                 }
               >
-                <td className="mono">{h.chargerName ?? "—"}</td>
-                <td className="sub">{h.siteName ?? "—"}</td>
-                <td className="sub">{h.billingHomeName ?? "—"}</td>
-                <td>{h.energyKwh} kWh</td>
-                <td>{kr(h.costIsk)}</td>
-                <td className="sub">
+                <td className="mono" data-label="Stöð">{h.chargerName ?? "—"}</td>
+                <td className="sub" data-label="Svæði">{h.siteName ?? "—"}</td>
+                <td className="sub" data-label="Greiðsluheimili">{h.billingHomeName ?? "—"}</td>
+                <td data-label="Orka">{h.energyKwh} kWh</td>
+                <td data-label="Kostnaður">{kr(h.costIsk)}</td>
+                <td className="sub" data-label="Tími">
                   {h.startedAt.slice(0, 16).replace("T", " ")}
                 </td>
               </tr>
