@@ -82,16 +82,7 @@
   width: 34px;
   height: 34px;
   border-radius: 9px;
-  background: linear-gradient(
-    135deg,
-    var(--green),
-    var(--teal) 55%,
-    var(--blue)
-  );
-  display: grid;
-  place-items: center;
-  color: #04121b;
-  font-weight: 900;
+  object-fit: cover;
   box-shadow: 0 10px 26px rgba(43, 182, 232, 0.28);
 }
 .host-root .brand .word strong {

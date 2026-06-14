@@ -171,7 +171,7 @@ export function HostShell({
       <div className="shell">
         <aside className={"sidebar" + (navOpen ? " open" : "")}>
           <div className="brand">
-            <div className="logo">S</div>
+            <img className="logo" src="/landing/straumvakt-logo-icon.png" alt="Straumvakt" />
             <div className="word">
               <strong>Straumvakt</strong>
               <span>Hýsill · Host</span>
