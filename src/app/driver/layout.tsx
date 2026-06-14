@@ -100,7 +100,7 @@ const SECTIONS: { label: string; items: Item[] }[] = [
     label: "Aðgangur",
     items: [
       { label: "Mínir aðgangar", href: "/driver/access" as Route, icon: I.key },
-      { label: "Leysa inn boð", href: "/driver/redeem" as Route, icon: I.plus },
+      { label: "Boðslykill", href: "/driver/redeem" as Route, icon: I.plus },
     ],
   },
   {

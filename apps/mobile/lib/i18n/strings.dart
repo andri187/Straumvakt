@@ -60,7 +60,7 @@ const Map<String, _Pair> _table = {
   'empty.refresh': _Pair('Check again', 'Athuga aftur'),
 
   // ── Redeem screen ──
-  'redeem.title': _Pair('Redeem invite', 'Leysa inn boð'),
+  'redeem.title': _Pair('Redeem invite', 'Boðslykill'),
   'redeem.subtitle': _Pair(
     'Got an invite code or QR from a housing association or workplace? '
         'Redeem it here to get charging access.',

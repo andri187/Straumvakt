@@ -4180,8 +4180,8 @@ class _SettingsTabState extends State<_SettingsTab> {
               ),
               _SettingsNavRow(
                 icon: Icons.mark_email_unread_rounded,
-                title: 'Leysa inn bod',
-                onTap: () => _openPlaceholder('Leysa inn bod'),
+                title: 'Bodslykill',
+                onTap: () => _openPlaceholder('Bodslykill'),
               ),
               _SettingsNavRow(
                 icon: Icons.nfc_rounded,

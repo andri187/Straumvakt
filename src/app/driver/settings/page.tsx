@@ -105,7 +105,7 @@ export default function DriverSettings() {
       <div className="card" style={{ maxWidth: 560, marginTop: 14 }}>
         <div className="card-h">Aðgangur & auðkenni</div>
         <NavRow label="Mínir aðgangar" href={"/driver/access" as Route} />
-        <NavRow label="Leysa inn boð" href={"/driver/redeem" as Route} />
+        <NavRow label="Boðslykill" href={"/driver/redeem" as Route} />
         <NavRow label="RFID-lyklar" soon />
         <NavRow label="Fjölskylda" soon />
       </div>

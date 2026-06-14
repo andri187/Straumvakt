@@ -1,6 +1,6 @@
 "use client";
 
-// Driver page — "Leysa inn boð" (redeem an invite). ADR 0028 host↔driver
+// Driver page — "Boðslykill" (redeem an invite). ADR 0028 host↔driver
 // INVITE loop, driver side. The driver is already authenticated (bearer in
 // localStorage); they paste the invite code/token they were given and we
 // call POST /api/driver/redeem-invite to create the DriverGroupMembership.
@@ -87,7 +87,7 @@ export default function DriverRedeem() {
     <>
       <div className="head">
         <div>
-          <h1>Leysa inn boð</h1>
+          <h1>Boðslykill</h1>
           <p>
             Sláðu inn boðskóðann sem hýsillinn sendi þér til að fá aðgang að
             hleðslustöðvunum þeirra.
@@ -156,7 +156,7 @@ export default function DriverRedeem() {
                   type="submit"
                   disabled={submitting || !code.trim()}
                 >
-                  {submitting ? "Leysi inn…" : "Leysa inn boð"}
+                  {submitting ? "Leysi inn…" : "Boðslykill"}
                 </button>
               </form>
             )}
