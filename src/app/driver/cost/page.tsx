@@ -1,11 +1,12 @@
 "use client";
 
 // Kostnaður — this-month usage on top, then past months as a list; clicking a
-// past month opens that month's invoice (a statement of its charges). Real
-// invoicing lands with the billing engine (P1); this is the per-month
-// statement built from the driver's own session history.
+// past month opens that month's invoice rendered like a real Icelandic
+// reikningur / greiðsluseðill (as it appears in heimabanki). Real invoicing
+// lands with the billing engine (P1); this is the per-month statement built
+// from the driver's own session history.
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { driverFetch, type DriverProfile } from "../driver-auth";
 import { useDriverMe } from "../layout";
 
@@ -26,7 +27,7 @@ const MONTHS = [
   "janúar", "febrúar", "mars", "apríl", "maí", "júní",
   "júlí", "ágúst", "september", "október", "nóvember", "desember",
 ];
-const monthKey = (iso: string) => iso.slice(0, 7); // YYYY-MM
+const monthKey = (iso: string) => iso.slice(0, 7);
 function monthLabel(key: string): string {
   const [y, m] = key.split("-");
   return `${MONTHS[Number(m) - 1] ?? m} ${y}`;
@@ -122,9 +123,7 @@ export default function DriverCost() {
             </tr>
           </thead>
           <tbody>
-            {rows === null && (
-              <tr><td colSpan={5} className="empty">Hleð…</td></tr>
-            )}
+            {rows === null && <tr><td colSpan={5} className="empty">Hleð…</td></tr>}
             {rows && pastKeys.length === 0 && (
               <tr><td colSpan={5} className="empty">Engir fyrri mánuðir.</td></tr>
             )}
@@ -171,6 +170,35 @@ function Stat({ lbl, val, grad }: { lbl: string; val: string; grad?: boolean }) 
   );
 }
 
+// ── Invoice (Icelandic reikningur / greiðsluseðill) ───────────────────────
+const INK = "#0b1220";
+const MUTE = "#5a6678";
+const LINE = "#e5e9f0";
+
+function fmtDate(d: Date): string {
+  return `${String(d.getUTCDate()).padStart(2, "0")}.${String(d.getUTCMonth() + 1).padStart(2, "0")}.${d.getUTCFullYear()}`;
+}
+function fmtDayDots(iso: string): string {
+  return iso.slice(0, 10).split("-").reverse().join(".");
+}
+
+function Field({ k, v }: { k: string; v: string }) {
+  return (
+    <div>
+      <div style={{ fontSize: 10, letterSpacing: ".08em", textTransform: "uppercase", color: MUTE }}>{k}</div>
+      <div style={{ fontWeight: 600, marginTop: 2 }}>{v}</div>
+    </div>
+  );
+}
+function TotalRow({ k, v, strong }: { k: string; v: string; strong?: boolean }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", fontWeight: strong ? 800 : 500, fontSize: strong ? 16 : 13 }}>
+      <span style={{ color: strong ? INK : MUTE }}>{k}</span>
+      <span>{v}</span>
+    </div>
+  );
+}
+
 function InvoiceModal({
   monthKey: mk,
   sessions,
@@ -183,63 +211,114 @@ function InvoiceModal({
   onClose: () => void;
 }) {
   const a = agg(sessions);
+  const total = a.cost; // aurar, VAT-inclusive
+  const exVat = Math.round(total / 1.24);
+  const vsk = total - exVat;
+
+  const [yy, mm] = mk.split("-").map(Number);
+  const issue = new Date(Date.UTC(yy, mm, 1)); // first day of the month after the period
+  const due = new Date(issue.getTime() + 14 * 86400000);
+  const fin = new Date(issue.getTime() + 28 * 86400000);
+  const ref = (me?.id ?? "0000").replace(/[^0-9]/g, "").padEnd(4, "0").slice(0, 4);
+  const invoiceNo = `STR-${yy}${String(mm).padStart(2, "0")}-${ref}`;
+  const claimNo = `${String(mm).padStart(2, "0")}${String(yy).slice(2)}${ref}`;
   const homes = [...new Set(sessions.map((s) => s.billingHomeName).filter(Boolean))].join(", ");
+
+  const th: CSSProperties = { textAlign: "left", padding: "7px 8px", fontSize: 10, letterSpacing: ".06em", textTransform: "uppercase", color: MUTE, borderBottom: `2px solid ${INK}` };
+  const thr: CSSProperties = { ...th, textAlign: "right" };
+  const td: CSSProperties = { padding: "8px", borderBottom: `1px solid ${LINE}` };
+  const tdr: CSSProperties = { ...td, textAlign: "right", whiteSpace: "nowrap" };
+
   return (
     <div
       onClick={onClose}
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(2,6,16,.6)",
-        backdropFilter: "blur(4px)",
-        zIndex: 90,
-        display: "grid",
-        placeItems: "center",
-        padding: 16,
-      }}
+      style={{ position: "fixed", inset: 0, background: "rgba(2,6,16,.66)", backdropFilter: "blur(4px)", zIndex: 90, display: "grid", placeItems: "center", padding: 16 }}
     >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="card"
-        style={{ width: "min(640px,96vw)", maxHeight: "90vh", overflow: "auto" }}
-      >
-        <div className="card-h">
-          Reikningur — {monthLabel(mk)}
+      <div onClick={(e) => e.stopPropagation()} style={{ width: "min(680px,96vw)", maxHeight: "92vh", overflow: "auto" }}>
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
           <button className="btn sm" type="button" onClick={onClose}>Loka</button>
         </div>
-        <div style={{ padding: "14px 18px" }}>
-          <div className="sub">
-            {me?.displayName ?? ""}{me?.email ? ` · ${me.email}` : ""}
-          </div>
-          {homes && <div className="sub">Greitt til: {homes}</div>}
 
-          <table className="rtable" style={{ marginTop: 14 }}>
-            <thead>
-              <tr>
-                <th>Dagsetning</th>
-                <th>Stöð</th>
-                <th>Orka</th>
-                <th>Kostnaður</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sessions.map((h) => (
-                <tr key={h.sessionId}>
-                  <td className="sub" data-label="Dagsetning">{h.startedAt.slice(0, 10)}</td>
-                  <td className="mono" data-label="Stöð">{h.chargerName ?? "—"}</td>
-                  <td data-label="Orka">{h.energyKwh} kWh</td>
-                  <td data-label="Kostnaður">{h.costIsk === null ? "—" : kr(h.costIsk)}</td>
+        {/* The invoice "paper" — light document, as it appears in the bank. */}
+        <div style={{ background: "#fff", color: INK, borderRadius: 12, overflow: "hidden", boxShadow: "0 30px 80px rgba(0,0,0,.5)", fontSize: 13, lineHeight: 1.5 }}>
+          <div style={{ height: 6, background: "linear-gradient(135deg,#3ee9a7,#2bd3c9 55%,#2bb6e8)" }} />
+          <div style={{ padding: "22px 26px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
+              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                <div style={{ width: 36, height: 36, borderRadius: 9, background: "linear-gradient(135deg,#3ee9a7,#2bd3c9 55%,#2bb6e8)", display: "grid", placeItems: "center", color: "#04121b", fontWeight: 900 }}>S</div>
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: 17 }}>Straumvakt ehf</div>
+                  <div style={{ color: MUTE, fontSize: 11 }}>Hleðsluþjónusta</div>
+                </div>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontWeight: 800, fontSize: 17, letterSpacing: ".04em" }}>REIKNINGUR</div>
+                <div style={{ color: MUTE, fontSize: 12 }}>Nr. {invoiceNo}</div>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 24, flexWrap: "wrap", marginTop: 18 }}>
+              <div style={{ flex: "1 1 220px" }}>
+                <Field k="Kröfuhafi" v="Straumvakt ehf" />
+                <div style={{ color: MUTE, fontSize: 12 }}>kt. 080487-3129</div>
+              </div>
+              <div style={{ flex: "1 1 220px" }}>
+                <Field k="Greiðandi" v={me?.displayName ?? "—"} />
+                <div style={{ color: MUTE, fontSize: 12 }}>{me?.email ?? ""}</div>
+                <div style={{ color: MUTE, fontSize: 12 }}>kt. —</div>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 24, flexWrap: "wrap", marginTop: 16, paddingTop: 14, borderTop: `1px solid ${LINE}` }}>
+              <Field k="Tímabil" v={monthLabel(mk)} />
+              <Field k="Útgáfudagur" v={fmtDate(issue)} />
+              <Field k="Gjalddagi" v={fmtDate(due)} />
+              <Field k="Eindagi" v={fmtDate(fin)} />
+              {homes && <Field k="Þjónustustaður" v={homes} />}
+            </div>
+
+            <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 18 }}>
+              <thead>
+                <tr>
+                  <th style={th}>Dagsetning</th>
+                  <th style={th}>Hleðslustöð</th>
+                  <th style={thr}>Orka</th>
+                  <th style={thr}>Upphæð</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {sessions.map((h) => (
+                  <tr key={h.sessionId}>
+                    <td style={td}>{fmtDayDots(h.startedAt)}</td>
+                    <td style={td}>{h.chargerName ?? "—"}{h.siteName ? <span style={{ color: MUTE }}> · {h.siteName}</span> : null}</td>
+                    <td style={tdr}>{h.energyKwh} kWh</td>
+                    <td style={tdr}>{h.costIsk === null ? "—" : kr(h.costIsk)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
 
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 16, paddingTop: 12, borderTop: "1px solid var(--border)" }}>
-            <span style={{ fontWeight: 700 }}>Samtals</span>
-            <span style={{ fontWeight: 800, fontSize: 18 }}>{kr(a.cost)}</span>
-          </div>
-          <div className="sub" style={{ marginTop: 6 }}>
-            {a.count} hleðslur · {a.energy.toLocaleString("is-IS")} kWh · VSK innifalinn.
+            <div style={{ marginLeft: "auto", marginTop: 16, width: "min(300px,100%)" }}>
+              <TotalRow k="Orka samtals" v={`${a.energy.toLocaleString("is-IS")} kWh`} />
+              <TotalRow k="Upphæð án VSK" v={kr(exVat)} />
+              <TotalRow k="VSK (24%)" v={kr(vsk)} />
+              <div style={{ borderTop: `2px solid ${INK}`, marginTop: 6, paddingTop: 6 }}>
+                <TotalRow k="Samtals" v={kr(total)} strong />
+              </div>
+            </div>
+
+            <div style={{ marginTop: 22, background: "#f3f6fb", border: `1px solid ${LINE}`, borderRadius: 10, padding: "14px 16px" }}>
+              <div style={{ fontWeight: 700, marginBottom: 10 }}>Greiðsluupplýsingar</div>
+              <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
+                <Field k="Kröfuhafi kt." v="080487-3129" />
+                <Field k="Kröfunúmer" v={claimNo} />
+                <Field k="Gjalddagi" v={fmtDate(due)} />
+                <Field k="Til greiðslu" v={kr(total)} />
+              </div>
+              <div style={{ color: MUTE, fontSize: 11, marginTop: 10 }}>
+                Greiðsluseðill birtist í heimabanka þínum undir kröfuhafanum Straumvakt ehf. VSK er innifalinn.
+              </div>
+            </div>
           </div>
         </div>
       </div>
