@@ -189,8 +189,8 @@ function hostOf(url: string | undefined): string {
           energyKwh: energyKwh.toFixed(3),
           costIskMinor: recomputed,
           tariffDefinitionId: tariffId,
-          verifiedSource: "reconciled",
-          enrichmentStatus: "complete",
+          // NB: verifiedSource/enrichmentStatus omitted — the Node Prisma
+          // client generation used by tsx predates those ENRICH-1 columns.
         };
         await nodePrisma.sessionLedger.upsert({
           where: { sessionId: s.id },

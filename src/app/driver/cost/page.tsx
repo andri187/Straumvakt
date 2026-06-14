@@ -51,7 +51,10 @@ export default function DriverCost() {
     (async () => {
       try {
         const r = await driverFetch<{ sessions: H[] }>("/api/driver/invoices");
-        if (!cancelled) setRows(r.sessions);
+        // Kostnaður is the billing view — list only billable charges
+        // (energy delivered > 0). Zero-kWh plug-ins (aborted / no charge)
+        // stay in Hleðslusaga as activity, but don't belong on an invoice.
+        if (!cancelled) setRows(r.sessions.filter((s) => s.energyKwh > 0));
       } catch (e) {
         if (!cancelled) setErr(e instanceof Error ? e.message : String(e));
       }
