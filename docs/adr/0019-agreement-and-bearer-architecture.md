@@ -344,9 +344,17 @@ Drop ACS (replaced by USRF on the commercial side) and STR
 | **MTR** | Mælagjald | E-meter daily fee | installation | ORG (CPO) — CPO can split | DSO supplier |
 | **RNT** | Leiga | Charger rental | installation | ORG (CPO) | Hardware owner |
 | **TRF** | Álag | Idle / extra tariff | installation | USR | CPO |
-| **IDL** | Idlepower | Idle power loss | installation (MDU only) | ORG (CPO) — CPO can split | CPO |
-| **NET** | Internet | Internet / SIM cost | installation (MDU only) | ORG (CPO) — CPO can split | CPO |
+| **IDL** | Idlepower | Idle power loss | installation | ORG (CPO) — host may forward | CPO |
+| **NET** | Internet | Internet / SIM cost | installation | ORG (CPO) — host may forward | CPO |
 | **SRF** | Þjónustugjald | Service line item | issues engine (deferred) | ORG (CPO) | Contractor |
+
+> **Superseded 2026-06-14 (see ADR 0031 amendment + [[agreement_sole_bearer_determinant]]):**
+> the `MDU only` scope on `IDL`/`NET` is dropped — they are ordinary host
+> operating costs enlistable at any installation. `installation_type` (decision
+> #6) and the `TRD` `MDU-only` scope (decision #4) **no longer gate factor
+> enlistment or bearer**; agreements alone determine bearer/terms, and any
+> forwardable factor (e.g. `USRF`) may carry a host markup on the host↔driver
+> clause above the fixed Straumvakt↔host base.
 
 ### Eleven locked decisions
 

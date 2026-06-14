@@ -391,6 +391,29 @@ contract-defined fee lines on top. This IS the P1 billing engine.
 > This does not block P0 commit or ADR 0029 (attribution). It gated the
 > P1 billing-module design — now resolved; P1.3/P1.6 unblocked.
 
+### Amendment 2026-06-14 — no MDU gating; forward-with-markup
+
+Two clarifications that override earlier wording in this ADR and ADR 0019:
+
+1. **No `MDU only` gating.** Drop the notion that any factor is restricted to
+   an MDU/site type. `IDL` (idle power loss) and `NET` (internet/SIM) are
+   ordinary host operating costs the host may enlist and forward at **any**
+   installation — they are not site-type-gated. This follows
+   [[agreement_sole_bearer_determinant]] (agreements alone determine
+   bearer/terms; `Site.siteType` is descriptive only). `installation_type`
+   does **not** gate factor enlistment; `BearerType.trd` is **not** MDU-only.
+
+2. **Forward-with-markup.** Every cost item's rate is *decided in the
+   Straumvakt ↔ Host contract* (the base). The host may then **forward** an
+   item to drivers and **add its own markup** on top — the markup is host
+   margin. Canonical case: `USRF` — the Straumvakt→host USRF is fixed by the
+   `service_cpo` agreement; the host may bill the driver USRF **+ a host
+   addition**. Mechanically this is the base clause on the Straumvakt↔host
+   agreement plus a host-authored clause/BearerRule on the host↔driver
+   agreement carrying the host's (≥ base) rate. No new schema — two agreements,
+   two rates. (Resolver realignment is part of the P1 cutover; no code change
+   here.)
+
 ## Open questions
 
 > **RESOLVED 2026-06-04 — see Decisions above.** Retained for the option
