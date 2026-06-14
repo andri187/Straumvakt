@@ -1239,6 +1239,10 @@ class _DriverShellState extends State<_DriverShell> {
               livePricing: _livePricing,
               onStartCharger: (s, c) => unawaited(_enterPreparing(s, c)),
               onStopCharging: () => unawaited(_stopCharging()),
+              onFetchChargerPricing: (c) => widget.api.chargerPricing(
+                widget.accessToken,
+                chargerId: c.chargerId,
+              ),
               driverEmail: widget.driverEmail,
               loading: _loadingChargers,
               onMenu: _openMenu,
@@ -1477,6 +1481,7 @@ class _ChargeTab extends StatelessWidget {
     required this.livePricing,
     required this.onStartCharger,
     required this.onStopCharging,
+    required this.onFetchChargerPricing,
     required this.driverEmail,
     required this.loading,
     required this.onMenu,
@@ -1497,6 +1502,7 @@ class _ChargeTab extends StatelessWidget {
   final ChargerPricing? livePricing;
   final void Function(Site site, Charger charger) onStartCharger;
   final VoidCallback onStopCharging;
+  final Future<ChargerPricing?> Function(Charger charger) onFetchChargerPricing;
   final String driverEmail;
   final bool loading;
   final VoidCallback onMenu;
@@ -1536,6 +1542,7 @@ class _ChargeTab extends StatelessWidget {
                       site: activeSite!,
                       onChangeSite: onCloseSite,
                       onStart: (c) => onStartCharger(activeSite!, c),
+                      onFetchPricing: onFetchChargerPricing,
                     ),
         ),
       ],
@@ -1894,7 +1901,10 @@ class _SiteCard extends StatelessWidget {
                       FittedBox(
                         fit: BoxFit.scaleDown,
                         child: Text(
-                          _krFromAurar(site.perKwh!),
+                          // VAT-inclusive, to match the expanded card total.
+                          _krFromAurar(
+                            site.perKwh! * (1 + site.vatRatePct / 100),
+                          ),
                           maxLines: 1,
                           style: TextStyle(
                             color: site.accent,
@@ -1972,11 +1982,13 @@ class _ChargersList extends StatefulWidget {
     required this.site,
     required this.onChangeSite,
     required this.onStart,
+    required this.onFetchPricing,
   });
 
   final Site site;
   final VoidCallback onChangeSite;
   final ValueChanged<Charger> onStart;
+  final Future<ChargerPricing?> Function(Charger charger) onFetchPricing;
 
   @override
   State<_ChargersList> createState() => _ChargersListState();
@@ -1984,6 +1996,34 @@ class _ChargersList extends StatefulWidget {
 
 class _ChargersListState extends State<_ChargersList> {
   _ChargerFilter _filter = _ChargerFilter.all;
+
+  // Tap-to-expand: the currently open charger (by connector id), plus a lazy
+  // per-charger pricing cache keyed by chargerId.
+  String? _expandedId;
+  final Map<String, ChargerPricing?> _pricingCache = {};
+  final Set<String> _pricingLoading = {};
+
+  void _toggle(Charger c) {
+    setState(() {
+      _expandedId = _expandedId == c.id ? null : c.id;
+    });
+    if (_expandedId != c.id) return; // collapsing — nothing to fetch
+    if (_pricingCache.containsKey(c.chargerId) ||
+        _pricingLoading.contains(c.chargerId)) {
+      return; // already have it / in flight
+    }
+    setState(() => _pricingLoading.add(c.chargerId));
+    widget.onFetchPricing(c).then((p) {
+      if (!mounted) return;
+      setState(() {
+        _pricingLoading.remove(c.chargerId);
+        _pricingCache[c.chargerId] = p;
+      });
+    }).catchError((_) {
+      if (!mounted) return;
+      setState(() => _pricingLoading.remove(c.chargerId));
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -2019,11 +2059,20 @@ class _ChargersListState extends State<_ChargersList> {
               padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
               itemCount: filtered.length,
               separatorBuilder: (_, __) => const SizedBox(height: 8),
-              itemBuilder: (_, i) => _ChargerRow(
-                charger: filtered[i],
-                accent: widget.site.accent,
-                onStart: () => widget.onStart(filtered[i]),
-              ),
+              itemBuilder: (_, i) {
+                final c = filtered[i];
+                return _ChargerRow(
+                  charger: c,
+                  accent: widget.site.accent,
+                  expanded: _expandedId == c.id,
+                  pricing: _pricingCache[c.chargerId],
+                  pricingLoading: _pricingLoading.contains(c.chargerId),
+                  fallbackPerKwh: widget.site.perKwh,
+                  fallbackVatPct: widget.site.vatRatePct,
+                  onToggle: () => _toggle(c),
+                  onStart: () => widget.onStart(c),
+                );
+              },
             ),
           ),
       ],
@@ -2091,16 +2140,6 @@ class _LocationSelector extends StatelessWidget {
                           fontSize: 18,
                           fontWeight: FontWeight.w900,
                           letterSpacing: -0.3,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '${site.chargers.length} stodvar - ${site.countAvailable} lausar - ${site.countInUse} i notkun',
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: _BrandPalette.muted,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ],
@@ -2221,15 +2260,30 @@ class _FilterChip extends StatelessWidget {
   }
 }
 
+// A charger row that expands on tap into a dropdown showing the driver's
+// contract pricing (lazily fetched) + a "start charge" button. Tapping the
+// header toggles; pricing reuses the in-session _CsPriceCard breakdown.
 class _ChargerRow extends StatelessWidget {
   const _ChargerRow({
     required this.charger,
     required this.accent,
+    required this.expanded,
+    required this.pricing,
+    required this.pricingLoading,
+    required this.fallbackPerKwh,
+    required this.fallbackVatPct,
+    required this.onToggle,
     required this.onStart,
   });
 
   final Charger charger;
   final Color accent;
+  final bool expanded;
+  final ChargerPricing? pricing;
+  final bool pricingLoading;
+  final double? fallbackPerKwh;
+  final double fallbackVatPct;
+  final VoidCallback onToggle;
   final VoidCallback onStart;
 
   @override
@@ -2237,70 +2291,237 @@ class _ChargerRow extends StatelessWidget {
     final isUsable = charger.status == ChargerStatus.available;
     return Material(
       color: Colors.transparent,
-      child: InkWell(
-        onTap: isUsable ? onStart : null,
-        borderRadius: BorderRadius.circular(18),
-        child: Ink(
-          padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            color: _BrandPalette.surface,
-            border: Border.all(
-              color: isUsable
-                  ? accent.withValues(alpha: 0.45)
-                  : _BrandPalette.border,
-            ),
+      child: Ink(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          color: _BrandPalette.surface,
+          border: Border.all(
+            color: expanded
+                ? accent.withValues(alpha: 0.8)
+                : (isUsable
+                    ? accent.withValues(alpha: 0.45)
+                    : _BrandPalette.border),
           ),
-          child: Row(
-            children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: accent.withValues(alpha: 0.13),
-                  borderRadius: BorderRadius.circular(13),
-                ),
-                child: Icon(
-                  Icons.ev_station_rounded,
-                  color: isUsable ? accent : _BrandPalette.muted,
-                  size: 22,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+        ),
+        child: Column(
+          children: [
+            // Header — tap toggles the dropdown.
+            InkWell(
+              onTap: onToggle,
+              borderRadius: BorderRadius.circular(18),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+                child: Row(
                   children: [
-                    Text(
-                      charger.serial,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w900,
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: accent.withValues(alpha: 0.13),
+                        borderRadius: BorderRadius.circular(13),
+                      ),
+                      child: Icon(
+                        Icons.ev_station_rounded,
+                        color: isUsable ? accent : _BrandPalette.muted,
+                        size: 22,
                       ),
                     ),
-                    const SizedBox(height: 3),
-                    Text(
-                      '${charger.maxPowerKw.toStringAsFixed(0)} kW - ${charger.connectorType} - ${charger.priceLabel}',
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: _BrandPalette.muted,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            charger.serial,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            '${charger.maxPowerKw.toStringAsFixed(0)} kW · ${charger.connectorType}',
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: _BrandPalette.muted,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
                       ),
+                    ),
+                    const SizedBox(width: 8),
+                    _StatusPill(status: charger.status),
+                    const SizedBox(width: 4),
+                    Icon(
+                      expanded
+                          ? Icons.expand_less_rounded
+                          : Icons.expand_more_rounded,
+                      color: isUsable ? accent : _BrandPalette.muted,
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
-              _StatusPill(status: charger.status),
-              const SizedBox(width: 4),
-              Icon(
-                Icons.chevron_right_rounded,
-                color: isUsable ? accent : _BrandPalette.muted,
+            ),
+            // Dropdown — contract pricing + start button.
+            AnimatedCrossFade(
+              firstChild: const SizedBox(width: double.infinity),
+              secondChild: Padding(
+                padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _pricingBlock(),
+                    const SizedBox(height: 12),
+                    _StartChargeButton(
+                      enabled: isUsable,
+                      onStart: onStart,
+                      status: charger.status,
+                    ),
+                  ],
+                ),
               ),
-            ],
+              crossFadeState: expanded
+                  ? CrossFadeState.showSecond
+                  : CrossFadeState.showFirst,
+              duration: const Duration(milliseconds: 180),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _pricingBlock() {
+    if (pricingLoading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 18),
+        child: Center(
+          child: SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(strokeWidth: 2.4, color: _csCyan),
+          ),
+        ),
+      );
+    }
+    if (pricing != null) {
+      return _CsPriceCard(pricing: pricing!);
+    }
+    // Per-charger fetch returned nothing — fall back to the installation
+    // headline price if we have it.
+    if (fallbackPerKwh != null) {
+      return Container(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: _csDivider),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Verð (m. VSK)',
+              style: TextStyle(
+                color: _csText,
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            Text(
+              '${_krFromAurar(fallbackPerKwh! * (1 + fallbackVatPct / 100))} kr/kWh',
+              style: const TextStyle(
+                color: _csMint,
+                fontSize: 15,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: 10),
+      child: Text(
+        'Verð ekki tiltækt',
+        style: TextStyle(
+          color: _BrandPalette.muted,
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}
+
+class _StartChargeButton extends StatelessWidget {
+  const _StartChargeButton({
+    required this.enabled,
+    required this.onStart,
+    required this.status,
+  });
+
+  final bool enabled;
+  final VoidCallback onStart;
+  final ChargerStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!enabled) {
+      return Container(
+        height: 52,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          color: _BrandPalette.midnight.withValues(alpha: 0.4),
+          border: Border.all(color: _BrandPalette.border),
+        ),
+        child: Text(
+          'Ekki laus · ${status.label}',
+          style: const TextStyle(
+            color: _BrandPalette.muted,
+            fontSize: 14,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      );
+    }
+    return SizedBox(
+      height: 52,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onStart,
+          borderRadius: BorderRadius.circular(16),
+          child: Ink(
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+                colors: [_csMint, _csBlue],
+              ),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: const Center(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.bolt_rounded, color: _BrandPalette.midnight, size: 20),
+                  SizedBox(width: 8),
+                  Text(
+                    'Hefja hledslu',
+                    style: TextStyle(
+                      color: _BrandPalette.midnight,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),
@@ -3077,12 +3298,11 @@ class _CsSummary extends StatelessWidget {
   }
 }
 
-// The driver's INDICATIVE contract price for this charger, broken down per
-// cost factor (DSO grid / electricity / station / workplace fee, ...). Each
-// line is a driver-paying clause; the total is the per-kWh sum. Prices are
-// VAT-exclusive (the card shows "+ VSK x%"). Bound to
-// GET /api/driver/chargers/:id/pricing — the canonical billing still runs at
-// session-stop, hence "áætlað".
+// The driver's contract price for this charger, broken down per provider —
+// the actual DSO (e.g. Veitur) and electric retailer (e.g. N1), plus any
+// station/access fees. Each line is a driver-paying clause. Prices are shown
+// WITH VAT (the final price the driver pays). Bound to
+// GET /api/driver/chargers/:id/pricing.
 class _CsPriceCard extends StatelessWidget {
   const _CsPriceCard({required this.pricing});
 
@@ -3101,8 +3321,30 @@ class _CsPriceCard extends StatelessWidget {
     }
   }
 
+  // VAT-inclusive aurar for a clause (price the driver actually pays).
+  static double _incVat(double exVatAurar, double vatPct) =>
+      exVatAurar * (1 + vatPct / 100);
+
   @override
   Widget build(BuildContext context) {
+    // Totals, VAT-inclusive, summed per basis from the driver-paying clauses.
+    var perKwhInc = 0.0;
+    var perMinInc = 0.0;
+    var perSessInc = 0.0;
+    for (final c in pricing.clauses) {
+      final inc = _incVat(c.unitPrice, c.vatRatePct);
+      switch (c.basis) {
+        case 'per_minute':
+          perMinInc += inc;
+          break;
+        case 'per_session':
+          perSessInc += inc;
+          break;
+        case 'per_kwh':
+          perKwhInc += inc;
+          break;
+      }
+    }
     return Container(
       padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
       decoration: BoxDecoration(
@@ -3127,28 +3369,14 @@ class _CsPriceCard extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Verð',
-                      style: TextStyle(
-                        color: _csText,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -0.3,
-                      ),
-                    ),
-                    SizedBox(height: 1),
-                    Text(
-                      'áætlað · skv. samningi',
-                      style: TextStyle(
-                        color: _csMuted,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
+                child: Text(
+                  'Verð',
+                  style: TextStyle(
+                    color: _csText,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.3,
+                  ),
                 ),
               ),
             ],
@@ -3157,7 +3385,7 @@ class _CsPriceCard extends StatelessWidget {
             padding: EdgeInsets.symmetric(vertical: 10),
             child: Divider(height: 1, thickness: 1, color: _csDivider),
           ),
-          // Per cost-factor clause lines
+          // Per-provider clause lines — DSO / retailer / fees (VAT-inclusive).
           for (final c in pricing.clauses)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 3),
@@ -3166,7 +3394,7 @@ class _CsPriceCard extends StatelessWidget {
                 children: [
                   Flexible(
                     child: Text(
-                      c.factorName,
+                      c.displayLabel,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: _csMuted,
@@ -3177,7 +3405,7 @@ class _CsPriceCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 12),
                   Text(
-                    '${_krFromAurar(c.unitPrice)} ${_unit(c.basis)}',
+                    '${_krFromAurar(_incVat(c.unitPrice, c.vatRatePct))} ${_unit(c.basis)}',
                     style: const TextStyle(
                       color: _csText,
                       fontSize: 14,
@@ -3192,7 +3420,7 @@ class _CsPriceCard extends StatelessWidget {
             padding: EdgeInsets.symmetric(vertical: 10),
             child: Divider(height: 1, thickness: 1, color: _csDivider),
           ),
-          // Total (per-kWh) + VAT note
+          // Total (per-kWh, VAT-inclusive) + "VAT included" note.
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.baseline,
@@ -3207,7 +3435,7 @@ class _CsPriceCard extends StatelessWidget {
                 ),
               ),
               Text(
-                '${_krFromAurar(pricing.perKwh)} kr/kWh',
+                '${_krFromAurar(perKwhInc)} kr/kWh',
                 style: const TextStyle(
                   color: _csMint,
                   fontSize: 20,
@@ -3218,17 +3446,15 @@ class _CsPriceCard extends StatelessWidget {
               ),
             ],
           ),
-          if (pricing.perMinute > 0 || pricing.perSession > 0)
+          if (perMinInc > 0 || perSessInc > 0)
             Padding(
               padding: const EdgeInsets.only(top: 3),
               child: Align(
                 alignment: Alignment.centerRight,
                 child: Text(
                   [
-                    if (pricing.perMinute > 0)
-                      '${_krFromAurar(pricing.perMinute)} kr/mín',
-                    if (pricing.perSession > 0)
-                      '${_krFromAurar(pricing.perSession)} kr/skipti',
+                    if (perMinInc > 0) '${_krFromAurar(perMinInc)} kr/mín',
+                    if (perSessInc > 0) '${_krFromAurar(perSessInc)} kr/skipti',
                   ].join(' · '),
                   style: const TextStyle(
                     color: _csMuted,
@@ -3238,18 +3464,17 @@ class _CsPriceCard extends StatelessWidget {
                 ),
               ),
             ),
-          if (!pricing.vatInclusive)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                '+ VSK ${pricing.vatRatePct.toStringAsFixed(0)}%',
-                style: const TextStyle(
-                  color: _csMuted,
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w500,
-                ),
+          const Padding(
+            padding: EdgeInsets.only(top: 4),
+            child: Text(
+              'VSK innifalin',
+              style: TextStyle(
+                color: _csMuted,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w500,
               ),
             ),
+          ),
         ],
       ),
     );

@@ -188,6 +188,7 @@ class PricingClause {
   const PricingClause({
     required this.factorCode,
     required this.factorName,
+    required this.supplierName,
     required this.basis,
     required this.unitPrice,
     required this.vatRatePct,
@@ -197,15 +198,28 @@ class PricingClause {
 
   final String factorCode;
   final String factorName;
+
+  /// The actual provider for this line — the DSO (e.g. Veitur) or the electric
+  /// retailer (e.g. N1). Null when the line has no external supplier (e.g. a
+  /// Straumvakt access fee); the UI then falls back to [factorName].
+  final String? supplierName;
   final String basis; // per_kwh | per_minute | per_day | per_session
   final double unitPrice;
   final double vatRatePct;
   final bool driverPays;
   final String? notes;
 
+  /// The provider label to show the driver: the supplier when known, else the
+  /// cost-factor name.
+  String get displayLabel =>
+      (supplierName != null && supplierName!.trim().isNotEmpty)
+      ? supplierName!
+      : factorName;
+
   factory PricingClause.fromJson(Map<String, dynamic> json) => PricingClause(
     factorCode: (json['factorCode'] ?? '') as String,
     factorName: (json['factorDisplayName'] ?? json['factorCode'] ?? '') as String,
+    supplierName: json['supplierName'] as String?,
     basis: (json['basisType'] ?? 'per_kwh') as String,
     unitPrice: double.tryParse('${json['unitPriceMinor'] ?? 0}') ?? 0,
     vatRatePct: double.tryParse('${json['vatRatePct'] ?? 0}') ?? 0,

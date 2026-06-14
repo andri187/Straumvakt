@@ -64,6 +64,11 @@ export interface InstallationSummary {
 export interface ChargerPricingClause {
   factorCode: string;
   factorDisplayName: string;
+  /** The actual provider for this line — the DSO (e.g. Veitur) or the electric
+   *  retailer (e.g. N1), resolved from the matching RateReference's
+   *  supplierOrgId. Null when the rate reference has no external supplier
+   *  (e.g. a Straumvakt access fee). */
+  supplierName: string | null;
   basisType: "per_kwh" | "per_minute" | "per_day" | "per_session";
   /** Driver's unit price, VAT-exclusive, currency-minor BigInt-as-string. */
   unitPriceMinor: string;
@@ -127,6 +132,7 @@ async function findActiveRateRef(
   vatRatePct: string;
   currency: string;
   notes: string | null;
+  supplierOrgId: string | null;
 } | null> {
   const row = await db.rateReference.findFirst({
     where: {
@@ -140,6 +146,7 @@ async function findActiveRateRef(
       vatRatePct: true,
       currency: true,
       notes: true,
+      supplierOrgId: true,
     },
     orderBy: { effectiveFrom: "desc" },
   });
@@ -150,6 +157,7 @@ async function findActiveRateRef(
     vatRatePct: row.vatRatePct.toString(),
     currency: row.currency,
     notes: row.notes ?? null,
+    supplierOrgId: row.supplierOrgId ?? null,
   };
 }
 
@@ -529,6 +537,24 @@ export async function getDriverChargerPricing(
 
   const signedReceiptSupported = ocmfCheck !== null;
 
+  // Resolve each rate reference's supplier org → display name (the actual DSO
+  // / electric retailer the driver pays). Batch-fetch to avoid N+1.
+  const supplierOrgIds = Array.from(
+    new Set(
+      Array.from(rateRefByCode.values())
+        .map((rr) => rr?.supplierOrgId)
+        .filter((x): x is string => !!x),
+    ),
+  );
+  const orgNameById = new Map<string, string>();
+  if (supplierOrgIds.length > 0) {
+    const orgs = await db.organization.findMany({
+      where: { id: { in: supplierOrgIds } },
+      select: { id: true, displayName: true },
+    });
+    for (const o of orgs) orgNameById.set(o.id, o.displayName);
+  }
+
   // Build clause rows + a parallel "resolved" list for the headline.
   const clauseRows: ChargerPricingClause[] = [];
   const resolved: Array<{
@@ -551,6 +577,9 @@ export async function getDriverChargerPricing(
     clauseRows.push({
       factorCode: c.costFactor.code,
       factorDisplayName: c.costFactor.displayNameEn,
+      supplierName: rr?.supplierOrgId
+        ? (orgNameById.get(rr.supplierOrgId) ?? null)
+        : null,
       // If no rate-ref is set, the clause exists but has no price yet.
       // Surface basis as 'per_kwh' (safest default for the driver
       // headline; the price will be "0" and notes will be null).
