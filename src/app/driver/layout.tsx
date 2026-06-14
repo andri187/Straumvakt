@@ -123,6 +123,7 @@ function DriverShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [me, setMe] = useState<DriverProfile | null>(null);
   const [ready, setReady] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
 
   useEffect(() => {
     if (!getDriverToken()) {
@@ -170,7 +171,7 @@ function DriverShell({ children }: { children: ReactNode }) {
   return (
     <div className="host-root">
       <div className="shell">
-        <aside className="sidebar">
+        <aside className={"sidebar" + (navOpen ? " open" : "")}>
           <div className="brand">
             <div className="logo">S</div>
             <div className="word">
@@ -200,6 +201,7 @@ function DriverShell({ children }: { children: ReactNode }) {
                       key={it.label}
                       href={it.href}
                       className={"nav-item" + (active ? " active" : "")}
+                      onClick={() => setNavOpen(false)}
                     >
                       {inner}
                     </Link>
@@ -226,9 +228,23 @@ function DriverShell({ children }: { children: ReactNode }) {
             </div>
           </div>
         </aside>
+        {navOpen && (
+          <div
+            className="sidebar-backdrop"
+            onClick={() => setNavOpen(false)}
+          />
+        )}
 
         <div className="main">
           <div className="topbar">
+            <button
+              className="hamb"
+              type="button"
+              aria-label="Valmynd"
+              onClick={() => setNavOpen((v) => !v)}
+            >
+              ☰
+            </button>
             <div className="org">{me?.organizationName || "Mín hleðsla"}</div>
             <div className="spacer" />
             <button

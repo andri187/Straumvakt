@@ -7,7 +7,7 @@
 import Link from "next/link";
 import type { Route } from "next";
 import { usePathname } from "next/navigation";
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, useContext, useState, type ReactNode } from "react";
 import { apiFetch } from "@/lib/api-client";
 
 async function hostLogout() {
@@ -157,6 +157,7 @@ export function HostShell({
   children: ReactNode;
 }) {
   const pathname = usePathname();
+  const [navOpen, setNavOpen] = useState(false);
   const initials = org.displayName.slice(0, 2).toUpperCase();
   const kindLabel =
     org.kind === "company"
@@ -168,7 +169,7 @@ export function HostShell({
   return (
     <div className="host-root">
       <div className="shell">
-        <aside className="sidebar">
+        <aside className={"sidebar" + (navOpen ? " open" : "")}>
           <div className="brand">
             <div className="logo">S</div>
             <div className="word">
@@ -194,6 +195,7 @@ export function HostShell({
                       key={it.label}
                       href={it.href}
                       className={"nav-item" + (active ? " active" : "")}
+                      onClick={() => setNavOpen(false)}
                     >
                       {inner}
                     </Link>
@@ -220,9 +222,23 @@ export function HostShell({
             </div>
           </div>
         </aside>
+        {navOpen && (
+          <div
+            className="sidebar-backdrop"
+            onClick={() => setNavOpen(false)}
+          />
+        )}
 
         <div className="main">
           <div className="topbar">
+            <button
+              className="hamb"
+              type="button"
+              aria-label="Valmynd"
+              onClick={() => setNavOpen((v) => !v)}
+            >
+              ☰
+            </button>
             <div className="org">
               {org.displayName}
               <span className="pill host">{kindLabel}</span>
