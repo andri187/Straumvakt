@@ -10,6 +10,8 @@ export interface HostDriver {
   displayName: string;
   status: string;
   groups: string[];
+  /** Active physical RFID card value(s) belonging to the driver. */
+  rfids: string[];
   addedAt: string;
 }
 
@@ -56,11 +58,25 @@ export async function listOrgDrivers(
           displayName: u.displayName ?? u.email,
           status: u.status,
           groups: [g.displayName],
+          rfids: [],
           addedAt: m.addedAt.toISOString(),
         });
       }
     }
   }
+
+  // Enrich with each driver's active physical RFID card(s).
+  const userIds = [...byUser.keys()];
+  if (userIds.length > 0) {
+    const tokens = await db.idToken.findMany({
+      where: { userId: { in: userIds }, kind: "rfid", status: "active" },
+      select: { userId: true, value: true },
+    });
+    for (const t of tokens) {
+      byUser.get(t.userId)?.rfids.push(t.value);
+    }
+  }
+
   return [...byUser.values()].sort((a, b) => a.displayName.localeCompare(b.displayName));
 }
 

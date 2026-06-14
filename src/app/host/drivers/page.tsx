@@ -13,6 +13,7 @@ type Driver = {
   displayName: string;
   status: string;
   groups: string[];
+  rfids: string[];
   addedAt: string;
 };
 
@@ -74,6 +75,7 @@ export default function HostDrivers() {
           <thead>
             <tr>
               <th>Ökumaður</th>
+              <th>RFID</th>
               <th>Aðgangshópar</th>
               <th>Staða</th>
               <th>Bætt við</th>
@@ -82,14 +84,14 @@ export default function HostDrivers() {
           <tbody>
             {rows === null && (
               <tr>
-                <td colSpan={4} className="empty">
+                <td colSpan={5} className="empty">
                   Hleð…
                 </td>
               </tr>
             )}
             {rows?.length === 0 && (
               <tr>
-                <td colSpan={4} className="empty">
+                <td colSpan={5} className="empty">
                   Engir ökumenn með aðgang enn.
                 </td>
               </tr>
@@ -100,6 +102,7 @@ export default function HostDrivers() {
                   <strong>{d.displayName}</strong>
                   <div className="sub">{d.email}</div>
                 </td>
+                <td className="mono">{d.rfids.length ? d.rfids.join(", ") : <span className="sub">—</span>}</td>
                 <td className="sub">{d.groups.join(", ") || "—"}</td>
                 <td>
                   <span
