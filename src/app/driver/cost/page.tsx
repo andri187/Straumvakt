@@ -66,7 +66,7 @@ export default function DriverCost() {
           <h1>Kostnaður</h1>
           <p>
             Yfirlit yfir kostnað þinn (síðustu 100 hleðslur), skipt eftir
-            greiðsluheimili.
+            kostnaðarstað.
           </p>
         </div>
       </div>
@@ -103,11 +103,11 @@ export default function DriverCost() {
       </div>
 
       <div className="card">
-        <div className="card-h">Eftir greiðsluheimili</div>
+        <div className="card-h">Eftir kostnaðarstað</div>
         <table className="rtable">
           <thead>
             <tr>
-              <th>Greiðsluheimili</th>
+              <th>Kostnaðarstaður</th>
               <th>Hleðslur</th>
               <th>Orka</th>
               <th>Kostnaður</th>
@@ -130,7 +130,7 @@ export default function DriverCost() {
             )}
             {homes.map(([name, v]) => (
               <tr key={name}>
-                <td data-label="Greiðsluheimili">
+                <td data-label="Kostnaðarstaður">
                   <strong>{name}</strong>
                 </td>
                 <td data-label="Hleðslur">{v.count}</td>

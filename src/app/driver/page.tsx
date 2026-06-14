@@ -147,7 +147,7 @@ export default function DriverDashboard() {
             <tr>
               <th>Stöð</th>
               <th>Svæði</th>
-              <th>Greiðsluheimili</th>
+              <th>Kostnaðarstaður</th>
               <th>Orka</th>
               <th>Kostnaður</th>
               <th>Tími</th>
@@ -178,7 +178,7 @@ export default function DriverDashboard() {
               >
                 <td className="mono" data-label="Stöð">{h.chargerName ?? "—"}</td>
                 <td className="sub" data-label="Svæði">{h.siteName ?? "—"}</td>
-                <td className="sub" data-label="Greiðsluheimili">{h.billingHomeName ?? "—"}</td>
+                <td className="sub" data-label="Kostnaðarstaður">{h.billingHomeName ?? "—"}</td>
                 <td data-label="Orka">{h.energyKwh} kWh</td>
                 <td data-label="Kostnaður">{kr(h.costIsk)}</td>
                 <td className="sub" data-label="Tími">
