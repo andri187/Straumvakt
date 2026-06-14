@@ -36,9 +36,7 @@ export default function DriverDashboard() {
     let cancelled = false;
     (async () => {
       try {
-        const hist = await driverFetch<{ sessions: History[] }>(
-          "/api/driver/sessions/history?limit=50",
-        );
+        const hist = await driverFetch<{ sessions: History[] }>("/api/driver/invoices");
         if (!cancelled) setHistory(hist.sessions);
       } catch (e) {
         if (!cancelled) setErr(e instanceof Error ? e.message : String(e));
@@ -89,7 +87,7 @@ export default function DriverDashboard() {
           flexWrap: "wrap",
         }}
       >
-        <Stat lbl="Orka (50 síðustu)" val={history ? `${energy.toLocaleString("is-IS")} kWh` : "—"} />
+        <Stat lbl="Orka" val={history ? `${energy.toLocaleString("is-IS")} kWh` : "—"} />
         <Stat lbl="Hleðslur" val={history ? String(count) : "—"} />
         <Stat lbl="Kostnaður" val={history ? kr(cost) : "—"} />
       </div>

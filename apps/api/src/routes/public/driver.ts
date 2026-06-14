@@ -47,6 +47,7 @@ import {
   updateDriverProfile,
 } from "../../repositories/driver-sessions";
 import { getSessionFullDetail } from "../../repositories/session-full-detail";
+import { listDriverActualSessions } from "../../repositories/driver-invoices";
 import type { Env } from "../../bindings";
 
 type Vars = { driverPayload: DriverTokenPayload };
@@ -722,6 +723,20 @@ publicDriver.get("/sessions/history", requireDriver, async (c) => {
     skip: parsed.data.skip,
     limit: parsed.data.limit,
   });
+  return c.json({ sessions });
+});
+
+// ── GET /api/driver/invoices ────────────────────────────────────────
+//
+// Billing source: the driver's ACTUAL charge sessions (charging.sessions
+// where user_id = driver), which is the full set for invoicing — unlike
+// /sessions/history, which reads only the ledger-projected subset. The
+// driver portal's invoice + usage views consume this.
+
+publicDriver.get("/invoices", requireDriver, async (c) => {
+  const { userId } = c.get("driverPayload");
+  const prisma = makePrisma(c.env);
+  const sessions = await listDriverActualSessions(prisma, userId);
   return c.json({ sessions });
 });
 

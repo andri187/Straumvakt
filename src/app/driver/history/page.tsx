@@ -48,9 +48,7 @@ export default function DriverHistory() {
     let cancelled = false;
     (async () => {
       try {
-        const r = await driverFetch<{ sessions: H[] }>(
-          "/api/driver/sessions/history?limit=100",
-        );
+        const r = await driverFetch<{ sessions: H[] }>("/api/driver/invoices");
         if (!cancelled) setRows(r.sessions);
       } catch (e) {
         if (!cancelled) setErr(e instanceof Error ? e.message : String(e));
