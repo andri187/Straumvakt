@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- NFC tag reading (ADR 0024 addendum). NDEF covers the URL/serial tag
+	     payload we write; TAG enables raw ISO-DEP/MIFARE if needed later.
+	     Requires the "Near Field Communication Tag Reading" capability on the
+	     App ID + a matching provisioning profile (Apple Developer account).
+	     Wire this file into Xcode: Runner target → Build Settings →
+	     CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements. -->
+	<key>com.apple.developer.nfc.readersession.formats</key>
+	<array>
+		<string>NDEF</string>
+		<string>TAG</string>
+	</array>
+</dict>
+</plist>
