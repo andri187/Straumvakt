@@ -119,6 +119,74 @@ the same reason.
 
 ---
 
+## Amendment 2026-08-02 — `raw_protocol` is too coarse to expire
+
+**Operator, on reviewing the retention split:** *"I see no reason to keep
+the heartbeats for more than 7 days, but that is limited to heartbeat
+messages only."*
+
+That distinction exposes a defect in **both this ADR and ADR 0037**.
+
+`gateway/src/identity-do.ts:570` stamps `retentionClass: "raw_protocol"`
+on **every** inbound OCPP frame, whatever the action. So `raw_protocol`
+does not mean "disposable protocol noise" — it means "arrived over
+OCPP", and that set includes:
+
+| frame | what it actually carries |
+|---|---|
+| `Heartbeat` | nothing. Liveness plus a clock sync. Genuinely disposable. |
+| **`MeterValues`** | **OCMF signed billing evidence** — the tamper-evident meter reading |
+| **`StopTransaction`** | the charger's own record of delivered energy, the basis of the invoice |
+| `StartTransaction`, `Authorize` | who was admitted and when |
+| `StatusNotification` | the input to downtime periods and fault diagnosis |
+
+ADR 0037 D2 expires `raw_protocol/` from R2 after 7 days. This ADR drops
+`protocol_log` partitions after 7 days. **Together they would delete
+signed billing evidence from both stores on a timer** — while ADR 0031
+§15 settles metering disputes on exactly those logs, and ADR 0018 §3c
+calls billing-touched retention "non-negotiable" at 7 years.
+
+This is the same mistake P4.12 refused to make at the ingest layer —
+where MeterValues was kept off the batched path specifically to protect
+OCMF — reintroduced at the retention layer.
+
+### Decision — classify at the gateway, by action
+
+`retentionClass` is assigned where the action is known:
+
+| action | class | retention |
+|---|---|---|
+| `Heartbeat` | `raw_protocol` | 7 days |
+| `MeterValues`, `StartTransaction`, `StopTransaction` | `financial` | indefinite |
+| `StatusNotification`, `BootNotification`, `Authorize`, `DataTransfer`, everything else | `operational` | 90 days |
+
+Consequences:
+
+- **`protocol_log` holds heartbeats and nothing else** — which is what
+  the operator asked for, and it makes the 7-day drop unconditionally
+  safe rather than conditionally dangerous.
+- **The split still delivers nearly all its benefit.** Heartbeats are
+  ~80% of event volume on their own, so the billing-grade table still
+  sheds the overwhelming majority of the noise.
+- **F5/F22 close more cleanly.** Every `protocol_log` partition is
+  single-class by construction, so the fail-closed drop gate can always
+  fire rather than blocking on a mixed partition.
+- ADR 0037's `raw_protocol/` prefix rule becomes correct as written,
+  because the prefix now contains only what it claims to.
+
+**Unclassified default must be `operational`, not `raw_protocol`.** A
+frame type nobody has triaged should age out in 90 days, not 7 — an
+unknown frame is more likely to be something new that matters than
+something disposable. Fail long, not short.
+
+**Backfill:** existing rows are already stamped `raw_protocol`
+indiscriminately, including OCMF-bearing MeterValues. They must be
+reclassified — or at minimum excluded from expiry — **before** either
+7-day rule is switched on. This is the one part of this work that is
+not safe to ship incrementally.
+
+---
+
 ## Migration
 
 1. Create `events.protocol_log` with the same shape as `event_log`,
