@@ -79,6 +79,14 @@ export interface Env {
   // prevent diagnostic/fail-open modes from running in production.
   APP_ENV?: string;
 
+  // P4.15 / ADR 0037 D5 — enables the destructive half of the
+  // partition-retention cron. Unset (the default) means the cron
+  // decides and logs but detaches/drops nothing. Set to "1" via
+  // `wrangler secret put PARTITION_DROP_ENABLED` only after the
+  // dry-run log has been reviewed for the partitions in question.
+  // Dropping a partition is irreversible.
+  PARTITION_DROP_ENABLED?: string;
+
   // Cloudflare Rate Limiting bindings — declared in wrangler.jsonc
   // `unsafe.bindings`. Optional so dev environments without the binding
   // fail OPEN with a warn rather than crashing. See

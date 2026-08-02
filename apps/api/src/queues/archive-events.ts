@@ -2,8 +2,8 @@
 //
 // Drains straumvakt-archive-events-* queue. For every envelope:
 //
-//   1. Compute the R2 key per ADR 0018 Decision 3b:
-//        <orgId>/<yyyy>/<mm>/<dd>/<chargingStationId>/<eventId>.json.gz
+//   1. Compute the R2 key per ADR 0037 D1 (amends ADR 0018 3b):
+//        <retentionClass>/<orgId>/<yyyy>/<mm>/<dd>/<chargingStationId>/<eventId>.json.gz
 //      where <chargingStationId> is the aggregateId for the
 //      'ocpp_identity' aggregateType (the rule the gateway DO uses
 //      today).
@@ -26,13 +26,28 @@
 import type { MessageBatch, R2Bucket } from "@cloudflare/workers-types";
 import type { Env, OcppEventMessage } from "../bindings";
 import { parseIngestEvent } from "../lib/ocpp/event-envelope";
+import { makePool } from "../lib/db/raw";
+import {
+  aggregateWatermarkDeltas,
+  upsertArchiveWatermarks,
+  type ArchiveWatermarkDelta,
+} from "../lib/db/archive-watermark";
 
 /**
  * Builds the R2 object key for an archived envelope. Pure function;
  * the consumer + tests both call it.
+ *
+ * ADR 0037 D1 — `retentionClass` leads the key. R2 lifecycle rules
+ * match a literal string prefix and cannot read object metadata, so
+ * tiered expiry ("expire raw_protocol at 7 days, never expire
+ * financial") is only expressible if the class is IN the key. It used
+ * to live in customMetadata only, which no lifecycle rule can see.
  */
 export function buildArchiveKey(
-  envelope: Pick<OcppEventMessage, "orgId" | "aggregateType" | "aggregateId" | "eventId" | "occurredAt">,
+  envelope: Pick<
+    OcppEventMessage,
+    "orgId" | "aggregateType" | "aggregateId" | "eventId" | "occurredAt" | "retentionClass"
+  >,
 ): string {
   const ts = new Date(envelope.occurredAt);
   const yyyy = ts.getUTCFullYear();
@@ -45,7 +60,48 @@ export function buildArchiveKey(
   // milestone 4.1's ADR 0012 model). For session.* and other
   // aggregateTypes the aggregateId is the right granularity already.
   const chargerKey = envelope.aggregateId;
-  return `${envelope.orgId}/${yyyy}/${mm}/${dd}/${chargerKey}/${envelope.eventId}.json.gz`;
+  return `${envelope.retentionClass}/${envelope.orgId}/${yyyy}/${mm}/${dd}/${chargerKey}/${envelope.eventId}.json.gz`;
+}
+
+/**
+ * Watermark sink. Injected so the unit tests can observe the deltas
+ * without a Postgres binding; production wires the pg-backed
+ * implementation below.
+ */
+export type WatermarkRecorder = (
+  deltas: ArchiveWatermarkDelta[],
+) => Promise<void>;
+
+export interface ArchiveBatchDeps {
+  recordWatermarks?: WatermarkRecorder;
+}
+
+/**
+ * Default recorder — one short-lived pg pool per batch, one upsert
+ * statement. ADR 0018 3d keeps R2 off the Postgres-ack path, and this
+ * write does not violate that: it happens AFTER the R2 puts and after
+ * the messages are acked, on a different queue from the inbound
+ * consumer, and a failure here is swallowed. A missed watermark
+ * increment can only ever UNDER-count, and the P4.15 drop gate
+ * fails closed on an under-count — so losing this write costs a
+ * delayed partition drop, never a lost row.
+ */
+async function recordWatermarksViaPg(
+  env: Env,
+  deltas: ArchiveWatermarkDelta[],
+): Promise<void> {
+  if (deltas.length === 0) return;
+  const pool = makePool(env);
+  try {
+    const client = await pool.connect();
+    try {
+      await upsertArchiveWatermarks(client, deltas);
+    } finally {
+      client.release();
+    }
+  } finally {
+    await pool.end().catch(() => undefined);
+  }
 }
 
 async function gzip(payload: ArrayBuffer): Promise<ArrayBuffer> {
@@ -57,12 +113,17 @@ async function gzip(payload: ArrayBuffer): Promise<ArrayBuffer> {
 export async function handleArchiveEventsBatch(
   batch: MessageBatch<OcppEventMessage>,
   env: Env,
+  deps: ArchiveBatchDeps = {},
 ): Promise<void> {
   const consumedAt = Date.now();
   let acked = 0;
   let retried = 0;
   let dropped = 0;
   let bytesWritten = 0;
+  // Envelopes whose R2 put returned success. Only these count toward
+  // the watermark — a retried message must not be counted until the
+  // put that finally lands.
+  const archived: Array<Pick<OcppEventMessage, "retentionClass" | "occurredAt">> = [];
 
   console.log("[archive-q] batch_start", {
     queue: batch.queue,
@@ -120,6 +181,10 @@ export async function handleArchiveEventsBatch(
       });
       message.ack();
       acked++;
+      archived.push({
+        retentionClass: env_.retentionClass,
+        occurredAt: env_.occurredAt,
+      });
     } catch (err) {
       console.error("[archive-q] r2_put_failed", {
         eventId: parsed.event.eventId,
@@ -130,6 +195,26 @@ export async function handleArchiveEventsBatch(
     }
   }
 
+  // ADR 0037 D5 — record what this batch archived so the P4.15
+  // partition-drop gate has something to read. Deliberately after the
+  // acks and deliberately non-fatal: an outage here must not turn a
+  // successful R2 write into a queue retry (which would re-put the
+  // object and inflate the count). Under-counting is the safe failure
+  // direction — the drop gate refuses to drop on a shortfall.
+  const deltas = aggregateWatermarkDeltas(archived);
+  if (deltas.length > 0) {
+    const record = deps.recordWatermarks ?? ((d) => recordWatermarksViaPg(env, d));
+    try {
+      await record(deltas);
+    } catch (err) {
+      console.error("[archive-q] watermark_upsert_failed", {
+        deltas: deltas.length,
+        objects: deltas.reduce((n, d) => n + d.objects, 0),
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
   console.log("[archive-q] batch_summary", {
     queue: batch.queue,
     count: batch.messages.length,
@@ -137,6 +222,7 @@ export async function handleArchiveEventsBatch(
     retried,
     dropped,
     bytesWritten,
+    watermarkKeys: deltas.length,
     durationMs: Date.now() - consumedAt,
   });
 }
