@@ -214,10 +214,14 @@ describe("zaptec webhooks", () => {
     // AuthType=Webhooks in the Zaptec portal locks every driver out
     // until we've seeded the IdToken table. Learned the hard way
     // 2026-05-04 — see retro.
+    //
+    // APP_ENV must be an explicit non-production value: the AUD-2 / FIX-3
+    // guard treats an unset APP_ENV as production and refuses to fail
+    // open there. Diagnostic fail-open is a staging/dev affordance only.
     const res = await call(
       "/auth",
       { cardId: "UNKNOWN-CARD" },
-      { env: { ZAPTEC_WEBHOOK_DIAGNOSTIC: "1" } },
+      { env: { ZAPTEC_WEBHOOK_DIAGNOSTIC: "1", APP_ENV: "staging" } },
     );
     expect(res.status).toBe(200);
     const body = (await res.json()) as { result: string; note?: string };
@@ -229,11 +233,26 @@ describe("zaptec webhooks", () => {
     const res = await call(
       "/auth",
       "not-an-object",
-      { env: { ZAPTEC_WEBHOOK_DIAGNOSTIC: "1" } },
+      { env: { ZAPTEC_WEBHOOK_DIAGNOSTIC: "1", APP_ENV: "staging" } },
     );
     expect(res.status).toBe(200);
     const body = (await res.json()) as { result: string };
     expect(body.result).toBe("Accept");
+  });
+
+  it("diagnostic mode refuses to fail open in production (AUD-2 / FIX-3)", async () => {
+    // Unset APP_ENV is treated as production — the fail-open path must
+    // never be reachable there, even with a valid bearer secret present.
+    for (const env of [
+      { ZAPTEC_WEBHOOK_DIAGNOSTIC: "1" },
+      { ZAPTEC_WEBHOOK_DIAGNOSTIC: "true", APP_ENV: "production" },
+      { ZAPTEC_WEBHOOK_DIAGNOSTIC: "1", ZAPTEC_WEBHOOK_SECRET: SECRET },
+    ]) {
+      const res = await call("/auth", { cardId: "UNKNOWN-CARD" }, { env });
+      expect(res.status).toBe(503);
+      const body = (await res.json()) as { error: string };
+      expect(body.error).toBe("diagnostic_disabled_in_prod");
+    }
   });
 
   it("returns 401 when authorization header is missing/wrong", async () => {

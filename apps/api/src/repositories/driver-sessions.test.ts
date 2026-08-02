@@ -55,7 +55,7 @@ describe("getDriverActiveSessions", () => {
     ]);
   });
 
-  it("falls back to 'Charger' when the asset has no display name", async () => {
+  it("falls back to 'Hleðslustöð' when the asset has no display name", async () => {
     const db = {
       chargeSession: {
         findMany: vi.fn(async () => [
@@ -73,7 +73,9 @@ describe("getDriverActiveSessions", () => {
     } as unknown as PrismaClient;
 
     const out = await getDriverActiveSessions(db, "user-1");
-    expect(out[0].chargerName).toBe("Charger");
+    // Driver-facing copy is Icelandic (a54c4e6, "Copy: … charger fallback
+    // Hleðslustöð"), not the original English "Charger".
+    expect(out[0].chargerName).toBe("Hleðslustöð");
     expect(out[0].energyKwh).toBe(0);
     expect(out[0].connectorId).toBeNull();
   });

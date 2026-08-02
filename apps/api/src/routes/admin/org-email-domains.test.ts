@@ -160,7 +160,13 @@ import { adminOrgEmailDomains } from "./org-email-domains";
 
 const ORG_ID    = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const OTHER_ORG = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
-const GROUP_ID  = "cccccccc-cccc-cccc-cccc-cccccccccccc";
+// Must be an RFC-9562-valid UUID (v4 nibble + 8/9/a/b variant nibble):
+// the POST/PATCH bodies run defaultDriverGroupId through z.uuid(), which
+// is strict under Zod 4. A structurally-invalid id short-circuits at
+// validation and never reaches the cross-tenant ownerOrgId guard below.
+// Real DriverGroup.id values are @default(uuid()) → v4, so this matches
+// production shape.
+const GROUP_ID  = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 const DOMAIN_ID = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee";
 
 // ─── HTTP helper ─────────────────────────────────────────────────────────────

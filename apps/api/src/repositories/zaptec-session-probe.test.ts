@@ -65,6 +65,13 @@ const Z_CHARGER = "ZAPTEC-CH-001";
 const OUR_STATION = "11111111-1111-1111-1111-111111111111";
 const OUR_SESSION = "22222222-2222-2222-2222-222222222222";
 
+// The fixtures below use fixed April-2026 timestamps. probeZaptecSessions
+// defaults its window to "the last 30 days" and passes it as a
+// started_at gte/lte filter on our side, so without an explicit window
+// these tests silently stop matching once wall-clock time moves past the
+// fixture dates. Pin the window to the fixtures instead of the clock.
+const WINDOW = { from: "2026-04-01T00:00:00Z", to: "2026-05-01T00:00:00Z" };
+
 describe("probeZaptecSessions", () => {
   beforeEach(() => {
     vi.mocked(listZaptecChargeHistory).mockReset();
@@ -101,6 +108,7 @@ describe("probeZaptecSessions", () => {
     const result = await probeZaptecSessions(db, {
       accessToken: "stub",
       installationId: "inst-1",
+      ...WINDOW,
     });
 
     expect(result.zaptecCount).toBe(1);
@@ -131,7 +139,7 @@ describe("probeZaptecSessions", () => {
       sessions: [],
     });
 
-    const result = await probeZaptecSessions(db, { accessToken: "stub" });
+    const result = await probeZaptecSessions(db, { accessToken: "stub", ...WINDOW });
     expect(result.bothInOurs).toEqual([]);
     expect(result.onlyInZaptec).toHaveLength(1);
     expect(result.onlyInZaptec[0].zaptecId).toBe("z-session-orphan");
@@ -153,7 +161,7 @@ describe("probeZaptecSessions", () => {
       ],
     });
 
-    const result = await probeZaptecSessions(db, { accessToken: "stub" });
+    const result = await probeZaptecSessions(db, { accessToken: "stub", ...WINDOW });
     // Zaptec returned no rows, so our charger-id filter to ocppIdentity
     // never gets seeded → ourSessions[] is empty too. Net behaviour:
     // empty buckets, ourCount=0. (To detect orphan our-side rows the
@@ -191,7 +199,7 @@ describe("probeZaptecSessions", () => {
         },
       ],
     });
-    const result = await probeZaptecSessions(db, { accessToken: "stub" });
+    const result = await probeZaptecSessions(db, { accessToken: "stub", ...WINDOW });
     // Both rows present but no match — both surface in their lonely bucket.
     expect(result.bothInOurs).toEqual([]);
     expect(result.onlyInZaptec).toHaveLength(1);
