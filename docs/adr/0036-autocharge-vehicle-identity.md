@@ -1,4 +1,4 @@
-# ADR 0021 — Autocharge: vehicle identity capture across transport layers
+# ADR 0036 — Autocharge: vehicle identity capture across transport layers
 
 **Status:** Proposed
 **Date:** 2026-05-08
