@@ -86,10 +86,25 @@
             "max_retries": 5,
             "dead_letter_queue": "straumvakt-outbound-dlq-staging"
           },
+          // P4.14 — batch cadence. Was 1s. The 2026-05-12 note raised it
+          // to 30s and measured ~50% fewer Neon CU-hours, but that change
+          // is not in this file (reverted with fix-A) and its premise no
+          // longer holds cleanly: Neon `suspend_timeout_seconds` is 0, so
+          // the compute never autosuspends and the saving is connection
+          // churn rather than wake-ups. The full win needs autosuspend
+          // enabled on Neon — an operator decision, not a config line here.
+          //
+          // 10s is the middle ground. Timeout only bites below ~10 events/s;
+          // past that `max_batch_size` fills first and the timeout is moot.
+          // At today's handful of chargers that means up to 10s of ingest
+          // lag on operator-visible StatusNotification — noticeable but
+          // tolerable while ADR 0023's fanout is unbuilt and the console
+          // polls anyway. 30s would have been very visible at this scale.
+          // Revisit with P4-D measurements.
           {
             "queue": "straumvakt-ocpp-events-staging",
             "max_batch_size": 100,
-            "max_batch_timeout": 1,
+            "max_batch_timeout": 10,
             "max_retries": 3,
             "dead_letter_queue": "straumvakt-ocpp-events-dlq-staging"
           },
