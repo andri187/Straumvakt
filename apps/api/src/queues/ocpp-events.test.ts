@@ -62,6 +62,23 @@ vi.mock("../lib/prisma", () => ({
 
 vi.mock("../lib/ocpp/bootstrap", () => ({}));
 
+// P4.12 — the batched heartbeat path. Mocked at the raw.ts boundary so
+// these tests assert consumer partitioning/ack/archive behaviour; the
+// SQL itself is covered by src/lib/db/raw.test.ts.
+const rawMocks = vi.hoisted(() => ({
+  batchIngestHeartbeats: vi.fn(),
+  poolEnd: vi.fn(async () => undefined),
+  clientRelease: vi.fn(),
+}));
+
+vi.mock("../lib/db/raw", () => ({
+  makePool: () => ({
+    connect: async () => ({ release: rawMocks.clientRelease }),
+    end: rawMocks.poolEnd,
+  }),
+  batchIngestHeartbeats: rawMocks.batchIngestHeartbeats,
+}));
+
 import { handleOcppEventsBatch } from "./ocpp-events";
 import type { OcppEventMessage, Env } from "../bindings";
 import type { Message, MessageBatch } from "@cloudflare/workers-types";
@@ -261,5 +278,208 @@ describe("handleOcppEventsBatch", () => {
     expect(replayed.ack).toHaveBeenCalledTimes(1);
     expect(replayed.retry).not.toHaveBeenCalled();
     expect(fakePrisma.eventLogEntry.create).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// P4.12 — batch partitioning (ADR 0035)
+//
+// Before this change the fast path was gated on EVERY message in the
+// batch being a heartbeat, so a single non-heartbeat sent the whole
+// batch down the per-event Prisma loop. At ~250 concurrent sessions
+// that meant ~99% of batches. These tests pin the partitioning
+// behaviour, and the archive-identity fix (F2) that came with it.
+// ─────────────────────────────────────────────────────────────────────
+
+function heartbeat(eventId: string, aggregateId = "33333333-3333-3333-3333-333333333333"): OcppEventMessage {
+  return { ...VALID, eventId, aggregateId, eventType: "ocpp.raw.Heartbeat" };
+}
+
+describe("handleOcppEventsBatch — batch partitioning", () => {
+  const archiveSendBatch = vi.fn(async () => undefined);
+  const ENV_ARCHIVE = {
+    ARCHIVE_QUEUE: { sendBatch: archiveSendBatch },
+  } as unknown as Env;
+
+  beforeEach(() => {
+    fakeIdempotency.clear();
+    nextLogId = 1;
+    vi.clearAllMocks();
+    fakePrisma.eventLogEntry.create.mockImplementation(async () => ({
+      id: `log-${nextLogId++}`,
+    }));
+    rawMocks.batchIngestHeartbeats.mockResolvedValue({
+      fresh: 0,
+      replays: 0,
+      identitiesTouched: 0,
+      freshEventIds: [],
+    });
+  });
+
+  it("splits a mixed batch: heartbeats batched, the rest through Prisma", async () => {
+    // THE regression this milestone exists for. One non-heartbeat used
+    // to drag every heartbeat onto the per-event path.
+    const hb1 = makeMsg(heartbeat("aaaaaaaa-0000-0000-0000-000000000001"));
+    const hb2 = makeMsg(heartbeat("aaaaaaaa-0000-0000-0000-000000000002"));
+    const status = makeMsg(VALID); // charger.status_updated
+
+    rawMocks.batchIngestHeartbeats.mockResolvedValue({
+      fresh: 2,
+      replays: 0,
+      identitiesTouched: 1,
+      freshEventIds: [
+        "aaaaaaaa-0000-0000-0000-000000000001",
+        "aaaaaaaa-0000-0000-0000-000000000002",
+      ],
+    });
+
+    await handleOcppEventsBatch(makeBatch([hb1, status, hb2]), ENV_ARCHIVE);
+
+    // Both heartbeats went through the batched transaction, once.
+    expect(rawMocks.batchIngestHeartbeats).toHaveBeenCalledTimes(1);
+    expect(rawMocks.batchIngestHeartbeats.mock.calls[0][1]).toHaveLength(2);
+
+    // The non-heartbeat still went through Prisma — exactly once, and
+    // the heartbeats did NOT.
+    expect(fakePrisma.eventLogEntry.create).toHaveBeenCalledTimes(1);
+
+    // Everything acked.
+    for (const m of [hb1, hb2, status]) {
+      expect(m.ack).toHaveBeenCalledTimes(1);
+      expect(m.retry).not.toHaveBeenCalled();
+    }
+  });
+
+  it("archives the events the insert reported fresh, not the first N (F2)", async () => {
+    // The old code did slice(0, result.fresh), which assumes fresh
+    // events are first in input order. With a replay interleaved that
+    // archived the WRONG envelopes — silently.
+    const hb1 = makeMsg(heartbeat("aaaaaaaa-0000-0000-0000-000000000001"));
+    const replay = makeMsg(heartbeat("aaaaaaaa-0000-0000-0000-000000000002"));
+    const hb3 = makeMsg(heartbeat("aaaaaaaa-0000-0000-0000-000000000003"));
+
+    // The middle one is a replay; #1 and #3 are fresh.
+    rawMocks.batchIngestHeartbeats.mockResolvedValue({
+      fresh: 2,
+      replays: 1,
+      identitiesTouched: 1,
+      freshEventIds: [
+        "aaaaaaaa-0000-0000-0000-000000000001",
+        "aaaaaaaa-0000-0000-0000-000000000003",
+      ],
+    });
+
+    await handleOcppEventsBatch(makeBatch([hb1, replay, hb3]), ENV_ARCHIVE);
+
+    expect(archiveSendBatch).toHaveBeenCalledTimes(1);
+    const archived = archiveSendBatch.mock.calls[0][0] as Array<{
+      body: OcppEventMessage;
+    }>;
+    // Assert on identity, not count — slice(0,2) would have passed a
+    // count-only assertion while archiving #1 and #2.
+    expect(archived.map((m) => m.body.eventId)).toEqual([
+      "aaaaaaaa-0000-0000-0000-000000000001",
+      "aaaaaaaa-0000-0000-0000-000000000003",
+    ]);
+  });
+
+  it("fast-path failure retries only the heartbeats; Prisma partition still runs", async () => {
+    const hb = makeMsg(heartbeat("aaaaaaaa-0000-0000-0000-000000000001"));
+    const status = makeMsg(VALID);
+
+    rawMocks.batchIngestHeartbeats.mockRejectedValue(new Error("hyperdrive blip"));
+
+    await handleOcppEventsBatch(makeBatch([hb, status]), ENV_ARCHIVE);
+
+    // Heartbeat retried — its transaction rolled back, nothing written.
+    expect(hb.retry).toHaveBeenCalledTimes(1);
+    expect(hb.ack).not.toHaveBeenCalled();
+
+    // The independent partition is unaffected. Before partitioning a
+    // fast-path failure retried the entire batch.
+    expect(status.ack).toHaveBeenCalledTimes(1);
+    expect(status.retry).not.toHaveBeenCalled();
+    expect(fakePrisma.eventLogEntry.create).toHaveBeenCalledTimes(1);
+  });
+
+  it("an all-heartbeat batch never touches Prisma", async () => {
+    const hb1 = makeMsg(heartbeat("aaaaaaaa-0000-0000-0000-000000000001"));
+    const hb2 = makeMsg(heartbeat("aaaaaaaa-0000-0000-0000-000000000002"));
+    rawMocks.batchIngestHeartbeats.mockResolvedValue({
+      fresh: 2,
+      replays: 0,
+      identitiesTouched: 1,
+      freshEventIds: [
+        "aaaaaaaa-0000-0000-0000-000000000001",
+        "aaaaaaaa-0000-0000-0000-000000000002",
+      ],
+    });
+
+    await handleOcppEventsBatch(makeBatch([hb1, hb2]), ENV_ARCHIVE);
+
+    expect(fakePrisma.eventLogEntry.create).not.toHaveBeenCalled();
+    expect(hb1.ack).toHaveBeenCalledTimes(1);
+    expect(hb2.ack).toHaveBeenCalledTimes(1);
+  });
+
+  it("a batch with no heartbeats never opens a pg pool", async () => {
+    // Guards the cost of the batched path when it has nothing to do.
+    const status = makeMsg(VALID);
+    await handleOcppEventsBatch(makeBatch([status]), ENV_ARCHIVE);
+    expect(rawMocks.batchIngestHeartbeats).not.toHaveBeenCalled();
+    expect(rawMocks.poolEnd).not.toHaveBeenCalled();
+  });
+
+  it("malformed heartbeat envelopes drop to the validation path, not the batch", async () => {
+    // Eligibility is decided AFTER parsing. A message that claims to be
+    // a heartbeat but fails envelope validation must not reach the
+    // batched insert.
+    const bad = makeMsg({ eventType: "ocpp.raw.Heartbeat", nope: true });
+    await handleOcppEventsBatch(makeBatch([bad]), ENV_ARCHIVE);
+
+    expect(rawMocks.batchIngestHeartbeats).not.toHaveBeenCalled();
+    expect(bad.ack).toHaveBeenCalledTimes(1); // poison → drop, not retry
+    expect(bad.retry).not.toHaveBeenCalled();
+  });
+
+  it("archive fanout is batched, not one send per event", async () => {
+    // P4.13 — the old loop awaited one send() per event, up to 100
+    // sequential round trips inside the batch window.
+    const msgs = Array.from({ length: 5 }, (_, i) =>
+      makeMsg(heartbeat(`aaaaaaaa-0000-0000-0000-00000000000${i + 1}`)),
+    );
+    rawMocks.batchIngestHeartbeats.mockResolvedValue({
+      fresh: 5,
+      replays: 0,
+      identitiesTouched: 1,
+      freshEventIds: msgs.map(
+        (_, i) => `aaaaaaaa-0000-0000-0000-00000000000${i + 1}`,
+      ),
+    });
+
+    await handleOcppEventsBatch(makeBatch(msgs), ENV_ARCHIVE);
+
+    expect(archiveSendBatch).toHaveBeenCalledTimes(1);
+    expect(archiveSendBatch.mock.calls[0][0]).toHaveLength(5);
+  });
+
+  it("archive failure never blocks the ack", async () => {
+    // ADR 0018 Decision 3 — two queues exist so an archive outage
+    // cannot block Postgres ack.
+    const hb = makeMsg(heartbeat("aaaaaaaa-0000-0000-0000-000000000001"));
+    rawMocks.batchIngestHeartbeats.mockResolvedValue({
+      fresh: 1,
+      replays: 0,
+      identitiesTouched: 1,
+      freshEventIds: ["aaaaaaaa-0000-0000-0000-000000000001"],
+    });
+    archiveSendBatch.mockRejectedValueOnce(new Error("R2 unavailable"));
+
+    await expect(
+      handleOcppEventsBatch(makeBatch([hb]), ENV_ARCHIVE),
+    ).resolves.toBeUndefined();
+
+    expect(hb.ack).toHaveBeenCalledTimes(1);
+    expect(hb.retry).not.toHaveBeenCalled();
   });
 });

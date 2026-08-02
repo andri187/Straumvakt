@@ -283,6 +283,16 @@ export interface HeartbeatBatchResult {
   fresh: number;
   replays: number;
   identitiesTouched: number;
+  /**
+   * Event IDs actually inserted by this call.
+   *
+   * P4.12 — the caller needs to know *which* events were fresh, not
+   * merely how many. The archive fanout previously did
+   * `slice(0, result.fresh)`, which assumes fresh events are the first
+   * N in input order; that only holds when the batch contains no
+   * replays. With replays interleaved it archived the wrong events.
+   */
+  freshEventIds: string[];
 }
 
 export async function batchIngestHeartbeats(
@@ -323,6 +333,7 @@ export async function batchIngestHeartbeats(
         fresh: 0,
         replays: heartbeats.length,
         identitiesTouched: 0,
+        freshEventIds: [],
       };
     }
 
@@ -377,6 +388,7 @@ export async function batchIngestHeartbeats(
       fresh: fresh.length,
       replays: heartbeats.length - fresh.length,
       identitiesTouched: updateResult.rowCount ?? 0,
+      freshEventIds: fresh.map((h) => h.eventId),
     };
   } catch (err) {
     await client.query("ROLLBACK");
