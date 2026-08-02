@@ -92,3 +92,9 @@ packages/*/node_modules/
 # event data we shouldn't preserve in git history.
 apps/api/scripts/zaptec-amqp-probe.jsonl
 apps/api/scripts/*-probe-output.jsonl
+
+# Generated Prisma client (Rule 8 — never commit generated files)
+apps/api/prisma/generated/
+
+# Claude Code local config
+.claude/
