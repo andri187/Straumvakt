@@ -51,6 +51,60 @@ IDs they absorb. Nothing below renumbers them.
 > Ships no customer-visible feature. Its value is that P4-D then
 > measures a system with no known defects.
 
+## Status — 2026-08-02
+
+| Milestone | State |
+|---|---|
+| P4.C0 baseline | ✅ done — tree clean, 13 commits, duplicate ADR 0021 resolved |
+| P4.12 batch write path | ✅ done — partitioned, not homogenised. MeterValues deliberately excluded (see Rule 5 note) |
+| P4.13 archive fanout | ✅ done — `sendBatch`, driven by returned identities |
+| P4.14 pooling + cadence | ⛔ **Rule 4** — needs an explicit instruction naming `apps/api/wrangler.jsonc` |
+| P4.15 partition retention | ⛔ **blocked on [ADR 0037](../adr/0037-r2-key-scheme-retention-class-segment.md)** |
+| P4.16 command durability | ✅ done — DO storage, claim-by-delete, close + error + alarm sweeps |
+| P4.17 subprotocol echo | ✅ done — RFC 6455 negotiation; entry Worker was dropping the offer |
+| P4.18 Authorize caching | ⏳ **Rule 5 gate** — not started |
+
+Test state: `apps/api` 579/579, `gateway` 54/54, both typecheck clean.
+
+### Findings that came out of the work
+
+- **F3 was not a defect.** "New pg pool per batch" is *required* —
+  Workers I/O isolation forbids reusing pg connections across requests
+  ([raw.ts header](../../apps/api/src/lib/db/raw.ts)). `max: 1` keeps it
+  to one Hyperdrive-routed connection. P4.14's "genuinely open question"
+  is answered: don't change it.
+
+- **`npx tsc --noEmit` at the repo root verifies about a third of the
+  codebase.** Root `tsconfig.json` excludes `apps/**`, `gateway/**` and
+  `packages/**`. CLAUDE.md Rules 9 and 10 name that command as the
+  verification bar, and it silently skips the API Worker and the OCPP
+  gateway. Vitest transpiles without typechecking, so tests don't catch
+  it either — four type errors shipped in the P4.12 commit before this
+  was noticed. **Rules 9/10 need a per-workspace typecheck**, or a root
+  script that runs all three.
+
+- **`virtual-cp.ts` needed no change for P4.17** — the workaround this
+  task list described (from the 2026-05-12 note) was already gone. The
+  simulator has therefore most likely been failing 1006 against the
+  gateway since Sprint 7.0.
+
+- **The outbox projection collapses terminal states.**
+  [`onCommandResult`](../../apps/api/src/lib/ocpp/projections.ts#L277)
+  only recognises `accepted` | `rejected` and silently returns on
+  anything else. P4.16's timeout and disconnect sweeps therefore emit
+  `rejected` with the real cause in `result.reason`. It drives the row
+  to `failed` and keeps the detail, but a timed-out command and a
+  charger-rejected command are indistinguishable in the console without
+  opening the JSON. ADR 0017's Sprint 9 Track A spec named `timed_out`
+  as a distinct state. **Follow-up: teach the projection the extra
+  outcomes** — small, `apps/api`-side, and it was outside the boundary
+  the work was done under.
+
+- **Six pre-existing test failures fixed**, all test bugs. Two of them
+  had stopped testing what they claimed: the Zaptec webhook fail-open
+  posture and the org-email-domain tenant-isolation guard. Both now
+  genuinely assert their invariant.
+
 ## Findings closed here
 
 | # | Finding | Location | Milestone |
