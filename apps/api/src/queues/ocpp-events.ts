@@ -138,8 +138,24 @@ async function fanOutToArchive(
   events: IngestEvent[],
 ): Promise<void> {
   if (!env.ARCHIVE_QUEUE || events.length === 0) return;
-  for (let i = 0; i < events.length; i += ARCHIVE_CHUNK) {
-    const chunk = events.slice(i, i + ARCHIVE_CHUNK);
+
+  // ADR 0040 D4 — heartbeats are never archived. At 1000 chargers that
+  // is ~1.44M objects/day and ~43M R2 Class A operations/month, on the
+  // order of $195/month to durably store frames carrying nothing but
+  // liveness and a clock sync. If a heartbeat is worthless after three
+  // days it is worthless in R2 too; the long-term availability artifact
+  // is the derived downtime period (P4.30), not the frames.
+  //
+  // Filtered by event type rather than retention class deliberately —
+  // the classification lives in the gateway and this must not silently
+  // change meaning if it moves.
+  const archivable = events.filter(
+    (e) => !HEARTBEAT_EVENT_TYPES.has(e.eventType),
+  );
+  if (archivable.length === 0) return;
+
+  for (let i = 0; i < archivable.length; i += ARCHIVE_CHUNK) {
+    const chunk = archivable.slice(i, i + ARCHIVE_CHUNK);
     try {
       await env.ARCHIVE_QUEUE.sendBatch(chunk.map((body) => ({ body })));
     } catch (err) {

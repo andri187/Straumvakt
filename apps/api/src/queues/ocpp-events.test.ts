@@ -354,7 +354,56 @@ describe("handleOcppEventsBatch — batch partitioning", () => {
     }
   });
 
-  it("archives the events the insert reported fresh, not the first N (F2)", async () => {
+  it("does not archive heartbeats at all (ADR 0040 D4)", async () => {
+    // ~1.44M objects/day at 1000 chargers, ~$195/mo of R2 Class A
+    // operations, for frames carrying nothing but liveness and a clock
+    // sync. The long-term availability artifact is the derived downtime
+    // period, not the frames.
+    const hb1 = makeMsg(heartbeat("aaaaaaaa-0000-0000-0000-000000000001"));
+    const hb2 = makeMsg(heartbeat("aaaaaaaa-0000-0000-0000-000000000002"));
+    rawMocks.batchIngestHeartbeats.mockResolvedValue({
+      fresh: 2,
+      replays: 0,
+      identitiesTouched: 1,
+      freshEventIds: [
+        "aaaaaaaa-0000-0000-0000-000000000001",
+        "aaaaaaaa-0000-0000-0000-000000000002",
+      ],
+    });
+
+    await handleOcppEventsBatch(makeBatch([hb1, hb2]), ENV_ARCHIVE);
+
+    // Ingested and acked, just never archived.
+    expect(hb1.ack).toHaveBeenCalledTimes(1);
+    expect(hb2.ack).toHaveBeenCalledTimes(1);
+    expect(archiveSendBatch).not.toHaveBeenCalled();
+  });
+
+  it("still archives non-heartbeat events from a mixed batch", async () => {
+    const hb = makeMsg(heartbeat("aaaaaaaa-0000-0000-0000-000000000001"));
+    const status = makeMsg(VALID); // charger.status_updated
+    rawMocks.batchIngestHeartbeats.mockResolvedValue({
+      fresh: 1,
+      replays: 0,
+      identitiesTouched: 1,
+      freshEventIds: ["aaaaaaaa-0000-0000-0000-000000000001"],
+    });
+
+    await handleOcppEventsBatch(makeBatch([hb, status]), ENV_ARCHIVE);
+
+    expect(archiveSendBatch).toHaveBeenCalledTimes(1);
+    const archived = archiveSendBatch.mock.calls[0][0];
+    expect(archived.map((m) => m.body.eventId)).toEqual([VALID.eventId]);
+  });
+
+  it.skip("archives the events the insert reported fresh, not the first N (F2)", async () => {
+    // SKIPPED by ADR 0040 D4, not by regression. The fast path handles
+    // only heartbeats, and heartbeats are no longer archived — so the
+    // fast path contributes nothing to the fanout and this assertion has
+    // no reachable path. The underlying contract (batchIngestHeartbeats
+    // returning WHICH events were fresh, not how many) is still correct
+    // and still covered in lib/db/raw.test.ts; it feeds the `recorded`
+    // count. Restore this test if heartbeats ever become archivable.
     // The old code did slice(0, result.fresh), which assumes fresh
     // events are first in input order. With a replay interleaved that
     // archived the WRONG envelopes — silently.
@@ -447,17 +496,12 @@ describe("handleOcppEventsBatch — batch partitioning", () => {
   it("archive fanout is batched, not one send per event", async () => {
     // P4.13 — the old loop awaited one send() per event, up to 100
     // sequential round trips inside the batch window.
+    // Non-heartbeat events — heartbeats are excluded from the fanout
+    // entirely (ADR 0040 D4), so the batching contract is exercised on
+    // the per-event path.
     const msgs = Array.from({ length: 5 }, (_, i) =>
-      makeMsg(heartbeat(`aaaaaaaa-0000-0000-0000-00000000000${i + 1}`)),
+      makeMsg({ ...VALID, eventId: `bbbbbbbb-0000-0000-0000-00000000000${i + 1}` }),
     );
-    rawMocks.batchIngestHeartbeats.mockResolvedValue({
-      fresh: 5,
-      replays: 0,
-      identitiesTouched: 1,
-      freshEventIds: msgs.map(
-        (_, i) => `aaaaaaaa-0000-0000-0000-00000000000${i + 1}`,
-      ),
-    });
 
     await handleOcppEventsBatch(makeBatch(msgs), ENV_ARCHIVE);
 
