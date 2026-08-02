@@ -156,6 +156,15 @@ IDs they absorb. Nothing below renumbers them.
 > `partition-cron.ts` says outright: *"What it does NOT do (yet):
 > detach/drop partitions older than the retention window."* At 1000
 > chargers that is ~2M rows/day with no ceiling.
+>
+> ⚠️ **Blocked on [ADR 0037](../adr/0037-r2-key-scheme-retention-class-segment.md)**
+> (Proposed, 2026-08-02). The archive gate below cannot be built until
+> the R2 key scheme carries a retention-class segment — today billing
+> evidence and heartbeat noise are indistinguishable by key, so no
+> lifecycle rule can expire one without the other. ADR 0037 also
+> replaces "count objects under the prefix" with a fail-closed
+> `events.archive_watermark` read. **Do not start P4.15 until 0037 is
+> accepted.**
 
 - [ ] Detach-and-drop past the retention window, per retention class —
       7 days for `raw_protocol` per ADR 0017 §5; `financial` and
