@@ -144,9 +144,19 @@ Test state: `apps/api` 579/579, `gateway` 72/72, both typecheck clean.
 - [ ] Triage the untracked set: commit what belongs (probes, ADRs, docs,
       reference pages, the `20260531200000_driver_self_onboarding`
       migration) in their own logical commits per Rule 8; delete scratch.
-- [ ] Resolve the duplicate ADR 0021 — renumber one (F20).
+- [x] Resolve the duplicate ADR 0021 — renumber one (F20). *Docs side done
+      2026-08-02 (autocharge → 0036). Code-comment citations repaired
+      2026-08-02: 26 autocharge references across 13 files moved to 0036;
+      the 5 genuine rate-reference-propagation citations in
+      `billing-tariff-mgmt.ts` / `routes/admin/billing.ts` correctly
+      remain 0021.*
 - [ ] Refresh `driver-app-api/README.md`: Phases 2 and 3 shipped; only
-      Phase 4 (polling → SSE → push) remains, and that is P6.2.
+      Phase 4 (polling → SSE → push) remains. **Correction 2026-08-02:**
+      that is *not* all P6.2. P6.2 is FCM/APNs background delivery;
+      the SSE/WebSocket read transport belongs to
+      [ADR 0038](../adr/0038-read-serving-tier-and-state-propagation.md)
+      and is sequenced with the serving tier. They are complementary —
+      push wakes a backgrounded app, SSE serves a foregrounded one.
 - [ ] `git status` clean; on a `dev/p4-c-*` branch, not `master`.
 - [ ] Baseline `npx tsc --noEmit` and `npx prisma validate` both green.
       If either is already red, fix before any P4-C code.
@@ -401,20 +411,42 @@ test; EVSE layer migrated with no billing regression.
 
 # P4-E — Operational read models *(sketch)*
 
-- [ ] **P4.28** `fleet_state` projection keyed by connector, maintained
-      by `lib/ocpp/projections.ts`. `listSiteTree` and the list endpoints
-      read it instead of recomputing hierarchy + credential decrypt per
-      request.
+- [ ] ~~**P4.28** `fleet_state` projection keyed by connector~~ —
+      **superseded by [ADR 0038](../adr/0038-read-serving-tier-and-state-propagation.md)
+      D3.** 0038 considers exactly this design as its Option A, names it
+      as what the AMPECO benchmark exhibits, and rejects it: a projection
+      table keeps the state in Postgres, keeps clients polling it, and
+      adds a *second* source of truth that can drift from the frames that
+      produced it. Option B — the DO that terminates OCPP already holds
+      the live state in memory at the moment it changes, so serve from
+      there — has no invalidation problem at all, because the serving
+      copy is the origin rather than a copy.
+
+      That argument is better than the one this milestone was written on.
+      **P4.28 is dropped**; Hot-tier state belongs to ADR 0038.
+
+      Two things 0038's Hot tier still needs, worth pinning as it is
+      built: a **fallback for chargers with no live DO** (never connected,
+      or long offline — the console must still render them, from
+      `last_seen_at`), and **rehydration on DO cold start**, which 0038
+      answers with "projection writes continue exactly as today — they
+      are the history and the recovery source."
 - [ ] **P4.29** Console read path — server-rendered first paint,
       stale-while-revalidate, stop blanking lists on refetch, UI state
-      separated from server state.
+      separated from server state. **Survives, reframed:** the site tree
+      and charger lists are 0038's **Warm** tier, not Hot — cached with
+      explicit invalidation on write, staleness budget in seconds to
+      minutes. F13/F14 are still real and still fixed here.
 - [ ] **P4.30** **Derived downtime periods** from connector status and
       last-seen. A downtime period is a derived *fact*; an issue is a
       *workstream* referencing one. P4.1's dashboards, SLA reporting and
       P6.1's issue engine all read this.
 - [ ] **P4.31** Driver polling backoff — focus-gated 10–15s instead of
       3–4s. Cheap, no new infrastructure, removes the largest single
-      source of database load. Full SSE/push stays at P6.2.
+      source of database load. **Interim mitigation only** — the
+      structural fix is [ADR 0038](../adr/0038-read-serving-tier-and-state-propagation.md)'s
+      serving tier, which removes the poll rather than slowing it.
+      (Corrected 2026-08-02: SSE is 0038, not P6.2; P6.2 is FCM/APNs.)
 
 **Exit:** cold page load is one indexed query; downtime periods populate
 with no human input; driver-originated DB load down roughly an order of
