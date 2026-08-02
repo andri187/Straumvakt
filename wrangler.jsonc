@@ -50,6 +50,21 @@
         // login route so it works across the UI/API subdomain split.
         "NEXT_PUBLIC_API_BASE_URL": "https://hlada-api-staging.straumvakt.workers.dev"
       },
+      // Custom-domain routing for the brand domain. Pre-pilot,
+      // straumvakt.org points at the staging Worker (per
+      // docs/operator/STRAUMVAKT_ORG_CUSTOM_DOMAIN_TODO.md). When the
+      // production Worker is cut over, these routes move to the root
+      // config and a staging.straumvakt.org parallel is added here.
+      // `custom_domain: true` auto-provisions DNS (CNAME flattening on
+      // apex) and an SSL cert via CF — plain `routes` would have
+      // required pre-existing DNS records.
+      "routes": [
+        { "pattern": "straumvakt.org", "custom_domain": true },
+        { "pattern": "www.straumvakt.org", "custom_domain": true }
+      ],
+      // Keep the workers.dev URL alive so hlada-staging.straumvakt.workers.dev
+      // remains a usable fallback while the custom domain settles.
+      "workers_dev": true,
       "services": [
         {
           "binding": "OCPP_GATEWAY",
