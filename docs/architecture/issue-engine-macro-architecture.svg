@@ -1,0 +1,196 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="940" viewBox="0 0 1440 940" role="img" aria-labelledby="title desc">
+  <title id="title">Straumvakt Issue Engine macro architecture</title>
+  <desc id="desc">Macro architecture diagram showing issue engine signal sources, normalization, detection, correlation, ticket workflow, routing, UI, remediation, and storage.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#07111f"/>
+      <stop offset="0.52" stop-color="#0b1726"/>
+      <stop offset="1" stop-color="#111827"/>
+    </linearGradient>
+    <linearGradient id="green" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#20e3a2"/>
+      <stop offset="1" stop-color="#45c7f4"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#000000" flood-opacity="0.35"/>
+    </filter>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="9" refY="6" orient="auto">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#7dd3fc"/>
+    </marker>
+    <style>
+      .title { font: 800 34px Inter, Segoe UI, Arial, sans-serif; fill: #f8fafc; }
+      .subtitle { font: 400 15px Inter, Segoe UI, Arial, sans-serif; fill: #94a3b8; }
+      .label { font: 750 16px Inter, Segoe UI, Arial, sans-serif; fill: #f8fafc; }
+      .small { font: 500 12px Inter, Segoe UI, Arial, sans-serif; fill: #cbd5e1; }
+      .tiny { font: 500 10px Inter, Segoe UI, Arial, sans-serif; fill: #94a3b8; }
+      .mono { font: 600 11px Consolas, Menlo, monospace; fill: #bae6fd; }
+      .panel { fill: #0f1d2e; stroke: #26384f; stroke-width: 1.2; rx: 14; filter: url(#shadow); }
+      .panel2 { fill: #0b2230; stroke: #2a5163; stroke-width: 1.2; rx: 14; filter: url(#shadow); }
+      .store { fill: #13202c; stroke: #475569; stroke-width: 1.2; rx: 12; }
+      .chip { fill: #102b35; stroke: #1f6f7a; stroke-width: 1; rx: 6; }
+      .warn { fill: #332711; stroke: #b7791f; stroke-width: 1.2; rx: 10; }
+      .line { stroke: #7dd3fc; stroke-width: 2.4; fill: none; marker-end: url(#arrow); }
+      .softline { stroke: #38bdf8; stroke-width: 1.5; fill: none; opacity: 0.55; marker-end: url(#arrow); }
+      .dash { stroke: #94a3b8; stroke-width: 1.5; stroke-dasharray: 5 7; fill: none; opacity: 0.65; marker-end: url(#arrow); }
+    </style>
+  </defs>
+
+  <rect width="1440" height="940" fill="url(#bg)"/>
+  <path d="M0 120 C240 48 390 158 620 88 C880 8 1040 130 1440 58 L1440 0 L0 0 Z" fill="#0f766e" opacity="0.09"/>
+  <path d="M0 900 C240 820 490 930 780 850 C1060 772 1210 882 1440 804 L1440 940 L0 940 Z" fill="#2563eb" opacity="0.08"/>
+
+  <text x="64" y="66" class="title">Straumvakt Issue Engine</text>
+  <text x="64" y="94" class="subtitle">Macro architecture: turn raw operational signals into routed, explainable work.</text>
+
+  <g transform="translate(64 140)">
+    <rect class="panel" width="260" height="520"/>
+    <text x="22" y="38" class="label">Signal sources</text>
+    <text x="22" y="62" class="tiny">Control-plane neutral inputs</text>
+
+    <g transform="translate(22 92)">
+      <rect class="chip" width="216" height="42"/>
+      <text x="14" y="19" class="small">OCPP gateway</text>
+      <text x="14" y="34" class="tiny">Boot, heartbeat, status, commands</text>
+    </g>
+    <g transform="translate(22 146)">
+      <rect class="chip" width="216" height="42"/>
+      <text x="14" y="19" class="small">Vendor APIs</text>
+      <text x="14" y="34" class="tiny">Zaptec, Easee, future OEMs</text>
+    </g>
+    <g transform="translate(22 200)">
+      <rect class="chip" width="216" height="42"/>
+      <text x="14" y="19" class="small">External CPMS</text>
+      <text x="14" y="34" class="tiny">Imported sessions and status</text>
+    </g>
+    <g transform="translate(22 254)">
+      <rect class="chip" width="216" height="42"/>
+      <text x="14" y="19" class="small">Network hardware</text>
+      <text x="14" y="34" class="tiny">UniFi, Teltonika, Shelly</text>
+    </g>
+    <g transform="translate(22 308)">
+      <rect class="chip" width="216" height="42"/>
+      <text x="14" y="19" class="small">Billing and sessions</text>
+      <text x="14" y="34" class="tiny">Cost blockers, stuck flows</text>
+    </g>
+    <g transform="translate(22 362)">
+      <rect class="chip" width="216" height="42"/>
+      <text x="14" y="19" class="small">Adapter health</text>
+      <text x="14" y="34" class="tiny">p95, error rate, contract tests</text>
+    </g>
+    <g transform="translate(22 430)">
+      <text x="0" y="0" class="mono">events.event_log</text>
+      <text x="0" y="20" class="mono">vendors.adapter_health</text>
+      <text x="0" y="40" class="mono">charging.sessions</text>
+      <text x="0" y="60" class="mono">ocpp.connectors</text>
+    </g>
+  </g>
+
+  <g transform="translate(398 170)">
+    <rect class="panel2" width="230" height="136"/>
+    <text x="20" y="36" class="label">Normalize</text>
+    <text x="20" y="62" class="small">Entity refs, timestamps, source,</text>
+    <text x="20" y="82" class="small">severity hints, evidence keys.</text>
+    <text x="20" y="112" class="mono">SignalFact[]</text>
+  </g>
+
+  <g transform="translate(398 370)">
+    <rect class="panel2" width="230" height="150"/>
+    <text x="20" y="36" class="label">Detection rules</text>
+    <text x="20" y="62" class="small">Deterministic first:</text>
+    <text x="20" y="84" class="tiny">offline, stuck session, auth burst,</text>
+    <text x="20" y="102" class="tiny">meter anomaly, network outage.</text>
+    <text x="20" y="130" class="mono">issues.detection_rules</text>
+  </g>
+
+  <g transform="translate(704 268)">
+    <rect class="panel2" width="250" height="170"/>
+    <text x="22" y="38" class="label">Correlate + dedupe</text>
+    <text x="22" y="66" class="small">Group by subject, rule key,</text>
+    <text x="22" y="86" class="small">time window, root-cause hint.</text>
+    <text x="22" y="118" class="tiny">Example: 20 chargers offline +</text>
+    <text x="22" y="136" class="tiny">WAN down = 1 site issue.</text>
+  </g>
+
+  <g transform="translate(1036 188)">
+    <rect class="panel" width="300" height="220"/>
+    <text x="24" y="38" class="label">Issue ticket</text>
+    <text x="24" y="66" class="small">Operator-facing unit of work.</text>
+    <g transform="translate(24 92)">
+      <text class="mono" x="0" y="0">issues.tickets</text>
+      <text class="tiny" x="0" y="24">subjectType + subjectId</text>
+      <text class="tiny" x="0" y="44">category + severity + status</text>
+      <text class="tiny" x="0" y="64">assigned user / contractor</text>
+      <text class="tiny" x="0" y="84">slaTargetAt + resolvedAt</text>
+    </g>
+  </g>
+
+  <g transform="translate(1036 478)">
+    <rect class="panel" width="300" height="220"/>
+    <text x="24" y="38" class="label">Timeline + evidence</text>
+    <text x="24" y="66" class="small">Every decision explains itself.</text>
+    <g transform="translate(24 94)">
+      <text class="mono" x="0" y="0">issues.ticket_events</text>
+      <text class="tiny" x="0" y="24">rule fired / matched evidence</text>
+      <text class="tiny" x="0" y="44">state snapshots / raw refs</text>
+      <text class="tiny" x="0" y="64">operator actions / notes</text>
+      <text class="tiny" x="0" y="84">resolution summary</text>
+    </g>
+  </g>
+
+  <g transform="translate(704 568)">
+    <rect class="warn" width="250" height="130"/>
+    <text x="22" y="36" class="label">Routing policy</text>
+    <text x="22" y="64" class="small">Route service to hardware owner,</text>
+    <text x="22" y="84" class="small">not always the site operator.</text>
+    <text x="22" y="112" class="mono">assets.chargers.owner_org_id</text>
+  </g>
+
+  <g transform="translate(388 705)">
+    <rect class="store" width="276" height="118"/>
+    <text x="20" y="34" class="label">Retention</text>
+    <text x="20" y="62" class="small">Issue history stays hot/long-lived.</text>
+    <text x="20" y="88" class="mono">issue_history = indefinite</text>
+  </g>
+
+  <g transform="translate(724 760)">
+    <rect class="panel" width="250" height="100"/>
+    <text x="22" y="36" class="label">Operator console</text>
+    <text x="22" y="62" class="small">Triage queue, site/charger pages,</text>
+    <text x="22" y="82" class="small">assignment, SLA, comments.</text>
+  </g>
+
+  <g transform="translate(1046 760)">
+    <rect class="panel" width="290" height="100"/>
+    <text x="22" y="36" class="label">Remediation</text>
+    <text x="22" y="62" class="small">Manual first; guided actions next;</text>
+    <text x="22" y="82" class="small">automation only after trust.</text>
+  </g>
+
+  <path class="line" d="M324 400 C356 400 366 238 398 238"/>
+  <path class="line" d="M324 400 C356 400 366 444 398 444"/>
+  <path class="line" d="M628 238 C660 238 672 318 704 326"/>
+  <path class="line" d="M628 444 C660 444 672 392 704 384"/>
+  <path class="line" d="M954 340 C994 340 1000 296 1036 296"/>
+  <path class="line" d="M954 390 C994 430 1002 536 1036 574"/>
+  <path class="softline" d="M829 438 L829 568"/>
+  <path class="line" d="M954 633 C990 633 996 360 1036 338"/>
+  <path class="line" d="M829 698 L829 760"/>
+  <path class="line" d="M974 810 L1046 810"/>
+  <path class="dash" d="M1190 760 L1190 698"/>
+  <path class="dash" d="M1036 606 C965 642 860 724 664 764"/>
+
+  <g transform="translate(64 705)">
+    <rect class="store" width="254" height="156"/>
+    <text x="20" y="34" class="label">V1 rule set</text>
+    <text x="20" y="64" class="tiny">1. Charger offline</text>
+    <text x="20" y="84" class="tiny">2. Site connectivity outage</text>
+    <text x="20" y="104" class="tiny">3. Stuck session</text>
+    <text x="20" y="124" class="tiny">4. Authorization failure burst</text>
+    <text x="20" y="144" class="tiny">5. Metering / signature anomaly</text>
+  </g>
+
+  <g transform="translate(64 884)">
+    <text class="tiny" x="0" y="0">Design constraints: post-pilot per ADR 0006; owner routing per ADR 0008; control-plane neutral per ADR 0011.</text>
+    <text class="tiny" x="0" y="20">First release should be read-only detection + explainable tickets. Automated remediation comes later.</text>
+  </g>
+</svg>

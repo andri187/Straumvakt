@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760" role="img" aria-labelledby="title desc">
+  <title id="title">Straumvakt Context Architecture</title>
+  <desc id="desc">System context diagram showing Straumvakt and its external actors and systems.</desc>
+  <defs>
+    <style>
+      .bg{fill:#08111f}.box{fill:#0f1b2d;stroke:#31445f;stroke-width:1.5;rx:10}.core{fill:#123026;stroke:#46b384;stroke-width:2;rx:12}.ext{fill:#251b35;stroke:#70529b;stroke-width:1.5;rx:10}.data{fill:#2b2414;stroke:#c59b3d;stroke-width:1.5;rx:10}
+      .title{fill:#fff;font:800 34px Inter,Segoe UI,Arial}.label{fill:#fff;font:700 20px Inter,Segoe UI,Arial}.text{fill:#cbd5e1;font:14px Inter,Segoe UI,Arial}.small{fill:#a8b3c4;font:13px Inter,Segoe UI,Arial}
+      .a{stroke:#7dd3fc;stroke-width:2.2;fill:none;marker-end:url(#arr)}.b{stroke:#86efac;stroke-width:2.2;fill:none;marker-end:url(#arr2)}.c{stroke:#fbbf24;stroke-width:2.2;fill:none;marker-end:url(#arr3)}.d{stroke-dasharray:7 7}
+    </style>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 10 5 0 10z" fill="#7dd3fc"/></marker>
+    <marker id="arr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 10 5 0 10z" fill="#86efac"/></marker>
+    <marker id="arr3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 10 5 0 10z" fill="#fbbf24"/></marker>
+  </defs>
+  <rect class="bg" width="1200" height="760"/>
+  <text class="title" x="48" y="58">Straumvakt Context</text>
+  <text class="text" x="48" y="86">Logical boundary: Straumvakt operates charging assets, sessions, diagnostics, tariffs, and cost allocation above several control planes.</text>
+
+  <rect class="core" x="430" y="250" width="340" height="210"/>
+  <text class="label" x="470" y="300">Straumvakt Platform</text>
+  <text class="text" x="470" y="336">Operator console</text>
+  <text class="text" x="470" y="362">Admin APIs and repositories</text>
+  <text class="text" x="470" y="388">Event log and projections</text>
+  <text class="text" x="470" y="414">Billing and cost-center model</text>
+
+  <rect class="box" x="52" y="132" width="230" height="120"/>
+  <text class="label" x="82" y="174">Operators</text>
+  <text class="small" x="82" y="204">CPO staff, admins, support</text>
+  <text class="small" x="82" y="226">Manage tenants and chargers</text>
+
+  <rect class="box" x="52" y="470" width="230" height="120"/>
+  <text class="label" x="82" y="512">Drivers</text>
+  <text class="small" x="82" y="542">RFID, app, roaming tokens</text>
+  <text class="small" x="82" y="564">Post-pilot richer app surface</text>
+
+  <rect class="ext" x="890" y="115" width="250" height="130"/>
+  <text class="label" x="920" y="158">Chargers</text>
+  <text class="small" x="920" y="188">OCPP 1.6J devices</text>
+  <text class="small" x="920" y="210">Native control endpoints</text>
+
+  <rect class="ext" x="890" y="300" width="250" height="130"/>
+  <text class="label" x="920" y="343">Vendor APIs</text>
+  <text class="small" x="920" y="373">Zaptec, Easee, future DC APIs</text>
+  <text class="small" x="920" y="395">Discovery and enrichment</text>
+
+  <rect class="ext" x="890" y="485" width="250" height="130"/>
+  <text class="label" x="920" y="528">External CPMS</text>
+  <text class="small" x="920" y="558">Overlay or read-only imports</text>
+  <text class="small" x="920" y="580">CDRs, status, webhooks</text>
+
+  <rect class="data" x="430" y="600" width="340" height="95"/>
+  <text class="label" x="470" y="640">Neon Postgres</text>
+  <text class="small" x="470" y="670">System of record, event log, audit, billing</text>
+
+  <path class="a" d="M282 190 C345 205 375 255 430 310"/>
+  <path class="a d" d="M282 530 C350 505 380 455 430 415"/>
+  <path class="b" d="M770 300 C815 250 845 200 890 178"/>
+  <path class="b" d="M770 355 C810 360 845 365 890 365"/>
+  <path class="b d" d="M770 410 C820 460 845 515 890 550"/>
+  <path class="c" d="M600 460 L600 600"/>
+  <text class="small" x="310" y="235">operate</text>
+  <text class="small" x="805" y="240">control and telemetry</text>
+  <text class="small" x="805" y="350">adapter data</text>
+  <text class="small" x="805" y="500">imports</text>
+  <text class="small" x="618" y="540">durable state</text>
+</svg>

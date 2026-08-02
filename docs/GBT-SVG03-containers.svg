@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760" role="img" aria-labelledby="title desc">
+  <title id="title">Straumvakt Container Architecture</title>
+  <desc id="desc">Container diagram showing runtime services and infrastructure.</desc>
+  <defs>
+    <style>
+      .bg{fill:#08111f}.ui{fill:#0f1b2d;stroke:#375678;stroke-width:1.5;rx:8}.api{fill:#10251f;stroke:#3d8b68;stroke-width:1.5;rx:8}.gw{fill:#241a33;stroke:#7551a3;stroke-width:1.5;rx:8}.q{fill:#2b2414;stroke:#c59b3d;stroke-width:1.5;rx:8}.db{fill:#182235;stroke:#7190c4;stroke-width:1.5;rx:8}
+      .title{fill:#fff;font:800 34px Inter,Segoe UI,Arial}.label{fill:#fff;font:700 20px Inter,Segoe UI,Arial}.small{fill:#aebbd0;font:13px Inter,Segoe UI,Arial}.lane{fill:#0b1524;stroke:#26384f;stroke-width:1}
+      .a{stroke:#7dd3fc;stroke-width:2.2;fill:none;marker-end:url(#arr)}.b{stroke:#86efac;stroke-width:2.2;fill:none;marker-end:url(#arr2)}.c{stroke:#fbbf24;stroke-width:2.2;fill:none;marker-end:url(#arr3)}
+    </style>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 10 5 0 10z" fill="#7dd3fc"/></marker>
+    <marker id="arr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 10 5 0 10z" fill="#86efac"/></marker>
+    <marker id="arr3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 10 5 0 10z" fill="#fbbf24"/></marker>
+  </defs>
+  <rect class="bg" width="1200" height="760"/>
+  <text class="title" x="48" y="58">Straumvakt Containers</text>
+  <text class="small" x="48" y="86">Runtime topology for the current split: UI, API Worker, OCPP gateway, queues, and Neon.</text>
+  <rect class="lane" x="45" y="120" width="1110" height="170" rx="10"/><text class="small" x="68" y="146">Presentation</text>
+  <rect class="lane" x="45" y="325" width="1110" height="170" rx="10"/><text class="small" x="68" y="351">Application and integration</text>
+  <rect class="lane" x="45" y="530" width="1110" height="170" rx="10"/><text class="small" x="68" y="556">Persistence and async</text>
+
+  <rect class="ui" x="95" y="170" width="230" height="86"/><text class="label" x="120" y="205">Next.js UI</text><text class="small" x="120" y="232">Operator console</text>
+  <rect class="ui" x="380" y="170" width="230" height="86"/><text class="label" x="405" y="205">Driver App</text><text class="small" x="405" y="232">Start charge, sessions, receipts</text>
+  <rect class="api" x="665" y="170" width="230" height="86"/><text class="label" x="690" y="205">API Client</text><text class="small" x="690" y="232">HTTPS fetch wrappers</text>
+  <rect class="api" x="120" y="375" width="260" height="86"/><text class="label" x="145" y="410">API Worker</text><text class="small" x="145" y="437">Hono routes, auth, repositories</text>
+  <rect class="gw" x="470" y="375" width="260" height="86"/><text class="label" x="495" y="410">OCPP Gateway</text><text class="small" x="495" y="437">Worker plus Durable Objects</text>
+  <rect class="gw" x="820" y="375" width="260" height="86"/><text class="label" x="845" y="410">Chargers</text><text class="small" x="845" y="437">WebSocket OCPP devices</text>
+  <rect class="db" x="120" y="580" width="260" height="86"/><text class="label" x="145" y="615">Neon Postgres</text><text class="small" x="145" y="642">Prisma 7, 18 schemas</text>
+  <rect class="q" x="470" y="580" width="260" height="86"/><text class="label" x="495" y="615">Queues</text><text class="small" x="495" y="642">Commands, retries, projection jobs</text>
+
+  <path class="a" d="M325 213 L380 213"/><path class="a" d="M610 213 L665 213"/><path class="a" d="M780 256 C640 315 470 366 380 398"/>
+  <path class="b" d="M380 418 L470 418"/><path class="b" d="M730 418 L820 418"/>
+  <path class="c" d="M250 461 L250 580"/><path class="c" d="M600 461 L600 580"/><path class="c" d="M470 623 L380 623"/>
+  <text class="small" x="340" y="200">admin HTTPS</text><text class="small" x="620" y="200">driver HTTPS</text><text class="small" x="405" y="400">service binding</text><text class="small" x="748" y="400">WebSocket</text><text class="small" x="270" y="528">Prisma</text>
+</svg>

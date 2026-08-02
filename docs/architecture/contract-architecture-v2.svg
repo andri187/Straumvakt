@@ -1,0 +1,337 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1640 1380" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif">
+  <defs>
+    <marker id="arrow-sky" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#38bdf8"/>
+    </marker>
+    <marker id="arrow-emerald" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#34d399"/>
+    </marker>
+    <marker id="arrow-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#fbbf24"/>
+    </marker>
+    <marker id="arrow-purple" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#c084fc"/>
+    </marker>
+    <marker id="arrow-rose" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#fb7185"/>
+    </marker>
+    <style>
+      .bg { fill: #0f172a; }
+      .panel { fill: #0c1628; }
+      .title { fill: #f1f5f9; font-size: 28px; font-weight: 700; }
+      .subtitle { fill: #94a3b8; font-size: 13px; }
+      .h2 { fill: #f1f5f9; font-size: 16px; font-weight: 600; }
+      .label { fill: #e2e8f0; font-size: 13px; }
+      .label-bold { fill: #f1f5f9; font-size: 13px; font-weight: 600; }
+      .small { fill: #94a3b8; font-size: 11px; }
+      .tiny { fill: #94a3b8; font-size: 10px; }
+      .mono { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; }
+      .agreement { fill: #0c1628; stroke: #38bdf8; stroke-width: 2; }
+      .scope-row { fill: #0c1628; stroke: #38bdf8; stroke-width: 1.5; }
+      .audience-col { fill: #0c1628; stroke: #34d399; stroke-width: 1.5; }
+      .rule-cell { fill: #111827; stroke: #334155; stroke-width: 1; }
+      .rule-cell-most { fill: #1f2937; stroke: #fbbf24; stroke-width: 2; }
+      .factor { fill: #1a1305; stroke: #fbbf24; stroke-width: 1.5; }
+      .bearer { fill: #170c1f; stroke: #c084fc; stroke-width: 1.5; }
+      .resolution { fill: #0a0f1c; stroke: #c084fc; stroke-width: 1.5; }
+      .example { fill: #100a1a; stroke: #fb7185; stroke-width: 1.5; }
+      .text-sky { fill: #38bdf8; }
+      .text-emerald { fill: #34d399; }
+      .text-amber { fill: #fbbf24; }
+      .text-purple { fill: #c084fc; }
+      .text-rose { fill: #fb7185; }
+      .text-slate { fill: #94a3b8; }
+      .text-ink { fill: #e2e8f0; }
+      .arrow-sky { stroke: #38bdf8; stroke-width: 2; fill: none; }
+      .arrow-emerald { stroke: #34d399; stroke-width: 2; fill: none; }
+      .arrow-amber { stroke: #fbbf24; stroke-width: 1.5; fill: none; }
+      .arrow-purple { stroke: #c084fc; stroke-width: 2; fill: none; stroke-dasharray: 5,3; }
+      .arrow-rose { stroke: #fb7185; stroke-width: 2; fill: none; }
+      .divider { stroke: #1e293b; stroke-width: 1; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1640" height="1380"/>
+
+  <!-- TITLE -->
+  <text class="title" x="40" y="50">Contract architecture — Straumvakt V3 (proposed)</text>
+  <text class="subtitle" x="40" y="74">Parent agreement enlists factors with default bearers. A two-axis override grid (scope x audience) decides per-session per-factor bearer at runtime.</text>
+
+  <!-- ============ LAYER 1: Parent Agreement ============ -->
+  <g transform="translate(420, 100)">
+    <rect class="agreement" rx="10" width="800" height="138"/>
+    <text class="text-ink" font-size="18" font-weight="700" x="20" y="30">Layer 1 - Parent Agreement</text>
+    <text class="text-sky mono" font-size="13" x="20" y="54">parties: Straumvakt  &lt;-&gt;  CPO ORG</text>
+    <text class="small" x="20" y="74">Enlists the subset of cost factors that apply to this CPO. Each enlisted factor</text>
+    <text class="small" x="20" y="90">carries a default bearer. The agreement is the only mandatory layer.</text>
+    <text class="text-amber mono" font-size="12" x="20" y="116">{ DSO: USR, ELE: USR, ACS: USR, PRM: USR,</text>
+    <text class="text-amber mono" font-size="12" x="20" y="132">  TRF: ORG, SRF: ORG, RNT: ORG, MTR: ORG }</text>
+  </g>
+
+  <!-- arrow down to grid -->
+  <path class="arrow-purple" d="M 820 240 L 820 280" marker-end="url(#arrow-purple)"/>
+  <text class="text-purple mono small" x="830" y="262">overrides flow into the grid below</text>
+
+  <!-- ============ LAYER 2: Override Grid ============ -->
+  <text class="h2" x="40" y="306">Layer 2 - Override grid (BearerRule rows live in any cell)</text>
+  <text class="small" x="40" y="324">Each row = (cost_factor, scope_node?, audience?, bearer, allocation_rule). Rows are *diffs* against the parent default. Empty grid is legal.</text>
+
+  <!-- Audience axis label (top, horizontal) -->
+  <text class="text-emerald mono small" x="380" y="358">less specific</text>
+  <path class="arrow-emerald" d="M 480 354 L 1130 354" stroke-dasharray="3,3" marker-end="url(#arrow-emerald)"/>
+  <text class="text-emerald mono small" x="1140" y="358">more specific</text>
+  <text class="text-emerald" font-size="13" font-weight="600" x="700" y="358">AUDIENCE</text>
+
+  <!-- Audience headers -->
+  <g transform="translate(380, 372)">
+    <rect class="audience-col" rx="6" width="240" height="34" fill="#0c1628" opacity="0.5"/>
+    <text class="text-emerald label-bold" x="14" y="22">All drivers (no audience)</text>
+  </g>
+  <g transform="translate(640, 372)">
+    <rect class="audience-col" rx="6" width="240" height="34" fill="#0c1628" opacity="0.5"/>
+    <text class="text-emerald label-bold" x="14" y="22">DriverGroup G</text>
+  </g>
+  <g transform="translate(900, 372)">
+    <rect class="audience-col" rx="6" width="240" height="34" fill="#0c1628" opacity="0.5"/>
+    <text class="text-emerald label-bold" x="14" y="22">Driver (User U)</text>
+  </g>
+
+  <!-- Scope axis label (left side, vertical) -->
+  <text class="text-sky mono small" x="40" y="430">less specific</text>
+  <path class="arrow-sky" d="M 76 442 L 76 770" stroke-dasharray="3,3" marker-end="url(#arrow-sky)"/>
+  <text class="text-sky" font-size="13" font-weight="600" x="40" y="608" transform="rotate(-90 40 608)">SCOPE</text>
+  <text class="text-sky mono small" x="40" y="780">more specific</text>
+
+  <!-- Scope row labels -->
+  <g transform="translate(110, 422)">
+    <rect class="scope-row" rx="6" width="260" height="50" fill="#0c1628" opacity="0.5"/>
+    <text class="text-sky label-bold" x="14" y="22">Contract default</text>
+    <text class="small" x="14" y="40">(scope = null)</text>
+  </g>
+  <g transform="translate(110, 488)">
+    <rect class="scope-row" rx="6" width="260" height="50" fill="#0c1628" opacity="0.5"/>
+    <text class="text-sky label-bold" x="14" y="22">Site</text>
+    <text class="small" x="14" y="40">e.g. Dalvegur 10</text>
+  </g>
+  <g transform="translate(110, 554)">
+    <rect class="scope-row" rx="6" width="260" height="50" fill="#0c1628" opacity="0.5"/>
+    <text class="text-sky label-bold" x="14" y="22">Installation</text>
+    <text class="small" x="14" y="40">DSO meter scope (per CPO ORG)</text>
+  </g>
+  <g transform="translate(110, 620)">
+    <rect class="scope-row" rx="6" width="260" height="50" fill="#0c1628" opacity="0.5"/>
+    <text class="text-sky label-bold" x="14" y="22">Circuit</text>
+    <text class="small" x="14" y="40">a tenant's parking row at Dalvegur</text>
+  </g>
+  <g transform="translate(110, 686)">
+    <rect class="scope-row" rx="6" width="260" height="50" fill="#0c1628" opacity="0.5"/>
+    <text class="text-sky label-bold" x="14" y="22">Charger</text>
+    <text class="small" x="14" y="40">single station</text>
+  </g>
+
+  <!-- 5x3 cell grid -->
+  <!-- Row: Contract default -->
+  <g transform="translate(380, 422)">
+    <rect class="rule-cell" rx="4" width="240" height="50"/>
+    <text class="small mono text-amber" x="10" y="20">parent agreement default</text>
+    <text class="small mono text-slate" x="10" y="38">(required, anchors the walk)</text>
+  </g>
+  <g transform="translate(640, 422)">
+    <rect class="rule-cell" rx="4" width="240" height="50"/>
+    <text class="small mono text-slate" x="10" y="20">group-only diff (rare)</text>
+    <text class="small mono text-slate" x="10" y="38">applies everywhere for G</text>
+  </g>
+  <g transform="translate(900, 422)">
+    <rect class="rule-cell" rx="4" width="240" height="50"/>
+    <text class="small mono text-slate" x="10" y="20">driver-only diff (rare)</text>
+    <text class="small mono text-slate" x="10" y="38">applies everywhere for U</text>
+  </g>
+
+  <!-- Row: Site -->
+  <g transform="translate(380, 488)">
+    <rect class="rule-cell" rx="4" width="240" height="50"/>
+    <text class="small mono" x="10" y="20">factor F at Site</text>
+    <text class="small mono text-slate" x="10" y="38">applies to anyone at Site</text>
+  </g>
+  <g transform="translate(640, 488)">
+    <rect class="rule-cell" rx="4" width="240" height="50"/>
+    <text class="small mono" x="10" y="20">factor F at Site for G</text>
+    <text class="small mono text-slate" x="10" y="38">members of G at Site</text>
+  </g>
+  <g transform="translate(900, 488)">
+    <rect class="rule-cell" rx="4" width="240" height="50"/>
+    <text class="small mono" x="10" y="20">factor F at Site for U</text>
+    <text class="small mono text-slate" x="10" y="38">U whenever charging at Site</text>
+  </g>
+
+  <!-- Row: Installation -->
+  <g transform="translate(380, 554)">
+    <rect class="rule-cell" rx="4" width="240" height="50"/>
+    <text class="small mono" x="10" y="20">factor F at Installation</text>
+    <text class="small mono text-slate" x="10" y="38">anyone at this installation</text>
+  </g>
+  <g transform="translate(640, 554)">
+    <rect class="rule-cell" rx="4" width="240" height="50"/>
+    <text class="small mono" x="10" y="20">factor F at Inst for G</text>
+    <text class="small mono text-slate" x="10" y="38">G members at this inst</text>
+  </g>
+  <g transform="translate(900, 554)">
+    <rect class="rule-cell" rx="4" width="240" height="50"/>
+    <text class="small mono" x="10" y="20">factor F at Inst for U</text>
+    <text class="small mono text-slate" x="10" y="38">U at this inst</text>
+  </g>
+
+  <!-- Row: Circuit -->
+  <g transform="translate(380, 620)">
+    <rect class="rule-cell" rx="4" width="240" height="50"/>
+    <text class="small mono" x="10" y="20">factor F at Circuit</text>
+    <text class="small mono text-slate" x="10" y="38">anyone on this circuit</text>
+  </g>
+  <g transform="translate(640, 620)">
+    <rect class="rule-cell" rx="4" width="240" height="50"/>
+    <text class="small mono" x="10" y="20">factor F at Circuit for G</text>
+    <text class="small mono text-slate" x="10" y="38">G members on this circuit</text>
+  </g>
+  <g transform="translate(900, 620)">
+    <rect class="rule-cell" rx="4" width="240" height="50"/>
+    <text class="small mono" x="10" y="20">factor F at Circuit for U</text>
+    <text class="small mono text-slate" x="10" y="38">U on this circuit</text>
+  </g>
+
+  <!-- Row: Charger -->
+  <g transform="translate(380, 686)">
+    <rect class="rule-cell" rx="4" width="240" height="50"/>
+    <text class="small mono" x="10" y="20">factor F at Charger</text>
+    <text class="small mono text-slate" x="10" y="38">anyone at this charger</text>
+  </g>
+  <g transform="translate(640, 686)">
+    <rect class="rule-cell" rx="4" width="240" height="50"/>
+    <text class="small mono" x="10" y="20">factor F at Charger for G</text>
+    <text class="small mono text-slate" x="10" y="38">G members at this charger</text>
+  </g>
+  <g transform="translate(900, 686)">
+    <rect class="rule-cell-most" rx="4" width="240" height="50"/>
+    <text class="small mono text-amber" x="10" y="20">factor F at Charger for U</text>
+    <text class="small mono text-amber" x="10" y="38">most specific - walk starts here</text>
+  </g>
+
+  <!-- Catalogs panel (right side) -->
+  <g transform="translate(1170, 372)">
+    <rect class="factor" rx="8" width="430" height="190"/>
+    <text class="label-bold" x="14" y="22">Cost factor catalog</text>
+    <text class="small" x="14" y="40">Enlist subset on each Agreement; default bearer per factor.</text>
+    <g font-size="11" font-family="ui-monospace, Consolas, monospace">
+      <text class="text-amber" x="14" y="64">DSO  Dreifing       DSO grid fee (per installation)</text>
+      <text class="text-amber" x="14" y="80">ELE  Rafmagn        Retailer energy price</text>
+      <text class="text-amber" x="14" y="96">ACS  Notendagjald    User access fee</text>
+      <text class="text-amber" x="14" y="112">PRM  Premium         Premium access fee</text>
+      <text class="text-amber" x="14" y="128">TRF  Timagjald       Extra tariffs (idle, surge)</text>
+      <text class="text-amber" x="14" y="144">SRF  Thjonustugjald  Service / installer / vendor fee</text>
+      <text class="text-amber" x="14" y="160">RNT  Leiga           Charger rental (HW lease)</text>
+      <text class="text-amber" x="14" y="176">MTR  Maelagjald      E-meter daily fee</text>
+    </g>
+  </g>
+
+  <g transform="translate(1170, 580)">
+    <rect class="bearer" rx="8" width="430" height="160"/>
+    <text class="label-bold" x="14" y="22">Bearer catalog (resolves at session-stop)</text>
+    <g font-size="11" font-family="ui-monospace, Consolas, monospace">
+      <text class="text-purple" x="14" y="46">ORG  Kerfiseigandi   the CPO ORG  (parent agreement counterparty)</text>
+      <text class="text-purple" x="14" y="68">USR  Notandi         the driver themselves</text>
+      <text class="text-purple" x="14" y="90">WRK  Vinnan          workplace ORG that owns the DriverGroup</text>
+      <text class="text-purple" x="14" y="112">                       (stored on group, not on rule)</text>
+      <text class="text-purple" x="14" y="134">TRD  Thridji adili    another User pays this driver's bill</text>
+      <text class="text-purple" x="14" y="148">                       (third-party user_id stored on rule)</text>
+    </g>
+  </g>
+
+  <!-- Walk path arrows -->
+  <path class="arrow-purple" d="M 1020 686 L 1020 656 L 768 656 L 768 626 L 510 626 L 510 596 L 510 558 L 510 528 L 510 494 L 510 462 L 510 426" marker-end="url(#arrow-purple)"/>
+  <text class="text-purple mono" font-size="11" x="1030" y="676">walk: most specific to least specific</text>
+  <text class="text-purple mono" font-size="11" x="1030" y="690">first non-null BearerRule wins</text>
+
+  <!-- ============ LAYER 3: Resolution at session-stop ============ -->
+  <line class="divider" x1="40" y1="784" x2="1600" y2="784"/>
+  <text class="h2" x="40" y="814">Layer 3 - Resolution at session-stop</text>
+
+  <g transform="translate(40, 832)">
+    <rect class="resolution" rx="8" width="1100" height="220"/>
+    <text class="label-bold" x="20" y="26">For each enlisted cost factor F, given Driver U at Charger C (with Circuit, Installation, Site walked from C):</text>
+    <g font-size="12" font-family="ui-monospace, Consolas, monospace">
+      <text class="text-purple" x="34" y="58">1.  BearerRule(F, scope=Charger C,     audience=Driver U)         -- most specific</text>
+      <text class="text-purple" x="34" y="76">2.  BearerRule(F, scope=Circuit,       audience=Driver U)</text>
+      <text class="text-purple" x="34" y="94">3.  BearerRule(F, scope=Installation,  audience=Driver U)</text>
+      <text class="text-purple" x="34" y="112">4.  BearerRule(F, scope=Site,          audience=Driver U)</text>
+      <text class="text-purple" x="34" y="130">5.  BearerRule(F, scope=Charger C,     audience=DriverGroup G)</text>
+      <text class="text-purple" x="34" y="148">6.  BearerRule(F, scope=Circuit,       audience=DriverGroup G)</text>
+      <text class="text-purple" x="34" y="166">7.  BearerRule(F, scope=Installation,  audience=DriverGroup G)        ... continues through Site / All ...</text>
+      <text class="text-purple" x="34" y="184">8.  Agreement default for F                                       -- least specific (anchor)</text>
+      <text class="text-amber" x="34" y="210">First non-null match wins. Result = (bearer_type, bearer_ref, allocation_rule, price_source).</text>
+    </g>
+  </g>
+
+  <g transform="translate(1170, 832)">
+    <rect class="resolution" rx="8" width="430" height="220"/>
+    <text class="label-bold" x="14" y="22">Output per session</text>
+    <g font-size="11" font-family="ui-monospace, Consolas, monospace">
+      <text class="text-amber" x="14" y="48">N billing_lines per session,</text>
+      <text class="text-amber" x="14" y="64">one per enlisted factor F:</text>
+      <text class="text-slate" x="14" y="92">{ session_id, factor: F,</text>
+      <text class="text-slate" x="14" y="108">  amount_minor, vat_minor,</text>
+      <text class="text-slate" x="14" y="124">  bearer_type: ORG|USR|WRK|TRD,</text>
+      <text class="text-slate" x="14" y="140">  bearer_ref: org_id | user_id | null,</text>
+      <text class="text-slate" x="14" y="156">  rule_id: BearerRule.id (audit) }</text>
+      <text class="text-purple" x="14" y="186">Invoicing rolls billing_lines</text>
+      <text class="text-purple" x="14" y="202">up by bearer per period.</text>
+    </g>
+  </g>
+
+  <!-- ============ Worked example: Dalvegur ============ -->
+  <line class="divider" x1="40" y1="1080" x2="1600" y2="1080"/>
+  <text class="h2" x="40" y="1110">Worked example - Dalvegur (workplace site, multiple ORGs, shared chargers)</text>
+
+  <g transform="translate(40, 1130)">
+    <rect class="example" rx="8" width="780" height="240"/>
+    <text class="label-bold" x="14" y="24">Setup</text>
+    <text class="small" x="14" y="44" font-family="ui-monospace, Consolas, monospace">CPO ORG = Dalvegur Eignir   (parties: Straumvakt &lt;-&gt; Dalvegur Eignir)</text>
+    <text class="small" x="14" y="60" font-family="ui-monospace, Consolas, monospace">Site     = Dalvegur 10</text>
+    <text class="small" x="14" y="76" font-family="ui-monospace, Consolas, monospace">Inst     = main installation (one DSO meter)</text>
+    <text class="small" x="14" y="92" font-family="ui-monospace, Consolas, monospace">Circuits = C1 Sjova bay, C2 Klettas bay, C3 visitors</text>
+
+    <text class="text-amber" x="14" y="120">DriverGroups under DriverGroupOwner ORG (workplace):</text>
+    <g font-size="11" font-family="ui-monospace, Consolas, monospace">
+      <text class="text-emerald" x="14" y="140">G_sjova    owner = Sjova    (workplace)   default scope: C1</text>
+      <text class="text-emerald" x="14" y="156">G_klettas  owner = Klettas  (workplace)   default scope: C2</text>
+      <text class="text-emerald" x="14" y="172">G_daltekni owner = Daltekni (workplace)   default scope: C3</text>
+    </g>
+
+    <text class="text-amber" x="14" y="200">Override choices (each workplace decides independently):</text>
+    <g font-size="11" font-family="ui-monospace, Consolas, monospace">
+      <text class="small" x="14" y="220">Sjova: absorbs ELE for G_sjova; lets DSO/ACS fall to USR. CEO Anna gets Charger 1 with all factors -&gt; WRK.</text>
+    </g>
+  </g>
+
+  <g transform="translate(840, 1130)">
+    <rect class="example" rx="8" width="760" height="240"/>
+    <text class="label-bold" x="14" y="24">Resolution for one session: Anna (G_sjova) at Charger C1-CHA-02</text>
+    <g font-size="11" font-family="ui-monospace, Consolas, monospace">
+      <text class="text-rose" x="14" y="46">factor DSO  -&gt; no driver/group/scope hit -&gt; agreement default       -&gt; USR  (Anna)</text>
+      <text class="text-rose" x="14" y="64">factor ELE  -&gt; group rule (G_sjova, scope=null) -&gt; bearer=WRK       -&gt; Sjova</text>
+      <text class="text-rose" x="14" y="82">factor ACS  -&gt; no override -&gt; agreement default                     -&gt; USR  (Anna)</text>
+      <text class="text-rose" x="14" y="100">factor PRM  -&gt; not idling, not enlisted on this session             -&gt; (skip)</text>
+      <text class="text-rose" x="14" y="118">factor TRF  -&gt; agreement default                                    -&gt; ORG  (Dalvegur Eignir)</text>
+      <text class="text-rose" x="14" y="136">factor SRF  -&gt; agreement default                                    -&gt; ORG  (Dalvegur Eignir)</text>
+      <text class="text-rose" x="14" y="154">factor RNT  -&gt; agreement default                                    -&gt; ORG  (Dalvegur Eignir)</text>
+      <text class="text-rose" x="14" y="172">factor MTR  -&gt; agreement default                                    -&gt; ORG  (Dalvegur Eignir)</text>
+    </g>
+
+    <text class="text-amber" x="14" y="202">Result: 7 billing_lines, three bearers</text>
+    <g font-size="11" font-family="ui-monospace, Consolas, monospace">
+      <text class="small" x="14" y="222">Anna pays: DSO + ACS    Sjova pays: ELE    Dalvegur Eignir pays: TRF + SRF + RNT + MTR</text>
+    </g>
+  </g>
+
+  <!-- footer note -->
+  <text class="small" x="40" y="1330" font-style="italic">Notes: WRK bearer resolves via the DriverGroup's owner ORG (stored once on the group). TRD requires a user_id on the rule. The same machinery handles the inverse case where a workplace pushes everything to USR.</text>
+</svg>

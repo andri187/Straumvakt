@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760" role="img" aria-labelledby="title desc">
+  <title id="title">Straumvakt Domain Model</title>
+  <desc id="desc">Domain model diagram for tenant, asset, charging, and billing concepts.</desc>
+  <defs>
+    <style>
+      .bg{fill:#08111f}.node{fill:#0f1b2d;stroke:#3b526f;stroke-width:1.5;rx:8}.asset{fill:#10251f;stroke:#3d8b68;stroke-width:1.5;rx:8}.bill{fill:#2b2414;stroke:#c59b3d;stroke-width:1.5;rx:8}.op{fill:#241a33;stroke:#7551a3;stroke-width:1.5;rx:8}
+      .title{fill:#fff;font:800 34px Inter,Segoe UI,Arial}.label{fill:#fff;font:700 18px Inter,Segoe UI,Arial}.small{fill:#aebbd0;font:13px Inter,Segoe UI,Arial}
+      .a{stroke:#7dd3fc;stroke-width:2;fill:none;marker-end:url(#arr)}.b{stroke:#fbbf24;stroke-width:2;fill:none;marker-end:url(#arr2)}.c{stroke:#86efac;stroke-width:2;fill:none;marker-end:url(#arr3)}
+    </style>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 10 5 0 10z" fill="#7dd3fc"/></marker>
+    <marker id="arr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 10 5 0 10z" fill="#fbbf24"/></marker>
+    <marker id="arr3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 10 5 0 10z" fill="#86efac"/></marker>
+  </defs>
+  <rect class="bg" width="1200" height="760"/>
+  <text class="title" x="48" y="58">Straumvakt Domain Model</text>
+  <text class="small" x="48" y="86">Logical business architecture: tenancy and physical assets stay independent from control planes and billing allocation.</text>
+
+  <rect class="node" x="70" y="150" width="210" height="76"/><text class="label" x="95" y="184">Organization</text><text class="small" x="95" y="207">operator, owner, payer, DSO</text>
+  <rect class="node" x="70" y="285" width="210" height="76"/><text class="label" x="95" y="319">User</text><text class="small" x="95" y="342">admin, driver, staff</text>
+  <rect class="node" x="70" y="420" width="210" height="76"/><text class="label" x="95" y="454">Membership</text><text class="small" x="95" y="477">role in organization</text>
+
+  <rect class="asset" x="370" y="120" width="210" height="68"/><text class="label" x="395" y="160">Property</text>
+  <rect class="asset" x="370" y="220" width="210" height="68"/><text class="label" x="395" y="260">Site</text>
+  <rect class="asset" x="370" y="320" width="210" height="68"/><text class="label" x="395" y="360">Installation</text>
+  <rect class="asset" x="370" y="420" width="210" height="68"/><text class="label" x="395" y="460">Circuit</text>
+  <rect class="asset" x="370" y="520" width="210" height="68"/><text class="label" x="395" y="560">Charging Station</text>
+
+  <rect class="asset" x="670" y="270" width="210" height="68"/><text class="label" x="695" y="310">EVSE</text>
+  <rect class="asset" x="670" y="370" width="210" height="68"/><text class="label" x="695" y="410">Connector</text>
+  <rect class="op" x="670" y="500" width="210" height="76"/><text class="label" x="695" y="534">Control Endpoint</text><text class="small" x="695" y="557">OCPP, vendor API, CPMS</text>
+
+  <rect class="op" x="960" y="215" width="180" height="76"/><text class="label" x="985" y="249">Charge Session</text><text class="small" x="985" y="272">driver + connector</text>
+  <rect class="bill" x="960" y="345" width="180" height="76"/><text class="label" x="985" y="379">Tariff</text><text class="small" x="985" y="402">cost factor rules</text>
+  <rect class="bill" x="960" y="475" width="180" height="76"/><text class="label" x="985" y="509">Billing Line</text><text class="small" x="985" y="532">allocated cost output</text>
+
+  <path class="a" d="M280 188 L370 154"/><path class="a" d="M175 226 L175 420"/><path class="a" d="M280 458 C320 450 340 440 370 430"/>
+  <path class="c" d="M475 188 L475 220"/><path class="c" d="M475 288 L475 320"/><path class="c" d="M475 388 L475 420"/><path class="c" d="M475 488 L475 520"/>
+  <path class="c" d="M580 554 C635 535 655 440 670 404"/><path class="c" d="M775 338 L775 370"/><path class="c" d="M775 438 L775 500"/>
+  <path class="b" d="M880 404 C920 370 940 310 960 253"/><path class="b" d="M880 404 L960 383"/><path class="b" d="M1050 421 L1050 475"/>
+  <path class="a" d="M280 323 C620 280 820 245 960 253"/>
+  <text class="small" x="600" y="630">Rule of thumb: assets are physical, control endpoints are optional, sessions bind people to connectors, billing allocates the result.</text>
+</svg>

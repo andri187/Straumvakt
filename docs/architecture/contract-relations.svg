@@ -1,0 +1,242 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 1240" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif">
+  <defs>
+    <marker id="sky-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#38bdf8"/>
+    </marker>
+    <marker id="emerald-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#34d399"/>
+    </marker>
+    <marker id="amber-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#fbbf24"/>
+    </marker>
+    <marker id="purple-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#c084fc"/>
+    </marker>
+    <style>
+      .bg { fill: #0f172a; }
+      .panel { fill: #0c1628; }
+      .title { fill: #f1f5f9; font-size: 26px; font-weight: 600; }
+      .subtitle { fill: #94a3b8; font-size: 13px; }
+      .h2 { font-size: 15px; font-weight: 600; }
+      .label { fill: #e2e8f0; font-size: 13px; }
+      .label-bold { fill: #f1f5f9; font-size: 13px; font-weight: 600; }
+      .small { fill: #94a3b8; font-size: 11px; }
+      .mono { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; }
+      .scope { fill: #0c1628; stroke: #38bdf8; stroke-width: 1.5; }
+      .driver { fill: #0c1628; stroke: #34d399; stroke-width: 1.5; }
+      .tariff { fill: #1a1305; stroke: #fbbf24; stroke-width: 1.5; }
+      .factor { fill: #170c1f; stroke: #c084fc; stroke-width: 1.5; }
+      .resolution { fill: #0a0f1c; stroke: #c084fc; stroke-width: 1.5; }
+      .text-sky { fill: #38bdf8; }
+      .text-emerald { fill: #34d399; }
+      .text-amber { fill: #fbbf24; }
+      .text-purple { fill: #c084fc; }
+      .text-rose { fill: #fb7185; }
+      .arrow-fk-sky { stroke: #38bdf8; stroke-width: 2; fill: none; }
+      .arrow-fk-emerald { stroke: #34d399; stroke-width: 2; fill: none; }
+      .arrow-anchor { stroke: #fbbf24; stroke-width: 1.5; fill: none; stroke-dasharray: 4,3; }
+      .arrow-purple { stroke: #c084fc; stroke-width: 1.5; fill: none; stroke-dasharray: 3,3; }
+      .divider { stroke: #1e293b; stroke-width: 1; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1440" height="1240"/>
+
+  <!-- Title -->
+  <text class="title" x="40" y="50">Contract relations — Straumvakt V3</text>
+  <text class="subtitle" x="40" y="74">Two self-referential trees (asset scope + driver). Cost factors anchor on physical entities. Resolved at session-stop into computeSessionCost().</text>
+
+  <!-- ASSET TREE COLUMN HEADER -->
+  <text class="text-sky h2" x="80" y="116">Asset / scope contracts</text>
+  <text class="small mono" x="80" y="134">billing.contracts — parent_contract_id self-ref</text>
+
+  <!-- DRIVER TREE COLUMN HEADER -->
+  <text class="text-emerald h2" x="980" y="116">Driver contracts</text>
+  <text class="small mono" x="980" y="134">billing.driver_contracts — parent_contract_id self-ref</text>
+
+  <!-- ===================== ASSET TREE ===================== -->
+  <g transform="translate(80, 156)">
+    <rect class="scope" rx="8" width="320" height="64"/>
+    <text class="label-bold" x="14" y="22">Contract</text>
+    <text class="text-sky mono" x="14" y="42" font-size="12">scope_type = org</text>
+    <text class="small mono" x="14" y="58">parent_contract_id = NULL  (root)</text>
+  </g>
+
+  <g transform="translate(80, 252)">
+    <rect class="scope" rx="8" width="320" height="64"/>
+    <text class="label-bold" x="14" y="22">Contract</text>
+    <text class="text-sky mono" x="14" y="42" font-size="12">scope_type = site</text>
+    <text class="small mono" x="14" y="58">parent → org Contract</text>
+  </g>
+
+  <g transform="translate(80, 348)">
+    <rect class="scope" rx="8" width="320" height="64"/>
+    <text class="label-bold" x="14" y="22">Contract</text>
+    <text class="text-sky mono" x="14" y="42" font-size="12">scope_type = installation</text>
+    <text class="small mono" x="14" y="58">parent → site Contract</text>
+  </g>
+
+  <g transform="translate(80, 444)">
+    <rect class="scope" rx="8" width="320" height="64"/>
+    <text class="label-bold" x="14" y="22">Contract</text>
+    <text class="text-sky mono" x="14" y="42" font-size="12">scope_type = circuit</text>
+    <text class="small mono" x="14" y="58">parent → installation Contract</text>
+  </g>
+
+  <g transform="translate(80, 540)">
+    <rect class="scope" rx="8" width="320" height="64"/>
+    <text class="label-bold" x="14" y="22">Contract</text>
+    <text class="text-sky mono" x="14" y="42" font-size="12">scope_type = charger</text>
+    <text class="small mono" x="14" y="58">parent → circuit Contract</text>
+  </g>
+
+  <!-- Asset parent FK arrows (child → parent) -->
+  <path class="arrow-fk-sky" d="M 240 252 L 240 220" marker-end="url(#sky-arrow)"/>
+  <text class="small mono text-sky" x="248" y="240">parent_contract_id</text>
+  <path class="arrow-fk-sky" d="M 240 348 L 240 316" marker-end="url(#sky-arrow)"/>
+  <path class="arrow-fk-sky" d="M 240 444 L 240 412" marker-end="url(#sky-arrow)"/>
+  <path class="arrow-fk-sky" d="M 240 540 L 240 508" marker-end="url(#sky-arrow)"/>
+
+  <!-- Tariff anchors hanging off scope rows -->
+  <g transform="translate(450, 252)">
+    <rect class="tariff" rx="6" width="240" height="64"/>
+    <text class="text-amber label-bold" x="12" y="22">Site row</text>
+    <text class="small mono" x="12" y="40">dso_tariff_id → TariffDefinition</text>
+    <text class="small mono" x="12" y="56">cost_factor = DSO  (Veitur, Norðurorka...)</text>
+  </g>
+  <path class="arrow-anchor" d="M 405 284 L 447 284" marker-end="url(#amber-arrow)"/>
+
+  <g transform="translate(450, 348)">
+    <rect class="tariff" rx="6" width="240" height="64"/>
+    <text class="text-amber label-bold" x="12" y="22">Installation row</text>
+    <text class="small mono" x="12" y="40">retailer_tariff_id → TariffDefinition</text>
+    <text class="small mono" x="12" y="56">cost_factor = REPF  (energy retailer)</text>
+  </g>
+  <path class="arrow-anchor" d="M 405 380 L 447 380" marker-end="url(#amber-arrow)"/>
+
+  <g transform="translate(450, 540)">
+    <rect class="tariff" rx="6" width="240" height="64"/>
+    <text class="text-amber label-bold" x="12" y="22">ChargingStation row</text>
+    <text class="small mono" x="12" y="40">chrgrf_tariff_id → TariffDefinition</text>
+    <text class="small mono" x="12" y="56">cost_factor = CHRGRF  (paid to owner)</text>
+  </g>
+  <path class="arrow-anchor" d="M 405 572 L 447 572" marker-end="url(#amber-arrow)"/>
+
+  <!-- ===================== DRIVER TREE ===================== -->
+  <g transform="translate(980, 156)">
+    <rect class="driver" rx="8" width="320" height="64"/>
+    <text class="label-bold" x="14" y="22">DriverContract</text>
+    <text class="text-emerald mono" x="14" y="42" font-size="12">owner_type = workplace</text>
+    <text class="small mono" x="14" y="58">parent_contract_id = NULL  (root)</text>
+  </g>
+
+  <g transform="translate(980, 252)">
+    <rect class="driver" rx="8" width="320" height="64"/>
+    <text class="label-bold" x="14" y="22">DriverContract</text>
+    <text class="text-emerald mono" x="14" y="42" font-size="12">owner_type = family_group</text>
+    <text class="small mono" x="14" y="58">parent → workplace contract</text>
+  </g>
+
+  <g transform="translate(980, 348)">
+    <rect class="driver" rx="8" width="320" height="64"/>
+    <text class="label-bold" x="14" y="22">DriverContract</text>
+    <text class="text-emerald mono" x="14" y="42" font-size="12">owner_type = self</text>
+    <text class="small mono" x="14" y="58">parent → family contract</text>
+  </g>
+
+  <!-- Driver parent FK arrows -->
+  <path class="arrow-fk-emerald" d="M 1140 252 L 1140 220" marker-end="url(#emerald-arrow)"/>
+  <text class="small mono text-emerald" x="1148" y="240">parent_contract_id</text>
+  <path class="arrow-fk-emerald" d="M 1140 348 L 1140 316" marker-end="url(#emerald-arrow)"/>
+
+  <!-- Driver tariff anchor (workplace fee) -->
+  <g transform="translate(980, 444)">
+    <rect class="tariff" rx="6" width="320" height="64"/>
+    <text class="text-amber label-bold" x="12" y="22">DriverContract row (workplace)</text>
+    <text class="small mono" x="12" y="40">wrkpf_tariff_id → TariffDefinition</text>
+    <text class="small mono" x="12" y="56">cost_factor = WRKPF  (workplace per-kWh fee)</text>
+  </g>
+  <path class="arrow-anchor" d="M 1140 220 C 1140 380, 750 380, 750 444" marker-end="url(#amber-arrow)" stroke-dasharray="4,3"/>
+
+  <!-- User → DriverContract -->
+  <g transform="translate(980, 540)">
+    <rect rx="8" width="320" height="64" fill="#0c1628" stroke="#475569" stroke-width="1.5"/>
+    <text class="label-bold" x="14" y="22">User (driver, audience=driver)</text>
+    <text class="small mono" x="14" y="42">admin-created via /people/users/new</text>
+    <text class="small mono" x="14" y="58">↑ owns 1..N active DriverContracts</text>
+  </g>
+  <path class="arrow-fk-emerald" d="M 1140 540 L 1140 412" marker-end="url(#emerald-arrow)"/>
+
+  <!-- Note about chain shape -->
+  <g transform="translate(980, 624)">
+    <text class="small" x="0" y="14">Note: the workplace → family → self chain shown is</text>
+    <text class="small" x="0" y="30">illustrative. Each DriverContract row carries a nullable</text>
+    <text class="small" x="0" y="46">parent FK; any owner_type can be a root or a child.</text>
+  </g>
+
+  <!-- ===================== JUNCTION TABLES ===================== -->
+  <line class="divider" x1="40" y1="700" x2="1400" y2="700"/>
+  <text class="text-purple h2" x="40" y="730">Cost-factor wiring (junction tables)</text>
+
+  <g transform="translate(80, 754)">
+    <rect class="factor" rx="8" width="380" height="120"/>
+    <text class="label-bold" x="14" y="22">ContractFactorAssignment</text>
+    <text class="small mono text-sky" x="14" y="44">contract_id  →  Contract</text>
+    <text class="small mono text-purple" x="14" y="62">cost_factor_id  →  CostFactor</text>
+    <text class="small mono" x="14" y="80">cost_center_id, allocation_rule, priority</text>
+    <text class="small" x="14" y="100">Says: for this contract row, this cost factor</text>
+    <text class="small" x="14" y="114">routes to this cost-center at this priority.</text>
+  </g>
+
+  <g transform="translate(510, 754)">
+    <rect class="factor" rx="8" width="380" height="120"/>
+    <text class="label-bold" x="14" y="22">DriverContractFactorOverride</text>
+    <text class="small mono text-emerald" x="14" y="44">driver_contract_id  →  DriverContract</text>
+    <text class="small mono text-purple" x="14" y="62">cost_factor_id  →  CostFactor</text>
+    <text class="small mono" x="14" y="80">cost_center_id, allocation_rule, priority</text>
+    <text class="small" x="14" y="100">Wins over the asset Contract chain at the</text>
+    <text class="small" x="14" y="114">matched scope (e.g. driver-specific REPF).</text>
+  </g>
+
+  <g transform="translate(940, 754)">
+    <rect class="factor" rx="8" width="380" height="120"/>
+    <text class="label-bold" x="14" y="22">ContractPeriodAccumulator</text>
+    <text class="small mono text-sky" x="14" y="44">contract_id  OR  driver_contract_id</text>
+    <text class="small mono text-purple" x="14" y="62">cost_factor_id, period_start, period_end</text>
+    <text class="small mono" x="14" y="80">kwh_accum, amount_accum_minor</text>
+    <text class="small" x="14" y="100">Backs cap rules ("first 200 kWh/mo at price A,</text>
+    <text class="small" x="14" y="114">overflow at price B").</text>
+  </g>
+
+  <!-- ===================== SESSION-STOP RESOLUTION ===================== -->
+  <line class="divider" x1="40" y1="900" x2="1400" y2="900"/>
+  <text class="text-purple h2" x="40" y="930">Session-stop resolution → computeSessionCost()</text>
+
+  <g transform="translate(80, 956)">
+    <rect class="resolution" rx="8" width="1280" height="240"/>
+
+    <text class="label-bold" x="20" y="28">Current resolver — apps/api/src/lib/tariff/resolve-tariff-chain.ts</text>
+
+    <text class="text-sky mono" x="40" y="56" font-size="12">1.  Site.dso_tariff_id              →  DSO  TariffDefinition         (required, throws if NULL)</text>
+    <text class="text-sky mono" x="40" y="76" font-size="12">2.  Installation.retailer_tariff_id →  REPF TariffDefinition         (required, throws if NULL)</text>
+    <text class="text-sky mono" x="40" y="96" font-size="12">3.  VAT-equality check across components</text>
+    <text class="text-sky mono" x="40" y="116" font-size="12">4.  Compose TariffChain { currency: "ISK", components: [DSO, REPF] }</text>
+    <text class="text-sky mono" x="40" y="136" font-size="12">5.  computeSessionCost(chain, energyKwh, durationS)  →  cost_minor + cost_breakdown_json</text>
+
+    <text class="label-bold text-amber" x="20" y="172">Schema-ready, NOT yet consumed by the resolver:</text>
+    <text class="text-amber mono" x="40" y="194" font-size="12">•  Contract parent-chain walk           (FKs exist; the walker isn't written)</text>
+    <text class="text-amber mono" x="40" y="212" font-size="12">•  ChargingStation.chrgrf_tariff_id      →  CHRGRF component (paid to owner_org_id)</text>
+    <text class="text-amber mono" x="40" y="230" font-size="12">•  DriverContract.wrkpf_tariff_id        →  WRKPF component (workplace fee)</text>
+  </g>
+
+  <!-- ===================== LEGEND (bottom right) ===================== -->
+  <g transform="translate(40, 1200)">
+    <text class="small">
+      <tspan class="text-sky">━━ asset FK</tspan>
+      <tspan class="text-emerald" dx="20">━━ driver FK</tspan>
+      <tspan class="text-amber" dx="20">┄┄ tariff anchor (FK from entity row to TariffDefinition)</tspan>
+      <tspan class="text-purple" dx="20">━━ junction table / resolver</tspan>
+    </text>
+  </g>
+</svg>

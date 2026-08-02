@@ -1,0 +1,241 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1180" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.08"/>
+    </filter>
+    <style>
+      .title       { font-size: 26px; font-weight: 600; fill: #0f172a; }
+      .subtitle    { font-size: 13px; font-weight: 400; fill: #64748b; }
+      .ns-label    { font-size: 14px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
+      .table-name  { font-size: 14px; font-weight: 600; fill: #0f172a; font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; }
+      .table-desc  { font-size: 11px; font-weight: 400; fill: #475569; }
+      .table-meta  { font-size: 10px; font-weight: 500; fill: #64748b; font-style: italic; }
+      .card-label  { font-size: 11px; font-weight: 600; fill: #0f172a; }
+      .user-name   { font-size: 18px; font-weight: 700; fill: #f8fafc; font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; }
+      .user-fields { font-size: 11px; font-weight: 400; fill: #cbd5e1; }
+      .user-section{ font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; fill: #94a3b8; }
+      .legend-label{ font-size: 11px; font-weight: 500; fill: #334155; }
+      .footnote    { font-size: 11px; font-weight: 400; fill: #64748b; font-style: italic; }
+    </style>
+  </defs>
+
+  <!-- ─── Background ─────────────────────────────────────────────── -->
+  <rect width="1600" height="1180" fill="#f8fafc"/>
+
+  <!-- ─── Title ──────────────────────────────────────────────────── -->
+  <text x="50" y="50" class="title">Straumvakt user-database schema</text>
+  <text x="50" y="75" class="subtitle">11 tables across 5 schemas. Updated 2026-05-31.</text>
+
+  <!-- ─── Namespace band: identity (top) ─────────────────────────── -->
+  <rect x="50" y="100" width="1500" height="380" rx="12" ry="12"
+        fill="#f0f9ff" stroke="#0284c7" stroke-width="1.5" stroke-dasharray="6 4" opacity="0.6"/>
+  <text x="72" y="125" class="ns-label" fill="#0369a1">identity — the person</text>
+
+  <!-- identity satellites (top row) -->
+  <g filter="url(#shadow)">
+    <rect x="90" y="150" width="220" height="92" rx="8" ry="8" fill="#e0f2fe" stroke="#0284c7" stroke-width="2"/>
+    <text x="200" y="174" text-anchor="middle" class="table-name">user_credentials</text>
+    <text x="200" y="195" text-anchor="middle" class="table-desc">password hash</text>
+    <text x="200" y="210" text-anchor="middle" class="table-desc">PBKDF2-SHA256 200k</text>
+    <text x="200" y="230" text-anchor="middle" class="table-meta">1 : 1 with users</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="350" y="150" width="220" height="92" rx="8" ry="8" fill="#e0f2fe" stroke="#0284c7" stroke-width="2"/>
+    <text x="460" y="174" text-anchor="middle" class="table-name">user_tokens</text>
+    <text x="460" y="195" text-anchor="middle" class="table-desc">invite / pw-reset / magic-link</text>
+    <text x="460" y="210" text-anchor="middle" class="table-desc">one-shot, time-boxed</text>
+    <text x="460" y="230" text-anchor="middle" class="table-meta">1 : N with users</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="610" y="150" width="220" height="92" rx="8" ry="8" fill="#e0f2fe" stroke="#0284c7" stroke-width="2"/>
+    <text x="720" y="174" text-anchor="middle" class="table-name">id_tokens</text>
+    <text x="720" y="195" text-anchor="middle" class="table-desc">RFID / EMAID / app JWT</text>
+    <text x="720" y="210" text-anchor="middle" class="table-desc">OCPP Authorize walks this</text>
+    <text x="720" y="230" text-anchor="middle" class="table-meta">1 : N with users</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="870" y="150" width="220" height="92" rx="8" ry="8" fill="#e0f2fe" stroke="#0284c7" stroke-width="2"/>
+    <text x="980" y="174" text-anchor="middle" class="table-name">user_vendor_refs</text>
+    <text x="980" y="195" text-anchor="middle" class="table-desc">Zaptec UUID, Easee, etc.</text>
+    <text x="980" y="210" text-anchor="middle" class="table-desc">survives re-syncs</text>
+    <text x="980" y="230" text-anchor="middle" class="table-meta">1 : N with users</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="1130" y="150" width="220" height="92" rx="8" ry="8" fill="#e0f2fe" stroke="#0284c7" stroke-width="2"/>
+    <text x="1240" y="174" text-anchor="middle" class="table-name">vehicles</text>
+    <text x="1240" y="195" text-anchor="middle" class="table-desc">driver's EVs</text>
+    <text x="1240" y="210" text-anchor="middle" class="table-desc">make / model / plate</text>
+    <text x="1240" y="230" text-anchor="middle" class="table-meta">1 : N with users</text>
+  </g>
+
+  <!-- The central User row -->
+  <g filter="url(#shadow)">
+    <rect x="490" y="290" width="620" height="170" rx="12" ry="12" fill="#1e293b" stroke="#0f172a" stroke-width="2"/>
+    <text x="800" y="320" text-anchor="middle" class="user-name">identity.users</text>
+    <text x="800" y="342" text-anchor="middle" class="user-section">the canonical User row</text>
+    <line x1="520" y1="356" x2="1080" y2="356" stroke="#475569" stroke-width="1"/>
+    <text x="800" y="378" text-anchor="middle" class="user-fields">id (UUID) · email (citext UNIQUE) · kennitala UNIQUE · phone · displayName</text>
+    <text x="800" y="396" text-anchor="middle" class="user-fields">firstName · lastName · dateOfBirth · photoUrl · address (JSONB) · locale · timezone</text>
+    <text x="800" y="414" text-anchor="middle" class="user-fields">audience: operator | driver | service</text>
+    <text x="800" y="432" text-anchor="middle" class="user-fields">emailVerifiedAt · phoneVerifiedAt · lastSeenAt · consent* · status · deletedAt</text>
+    <text x="800" y="450" text-anchor="middle" class="user-fields">metadata (JSONB)</text>
+  </g>
+
+  <!-- Lines from satellites down to User (identity) -->
+  <g stroke="#0284c7" stroke-width="2" fill="none" opacity="0.55">
+    <line x1="200" y1="242" x2="540" y2="290"/>
+    <line x1="460" y1="242" x2="660" y2="290"/>
+    <line x1="720" y1="242" x2="780" y2="290"/>
+    <line x1="980" y1="242" x2="920" y2="290"/>
+    <line x1="1240" y1="242" x2="1050" y2="290"/>
+  </g>
+
+  <!-- ─── Namespace band: tenancy (operator-side) ────────────────── -->
+  <rect x="50" y="510" width="730" height="280" rx="12" ry="12"
+        fill="#faf5ff" stroke="#9333ea" stroke-width="1.5" stroke-dasharray="6 4" opacity="0.6"/>
+  <text x="72" y="535" class="ns-label" fill="#7e22ce">tenancy — operator-side access</text>
+
+  <g filter="url(#shadow)">
+    <rect x="90" y="560" width="320" height="210" rx="8" ry="8" fill="#f3e8ff" stroke="#9333ea" stroke-width="2"/>
+    <text x="250" y="585" text-anchor="middle" class="table-name">memberships</text>
+    <text x="250" y="610" text-anchor="middle" class="table-desc">role: owner / operator / billing / agent</text>
+    <text x="250" y="628" text-anchor="middle" class="table-desc">grants UI + API access to one Org</text>
+    <text x="250" y="660" text-anchor="middle" class="table-meta">@@id([orgId, userId])</text>
+    <text x="250" y="678" text-anchor="middle" class="table-meta">— one role per (user, org)</text>
+    <text x="250" y="710" text-anchor="middle" class="card-label">N : M with Organizations</text>
+    <text x="250" y="730" text-anchor="middle" class="table-meta">joined via /api/admin/orgs/:id/invites</text>
+    <text x="250" y="748" text-anchor="middle" class="table-meta">+ Resend email (live since 2026-05-31)</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="450" y="560" width="300" height="120" rx="8" ry="8" fill="#f3e8ff" stroke="#9333ea" stroke-width="2"/>
+    <text x="600" y="585" text-anchor="middle" class="table-name">platform_grants</text>
+    <text x="600" y="610" text-anchor="middle" class="table-desc">super_user / platform_admin</text>
+    <text x="600" y="628" text-anchor="middle" class="table-desc">cross-org Straumvakt-staff role</text>
+    <text x="600" y="660" text-anchor="middle" class="card-label">0..1 per user</text>
+  </g>
+
+  <!-- ─── Namespace band: agreements (driver-side) ───────────────── -->
+  <rect x="820" y="510" width="730" height="280" rx="12" ry="12"
+        fill="#f0fdf4" stroke="#16a34a" stroke-width="1.5" stroke-dasharray="6 4" opacity="0.6"/>
+  <text x="842" y="535" class="ns-label" fill="#15803d">agreements — driver-side access</text>
+
+  <g filter="url(#shadow)">
+    <rect x="860" y="560" width="430" height="210" rx="8" ry="8" fill="#dcfce7" stroke="#16a34a" stroke-width="2"/>
+    <text x="1075" y="585" text-anchor="middle" class="table-name">driver_group_memberships</text>
+    <text x="1075" y="610" text-anchor="middle" class="table-desc">User → DriverGroup → Agreement → Installation</text>
+    <text x="1075" y="628" text-anchor="middle" class="table-desc">grants the right to start a charge</text>
+    <text x="1075" y="660" text-anchor="middle" class="card-label" fill="#15803d">A.11 gate at OCPP Authorize</text>
+    <text x="1075" y="678" text-anchor="middle" class="table-meta">(behind enforce_authorize flag, default OFF)</text>
+    <text x="1075" y="710" text-anchor="middle" class="card-label">N : M with DriverGroups</text>
+    <text x="1075" y="730" text-anchor="middle" class="table-meta" fill="#b45309">joined via: admin script (no API yet — gap)</text>
+    <text x="1075" y="748" text-anchor="middle" class="table-meta">drivers_admin_created_only per ADR 0014</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="1330" y="560" width="200" height="120" rx="8" ry="8" fill="#dcfce7" stroke="#16a34a" stroke-width="2"/>
+    <text x="1430" y="585" text-anchor="middle" class="table-name">driver_groups</text>
+    <text x="1430" y="610" text-anchor="middle" class="table-desc">a named cohort of</text>
+    <text x="1430" y="624" text-anchor="middle" class="table-desc">drivers under one</text>
+    <text x="1430" y="638" text-anchor="middle" class="table-desc">Agreement</text>
+    <text x="1430" y="660" text-anchor="middle" class="card-label">parent of memberships</text>
+  </g>
+
+  <!-- Lines from User down to tenancy + agreements -->
+  <g stroke="#9333ea" stroke-width="2" fill="none" opacity="0.55">
+    <line x1="700" y1="460" x2="320" y2="560"/>
+    <line x1="780" y1="460" x2="580" y2="560"/>
+  </g>
+  <g stroke="#16a34a" stroke-width="2" fill="none" opacity="0.55">
+    <line x1="900" y1="460" x2="1050" y2="560"/>
+  </g>
+  <g stroke="#16a34a" stroke-width="1.5" fill="none" opacity="0.4" stroke-dasharray="4 3">
+    <line x1="1290" y1="660" x2="1330" y2="620"/>
+  </g>
+
+  <!-- ─── Namespace band: charging + audit + vendor (bottom) ─────── -->
+  <rect x="50" y="820" width="1500" height="220" rx="12" ry="12"
+        fill="#fefce8" stroke="#ca8a04" stroke-width="1.5" stroke-dasharray="6 4" opacity="0.4"/>
+  <text x="72" y="845" class="ns-label" fill="#a16207">cross-cutting — charging · audit · vendor mirror</text>
+
+  <g filter="url(#shadow)">
+    <rect x="90" y="870" width="280" height="140" rx="8" ry="8" fill="#fef3c7" stroke="#d97706" stroke-width="2"/>
+    <text x="230" y="894" text-anchor="middle" class="table-name">charging.sessions</text>
+    <text x="230" y="918" text-anchor="middle" class="table-desc">historical charges (1:N nullable)</text>
+    <text x="230" y="936" text-anchor="middle" class="table-desc">NULL userId = anonymous free-vend</text>
+    <text x="230" y="958" text-anchor="middle" class="card-label">driver of record per charge</text>
+    <text x="230" y="976" text-anchor="middle" class="table-meta">attribution via OCPP idTag → IdToken</text>
+    <text x="230" y="994" text-anchor="middle" class="table-meta">indexed on (userId, startedAt desc)</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="410" y="870" width="280" height="140" rx="8" ry="8" fill="#e2e8f0" stroke="#64748b" stroke-width="2"/>
+    <text x="550" y="894" text-anchor="middle" class="table-name">audit.audit_actions</text>
+    <text x="550" y="918" text-anchor="middle" class="table-desc">every admin-side state change</text>
+    <text x="550" y="936" text-anchor="middle" class="table-desc">who · what · when · payload</text>
+    <text x="550" y="958" text-anchor="middle" class="card-label">1 : N with users</text>
+    <text x="550" y="976" text-anchor="middle" class="table-meta">e.g. attach-vendor, supersede,</text>
+    <text x="550" y="994" text-anchor="middle" class="table-meta">credential rotate, membership change</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="730" y="870" width="380" height="140" rx="8" ry="8" fill="#e0f2fe" stroke="#0284c7" stroke-width="2"/>
+    <text x="920" y="894" text-anchor="middle" class="table-name">identity.vendor_user_group_memberships</text>
+    <text x="920" y="918" text-anchor="middle" class="table-desc">Zaptec UserGroup mirror (sync-only)</text>
+    <text x="920" y="936" text-anchor="middle" class="table-desc">N:M with vendor_user_groups</text>
+    <text x="920" y="966" text-anchor="middle" class="table-meta" fill="#b45309">⚠ Orthogonal to agreements.driver_groups</text>
+    <text x="920" y="984" text-anchor="middle" class="table-meta" fill="#b45309">— two "group" concepts coexist by design</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="1150" y="870" width="380" height="140" rx="8" ry="8" fill="#fff7ed" stroke="#ea580c" stroke-width="2" stroke-dasharray="4 3"/>
+    <text x="1340" y="894" text-anchor="middle" class="table-name">[ what's still missing ]</text>
+    <text x="1340" y="918" text-anchor="middle" class="table-desc">POST /api/admin/.../memberships (create)</text>
+    <text x="1340" y="936" text-anchor="middle" class="table-desc">POST /api/admin/users/:id/password-reset</text>
+    <text x="1340" y="954" text-anchor="middle" class="table-desc">POST /api/admin/users/:id/verify-email</text>
+    <text x="1340" y="972" text-anchor="middle" class="table-desc">bulk driver import (CSV)</text>
+    <text x="1340" y="994" text-anchor="middle" class="table-meta" fill="#9a3412">ADR 0022 driver self-onboarding: Open</text>
+  </g>
+
+  <!-- Lines from User down to charging + audit + vendor -->
+  <g stroke="#d97706" stroke-width="2" fill="none" opacity="0.4">
+    <line x1="600" y1="460" x2="230" y2="870"/>
+  </g>
+  <g stroke="#64748b" stroke-width="2" fill="none" opacity="0.4">
+    <line x1="800" y1="460" x2="550" y2="870"/>
+  </g>
+  <g stroke="#0284c7" stroke-width="2" fill="none" opacity="0.4">
+    <line x1="1000" y1="460" x2="920" y2="870"/>
+  </g>
+
+  <!-- ─── Legend at the bottom ───────────────────────────────────── -->
+  <g transform="translate(50, 1070)">
+    <text x="0" y="14" class="ns-label" fill="#334155">legend</text>
+
+    <rect x="80" y="0" width="14" height="14" rx="2" fill="#e0f2fe" stroke="#0284c7" stroke-width="1.5"/>
+    <text x="100" y="12" class="legend-label">identity — the person</text>
+
+    <rect x="240" y="0" width="14" height="14" rx="2" fill="#f3e8ff" stroke="#9333ea" stroke-width="1.5"/>
+    <text x="260" y="12" class="legend-label">tenancy — operator access</text>
+
+    <rect x="420" y="0" width="14" height="14" rx="2" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+    <text x="440" y="12" class="legend-label">agreements — driver access</text>
+
+    <rect x="600" y="0" width="14" height="14" rx="2" fill="#fef3c7" stroke="#d97706" stroke-width="1.5"/>
+    <text x="620" y="12" class="legend-label">charging — session history</text>
+
+    <rect x="780" y="0" width="14" height="14" rx="2" fill="#e2e8f0" stroke="#64748b" stroke-width="1.5"/>
+    <text x="800" y="12" class="legend-label">audit — every state change</text>
+
+    <rect x="920" y="0" width="14" height="14" rx="2" fill="#fff7ed" stroke="#ea580c" stroke-width="1.5" stroke-dasharray="3 2"/>
+    <text x="940" y="12" class="legend-label">not yet built (sprint gap)</text>
+  </g>
+
+  <text x="50" y="1130" class="footnote">The two-table membership split is the architectural backbone: tenancy (who can administer) vs. agreements (who can charge). Same User, both rows.</text>
+  <text x="50" y="1150" class="footnote">Schema-as-namespace: identity / tenancy / agreements / charging / audit each owns its concerns. ADR 0014 (audience), ADR 0019 (driver groups), ADR 0022 (self-onboarding — Open).</text>
+</svg>
