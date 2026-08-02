@@ -156,7 +156,12 @@ describe("batchIngestHeartbeats", () => {
     const { client, calls } = makeClient([]);
     const { batchIngestHeartbeats } = await import("./raw");
     const result = await batchIngestHeartbeats(client, []);
-    expect(result).toEqual({ fresh: 0, replays: 0, identitiesTouched: 0 });
+    expect(result).toEqual({
+      fresh: 0,
+      replays: 0,
+      identitiesTouched: 0,
+      freshEventIds: [],
+    });
     expect(calls).toHaveLength(0);
   });
 

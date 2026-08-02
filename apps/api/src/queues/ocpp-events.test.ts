@@ -296,7 +296,11 @@ function heartbeat(eventId: string, aggregateId = "33333333-3333-3333-3333-33333
 }
 
 describe("handleOcppEventsBatch — batch partitioning", () => {
-  const archiveSendBatch = vi.fn(async () => undefined);
+  // Typed parameter, not `vi.fn(async () => …)`: without it the mock's
+  // call tuple is empty and `mock.calls[0][0]` doesn't typecheck.
+  const archiveSendBatch = vi.fn(
+    async (_messages: Array<{ body: OcppEventMessage }>) => undefined,
+  );
   const ENV_ARCHIVE = {
     ARCHIVE_QUEUE: { sendBatch: archiveSendBatch },
   } as unknown as Env;
@@ -372,9 +376,7 @@ describe("handleOcppEventsBatch — batch partitioning", () => {
     await handleOcppEventsBatch(makeBatch([hb1, replay, hb3]), ENV_ARCHIVE);
 
     expect(archiveSendBatch).toHaveBeenCalledTimes(1);
-    const archived = archiveSendBatch.mock.calls[0][0] as Array<{
-      body: OcppEventMessage;
-    }>;
+    const archived = archiveSendBatch.mock.calls[0][0];
     // Assert on identity, not count — slice(0,2) would have passed a
     // count-only assertion while archiving #1 and #2.
     expect(archived.map((m) => m.body.eventId)).toEqual([

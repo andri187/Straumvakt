@@ -311,7 +311,7 @@ export async function batchIngestHeartbeats(
   }>,
 ): Promise<HeartbeatBatchResult> {
   if (heartbeats.length === 0) {
-    return { fresh: 0, replays: 0, identitiesTouched: 0 };
+    return { fresh: 0, replays: 0, identitiesTouched: 0, freshEventIds: [] };
   }
   const IDEMPOTENCY_SCOPE = "ocpp";
   const IDEMPOTENCY_TTL_MS = 7 * 24 * 60 * 60 * 1000;
