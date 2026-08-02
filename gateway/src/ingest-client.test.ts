@@ -85,7 +85,7 @@ describe("enqueueOrPost", () => {
 
   it("falls straight through to postEvent when queue is not bound (local dev)", async () => {
     const mainAppFetch = vi.fn(
-      async () =>
+      async (_req: Request) =>
         new Response(
           JSON.stringify({ eventId: SAMPLE_EVENT.eventId, recorded: true }),
           { status: 202 },
@@ -96,7 +96,7 @@ describe("enqueueOrPost", () => {
     const outcome = await enqueueOrPost(env, SAMPLE_EVENT);
 
     expect(mainAppFetch).toHaveBeenCalledTimes(1);
-    const callArg = mainAppFetch.mock.calls[0][0] as Request;
+    const callArg = mainAppFetch.mock.calls[0]![0];
     expect(callArg.url).toBe("https://main.internal/api/internal/ocpp-events");
     expect(outcome.kind).toBe("accepted");
   });
