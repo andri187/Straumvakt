@@ -17,7 +17,11 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DurableObjectState } from "@cloudflare/workers-types";
-import { IdentityDurableObject, selectSubprotocol } from "./identity-do";
+import {
+  IdentityDurableObject,
+  selectSubprotocol,
+  retentionClassFor,
+} from "./identity-do";
 import type { GatewayEnv } from "./auth";
 
 const IDENTITY_ID = "11111111-1111-1111-1111-111111111111";
@@ -1430,5 +1434,52 @@ describe("F21 Authorize gate fails closed on an unverifiable lookup", () => {
     );
     const stop = JSON.parse(ws.sent[ws.sent.length - 1]!) as [number, string, Record<string, unknown>];
     expect(idTagStatus(stop[2])).toBe("Accepted");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// ADR 0039 amendment / ADR 0040 — retention class per OCPP action.
+//
+// Guards billing evidence. A blanket `raw_protocol` stamp combined with
+// ADR 0037's 7-day R2 expiry and ADR 0039's 7-day partition drop would
+// have deleted OCMF-bearing MeterValues and StopTransaction from BOTH
+// stores on a timer, while ADR 0031 §15 settles metering disputes on
+// exactly those logs.
+// ─────────────────────────────────────────────────────────────────────
+describe("retentionClassFor", () => {
+  it("classifies heartbeats as disposable", () => {
+    expect(retentionClassFor("Heartbeat")).toBe("raw_protocol");
+  });
+
+  it("classifies billing-bearing frames as financial", () => {
+    // MeterValues carries the OCMF signed meter reading; StopTransaction
+    // is the charger's own record of delivered energy.
+    expect(retentionClassFor("MeterValues")).toBe("financial");
+    expect(retentionClassFor("StartTransaction")).toBe("financial");
+    expect(retentionClassFor("StopTransaction")).toBe("financial");
+  });
+
+  it("classifies diagnostic frames as operational", () => {
+    expect(retentionClassFor("StatusNotification")).toBe("operational");
+    expect(retentionClassFor("BootNotification")).toBe("operational");
+    expect(retentionClassFor("Authorize")).toBe("operational");
+  });
+
+  it("defaults an unknown action to operational, never raw_protocol", () => {
+    // Fail long, not short: an untriaged frame type is more likely to be
+    // something new that matters than something disposable.
+    expect(retentionClassFor("SomeVendorExtension")).toBe("operational");
+    expect(retentionClassFor("")).toBe("operational");
+  });
+
+  it("only Heartbeat is ever disposable", () => {
+    const actions = [
+      "MeterValues", "StartTransaction", "StopTransaction",
+      "StatusNotification", "BootNotification", "Authorize",
+      "DataTransfer", "DiagnosticsStatusNotification",
+    ];
+    for (const a of actions) {
+      expect(retentionClassFor(a)).not.toBe("raw_protocol");
+    }
   });
 });

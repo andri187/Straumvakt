@@ -208,6 +208,41 @@ const COMMAND_TIMEOUT_MS = 30_000;
  * — the identity and org are implied by which object you are talking
  * to, and are what the upstream lookup was scoped by.
  */
+/**
+ * Retention class per OCPP action — ADR 0039 amendment / ADR 0040.
+ *
+ * Every inbound frame used to be stamped `raw_protocol`, which did not
+ * mean "disposable protocol noise" — it meant "arrived over OCPP". That
+ * set includes MeterValues, which carries the **OCMF signed billing
+ * evidence**, and StopTransaction, which is the charger's own record of
+ * delivered energy. ADR 0037 expires `raw_protocol/` from R2 after 7
+ * days and ADR 0039 drops `protocol_log` partitions after 7 days, so
+ * the blanket stamp would have deleted billing evidence from both
+ * stores on a timer — while ADR 0031 §15 settles metering disputes on
+ * exactly those logs.
+ *
+ * Classify here, where the action is known.
+ */
+const FINANCIAL_ACTIONS = new Set<string>([
+  "MeterValues",
+  "StartTransaction",
+  "StopTransaction",
+]);
+
+export function retentionClassFor(
+  action: string,
+): "financial" | "operational" | "raw_protocol" {
+  // Heartbeats are the only genuinely disposable frame: liveness plus a
+  // clock sync, carrying nothing. The long-term availability artifact is
+  // the derived downtime period, not the frames.
+  if (action === "Heartbeat") return "raw_protocol";
+  if (FINANCIAL_ACTIONS.has(action)) return "financial";
+  // Default is deliberately `operational`, NOT `raw_protocol`. An
+  // untriaged frame type is more likely to be something new that matters
+  // than something disposable — fail long, not short.
+  return "operational";
+}
+
 const AUTHZ_PREFIX = "authz:";
 
 function authzKey(idTag: string): string {
@@ -567,7 +602,7 @@ export class IdentityDurableObject {
       eventType: `ocpp.raw.${frame.action}`,
       occurredAt: new Date().toISOString(),
       correlationId: frame.uniqueId,
-      retentionClass: "raw_protocol",
+      retentionClass: retentionClassFor(frame.action),
       payload: { action: frame.action, request: frame.payload },
     };
 
