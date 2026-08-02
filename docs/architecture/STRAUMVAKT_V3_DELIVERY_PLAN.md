@@ -25,6 +25,26 @@
 > Where this plan still says "pilot go-live (end of Sprint 10)" below, read
 > it as historical context; the live target is P5 public launch.
 
+> [!IMPORTANT]
+> **Scale-readiness expansion (2026-08-02).**
+> [ADR 0035](../adr/0035-multi-operator-scale-readiness-roadmap.md)
+> **extends** the going-public plan above — it does not replace it. Phase
+> numbering P0–P6 stands; no sprint renumbering. Three changes:
+> - **P4 expands** from "observability + security" to the full hardening
+>   track: ingest and command integrity (P4.12–P4.18), the load-test
+>   harness (P4.19–P4.22), tenancy depth + EVSE layer (P4.23–P4.27), and
+>   operational read models (P4.28–P4.31). P4 still depends only on P0
+>   and still runs parallel to Track E, **so launch does not move.**
+> - **New P7 — Fleet Acquisition** (Track F): bulk onboarding of a
+>   mixed-vendor fleet. Market-triggered, parallel to everything.
+> - **P0.7 re-opens** and **P1 gains P1.9–P1.11** (tariff snapshots,
+>   credit notes) — see ADR 0035 "Fold-ins".
+>
+> ⚠️ **P5.5 has a hidden dependency.** It says "re-run Sprint 9
+> Scenario D"; ADR 0017's Sprint 9 Track B never shipped and no fleet
+> simulator exists. P4.19–P4.22 build it. Until then P5.5 cannot be
+> executed and P5.7's go/no-go cannot honestly be signed.
+
 ---
 
 ## 0. How to read this plan

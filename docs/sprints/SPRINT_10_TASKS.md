@@ -1,8 +1,31 @@
 # Sprint 10 — Observability + Security/Tenancy · Task List
 
-**Status:** FUTURE — entry condition: Sprint 9 exit met (4k sim
-runs cleanly on staging).
-**Branch:** `dev/sprint-10-observability-security`.
+> [!NOTE]
+> **Absorbed into P4.** Per
+> [GOING_PUBLIC_CRITICAL_PATH.md](../architecture/GOING_PUBLIC_CRITICAL_PATH.md)
+> this file is the task detail for **P4.1–P4.11** — the `10.x` IDs below
+> map one-to-one onto `P4.n`. Content unchanged and still required.
+>
+> [ADR 0035](../adr/0035-multi-operator-scale-readiness-roadmap.md)
+> (2026-08-02) **expands P4** with four more sub-tracks — ingest and
+> command integrity, measurement, tenancy depth, operational read models.
+> The full P4 picture, including these milestones, is in
+> [P4_TASKS.md](./P4_TASKS.md). Start there.
+>
+> Two notes on the content below, from the 2026-08-02 review:
+> - **10.5 (RLS)** and **10.8 (tenant-isolation tests)** were already
+>   scoped by
+>   [TENANT_ISOLATION_AUDIT.md](../architecture/TENANT_ISOLATION_AUDIT.md)
+>   (2026-06-05). Validate that audit rather than re-running it — its
+>   High finding is that there is no DB backstop at all.
+> - **10.3 (alert thresholds)** is better set from P4-D's measured
+>   numbers than from estimates. Dashboards can start any time;
+>   thresholds should follow measurement.
+
+**Status:** ACTIVE as P4.1–P4.11 — depends on P0 only; runs **parallel**
+to Track E. (Was: FUTURE, entry condition Sprint 9 exit — that framing
+predates the going-public fold.)
+**Branch:** `dev/p4-b-observability-security`.
 
 > Rescoped per [ADR 0017](../adr/0017-prepilot-rescope-for-4k-charger-target.md).
 > Absorbs gbtNotes S8 (Observability) + S9 (Security, Tenant
