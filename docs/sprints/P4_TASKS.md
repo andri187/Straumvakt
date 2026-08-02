@@ -62,9 +62,9 @@ IDs they absorb. Nothing below renumbers them.
 | P4.15 partition retention | ⛔ **blocked on [ADR 0037](../adr/0037-r2-key-scheme-retention-class-segment.md)** |
 | P4.16 command durability | ✅ done — DO storage, claim-by-delete, close + error + alarm sweeps |
 | P4.17 subprotocol echo | ✅ done — RFC 6455 negotiation; entry Worker was dropping the offer |
-| P4.18 Authorize caching | ⏳ **Rule 5 gate** — not started |
+| P4.18 Authorize caching | ✅ done — DO-storage cache keyed by idTag, 60s TTL, `POST /invalidate-authorize`. **Follow-up open:** nothing on the `apps/api` side calls the invalidation endpoint yet |
 
-Test state: `apps/api` 579/579, `gateway` 54/54, both typecheck clean.
+Test state: `apps/api` 579/579, `gateway` 72/72, both typecheck clean.
 
 ### Findings that came out of the work
 
@@ -104,6 +104,20 @@ Test state: `apps/api` 579/579, `gateway` 54/54, both typecheck clean.
   had stopped testing what they claimed: the Zaptec webhook fail-open
   posture and the org-email-domain tenant-isolation guard. Both now
   genuinely assert their invariant.
+
+- 🔴 **The Authorize gate fails OPEN on upstream error, even when
+  enforced** (ADR 0035 finding **F21**). `responseFor`
+  ([identity-do.ts:585](../../gateway/src/identity-do.ts#L585)) returns
+  the stub when the verdict is null, and the `Authorize` stub is
+  `Accepted`. So if the API Worker or Postgres is unreachable, every
+  idTag is admitted regardless of `Installation.enforceAuthorize`.
+  Pre-existing — surfaced while implementing P4.18, not introduced by
+  it. **This directly undermines P4.11**: flipping enforcement gives an
+  access gate that opens whenever the API is down. P4.18's cache makes a
+  safer option available (serve the last known non-Accepted verdict
+  during an outage rather than fabricating an Accept), but that changes
+  access precedence and needs its own Rule 5 pass. **Decide before
+  P4.11 flips enforcement, not after.**
 
 ## Findings closed here
 
