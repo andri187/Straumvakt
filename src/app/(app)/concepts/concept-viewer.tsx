@@ -7,12 +7,18 @@ import { useState } from "react";
 // full-height surface: a sticky TOP NAV BAR to jump between the views, with
 // the selected view filling the rest of the screen. The page is gated by
 // the (app) layout's admin-session check.
+// Streamlined to the intended privilege tiers: platform staff (operator) →
+// host_admin → driver (+ helper capability) → contractor. The standalone
+// driver WEB portal is retired — per ADR 0026 §5 the mobile app is the only
+// driver surface; its screens fold into "Driver app". "Technician" is renamed
+// "Contractor" (ADR 0032: the paid escalation tier, not a tenancy role).
+// "Roles & access" is the privilege backbone the persona views derive from.
 const VIEWS = [
+  { key: "roles", label: "Roles & access", src: "/concepts/roles.html" },
   { key: "admin", label: "Operator admin", src: "/concepts/admin.html" },
   { key: "host", label: "Host portal", src: "/concepts/host.html" },
-  { key: "driver", label: "Driver portal", src: "/concepts/driver.html" },
   { key: "driver-app", label: "Driver app", src: "/concepts/driver-app.html" },
-  { key: "technician", label: "Technician", src: "/concepts/technician.html" },
+  { key: "contractor", label: "Contractor", src: "/concepts/technician.html" },
 ] as const;
 
 export function ConceptViewer() {

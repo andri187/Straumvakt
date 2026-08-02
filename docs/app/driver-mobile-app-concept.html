@@ -1,0 +1,502 @@
+<!doctype html>
+<html lang="is">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Straumvakt-driver — mobile app · web mock</title>
+  <!--
+    Web mock of the SHIPPED Straumvakt driver mobile app:
+      E:/Claude/CPMS/mobile-app-driver  (pubspec: straumvakt_driver, v0.3.0)
+    Single-file Flutter app (lib/main.dart). Rendered as phone frames so the
+    real mobile UI can be reviewed in a browser.
+
+    Faithful to lib/main.dart:
+      • Colours = _BrandPalette + the brighter charging-session palette (_cs*).
+      • Copy = the literal Icelandic strings in the source (ASCII-styled labels
+        as in the app; the charging view keeps proper diacritics).
+      • Screens = Login · Hlaða (sites → chargers) · Símatap detected-reader
+        sheet · Live charging (SOC ring) · Aðstoð · Account drawer ·
+        Greiðsluskilmálar (let the company pay) · Hleðslusaga.
+
+    Standalone — open in a browser. No build, no data. This is a mock, not the
+    running app (BLE, polling, API are represented, not live).
+  -->
+  <style>
+    :root {
+      /* _BrandPalette */
+      --midnight: #010B13;
+      --deep-navy: #061522;
+      --surface: #0A2130;
+      --surface-hi: #0E2A3D;
+      --border: #1E5B70;
+      --mint: #69F2A6;
+      --cyan: #25C9C9;
+      --blue: #2098E4;
+      --muted: #A7BBC8;
+      --danger: #FF3864;
+      --amber: #F6A532;
+      /* charging-session palette (brighter) */
+      --cs-text: #F5F7FA; --cs-muted: #A8B2BC; --cs-divider: rgba(255,255,255,.14);
+      --cs-mint: #52F0A0; --cs-cyan: #14C7D9; --cs-blue: #1E9BFF; --cs-track: #13242E;
+      --white: #fff;
+      font-family: Roboto, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; color: var(--white);
+      background:
+        radial-gradient(900px 480px at 82% -8%, rgba(37,201,201,.10), transparent 60%),
+        radial-gradient(760px 420px at -8% 6%, rgba(105,242,166,.08), transparent 60%),
+        #04080e;
+      background-attachment: fixed; padding: 34px 24px 80px;
+    }
+    .page-head { max-width: 1220px; margin: 0 auto 26px; }
+    .page-head .brandrow { display: flex; align-items: center; gap: 12px; }
+    .page-head .logo { width: 38px; height: 38px; border-radius: 11px; background: linear-gradient(135deg, var(--mint), var(--blue)); display: grid; place-items: center; color: var(--midnight); font-weight: 900; font-size: 18px; box-shadow: 0 10px 26px rgba(37,201,201,.28); }
+    .page-head h1 { margin: 0; font-size: 22px; letter-spacing: -.02em; }
+    .page-head h1 span { background: linear-gradient(135deg, var(--mint), var(--cyan) 55%, var(--blue)); background-clip: text; -webkit-background-clip: text; color: transparent; }
+    .page-head p { margin: 8px 0 0; color: var(--muted); font-size: 13px; max-width: 78ch; line-height: 1.5; }
+    .page-head .meta { margin-top: 8px; font-size: 11px; color: var(--muted); }
+    .page-head code { color: var(--cyan); font-family: ui-monospace, monospace; }
+
+    .gallery { max-width: 1220px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 42px 30px; justify-items: center; }
+    .device { width: 300px; }
+    .caption { margin-top: 14px; text-align: center; }
+    .caption .t { font-size: 14px; font-weight: 800; letter-spacing: -.01em; }
+    .caption .d { margin-top: 3px; font-size: 11.5px; color: var(--muted); line-height: 1.45; }
+
+    .phone { width: 300px; height: 628px; border-radius: 46px; padding: 9px; background: linear-gradient(160deg, #1a2632, #0a121b); box-shadow: 0 30px 60px rgba(0,0,0,.55), 0 0 0 1px rgba(120,150,170,.16) inset; position: relative; }
+    .screen { position: relative; width: 100%; height: 100%; border-radius: 38px; overflow: hidden; background: var(--midnight); display: flex; flex-direction: column; }
+    .phone::before { content: ""; position: absolute; top: 9px; left: 50%; transform: translateX(-50%); width: 116px; height: 24px; background: #05080d; border-radius: 0 0 16px 16px; z-index: 6; }
+    .statusbar { height: 36px; flex: none; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; font-size: 11px; font-weight: 700; z-index: 7; }
+    .statusbar .bars { display: inline-flex; gap: 2px; align-items: flex-end; height: 10px; }
+    .statusbar .bars i { width: 3px; background: var(--white); border-radius: 1px; }
+    .statusbar .bars i:nth-child(1){height:4px}.statusbar .bars i:nth-child(2){height:6px}.statusbar .bars i:nth-child(3){height:8px}.statusbar .bars i:nth-child(4){height:10px}
+    .statusbar .batt { width: 22px; height: 11px; border: 1px solid rgba(255,255,255,.8); border-radius: 3px; padding: 1px; display: inline-block; vertical-align: middle; margin-left: 6px; }
+    .statusbar .batt i { display:block; height:100%; width:78%; background: var(--mint); border-radius:1px; }
+
+    .app { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+    .scroll { flex: 1; overflow: auto; }
+    .scroll::-webkit-scrollbar { width: 0; }
+    .pad { padding: 0 20px; }
+
+    /* header (logo mark + first name + hamburger) */
+    .apphdr { display: flex; align-items: center; gap: 10px; padding: 12px 12px 8px 20px; }
+    .apphdr .mark { width: 36px; height: 36px; border-radius: 12px; background: linear-gradient(135deg, var(--mint), var(--blue)); display: grid; place-items: center; color: var(--midnight); font-weight: 900; font-size: 17px; flex: none; }
+    .apphdr .ttl { flex: 1; font-size: 20px; font-weight: 900; letter-spacing: -.03em; }
+    .apphdr .mn { color: var(--white); font-size: 22px; }
+    .apphdr .bk { color: var(--white); font-size: 22px; padding: 0 4px; }
+
+    .h2 { font-size: 22px; font-weight: 900; letter-spacing: -.02em; }
+    .sub { color: var(--muted); font-size: 13px; line-height: 1.45; }
+
+    /* bottom nav */
+    .bnav { flex: none; height: 64px; background: var(--deep-navy); display: flex; }
+    .bnav .it { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; color: var(--muted); font-size: 11px; font-weight: 700; }
+    .bnav .it .ic { width: 56px; height: 26px; border-radius: 999px; display: grid; place-items: center; font-size: 17px; }
+    .bnav .it.on { color: var(--white); }
+    .bnav .it.on .ic { background: rgba(37,201,201,.18); color: var(--white); }
+
+    /* site card */
+    .sitecard { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 12px; margin-bottom: 8px; }
+    .sitecard .pin { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; font-size: 18px; flex: none; }
+    .sitecard .nm { font-size: 15px; font-weight: 900; letter-spacing: -.01em; }
+    .sitecard .row2 { display: flex; align-items: center; gap: 8px; margin-top: 3px; font-size: 11px; font-weight: 700; color: var(--muted); }
+    .dot { width: 6px; height: 6px; border-radius: 999px; display: inline-block; }
+    .sitecard .dist { font-size: 12px; font-weight: 900; }
+    .sitecard .chev { color: var(--muted); font-size: 20px; }
+
+    /* location selector */
+    .locsel { display: flex; align-items: center; gap: 12px; border-radius: 20px; padding: 12px 12px 12px 14px; margin: 6px 20px 4px; border: 1.2px solid rgba(37,201,201,.55); background: linear-gradient(135deg, rgba(37,201,201,.18), var(--surface)); }
+    .locsel .pin { width: 40px; height: 40px; border-radius: 12px; background: rgba(37,201,201,.18); display: grid; place-items: center; color: var(--cyan); font-size: 20px; flex: none; }
+    .locsel .nm { font-size: 18px; font-weight: 900; letter-spacing: -.02em; }
+    .locsel .mt { font-size: 12px; font-weight: 700; color: var(--muted); margin-top: 2px; }
+    .locsel .skipta { display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px; border-radius: 99px; border: 1px solid rgba(37,201,201,.4); background: rgba(1,11,19,.4); color: var(--cyan); font-size: 11px; font-weight: 900; }
+
+    /* filter chips */
+    .chips { display: flex; gap: 8px; padding: 8px 20px 4px; overflow: hidden; }
+    .chip { padding: 8px 14px; border-radius: 99px; font-size: 12px; font-weight: 900; letter-spacing: .02em; border: 1px solid var(--border); background: var(--surface); color: var(--muted); white-space: nowrap; }
+    .chip.on { border-color: var(--cyan); background: rgba(37,201,201,.18); color: var(--cyan); }
+
+    /* charger row */
+    .crow { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 12px 12px 12px 14px; margin-bottom: 8px; }
+    .crow.use { border-color: rgba(37,201,201,.45); }
+    .crow .ev { width: 42px; height: 42px; border-radius: 13px; display: grid; place-items: center; font-size: 20px; flex: none; }
+    .crow .nm { font-size: 15px; font-weight: 900; }
+    .crow .mt { font-size: 12px; font-weight: 700; color: var(--muted); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .crow .chev { font-size: 20px; }
+    .pill { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 99px; font-size: 11px; font-weight: 900; }
+
+    /* símatap banner */
+    .simatap { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid rgba(37,201,201,.5); border-radius: 18px; padding: 12px 14px; margin: 6px 18px; }
+    .simatap .bt { width: 36px; height: 36px; border-radius: 999px; background: rgba(37,201,201,.3); display: grid; place-items: center; color: var(--cyan); font-size: 17px; flex: none; box-shadow: 0 0 0 0 rgba(37,201,201,.5); animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(37,201,201,.45)} 70%{box-shadow:0 0 0 10px rgba(37,201,201,0)} 100%{box-shadow:0 0 0 0 rgba(37,201,201,0)} }
+
+    /* login */
+    .lfield { display: flex; align-items: center; gap: 10px; background: var(--deep-navy); border: 1px solid var(--border); border-radius: 18px; padding: 14px; color: var(--white); font-size: 14px; }
+    .lfield.focus { border-color: var(--cyan); }
+    .lfield .ic { color: var(--muted); font-size: 16px; width: 18px; text-align: center; }
+    .lfield .ph { color: var(--muted); }
+    .btn { display: flex; align-items: center; justify-content: center; gap: 9px; border: 0; border-radius: 18px; padding: 16px; font-size: 16px; font-weight: 900; }
+    .btn.cyan { background: var(--cyan); color: var(--midnight); }
+
+    /* live charging (SOC) */
+    .cs-loc { display: flex; align-items: center; justify-content: center; gap: 6px; color: var(--cs-muted); font-size: 14px; }
+    .cs-metrics { display: flex; }
+    .cs-metric { flex: 1; text-align: center; }
+    .cs-metric .l { color: var(--cs-muted); font-size: 12px; font-weight: 700; letter-spacing: .14em; }
+    .cs-metric .v { color: var(--cs-text); font-size: 23px; font-weight: 700; letter-spacing: -.02em; margin-top: 6px; font-variant-numeric: tabular-nums; }
+    .soc { width: 210px; height: 210px; margin: 6px auto; border-radius: 999px; display: grid; place-items: center; background: conic-gradient(from -90deg, var(--cs-blue), var(--cs-cyan) 33%, var(--cs-mint) 67%, var(--cs-track) 67%, var(--cs-track) 100%); }
+    .soc .hole { width: 186px; height: 186px; border-radius: 999px; background: var(--midnight); display: grid; place-items: center; }
+    .soc .pct { font-size: 60px; font-weight: 800; letter-spacing: -.04em; line-height: 1; color: var(--cs-text); }
+    .soc .lab { font-size: 12px; font-weight: 700; letter-spacing: .24em; color: var(--cs-muted); margin-top: 6px; }
+    .cs-summary { display: flex; }
+    .cs-summary .c { flex: 1; text-align: center; }
+    .cs-summary .v { font-size: 21px; font-weight: 700; color: var(--cs-text); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+    .cs-summary .l { font-size: 12px; color: var(--cs-muted); margin-top: 3px; }
+    .pricecard { border: 1px solid var(--cs-divider); border-radius: 20px; padding: 16px 18px; }
+    .pricecard .top { display: flex; align-items: center; gap: 14px; }
+    .pricecard .ic { width: 38px; height: 38px; border-radius: 11px; background: rgba(82,240,160,.12); display: grid; place-items: center; color: var(--cs-mint); font-size: 18px; }
+    .pricecard .hr { height: 1px; background: var(--cs-divider); margin: 14px 0; }
+    .stopbtn { height: 60px; border-radius: 20px; display: flex; align-items: center; justify-content: center; gap: 12px; background: linear-gradient(90deg, var(--cs-mint), var(--cs-blue)); color: var(--midnight); font-size: 17px; font-weight: 800; letter-spacing: -.01em; }
+    .stopbtn .sq { width: 15px; height: 15px; border-radius: 3px; background: var(--midnight); }
+
+    /* support / drawer / generic tiles */
+    .tile { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 14px; margin-bottom: 10px; }
+    .tile .ic { width: 42px; height: 42px; border-radius: 13px; display: grid; place-items: center; font-size: 20px; flex: none; }
+    .tile .tt { font-size: 15px; font-weight: 900; }
+    .tile .ts { font-size: 12px; font-weight: 700; color: var(--muted); margin-top: 2px; }
+    .tile .chev { margin-left: auto; color: var(--muted); font-size: 18px; }
+
+    .drawer-card { display: flex; align-items: center; gap: 14px; padding: 20px; border-radius: 24px; border: 1px solid var(--border); background: linear-gradient(135deg, var(--surface-hi), var(--surface)); }
+    .drawer-card .pa { width: 60px; height: 60px; border-radius: 20px; background: rgba(37,201,201,.15); display: grid; place-items: center; color: var(--cyan); font-size: 30px; flex: none; }
+    .srow { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 14px; margin-bottom: 10px; }
+    .srow .ic { color: var(--cyan); font-size: 19px; width: 22px; text-align: center; }
+    .srow .t { flex: 1; font-size: 14px; font-weight: 900; }
+    .srow .v { font-size: 12px; font-weight: 800; color: var(--muted); }
+    .toggle { width: 42px; height: 24px; border-radius: 999px; background: var(--cyan); position: relative; flex: none; }
+    .toggle::after { content: ""; position: absolute; top: 3px; right: 3px; width: 18px; height: 18px; border-radius: 999px; background: #fff; }
+    .outline-danger { border: 1px solid var(--danger); color: var(--danger); border-radius: 18px; padding: 15px; text-align: center; font-size: 16px; font-weight: 900; display: flex; align-items: center; justify-content: center; gap: 8px; }
+
+    .sheet { position: absolute; inset: 0; background: rgba(1,7,12,.55); display: grid; place-items: center; padding: 16px; }
+    .sheet .card { width: 100%; background: var(--surface); border: 1.2px solid rgba(37,201,201,.55); border-radius: 28px; padding: 22px 20px 18px; text-align: center; box-shadow: 0 20px 50px rgba(37,201,201,.22); }
+    .ringspin { width: 110px; height: 110px; margin: 0 auto; border-radius: 999px; display: grid; place-items: center; background: conic-gradient(var(--cyan) 0 78%, var(--border) 78% 100%); }
+    .ringspin .hole { width: 92px; height: 92px; border-radius: 999px; background: var(--surface); display: grid; place-items: center; color: var(--cyan); font-size: 40px; }
+  </style>
+</head>
+<body>
+  <div class="page-head">
+    <div class="brandrow">
+      <div class="logo">S</div>
+      <h1><span>Straumvakt-driver</span> — mobile app · web mock</h1>
+    </div>
+    <p>The shipped driver app (<code>mobile-app-driver</code>, Flutter <code>straumvakt_driver</code> v0.3.0) rendered as a
+      browser mock — same <code>_BrandPalette</code> and the literal Icelandic copy from <code>lib/main.dart</code>. Static
+      showcase of the real screens; BLE (Símatap), session polling and API calls are represented, not live.</p>
+    <div class="meta">Innskráning · Hlaða (staðsetningar → stöðvar) · Símatap-skynjun · Lifandi hleðsla · Aðstoð · Reikningur (valmynd) · Greiðsluskilmálar · Hleðslusaga</div>
+  </div>
+
+  <div class="gallery">
+
+    <!-- ============ 1 · LOGIN ============ -->
+    <div class="device">
+      <div class="phone"><div class="screen">
+        <div class="statusbar"><span>9:41</span><span><span class="bars"><i></i><i></i><i></i><i></i></span><span class="batt"><i></i></span></span></div>
+        <div class="app"><div class="scroll pad" style="display:flex;flex-direction:column;justify-content:center;">
+          <div style="text-align:center;">
+            <div style="font-size:64px;line-height:1;">🚗</div>
+            <div style="font-size:38px;font-weight:900;letter-spacing:-.04em;margin-top:10px;">Straumvakt</div>
+          </div>
+          <div style="height:26px;"></div>
+          <div class="lfield"><span class="ic">✉</span><span style="color:var(--white);">n1@n1.is</span></div>
+          <div style="height:14px;"></div>
+          <div class="lfield focus"><span class="ic">🔒</span><span style="letter-spacing:3px;">••••••••</span></div>
+          <div style="height:24px;"></div>
+          <button class="btn cyan">⇲ Skrá inn</button>
+          <div style="text-align:center;margin-top:12px;"><span style="color:var(--cyan);font-size:13px;">Gleymt lykilorð?</span></div>
+          <div style="text-align:center;margin-top:12px;font-size:11px;color:var(--muted);">hlada-api-staging.straumvakt.workers.dev</div>
+        </div></div>
+      </div></div>
+      <div class="caption"><div class="t">Innskráning</div><div class="d">Netfang + lykilorð (rekstraraðili útbýr aðgang). Símatap kemur eftir innskráningu.</div></div>
+    </div>
+
+    <!-- ============ 2 · HLAÐA — SITES ============ -->
+    <div class="device">
+      <div class="phone"><div class="screen">
+        <div class="statusbar"><span>9:41</span><span><span class="bars"><i></i><i></i><i></i><i></i></span><span class="batt"><i></i></span></span></div>
+        <div class="app">
+          <div class="apphdr"><div class="mark">S</div><div class="ttl">N1</div><div class="mn">☰</div></div>
+          <div class="simatap">
+            <div class="bt">ᛒ</div>
+            <div style="flex:1;min-width:0;"><div style="font-size:14px;font-weight:900;">Símatap virkt</div><div class="sub" style="font-size:12px;">Haltu símanum að hleðslustöðinni til að hefja hleðslu.</div></div>
+          </div>
+          <div class="scroll pad" style="padding-top:4px;">
+            <div class="h2">Veldu staðsetningu</div>
+            <div class="sub" style="margin-top:4px;">Hleðslustaðir sem þinn aðgangur nær til.</div>
+            <div style="height:16px;"></div>
+            <div class="sitecard">
+              <div class="pin" style="background:rgba(37,201,201,.15);color:var(--cyan);">📍</div>
+              <div style="flex:1;min-width:0;"><div class="nm">Dalvegur 10 - 14</div><div class="row2"><span>12 stöðvar</span><span class="dot" style="background:var(--mint);"></span><span style="color:var(--mint);font-weight:900;">8</span><span class="dot" style="background:var(--amber);"></span><span style="color:var(--amber);font-weight:900;">2</span></div></div>
+              <div class="dist" style="color:var(--cyan);">Hér</div><div class="chev">›</div>
+            </div>
+            <div class="sitecard">
+              <div class="pin" style="background:rgba(105,242,166,.15);color:var(--mint);">📍</div>
+              <div style="flex:1;min-width:0;"><div class="nm">N1 Ártúnsbrekka</div><div class="row2"><span>4 stöðvar</span><span class="dot" style="background:var(--mint);"></span><span style="color:var(--mint);font-weight:900;">3</span><span class="dot" style="background:var(--amber);"></span><span style="color:var(--amber);font-weight:900;">1</span></div></div>
+              <div class="dist" style="color:var(--mint);">4 km</div><div class="chev">›</div>
+            </div>
+            <div class="sitecard">
+              <div class="pin" style="background:rgba(32,152,228,.15);color:var(--blue);">📍</div>
+              <div style="flex:1;min-width:0;"><div class="nm">Ísorka miðborg</div><div class="row2"><span>4 stöðvar</span><span class="dot" style="background:var(--mint);"></span><span style="color:var(--mint);font-weight:900;">2</span><span class="dot" style="background:var(--amber);"></span><span style="color:var(--amber);font-weight:900;">1</span></div></div>
+              <div class="dist" style="color:var(--blue);">6 km</div><div class="chev">›</div>
+            </div>
+            <div class="sitecard">
+              <div class="pin" style="background:rgba(246,165,50,.15);color:var(--amber);">📍</div>
+              <div style="flex:1;min-width:0;"><div class="nm">Heim</div><div class="row2"><span>1 stöð</span><span class="dot" style="background:var(--muted);"></span><span style="color:var(--muted);font-weight:900;">0</span></div></div>
+              <div class="dist" style="color:var(--amber);">12 km</div><div class="chev">›</div>
+            </div>
+          </div>
+          <div class="bnav"><div class="it on"><div class="ic">⚡</div>Hlaða</div><div class="it"><div class="ic">🛟</div>Aðstoð</div></div>
+        </div>
+      </div></div>
+      <div class="caption"><div class="t">Hlaða — staðsetningar</div><div class="d">Símatap-borði efst. Staðir með lausum/í-notkun talningu og fjarlægð.</div></div>
+    </div>
+
+    <!-- ============ 3 · HLAÐA — CHARGERS ============ -->
+    <div class="device">
+      <div class="phone"><div class="screen">
+        <div class="statusbar"><span>9:41</span><span><span class="bars"><i></i><i></i><i></i><i></i></span><span class="batt"><i></i></span></span></div>
+        <div class="app">
+          <div class="apphdr"><div class="bk">←</div><div class="ttl">N1</div><div class="mn">☰</div></div>
+          <div class="locsel">
+            <div class="pin">📍</div>
+            <div style="flex:1;min-width:0;"><div class="nm">Dalvegur 10 - 14</div><div class="mt">12 stöðvar - 8 lausar - 2 í notkun</div></div>
+            <div class="skipta">Skipta ⇄</div>
+          </div>
+          <div class="chips"><span class="chip on">Allar</span><span class="chip">Lausar</span><span class="chip">Hraðar</span><span class="chip">CCS</span></div>
+          <div class="scroll pad" style="padding-top:6px;">
+            <div class="crow use">
+              <div class="ev" style="background:rgba(37,201,201,.13);color:var(--cyan);">🔌</div>
+              <div style="flex:1;min-width:0;"><div class="nm">ZPR074002</div><div class="mt">22 kW - Type 2 - 39 kr/kWh</div></div>
+              <div class="pill" style="color:var(--mint);background:rgba(105,242,166,.13);border:1px solid rgba(105,242,166,.45);"><span class="dot" style="background:var(--mint);"></span>Laus</div>
+              <div class="chev" style="color:var(--cyan);">›</div>
+            </div>
+            <div class="crow use">
+              <div class="ev" style="background:rgba(37,201,201,.13);color:var(--cyan);">🔌</div>
+              <div style="flex:1;min-width:0;"><div class="nm">ZPR074003</div><div class="mt">22 kW - Type 2 - 39 kr/kWh</div></div>
+              <div class="pill" style="color:var(--mint);background:rgba(105,242,166,.13);border:1px solid rgba(105,242,166,.45);"><span class="dot" style="background:var(--mint);"></span>Laus</div>
+              <div class="chev" style="color:var(--cyan);">›</div>
+            </div>
+            <div class="crow">
+              <div class="ev" style="background:rgba(37,201,201,.13);color:var(--muted);">🔌</div>
+              <div style="flex:1;min-width:0;"><div class="nm">ZPR074005</div><div class="mt">22 kW - Type 2 - 39 kr/kWh</div></div>
+              <div class="pill" style="color:var(--amber);background:rgba(246,165,50,.13);border:1px solid rgba(246,165,50,.45);"><span class="dot" style="background:var(--amber);"></span>I notkun</div>
+              <div class="chev" style="color:var(--muted);">›</div>
+            </div>
+            <div class="crow">
+              <div class="ev" style="background:rgba(37,201,201,.13);color:var(--muted);">🔌</div>
+              <div style="flex:1;min-width:0;"><div class="nm">ZPR074006</div><div class="mt">22 kW - Type 2 - 39 kr/kWh</div></div>
+              <div class="pill" style="color:var(--muted);background:rgba(167,187,200,.1);border:1px solid rgba(167,187,200,.4);"><span class="dot" style="background:var(--muted);"></span>Otengd</div>
+              <div class="chev" style="color:var(--muted);">›</div>
+            </div>
+            <div class="crow use">
+              <div class="ev" style="background:rgba(37,201,201,.13);color:var(--cyan);">🔌</div>
+              <div style="flex:1;min-width:0;"><div class="nm">ZPR074011</div><div class="mt">50 kW - CCS - 46 kr/kWh</div></div>
+              <div class="pill" style="color:var(--mint);background:rgba(105,242,166,.13);border:1px solid rgba(105,242,166,.45);"><span class="dot" style="background:var(--mint);"></span>Laus</div>
+              <div class="chev" style="color:var(--cyan);">›</div>
+            </div>
+          </div>
+          <div class="bnav"><div class="it on"><div class="ic">⚡</div>Hlaða</div><div class="it"><div class="ic">🛟</div>Aðstoð</div></div>
+        </div>
+      </div></div>
+      <div class="caption"><div class="t">Hlaða — stöðvar</div><div class="d">Staðsetningarhaus með “Skipta”, síur (Allar/Lausar/Hraðar/CCS), stöðvaraðir.</div></div>
+    </div>
+
+    <!-- ============ 4 · SÍMATAP DETECTED SHEET ============ -->
+    <div class="device">
+      <div class="phone"><div class="screen">
+        <div class="statusbar"><span>9:41</span><span><span class="bars"><i></i><i></i><i></i><i></i></span><span class="batt"><i></i></span></span></div>
+        <div class="app" style="position:relative;">
+          <div class="apphdr"><div class="bk">←</div><div class="ttl">N1</div><div class="mn">☰</div></div>
+          <div class="pad" style="opacity:.5;filter:blur(.5px);">
+            <div class="crow use"><div class="ev" style="background:rgba(37,201,201,.13);color:var(--cyan);">🔌</div><div style="flex:1;"><div class="nm">ZPR074002</div><div class="mt">22 kW - Type 2 - 39 kr/kWh</div></div></div>
+          </div>
+          <div class="sheet">
+            <div class="card">
+              <div class="ringspin"><div class="hole">⚡</div></div>
+              <div style="font-size:22px;font-weight:900;letter-spacing:-.02em;margin-top:18px;">ZPR074002</div>
+              <div class="sub" style="margin-top:4px;">Dalvegur 10 - 14</div>
+              <div style="color:var(--cyan);font-size:14px;font-weight:900;margin-top:14px;">Hef hleðslu eftir 3...</div>
+              <div style="display:flex;gap:10px;margin-top:16px;">
+                <div style="flex:1;border:1px solid var(--border);color:var(--muted);border-radius:16px;padding:14px;font-weight:900;">Hætta við</div>
+                <div style="flex:1;background:var(--cyan);color:var(--midnight);border-radius:16px;padding:14px;font-weight:900;">Hefja núna</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div></div>
+      <div class="caption"><div class="t">Símatap — skynjun</div><div class="d">BLE-lesari greindur við stöð. Sjálfræsing með niðurtalningu, eða Hefja núna.</div></div>
+    </div>
+
+    <!-- ============ 5 · LIVE CHARGING (SOC) ============ -->
+    <div class="device">
+      <div class="phone"><div class="screen">
+        <div class="statusbar"><span>9:41</span><span><span class="bars"><i></i><i></i><i></i><i></i></span><span class="batt"><i></i></span></span></div>
+        <div class="app">
+          <div class="apphdr"><div class="mark">S</div><div class="ttl">N1</div><div class="mn">☰</div></div>
+          <div class="scroll" style="padding:4px 24px 12px;display:flex;flex-direction:column;">
+            <div class="cs-loc">📍 Dalvegur 10 - 14</div>
+            <div style="height:18px;"></div>
+            <div class="cs-metrics">
+              <div class="cs-metric"><div class="l">AFL</div><div class="v">⚡ 11,2 kW</div></div>
+              <div class="cs-metric"><div class="l">TÍMI</div><div class="v">🕓 00:16:48</div></div>
+            </div>
+            <div style="height:16px;"></div>
+            <div class="soc"><div class="hole"><div style="text-align:center;"><div class="pct">67%</div><div class="lab">HLAÐIÐ</div></div></div></div>
+            <div style="height:16px;"></div>
+            <div class="cs-summary">
+              <div class="c"><div class="v">18,42 kWh</div><div class="l">bætt í rafhlöðu</div></div>
+              <div class="c"><div class="v">1.017 kr.</div><div class="l">kostnaður</div></div>
+            </div>
+            <div style="height:18px;"></div>
+            <div class="pricecard">
+              <div class="top">
+                <div class="ic">🏷</div>
+                <div><div style="font-size:18px;font-weight:700;letter-spacing:-.02em;">55 kr/kWh</div><div style="color:var(--cs-muted);font-size:12.5px;">15 kr/klst eftir frítíma</div></div>
+              </div>
+              <div class="hr"></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;"><span style="color:var(--cs-muted);font-size:14px;">Frítími eftir:</span><span style="color:var(--cs-mint);font-size:22px;font-weight:800;letter-spacing:-.02em;">07:43</span></div>
+            </div>
+            <div style="height:16px;"></div>
+            <div class="stopbtn"><span class="sq"></span> Stöðva hleðslu</div>
+          </div>
+        </div>
+      </div></div>
+      <div class="caption"><div class="t">Lifandi hleðsla</div><div class="d">SOC-hringur, afl/tími, kWh/kostnaður, verðspjald með frítíma, Stöðva.</div></div>
+    </div>
+
+    <!-- ============ 6 · AÐSTOÐ ============ -->
+    <div class="device">
+      <div class="phone"><div class="screen">
+        <div class="statusbar"><span>9:41</span><span><span class="bars"><i></i><i></i><i></i><i></i></span><span class="batt"><i></i></span></span></div>
+        <div class="app">
+          <div class="apphdr"><div class="mark">S</div><div class="ttl">N1</div><div class="mn">☰</div></div>
+          <div class="scroll pad" style="padding-top:8px;">
+            <div class="h2">Aðstoð</div>
+            <div class="sub" style="margin-top:4px;">Tilkynna vandamál eða biðja um aðstoð.</div>
+            <div style="height:18px;"></div>
+            <div class="tile"><div class="ic" style="background:rgba(246,165,50,.13);color:var(--amber);">⚠</div><div style="flex:1;"><div class="tt">Tilkynna bilun</div><div class="ts">Hleðslustöðin svarar ekki eða er biluð.</div></div><div class="chev">›</div></div>
+            <div class="tile"><div class="ic" style="background:rgba(37,201,201,.13);color:var(--cyan);">？</div><div style="flex:1;"><div class="tt">Reikningur eða verð</div><div class="ts">Spurningar um reikning, verðskrá eða notkun.</div></div><div class="chev">›</div></div>
+            <div class="tile"><div class="ic" style="background:rgba(32,152,228,.13);color:var(--blue);">▦</div><div style="flex:1;"><div class="tt">Skanna QR á hleðslustöð</div><div class="ts">Finna stöð með QR-kóða (kemur fljótlega).</div></div><div class="chev">›</div></div>
+            <div style="height:12px;"></div>
+            <div class="tile" style="margin-bottom:0;"><div style="color:var(--muted);font-size:18px;">ⓘ</div><div class="ts" style="margin:0;">Mál sem tilkynnt eru hér rata sjálfkrafa í rekstrarteymið.</div></div>
+          </div>
+          <div class="bnav"><div class="it"><div class="ic">⚡</div>Hlaða</div><div class="it on"><div class="ic">🛟</div>Aðstoð</div></div>
+        </div>
+      </div></div>
+      <div class="caption"><div class="t">Aðstoð</div><div class="d">Tilkynna bilun / reikningsfyrirspurn / QR. Ratar í Issue Engine.</div></div>
+    </div>
+
+    <!-- ============ 7 · ACCOUNT DRAWER ============ -->
+    <div class="device">
+      <div class="phone"><div class="screen">
+        <div class="statusbar"><span>9:41</span><span><span class="bars"><i></i><i></i><i></i><i></i></span><span class="batt"><i></i></span></span></div>
+        <div class="app"><div class="scroll pad" style="padding-top:16px;">
+          <div class="drawer-card">
+            <div class="pa">👤</div>
+            <div><div style="font-size:20px;font-weight:900;letter-spacing:-.02em;">N1 Drivers</div><div class="sub" style="font-weight:700;">n1@n1.is</div></div>
+          </div>
+          <div style="height:22px;"></div>
+          <div style="font-size:18px;font-weight:900;letter-spacing:-.01em;">Stillingar</div>
+          <div style="height:10px;"></div>
+          <div class="srow" style="border-color:rgba(37,201,201,.5);">
+            <div class="ic">ᛒ</div>
+            <div style="flex:1;"><div class="t">Símatap (BLE)</div><div class="ts" style="font-size:11px;font-weight:700;color:var(--muted);margin-top:2px;">Sjálfvirkt: haltu símanum að lesara til að hefja hleðslu.</div></div>
+            <div class="toggle"></div>
+          </div>
+          <div class="srow"><div class="ic">🧾</div><div class="t">Hleðslusaga</div><div class="v">3 hleðslur</div><div style="color:var(--muted);">›</div></div>
+          <div class="srow"><div class="ic">💳</div><div class="t">Greiðsluskilmálar</div><div class="v">1 virkur</div><div style="color:var(--muted);">›</div></div>
+          <div class="srow"><div class="ic">🌐</div><div class="t">Tungumál</div><div class="v">Íslenska</div></div>
+          <div class="srow"><div class="ic">📡</div><div class="t">RFID</div><div class="v" style="font-family:ui-monospace,monospace;">EE43C609263CC7</div></div>
+          <div style="height:14px;"></div>
+          <div class="outline-danger">⎋ Útskrá</div>
+          <div style="text-align:center;margin-top:14px;font-size:11px;color:var(--muted);font-weight:700;">Straumvakt-driver - v0.3.0</div>
+        </div></div>
+      </div></div>
+      <div class="caption"><div class="t">Reikningur (valmynd)</div><div class="d">Símatap-rofi, hleðslusaga, greiðsluskilmálar, tungumál, RFID, útskrá.</div></div>
+    </div>
+
+    <!-- ============ 8 · GREIÐSLUSKILMÁLAR ============ -->
+    <div class="device">
+      <div class="phone"><div class="screen">
+        <div class="statusbar"><span>9:41</span><span><span class="bars"><i></i><i></i><i></i><i></i></span><span class="batt"><i></i></span></span></div>
+        <div class="app">
+          <div class="apphdr"><div class="bk">←</div><div class="ttl" style="font-size:18px;">Greiðsluskilmálar</div></div>
+          <div class="scroll pad" style="padding-top:8px;">
+            <div style="font-size:16px;font-weight:900;letter-spacing:-.01em;">Skilmálar tengdir þínum aðgangi</div>
+            <div class="sub" style="margin-top:4px;">Yfirlit yfir hverjir greiða fyrir hverja hleðslu.</div>
+            <div style="height:14px;"></div>
+            <!-- active term -->
+            <div style="background:var(--surface);border:1px solid rgba(37,201,201,.4);border-radius:20px;padding:14px;margin-bottom:10px;">
+              <div style="display:flex;align-items:center;gap:12px;">
+                <div style="width:40px;height:40px;border-radius:12px;background:rgba(37,201,201,.13);color:var(--cyan);display:grid;place-items:center;font-size:19px;">🧾</div>
+                <div style="flex:1;font-size:15px;font-weight:900;letter-spacing:-.01em;">N1 fyrirtækjareikningur</div>
+                <div class="pill" style="color:var(--mint);background:rgba(105,242,166,.13);border:1px solid rgba(105,242,166,.45);"><span class="dot" style="background:var(--mint);"></span>Virkur</div>
+              </div>
+              <div class="sub" style="font-weight:700;margin-top:10px;">Mánaðarleg innheimta á kennitölu N1 ehf.</div>
+              <div style="color:var(--muted);font-size:11px;font-weight:800;margin-top:8px;">▤ Allar hleðslur</div>
+            </div>
+            <!-- inactive term -->
+            <div style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:14px;margin-bottom:10px;">
+              <div style="display:flex;align-items:center;gap:12px;">
+                <div style="width:40px;height:40px;border-radius:12px;background:rgba(37,201,201,.13);color:var(--cyan);display:grid;place-items:center;font-size:19px;">🧾</div>
+                <div style="flex:1;font-size:15px;font-weight:900;letter-spacing:-.01em;">Persónulegur kortahald</div>
+                <div class="pill" style="color:var(--muted);background:rgba(167,187,200,.1);border:1px solid rgba(167,187,200,.4);"><span class="dot" style="background:var(--muted);"></span>Óvirkur</div>
+              </div>
+              <div class="sub" style="font-weight:700;margin-top:10px;">Visa **** 4291 - sjálfgefin greiðsluleið.</div>
+              <div style="color:var(--muted);font-size:11px;font-weight:800;margin-top:8px;">▤ Heimahleðsla og opin svæði</div>
+            </div>
+            <div style="height:8px;"></div>
+            <!-- company request -->
+            <div style="border-radius:22px;padding:18px;border:1.2px solid rgba(37,201,201,.5);background:linear-gradient(135deg,rgba(37,201,201,.18),var(--surface));">
+              <div style="display:flex;align-items:center;gap:12px;">
+                <div style="width:40px;height:40px;border-radius:12px;background:rgba(37,201,201,.18);color:var(--cyan);display:grid;place-items:center;font-size:19px;">💼</div>
+                <div style="flex:1;font-size:16px;font-weight:900;letter-spacing:-.02em;">Láttu fyrirtækið borga</div>
+              </div>
+              <div class="sub" style="margin-top:10px;">Biðja vinnuveitanda þinn um að taka yfir reikninga fyrir hleðslur á starfstengdum ferðum.</div>
+              <div style="height:14px;"></div>
+              <div class="btn cyan" style="border-radius:16px;padding:14px;font-size:15px;">➤ Senda beiðni</div>
+            </div>
+          </div>
+        </div>
+      </div></div>
+      <div class="caption"><div class="t">Greiðsluskilmálar</div><div class="d">Hver greiðir hverja hleðslu + “Láttu fyrirtækið borga” (vinnustaður tekur yfir).</div></div>
+    </div>
+
+    <!-- ============ 9 · HLEÐSLUSAGA ============ -->
+    <div class="device">
+      <div class="phone"><div class="screen">
+        <div class="statusbar"><span>9:41</span><span><span class="bars"><i></i><i></i><i></i><i></i></span><span class="batt"><i></i></span></span></div>
+        <div class="app">
+          <div class="apphdr"><div class="bk">←</div><div class="ttl" style="font-size:18px;">Hleðslusaga</div></div>
+          <div class="scroll pad" style="padding-top:8px;">
+            <div class="h2">Hleðslur</div>
+            <div class="sub" style="margin-top:4px;">Yfirlit yfir nýlegar hleðslur og kostnað.</div>
+            <div style="height:18px;"></div>
+            <div style="display:flex;background:var(--surface);border:1px solid var(--border);border-radius:22px;padding:18px;">
+              <div style="flex:1;"><div style="color:var(--muted);font-size:11px;font-weight:800;letter-spacing:.04em;">Síðustu 30 dagar</div><div style="font-size:20px;font-weight:900;letter-spacing:-.02em;margin-top:4px;">92,2 kWh</div></div>
+              <div style="width:1px;background:var(--border);margin:0 14px;"></div>
+              <div style="flex:1;"><div style="color:var(--muted);font-size:11px;font-weight:800;letter-spacing:.04em;">Heildarkostnaður</div><div style="font-size:20px;font-weight:900;letter-spacing:-.02em;margin-top:4px;">3.187 kr.</div></div>
+            </div>
+            <div style="height:18px;"></div>
+            <div class="tile" style="margin-bottom:10px;"><div class="ic" style="background:rgba(105,242,166,.13);color:var(--mint);">⚡</div><div style="flex:1;min-width:0;"><div class="tt" style="font-size:14px;">ZPR074002 - Dalvegur</div><div class="ts">I gaer 18:42 - 32.4 kWh</div></div><div style="color:var(--mint);font-size:13px;font-weight:900;">1264 kr.</div></div>
+            <div class="tile" style="margin-bottom:10px;"><div class="ic" style="background:rgba(105,242,166,.13);color:var(--mint);">⚡</div><div style="flex:1;min-width:0;"><div class="tt" style="font-size:14px;">N1-742 - Ártúnsbrekka</div><div class="ts">29. maí 09:11 - 18.0 kWh</div></div><div style="color:var(--mint);font-size:13px;font-weight:900;">Innifalið</div></div>
+            <div class="tile" style="margin-bottom:0;"><div class="ic" style="background:rgba(105,242,166,.13);color:var(--mint);">⚡</div><div style="flex:1;min-width:0;"><div class="tt" style="font-size:14px;">IS-306 - Miðborg</div><div class="ts">25. maí 14:33 - 41.8 kWh</div></div><div style="color:var(--mint);font-size:13px;font-weight:900;">1923 kr.</div></div>
+          </div>
+        </div>
+      </div></div>
+      <div class="caption"><div class="t">Hleðslusaga</div><div class="d">30-daga samtala (kWh + kr.) og listi fyrri hleðslna. “Innifalið” = vinnan greiðir.</div></div>
+    </div>
+
+  </div>
+</body>
+</html>

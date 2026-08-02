@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Straumvakt — Privilege-driven views</title>
+  <style>
+    :root{
+      --bg:#070b16;--surface:#0b1220;--raised:#111a2e;--inset:#0e1626;--border:#1e2a44;--ring:#2b3a5e;
+      --text:#f5f7fa;--muted:#97a3b8;--soft:#c8d1e0;--green:#3ee9a7;--teal:#2bd3c9;--blue:#2bb6e8;--sky:#6fb8f0;--amber:#f4c95d;--red:#ff6b6b;
+      font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    }
+    *{box-sizing:border-box;}
+    body{margin:0;min-height:100vh;color:var(--text);
+      background:radial-gradient(1200px 600px at 80% -10%,rgba(43,182,232,.10),transparent 60%),radial-gradient(900px 500px at -10% 10%,rgba(62,233,167,.08),transparent 60%),var(--bg);
+      background-attachment:fixed;}
+    a{color:inherit;text-decoration:none;}
+    button{font-family:inherit;cursor:pointer;}
+    .ico,.ico svg{width:18px;height:18px;}
+    svg{stroke-width:1.8;}
+
+    /* top bar */
+    .top{display:flex;align-items:center;gap:16px;padding:14px 24px;border-bottom:1px solid var(--border);position:sticky;top:0;background:rgba(7,11,22,.8);backdrop-filter:blur(12px);z-index:5;flex-wrap:wrap;}
+    .brand{display:flex;align-items:center;gap:11px;}
+    .logo{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,var(--green),var(--teal) 55%,var(--blue));display:grid;place-items:center;color:#04121b;font-weight:900;}
+    .brand strong{display:block;font-size:15px;background:linear-gradient(135deg,var(--green),var(--teal) 55%,var(--blue));-webkit-background-clip:text;background-clip:text;color:transparent;}
+    .brand span{display:block;font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--sky);}
+    .roles{display:flex;gap:6px;flex-wrap:wrap;margin-left:8px;}
+    .role-btn{display:flex;align-items:center;gap:8px;padding:8px 13px;border-radius:10px;border:1px solid var(--border);background:var(--inset);color:var(--soft);font-size:13px;font-weight:600;}
+    .role-btn:hover{border-color:var(--ring);}
+    .role-btn.on{border-color:rgba(43,182,232,.5);background:linear-gradient(135deg,rgba(62,233,167,.14),rgba(43,182,232,.12));color:var(--text);}
+    .role-btn .dot{width:8px;height:8px;border-radius:999px;}
+    .spacer{flex:1;}
+    .matrix-toggle{font-size:12px;color:var(--muted);border:1px solid var(--border);border-radius:9px;padding:7px 12px;background:var(--inset);}
+
+    /* shell */
+    .shell{display:grid;grid-template-columns:248px 1fr;min-height:calc(100vh - 62px);}
+    .side{border-right:1px solid var(--border);background:rgba(11,18,32,.5);padding:14px 10px;}
+    .side .who{padding:8px 12px 14px;border-bottom:1px solid var(--border);margin-bottom:10px;}
+    .side .who .nm{font-size:15px;font-weight:800;}
+    .side .who .ti{font-size:11px;color:var(--sky);margin-top:3px;}
+    .side .who .ds{font-size:11.5px;color:var(--muted);margin-top:7px;line-height:1.5;}
+    .side .who .sc{font-size:11.5px;color:var(--amber);margin-top:9px;line-height:1.5;display:flex;gap:6px;}
+    .iso{display:flex;gap:10px;align-items:flex-start;border:1px solid rgba(244,201,93,.3);background:rgba(244,201,93,.07);border-radius:10px;padding:11px 14px;margin:16px 0 0;font-size:12.5px;color:var(--soft);}
+    .iso b{color:var(--amber);}
+    .navlabel{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);padding:12px 12px 5px;}
+    .nav-item{display:flex;align-items:center;gap:11px;padding:8px 12px;border-radius:9px;color:var(--soft);font-size:13.5px;font-weight:500;}
+    .nav-item:hover{background:var(--raised);}
+    .nav-item .ico{display:inline-flex;align-items:center;justify-content:center;color:var(--muted);}
+    .nav-item .mut{margin-left:auto;width:6px;height:6px;border-radius:999px;background:var(--sky);opacity:.8;}
+
+    /* main */
+    .main{padding:24px 28px 60px;max-width:1100px;}
+    h1{font-size:22px;margin:0 0 4px;letter-spacing:-.01em;}
+    .sub{color:var(--muted);font-size:13px;}
+    .legend{display:flex;gap:18px;flex-wrap:wrap;margin:16px 0 18px;font-size:12px;color:var(--muted);}
+    .legend b{color:var(--soft);}
+    .pill{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid var(--border);}
+    .do{color:var(--green);background:rgba(62,233,167,.1);border-color:rgba(62,233,167,.35);}
+    .view{color:var(--sky);background:rgba(111,184,240,.1);border-color:rgba(111,184,240,.35);}
+    .mutual{color:var(--sky);}
+    .specific{color:var(--amber);}
+
+    .card{border:1px solid var(--border);border-radius:14px;background:linear-gradient(180deg,rgba(17,26,46,.5),rgba(11,18,32,.6));margin-bottom:18px;overflow:hidden;}
+    .card-h{padding:11px 16px;border-bottom:1px solid var(--border);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:700;}
+    table{width:100%;border-collapse:collapse;font-size:13px;}
+    td,th{text-align:left;padding:11px 16px;border-bottom:1px solid rgba(30,42,68,.5);vertical-align:top;}
+    tbody tr:last-child td{border-bottom:0;}
+    th{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);}
+    .it-name{display:flex;align-items:center;gap:9px;font-weight:600;}
+    .it-name .ico{color:var(--muted);display:inline-flex;}
+    .note{color:var(--muted);font-size:12px;}
+    .mark{color:var(--green);} .markv{color:var(--sky);} .markn{color:var(--ring);}
+
+    /* matrix overlay */
+    #matrix{display:none;}
+    #matrix.on{display:block;}
+    .mtable th.r{text-align:center;font-size:10px;}
+    .mtable td.c{text-align:center;font-size:14px;}
+  </style>
+</head>
+<body>
+  <div class="top">
+    <div class="brand"><div class="logo">S</div><div><strong>Straumvakt</strong><span>Privilege-driven views</span></div></div>
+    <div class="roles" id="roles"></div>
+    <div class="spacer"></div>
+    <button class="matrix-toggle" id="mtoggle">Full access matrix ⤢</button>
+  </div>
+
+  <div class="shell">
+    <aside class="side">
+      <div class="who" id="who"></div>
+      <nav id="nav"></nav>
+    </aside>
+    <main class="main">
+      <div id="rolehead"></div>
+      <div class="legend">
+        <span><span class="pill do">DO</span> manage / act</span>
+        <span><span class="pill view">VIEW</span> read-only</span>
+        <span><b class="mutual">● Mutual</b> shared by ≥2 roles (scope differs)</span>
+        <span><b class="specific">◆ Role-specific</b> only this tier</span>
+      </div>
+      <div class="card">
+        <div class="card-h">Items accessible to this role</div>
+        <table><tbody id="items"></tbody></table>
+      </div>
+
+      <div id="matrix">
+        <div class="card">
+          <div class="card-h">Full access matrix — items × roles</div>
+          <table class="mtable"><thead id="mhead"></thead><tbody id="mbody"></tbody></table>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="lucide.min.js"></script>
+  <script>
+  // Roles (tiers). 'help' = a driver with the host-granted is_helper capability.
+  const ROLES = {
+    op:  {label:'Operator admin', color:'#2bb6e8', tier:'Straumvakt staff · PlatformGrant (ADR 0014)', desc:'Runs the platform. Cross-tenant. Authors cost factors, tariffs & agreements; onboards hosts.', scope:'All tenants (platform) — cross-org via PlatformGrant.'},
+    host:{label:'Host admin',     color:'#3ee9a7', tier:'host_admin · Membership, org-scoped (ADR 0027)', desc:'Manages own org: drivers, chargers/sites, reads billing. No tariff authoring, no cross-org.', scope:'Only this organization — every query gated by Membership.orgId + RLS.'},
+    drv: {label:'Driver',         color:'#6fb8f0', tier:'audience=driver · mobile app only (ADR 0026 §5)', desc:'Charges within access scope; invite-only; reads own cost. The app is the only driver surface. May belong to multiple hosts (e.g. home HOA + workplace) — ADR 0026 §9.', scope:'Only your own identity (+ dependents), across every host you belong to — grouped by host; each host sees only its own slice.'},
+    help:{label:'Helper',         color:'#f4c95d', tier:'driver + is_helper capability (ADR 0032 §3)', desc:'A driver the host flagged as helper: claim issues, chat, scoped remote reset. Not staff, unpaid.', scope:'Your own data + in-scope assistance requests (DriverGroup scope).'},
+    con: {label:'Contractor',     color:'#c8d1e0', tier:'Tengill / SLA · paid escalation tier (ADR 0032 §5C)', desc:'Services chargers across hosts: technical control + settlement. No tariffs, drivers or cross-host billing.', scope:'Only chargers on jobs assigned to you — technical fields, no tariffs/identities.'}
+  };
+  const ORDER = ['op','host','drv','help','con'];
+
+  // Access: 2 = DO (manage/act), 1 = VIEW (read-only), 0/undefined = no access.
+  // The SAME item shows different depth per role — that is privilege-driven access.
+  const ITEMS = [
+    {k:'dashboard', label:'Dashboard', sec:'Overview', icon:'layout-dashboard', a:{op:1,host:1,drv:1,help:1,con:1}, note:'Role-scoped KPIs — everyone sees their own numbers.'},
+    {k:'chargers', label:'Chargers', sec:'Operations', icon:'zap', a:{op:2,host:2,drv:1,help:1,con:2}, note:'Mutual, depth differs: operator configures · host onboards & reads · driver starts (in scope) · contractor controls (technical).'},
+    {k:'onboarding', label:'Set up site / installation', sec:'Operations', icon:'plus-circle', a:{op:2,host:2}, note:'Host self-serve (site→DSO, installation→e-meter→provider, connect chargers); operator can do on behalf.'},
+    {k:'sessions', label:'Charge log / sessions', sec:'Operations', icon:'activity', a:{op:1,host:1,drv:1,help:1,con:1}, note:'One session, scoped fields: operator all · host own · driver own+family · contractor technical only (no price/identity).'},
+    {k:'monitoring', label:'Monitoring & diagnostics', sec:'Operations', icon:'radar', a:{op:2,con:2}, note:'Automated fault rules; routes owner-first (ADR 0032 §4, ADR 0008).'},
+    {k:'vehicleids', label:'Vehicle IDs / autocharge', sec:'Operations', icon:'fingerprint', a:{op:1,drv:2}, note:'Operator views fleet; driver manages own vehicles.'},
+
+    {k:'drivers', label:'Drivers', sec:'People & access', icon:'users', a:{op:2,host:2}, note:'Operator = global cross-host list; host = own org only (ADR 0026 §11).'},
+    {k:'invite', label:'Invite driver', sec:'People & access', icon:'user-plus', a:{op:2,host:2}, note:'Host invites its drivers (code/QR/email); operator sends host-admin invites.'},
+    {k:'requests', label:'Access requests', sec:'People & access', icon:'inbox', a:{host:2}, note:'QR-with-approval inbox; approve → bind driver to unit (ADR 0026 §3).'},
+    {k:'family', label:'Family / dependents', sec:'People & access', icon:'users', a:{drv:2}, note:'Dependent children (no kennitala) under the unit owner (ADR 0031 §18).'},
+    {k:'myaccess', label:'My access', sec:'People & access', icon:'key-round', a:{drv:1,help:1}, note:'Which hosts/chargers the driver may use, and where charging bills.'},
+    {k:'redeem', label:'Redeem invite', sec:'People & access', icon:'qr-code', a:{drv:2,help:2}, note:'Mobile empty-state funnel — the ONLY redemption surface (ADR 0026 §5).'},
+
+    {k:'units', label:'Units & owners', sec:'Billing & agreements', icon:'building-2', a:{op:1,host:2}, note:'BillObject / owner = invoice recipient; host manages, operator views (ADR 0029).'},
+    {k:'agreements', label:'Agreements', sec:'Billing & agreements', icon:'handshake', a:{op:2,host:1,drv:1}, note:'Operator AUTHORS factor/BearerRule agreements; host reads its commercial terms; driver sees the resolved price (ADR 0019/0031).'},
+    {k:'costfactors', label:'Cost factors & tariffs', sec:'Billing & agreements', icon:'receipt', a:{op:2}, note:'Operator/platform only — host is excluded from tariff authoring (ADR 0027 §3).'},
+    {k:'invoices', label:'Invoices', sec:'Billing & agreements', icon:'file-text', a:{op:1,host:1,drv:1,con:1}, note:'Straumvakt-as-agent; recipient = unit owner / company. Each role reads its own (ADR 0031).'},
+
+    {k:'issues', label:'Issues / assistance', sec:'Assistance', icon:'life-buoy', a:{drv:2,help:2,con:2,host:1}, note:'Pull model + cost-gated escalation: driver raises → helper claims/chats → contractor resolves. Host views SLA usage (ADR 0032).'},
+    {k:'becomehelper', label:'Become helper', sec:'Assistance', icon:'heart-handshake', a:{drv:2,help:2}, note:'Driver capability the host can grant (is_helper) — chat + scoped remote reset. Not a role (ADR 0032 §2).'},
+
+    {k:'jobs', label:'Jobs / call-outs', sec:'Settlement', icon:'wrench', a:{con:2}, note:'Contractor work queue (escalations + monitoring), per-ticket chat, resolve & settle.'},
+    {k:'ratecards', label:'Rate cards & SLA', sec:'Settlement', icon:'scroll', a:{op:2,host:1,con:1}, note:'Operator manages; host reads its SLA; contractor reads (read-only) — drives the price shown before escalation (ADR 0032 §5C).'},
+    {k:'payouts', label:'Payouts', sec:'Settlement', icon:'wallet', a:{con:1}, note:'Contractor monthly settlement via Straumvakt (ADR 0031).'},
+
+    {k:'applications', label:'Applications (RFQ)', sec:'Onboarding', icon:'inbox', a:{op:2}, note:'Inbound /apply leads → convert to host (ADR 0026 §6).'},
+    {k:'vendorcreds', label:'Vendor credentials', sec:'Onboarding', icon:'key-round', a:{op:2,host:2}, note:'Zaptec/Easee/Alfen discover + import (host during onboarding; operator anytime).'},
+    {k:'reference', label:'Reference catalogue', sec:'Reference', icon:'book-open', a:{op:1}, note:'DSO/retailers/TSO + vendor API docs (read-only lookups).'},
+    {k:'platform', label:'Platform', sec:'Platform', icon:'cog', a:{op:2}, note:'Straumvakt staff / MFA / deploys / RLS — super_user (ADR 0014).'},
+    {k:'settings', label:'Settings', sec:'Other', icon:'settings', a:{op:2,host:2,drv:2,help:2,con:2}, note:'Own profile. Driver identity (name/kennitala) is host-managed & read-only.'}
+  ];
+
+  let role = 'host';
+
+  function count(it){ return ORDER.filter(r=>it.a[r]).length; }
+  function accPill(v){ return v===2 ? '<span class="pill do">DO</span>' : v===1 ? '<span class="pill view">VIEW</span>' : ''; }
+
+  function renderRoles(){
+    document.getElementById('roles').innerHTML = ORDER.map(r=>
+      `<button class="role-btn ${r===role?'on':''}" data-r="${r}"><span class="dot" style="background:${ROLES[r].color}"></span>${ROLES[r].label}</button>`
+    ).join('');
+  }
+  function renderWho(){
+    const R=ROLES[role];
+    document.getElementById('who').innerHTML =
+      `<div class="nm">${R.label}</div><div class="ti">${R.tier}</div><div class="ds">${R.desc}</div><div class="sc"><span>🔒</span><span><b style="color:var(--soft)">Data scope:</b> ${R.scope}</span></div>`;
+  }
+  function renderHead(){
+    const R=ROLES[role];
+    const items=ITEMS.filter(i=>i.a[role]);
+    const mut=items.filter(i=>count(i)>1).length, spec=items.length-mut;
+    document.getElementById('rolehead').innerHTML =
+      `<h1>${R.label} — accessible items</h1><div class="sub">${items.length} items · ${mut} mutual · ${spec} role-specific. The sidebar and screens are composed from one shared registry, gated by this role's privileges.</div>`+
+      `<div class="iso"><span>🛡️</span><span><b>Item-gating is not data isolation.</b> This view decides which screens a role <i>sees</i>. Per-row scoping (this role sees only <b>${R.scope.replace(/\.$/,'')}</b>) is enforced server-side — RLS + repository org_id / driver-identity scope (ADR 0014/0027/0032), guarded by P4 tenant-isolation tests.</span></div>`;
+  }
+  function renderNav(){
+    const items=ITEMS.filter(i=>i.a[role]);
+    const secs=[...new Set(items.map(i=>i.sec))];
+    let html='';
+    for(const s of secs){
+      html+=`<div class="navlabel">${s}</div>`;
+      for(const i of items.filter(x=>x.sec===s)){
+        html+=`<div class="nav-item"><span class="ico"><i data-lucide="${i.icon}"></i></span> ${i.label}${count(i)>1?'<span class="mut" title="mutual"></span>':''}</div>`;
+      }
+    }
+    document.getElementById('nav').innerHTML=html;
+  }
+  function renderItems(){
+    const items=ITEMS.filter(i=>i.a[role]);
+    document.getElementById('items').innerHTML = items.map(i=>{
+      const mutual=count(i)>1;
+      return `<tr>
+        <td style="width:230px"><div class="it-name"><span class="ico"><i data-lucide="${i.icon}"></i></span>${i.label}</div><div class="note" style="margin-top:3px">${i.sec}</div></td>
+        <td style="width:80px">${accPill(i.a[role])}</td>
+        <td style="width:120px"><b class="${mutual?'mutual':'specific'}">${mutual?'● Mutual':'◆ Specific'}</b><div class="note">${mutual?ORDER.filter(r=>i.a[r]).map(r=>ROLES[r].label.split(' ')[0]).join(', '):'only '+ROLES[role].label}</div></td>
+        <td><div class="note">${i.note}</div></td>
+      </tr>`;
+    }).join('');
+  }
+  function renderMatrix(){
+    document.getElementById('mhead').innerHTML =
+      '<tr><th>Item</th>'+ORDER.map(r=>`<th class="r">${ROLES[r].label.split(' ')[0]}</th>`).join('')+'</tr>';
+    document.getElementById('mbody').innerHTML = ITEMS.map(i=>
+      `<tr><td><div class="it-name" style="font-weight:500"><span class="ico"><i data-lucide="${i.icon}"></i></span>${i.label}</div></td>`+
+      ORDER.map(r=>{const v=i.a[r];return `<td class="c">${v===2?'<span class="mark">✔</span>':v===1?'<span class="markv">○</span>':'<span class="markn">–</span>'}</td>`}).join('')+'</tr>'
+    ).join('');
+  }
+
+  function render(){
+    renderRoles(); renderWho(); renderHead(); renderNav(); renderItems(); renderMatrix();
+    if(window.lucide) lucide.createIcons({attrs:{'stroke-width':1.8}});
+  }
+
+  document.getElementById('roles').addEventListener('click',e=>{
+    const b=e.target.closest('[data-r]'); if(!b)return; role=b.dataset.r; render();
+  });
+  document.getElementById('mtoggle').addEventListener('click',()=>{
+    const m=document.getElementById('matrix'); m.classList.toggle('on');
+    document.getElementById('mtoggle').textContent = m.classList.contains('on')?'Hide access matrix ⤡':'Full access matrix ⤢';
+    if(window.lucide) lucide.createIcons({attrs:{'stroke-width':1.8}});
+  });
+
+  render();
+  </script>
+</body>
+</html>

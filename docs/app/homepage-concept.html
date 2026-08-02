@@ -1,0 +1,595 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Straumvakt — Human-readable homepage concept</title>
+  <style>
+    :root {
+      --bg: #070b16;
+      --surface: #0b1220;
+      --raised: #111a2e;
+      --inset: #0e1626;
+      --border: #1e2a44;
+      --ring: #2b3a5e;
+      --text: #f5f7fa;
+      --muted: #97a3b8;
+      --soft: #c8d1e0;
+      --green: #3ee9a7;
+      --teal: #2bd3c9;
+      --blue: #2bb6e8;
+      --sky: #6fb8f0;
+      --amber: #f4c95d;
+      --red: #ff6b6b;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      background:
+        radial-gradient(900px 500px at 78% -5%, rgba(43, 182, 232, .16), transparent 64%),
+        radial-gradient(760px 440px at 0% 0%, rgba(62, 233, 167, .1), transparent 62%),
+        var(--bg);
+    }
+
+    a { color: inherit; text-decoration: none; }
+
+    .page {
+      min-height: 100vh;
+    }
+
+    .nav {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 64px;
+      padding: 0 clamp(18px, 4vw, 56px);
+      border-bottom: 1px solid rgba(30, 42, 68, .75);
+      background: rgba(7, 11, 22, .78);
+      backdrop-filter: blur(16px);
+    }
+
+    .mark {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .logo {
+      width: 34px;
+      height: 34px;
+      display: block;
+      filter: drop-shadow(0 12px 28px rgba(43,182,232,.25));
+    }
+
+    .word {
+      min-width: 0;
+    }
+
+    .word strong {
+      display: block;
+      font-size: 17px;
+      letter-spacing: -0.01em;
+      background: linear-gradient(135deg, var(--green), var(--teal) 55%, var(--blue));
+      background-clip: text;
+      -webkit-background-clip: text;
+      color: transparent;
+      line-height: 1.1;
+    }
+
+    .word span {
+      display: block;
+      margin-top: 3px;
+      color: var(--sky);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .navlinks {
+      display: flex;
+      gap: 22px;
+      align-items: center;
+      color: var(--soft);
+      font-size: 13px;
+    }
+
+    .navlinks a:hover { color: var(--text); }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(320px, 0.9fr) minmax(520px, 1.1fr);
+      gap: clamp(30px, 5vw, 70px);
+      align-items: center;
+      min-height: calc(100vh - 64px);
+      padding: clamp(34px, 5vw, 72px) clamp(18px, 4vw, 56px) 52px;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      padding: 7px 10px;
+      border: 1px solid rgba(111, 184, 240, .28);
+      border-radius: 7px;
+      color: var(--sky);
+      background: rgba(17, 26, 46, .64);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .eyebrow i {
+      display: block;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 16px var(--green);
+    }
+
+    h1 {
+      max-width: 780px;
+      margin: 18px 0 0;
+      font-size: clamp(42px, 6.4vw, 82px);
+      line-height: .95;
+      letter-spacing: 0;
+    }
+
+    .lead {
+      max-width: 640px;
+      margin: 22px 0 0;
+      color: var(--soft);
+      font-size: clamp(17px, 1.8vw, 21px);
+      line-height: 1.55;
+    }
+
+    .lead strong {
+      color: var(--text);
+      font-weight: 750;
+    }
+
+    .buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 30px;
+    }
+
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 42px;
+      padding: 0 16px;
+      border-radius: 7px;
+      font-size: 14px;
+      font-weight: 800;
+      border: 1px solid var(--ring);
+      background: var(--raised);
+      color: var(--text);
+    }
+
+    .button.primary {
+      color: #06131a;
+      background: linear-gradient(135deg, var(--green), var(--teal) 55%, var(--blue));
+      border-color: transparent;
+    }
+
+    .plain-note {
+      margin-top: 26px;
+      display: grid;
+      gap: 8px;
+      max-width: 610px;
+    }
+
+    .plain-note p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .plain-note b { color: var(--sky); }
+
+    .visual {
+      position: relative;
+      min-height: 610px;
+      border: 1px solid rgba(43, 58, 94, .85);
+      border-radius: 8px;
+      background:
+        linear-gradient(180deg, rgba(17, 26, 46, .94), rgba(11, 18, 32, .94)),
+        repeating-linear-gradient(0deg, transparent 0 31px, rgba(255,255,255,.035) 32px),
+        repeating-linear-gradient(90deg, transparent 0 31px, rgba(255,255,255,.035) 32px);
+      box-shadow: 0 1px 0 rgba(255,255,255,.03) inset, 0 24px 70px rgba(0,0,0,.36);
+      overflow: hidden;
+    }
+
+    .visual-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 18px;
+      border-bottom: 1px solid rgba(43, 58, 94, .8);
+      background: rgba(7, 11, 22, .45);
+    }
+
+    .visual-header strong {
+      font-size: 13px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--green);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .status i {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+      box-shadow: 0 0 18px currentColor;
+    }
+
+    .map {
+      position: relative;
+      height: 430px;
+      margin: 28px;
+    }
+
+    .node {
+      position: absolute;
+      min-width: 142px;
+      padding: 11px 12px;
+      border: 1px solid rgba(111, 184, 240, .34);
+      border-radius: 8px;
+      background: rgba(7, 11, 22, .86);
+      box-shadow: 0 12px 28px rgba(0,0,0,.2);
+    }
+
+    .node small {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.25;
+    }
+
+    .node strong {
+      display: block;
+      margin-top: 3px;
+      font-size: 15px;
+    }
+
+    .node .mini {
+      display: flex;
+      gap: 5px;
+      margin-top: 9px;
+    }
+
+    .mini span {
+      height: 6px;
+      flex: 1;
+      border-radius: 999px;
+      background: rgba(151,163,184,.2);
+    }
+
+    .mini span.on { background: linear-gradient(90deg, var(--green), var(--blue)); }
+
+    .org { left: 16px; top: 58px; }
+    .site { left: 214px; top: 58px; }
+    .install { left: 412px; top: 58px; }
+    .station { left: 412px; top: 198px; }
+    .ocpp { left: 214px; top: 280px; }
+    .vendor { left: 16px; top: 280px; }
+
+    svg.lines {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+      pointer-events: none;
+    }
+
+    .line {
+      fill: none;
+      stroke: rgba(111, 184, 240, .42);
+      stroke-width: 2;
+    }
+
+    .line.hot {
+      stroke: url(#flow);
+      stroke-width: 3;
+      stroke-dasharray: 10 8;
+      animation: dash 1.7s linear infinite;
+    }
+
+    @keyframes dash {
+      to { stroke-dashoffset: -36; }
+    }
+
+    .caption-card {
+      position: absolute;
+      left: 28px;
+      right: 28px;
+      bottom: 24px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+
+    .caption {
+      min-height: 86px;
+      padding: 13px;
+      border: 1px solid rgba(43, 58, 94, .9);
+      border-radius: 8px;
+      background: rgba(14, 22, 38, .92);
+    }
+
+    .caption strong {
+      display: block;
+      margin-bottom: 7px;
+      font-size: 13px;
+    }
+
+    .caption p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.42;
+    }
+
+    .band {
+      padding: 18px clamp(18px, 4vw, 56px) 70px;
+    }
+
+    .section-head {
+      max-width: 780px;
+      margin-bottom: 22px;
+    }
+
+    .section-head h2 {
+      margin: 0;
+      font-size: clamp(26px, 3vw, 40px);
+      letter-spacing: 0;
+    }
+
+    .section-head p {
+      margin: 10px 0 0;
+      color: var(--soft);
+      font-size: 16px;
+      line-height: 1.55;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+    }
+
+    .info {
+      min-height: 220px;
+      padding: 18px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: rgba(11, 18, 32, .74);
+      box-shadow: 0 1px 0 rgba(255,255,255,.03) inset, 0 12px 30px rgba(0,0,0,.18);
+    }
+
+    .icon {
+      display: grid;
+      place-items: center;
+      width: 36px;
+      height: 36px;
+      margin-bottom: 16px;
+      border-radius: 8px;
+      color: #06131a;
+      background: linear-gradient(135deg, var(--green), var(--blue));
+      font-weight: 900;
+    }
+
+    .info h3 {
+      margin: 0;
+      font-size: 17px;
+    }
+
+    .info p {
+      margin: 10px 0 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    @media (max-width: 1050px) {
+      body { overflow-x: hidden; }
+      .hero {
+        grid-template-columns: 1fr;
+        min-height: auto;
+      }
+      .visual { min-height: 560px; }
+      .cards { grid-template-columns: repeat(2, 1fr); }
+      .navlinks { display: none; }
+    }
+
+    @media (max-width: 640px) {
+      .hero { padding-top: 28px; }
+      .visual { display: none; }
+      .cards { grid-template-columns: 1fr; }
+      h1 { font-size: 44px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <nav class="nav">
+      <a class="mark" href="#">
+        <svg class="logo" viewBox="0 0 120 120" fill="none" aria-hidden="true">
+          <defs>
+            <linearGradient id="svHomeBolt" x1="40" y1="20" x2="80" y2="100" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#8EF5C7" />
+              <stop offset="100%" stop-color="#6FDCEA" />
+            </linearGradient>
+          </defs>
+          <path d="M 84 18 L 54 18 A 24 24 0 0 0 30 42 L 30 60" stroke="#3EE9A7" stroke-width="13" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M 36 102 L 66 102 A 24 24 0 0 0 90 78 L 90 60" stroke="#2BB6E8" stroke-width="13" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M 66 28 L 44 66 L 58 66 L 52 96 L 78 56 L 62 56 Z" fill="url(#svHomeBolt)" />
+        </svg>
+        <span class="word">
+          <strong>Straumvakt</strong>
+          <span>Control · Overview · Convenience</span>
+        </span>
+      </a>
+      <div class="navlinks">
+        <a href="#what">What it is</a>
+        <a href="#how">How it works</a>
+        <a href="#why">Why it matters</a>
+      </div>
+    </nav>
+
+    <section class="hero" id="what">
+      <div>
+        <span class="eyebrow"><i></i> Charging operating platform for real sites</span>
+        <h1>One place to run chargers, people, power, and billing.</h1>
+        <p class="lead">
+          Straumvakt helps operators understand and manage EV charging sites.
+          It keeps the <strong>physical reality</strong> clear: properties, sites,
+          installations, circuits, chargers, meters, modems, controllers, drivers,
+          sessions, and costs.
+        </p>
+        <div class="buttons">
+          <a class="button primary" href="#how">See the simple map</a>
+          <a class="button" href="#why">Read the plain explanation</a>
+        </div>
+        <div class="plain-note">
+          <p><b>Not just OCPP.</b> Straumvakt can work through OCPP, vendor APIs like Zaptec and Easee, external CPMS imports, or read-only data.</p>
+          <p><b>Not just a dashboard.</b> It is the operating layer that connects assets, contracts, events, issues, and billing.</p>
+        </div>
+      </div>
+
+      <div class="visual" aria-label="Straumvakt operating map">
+        <div class="visual-header">
+          <strong>Live operating map</strong>
+          <span class="status"><i></i> domain events flowing</span>
+        </div>
+        <div class="map">
+          <svg class="lines" viewBox="0 0 610 430" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="flow" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stop-color="#3ee9a7"/>
+                <stop offset="58%" stop-color="#2bd3c9"/>
+                <stop offset="100%" stop-color="#2bb6e8"/>
+              </linearGradient>
+            </defs>
+            <path class="line hot" d="M158 92 H214" />
+            <path class="line hot" d="M356 92 H412" />
+            <path class="line" d="M484 132 V198" />
+            <path class="line hot" d="M412 238 H356 C300 238 286 280 286 280" />
+            <path class="line" d="M214 320 H158" />
+            <path class="line hot" d="M86 280 C86 212 178 190 214 132" />
+          </svg>
+
+          <div class="node org">
+            <small>Legal entity</small>
+            <strong>Operator / owner / payer</strong>
+            <div class="mini"><span class="on"></span><span class="on"></span><span></span></div>
+          </div>
+          <div class="node site">
+            <small>Physical place</small>
+            <strong>Property and site</strong>
+            <div class="mini"><span class="on"></span><span class="on"></span><span class="on"></span></div>
+          </div>
+          <div class="node install">
+            <small>Electrical grouping</small>
+            <strong>Installation and circuits</strong>
+            <div class="mini"><span class="on"></span><span class="on"></span><span></span></div>
+          </div>
+          <div class="node station">
+            <small>Physical assets</small>
+            <strong>Chargers, meters, modems</strong>
+            <div class="mini"><span class="on"></span><span></span><span class="on"></span></div>
+          </div>
+          <div class="node ocpp">
+            <small>Control plane</small>
+            <strong>OCPP / vendor / CPMS</strong>
+            <div class="mini"><span class="on"></span><span class="on"></span><span class="on"></span></div>
+          </div>
+          <div class="node vendor">
+            <small>Source of truth</small>
+            <strong>Events and billing</strong>
+            <div class="mini"><span class="on"></span><span class="on"></span><span class="on"></span></div>
+          </div>
+        </div>
+
+        <div class="caption-card">
+          <div class="caption">
+            <strong>See the site clearly</strong>
+            <p>From organization down to every circuit, charger, meter, modem, and controller.</p>
+          </div>
+          <div class="caption">
+            <strong>Use any control path</strong>
+            <p>Native OCPP, Zaptec/Easee APIs, external CPMS, or read-only imports.</p>
+          </div>
+          <div class="caption">
+            <strong>Keep one event truth</strong>
+            <p>Sessions, faults, commands, and meter values become canonical events.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="band" id="how">
+      <div class="section-head">
+        <h2>In plain terms</h2>
+        <p>Straumvakt is the layer between messy field reality and daily operations. It helps people answer simple questions quickly.</p>
+      </div>
+      <div class="cards">
+        <article class="info">
+          <div class="icon">1</div>
+          <h3>What do we own or operate?</h3>
+          <p>Organizations, properties, sites, installations, circuits, chargers, connectors, meters, modems, and controllers are modeled as real physical things.</p>
+        </article>
+        <article class="info">
+          <div class="icon">2</div>
+          <h3>How are chargers controlled?</h3>
+          <p>Each asset can be controlled through the right path: OCPP, OEM API, an external CPMS, or no control at all when the site is read-only.</p>
+        </article>
+        <article class="info">
+          <div class="icon">3</div>
+          <h3>What happened?</h3>
+          <p>Every command, status change, session, fault, and meter reading is preserved as an event so reports and audits have a common foundation.</p>
+        </article>
+        <article class="info">
+          <div class="icon">4</div>
+          <h3>Who pays for what?</h3>
+          <p>Contracts, tariffs, cost centers, drivers, workplaces, owners, and service fees are tied back to sessions and physical assets.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="band" id="why">
+      <div class="section-head">
+        <h2>Built for operators, technicians, and finance</h2>
+        <p>
+          The goal is not to force every charger into one protocol. The goal is to make a charging operation understandable,
+          supportable, and billable even when different vendors and control systems are involved.
+        </p>
+      </div>
+    </section>
+  </div>
+</body>
+</html>
