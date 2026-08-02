@@ -28,7 +28,16 @@
  *     DLQ, configured in apps/api wrangler.jsonc). The legacy
  *     `inflight:<eventId>` DO-storage path was removed in Sprint 5.2
  *     because queue retries replace it.
- *   • Inflight outbound commands still: `cmd:<commandId>`.
+ *   • Outbound: inflight commands live in `state.storage` under
+ *     `cmd:<uniqueId>` (P4.16). Written *before* the Call frame goes
+ *     on the wire, deleted on correlation. Because this DO hibernates
+ *     between frames, an in-memory map would lose the correlation
+ *     whenever the object was evicted between dispatch and the
+ *     charger's CallResult — the command would sit "Sent" forever in
+ *     the operator console. Every inflight command now reaches a
+ *     terminal state via one of three paths: CallResult/CallError
+ *     correlation, the `webSocketClose` sweep, or the alarm-driven
+ *     timeout sweep.
  */
 import type { DurableObjectState } from "@cloudflare/workers-types";
 import { parseFrame, serializeCallResult, serializeCall } from "./ocpp-frame";
@@ -62,6 +71,48 @@ function stringField(obj: unknown, key: string): string | undefined {
   return typeof v === "string" ? v : undefined;
 }
 
+/**
+ * WebSocket subprotocols this gateway speaks, most-preferred first.
+ * OCPP 1.6J only — `ocpp_identities.ocpp_version` is authoritative for
+ * the identity, but the wire negotiation is 1.6 across the fleet.
+ */
+export const SUPPORTED_SUBPROTOCOLS = ["ocpp1.6"] as const;
+
+export type SubprotocolChoice =
+  | { ok: true; selected: string | null }
+  | { ok: false; offered: string[] };
+
+/**
+ * RFC 6455 §4.1/§4.2.2 subprotocol negotiation (P4.17).
+ *
+ *   • No offer at all → `selected: null`; the 101 must NOT carry a
+ *     `Sec-WebSocket-Protocol` header.
+ *   • One or more offers, at least one supported → echo it. The token
+ *     echoed is the client's own spelling, because RFC 6455 requires
+ *     the selected value to be one that appeared in the client
+ *     handshake; we compare case-insensitively so `OCPP1.6` from a
+ *     sloppy firmware still negotiates.
+ *   • Offers present but none supported → `ok: false`, caller fails
+ *     the handshake.
+ *
+ * Client preference order wins over ours — that is what the RFC's
+ * "the server selects one of them" plus the client's ordered list
+ * means in practice, and with a single supported protocol it is
+ * indistinguishable anyway.
+ */
+export function selectSubprotocol(header: string | null): SubprotocolChoice {
+  const offered = (header ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+  if (offered.length === 0) return { ok: true, selected: null };
+  const match = offered.find((token) =>
+    SUPPORTED_SUBPROTOCOLS.some((s) => s === token.toLowerCase()),
+  );
+  if (!match) return { ok: false, offered };
+  return { ok: true, selected: match };
+}
+
 interface SessionMeta {
   identityId: string;
   orgId: string;
@@ -74,20 +125,45 @@ interface OutboundPending {
   action: string;
   payload: Record<string, unknown>;
   enqueuedAt: number;
+  /** Wall-clock ms after which the timeout sweep fails this command. */
+  expiresAt: number;
 }
 
-interface SessionMapEntry {
-  connectorId: string; // UUID resolved from connector index
-  chargeSessionId: string; // UUID minted by DO for this transaction
+/** DO-storage key prefix for inflight outbound commands (P4.16). */
+const CMD_PREFIX = "cmd:";
+
+function cmdKey(uniqueId: string): string {
+  return `${CMD_PREFIX}${uniqueId}`;
 }
+
+/**
+ * How long an outbound Call may sit uncorrelated before the alarm
+ * sweep declares it failed.
+ *
+ * 30 seconds, chosen because:
+ *   • 30s is the conventional OCPP-J CALL→response timeout
+ *     (docs/reference/integrations/ocpp-1.6j.md §2.2) — the number
+ *     charger firmware is itself written against. A charger that has
+ *     not answered by then has almost certainly dropped the request
+ *     rather than being merely slow (real Zaptec hardware answers
+ *     RemoteStart in well under 2s, even over LTE).
+ *   • `apps/api/scripts/virtual-cp.ts` already uses 30s for its own
+ *     call timeout. Matching it means neither end of the wire is
+ *     waiting on a peer that has already given up.
+ *   • It is short enough that the operator console shows a terminal
+ *     state within one page refresh, and long enough that we do not
+ *     manufacture false failures on a congested link.
+ *
+ * A CallResult arriving after the sweep is logged as an unmatched
+ * uniqueId (same as any spurious frame) — we deliberately do not
+ * resurrect a command that has already been reported terminal, because
+ * the outbox row on the API side has moved on.
+ */
+const COMMAND_TIMEOUT_MS = 30_000;
 
 export class IdentityDurableObject {
   private readonly state: DurableObjectState;
   private readonly env: GatewayEnv;
-  /** Map from OCPP transactionId (number) to our session UUIDs. */
-  private readonly transactions = new Map<number, SessionMapEntry>();
-  /** uniqueId → pending outbound command, awaiting CallResult from charger. */
-  private readonly pendingOutbound = new Map<string, OutboundPending>();
   private meta: SessionMeta | null = null;
 
   constructor(state: DurableObjectState, env: GatewayEnv) {
@@ -120,6 +196,25 @@ export class IdentityDurableObject {
   // ───────────────────────────────────────────────────────────────
 
   private async handleUpgrade(request: Request): Promise<Response> {
+    // P4.17 — subprotocol negotiation. The entry Worker rebuilds the
+    // upgrade request, so it forwards the client's offer under
+    // `x-straumvakt-ws-protocol`; we accept the spec header too so the
+    // DO can be driven directly (tests, future direct routing).
+    const offer =
+      request.headers.get("sec-websocket-protocol") ??
+      request.headers.get("x-straumvakt-ws-protocol");
+    const negotiated = selectSubprotocol(offer);
+    if (!negotiated.ok) {
+      // RFC 6455 §4.2.2: if the client offers subprotocols and the
+      // server supports none of them, the handshake must fail rather
+      // than complete without the header. Failing here with a 400 is
+      // cleaner than a 101 the client immediately closes 1006.
+      return new Response(
+        `unsupported websocket subprotocol; supported: ${SUPPORTED_SUBPROTOCOLS.join(", ")}`,
+        { status: 400 },
+      );
+    }
+
     // Meta is passed as trailing headers by the gateway entry. The DO
     // persists it so hibernation wake-ups recover identity context.
     const identityId = request.headers.get("x-straumvakt-identity-id");
@@ -137,9 +232,17 @@ export class IdentityDurableObject {
     // Hibernation API — the DO is evicted between frames.
     this.state.acceptWebSocket(serverWs);
 
+    // Only send the header when the client actually offered a
+    // subprotocol. Echoing one the client never asked for is itself a
+    // protocol violation (RFC 6455 §4.1) and some stacks close on it.
+    const headers = negotiated.selected
+      ? { "Sec-WebSocket-Protocol": negotiated.selected }
+      : undefined;
+
     return new Response(null, {
       status: 101,
       webSocket: clientWs,
+      ...(headers ? { headers } : {}),
     });
   }
 
@@ -185,10 +288,120 @@ export class IdentityDurableObject {
     }
   }
 
-  async webSocketClose(_ws: WebSocket, _code: number, _reason: string, _wasClean: boolean): Promise<void> {
-    // Cleanly mark lastSeen; nothing to tear down beyond that. State
-    // survives the close — DO hibernates until next event.
+  async webSocketClose(ws: WebSocket, code: number, reason: string, _wasClean: boolean): Promise<void> {
+    // Cleanly mark lastSeen; state survives the close — DO hibernates
+    // until the next event.
     await this.state.storage.put("lastClosedAt", Date.now());
+
+    // P4.16 — anything still inflight can never be answered now: the
+    // socket that would have carried the CallResult is gone. Sweep to
+    // a terminal state instead of leaving the outbox row hanging until
+    // the timeout alarm notices. Only sweep when the last socket goes
+    // away; a charger with a second connection may still answer. The
+    // closing socket is filtered explicitly — whether it is still
+    // listed at this point is a runtime detail we should not depend on.
+    const remaining = this.state.getWebSockets().filter((s) => s !== ws);
+    if (remaining.length > 0) return;
+    await this.sweepPending("disconnected", {
+      closeCode: code,
+      closeReason: reason,
+    });
+  }
+
+  /**
+   * A socket torn down by error never reaches `webSocketClose` — the
+   * Hibernation API routes it here instead. Same durability problem,
+   * same sweep (P4.16).
+   */
+  async webSocketError(ws: WebSocket, error: unknown): Promise<void> {
+    await this.state.storage.put("lastClosedAt", Date.now());
+    const remaining = this.state.getWebSockets().filter((s) => s !== ws);
+    if (remaining.length > 0) return;
+    await this.sweepPending("disconnected", {
+      socketError: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  /**
+   * DO alarm — timeout sweep for outbound commands whose CallResult
+   * never arrived (P4.16). Re-arms itself for the next command still
+   * inside its window so a burst of dispatches costs one alarm each
+   * rather than one per tick.
+   */
+  async alarm(): Promise<void> {
+    await this.ensureMeta();
+    const now = Date.now();
+    const pending = await this.state.storage.list<OutboundPending>({
+      prefix: CMD_PREFIX,
+    });
+
+    let nextDueAt: number | null = null;
+    for (const [key, cmd] of pending) {
+      if (cmd.expiresAt > now) {
+        nextDueAt = nextDueAt === null ? cmd.expiresAt : Math.min(nextDueAt, cmd.expiresAt);
+        continue;
+      }
+      // delete() reports whether the key was still there — the same
+      // claim guard the CallResult path uses, so a CallResult racing
+      // the alarm produces exactly one terminal event, not two.
+      const claimed = await this.state.storage.delete(key);
+      if (!claimed) continue;
+      console.warn("[ocpp-gw] command timed out", {
+        commandId: cmd.commandId,
+        uniqueId: cmd.uniqueId,
+        action: cmd.action,
+        timeoutMs: COMMAND_TIMEOUT_MS,
+      });
+      await this.recordCommandResult(cmd, {
+        outcome: "rejected",
+        result: {
+          reason: "timeout",
+          timeoutMs: COMMAND_TIMEOUT_MS,
+        },
+      });
+    }
+
+    if (nextDueAt !== null) await this.state.storage.setAlarm(nextDueAt);
+  }
+
+  /**
+   * Drain every `cmd:` row and report it terminal. Used by the
+   * disconnect path; `reason` lands in the command_result payload so
+   * the operator console can distinguish "charger dropped mid-command"
+   * from "charger said no".
+   *
+   * Emitted as outcome `rejected` on purpose: the apps/api projection
+   * `ocpp.command_result` only recognises `accepted` / `rejected` and
+   * ignores anything else, so a bespoke `disconnected` outcome would
+   * silently leave the outbox row on the optimistic `acked` the
+   * dispatcher wrote at 202. `rejected` is what drives it to `failed`.
+   */
+  private async sweepPending(
+    reason: "disconnected",
+    detail: Record<string, unknown>,
+  ): Promise<void> {
+    const pending = await this.state.storage.list<OutboundPending>({
+      prefix: CMD_PREFIX,
+    });
+    if (pending.size === 0) return;
+    await this.ensureMeta();
+    for (const [key, cmd] of pending) {
+      const claimed = await this.state.storage.delete(key);
+      if (!claimed) continue;
+      console.warn("[ocpp-gw] command failed on disconnect", {
+        commandId: cmd.commandId,
+        uniqueId: cmd.uniqueId,
+        action: cmd.action,
+        reason,
+      });
+      await this.recordCommandResult(cmd, {
+        outcome: "rejected",
+        result: { reason, ...detail },
+      });
+    }
+    // Nothing left to time out — drop the alarm so a hibernating DO
+    // isn't woken for an empty sweep.
+    await this.state.storage.deleteAlarm();
   }
 
   // ───────────────────────────────────────────────────────────────
@@ -408,37 +621,87 @@ export class IdentityDurableObject {
       );
     }
 
+    const now = Date.now();
     const uniqueId = crypto.randomUUID();
-    this.pendingOutbound.set(uniqueId, {
+    const pending: OutboundPending = {
       commandId: body.commandId,
       uniqueId,
       action: body.action,
       payload: body.payload,
-      enqueuedAt: Date.now(),
-    });
+      enqueuedAt: now,
+      expiresAt: now + COMMAND_TIMEOUT_MS,
+    };
 
-    activeWs.send(serializeCall(uniqueId, body.action, body.payload));
+    // Durability ordering matters: persist BEFORE the frame goes on
+    // the wire. The reverse order leaves a window where the charger
+    // has the Call and we have no record of it — the exact hole P4.16
+    // closes. Persisting a command that then fails to send is the
+    // recoverable direction: we roll it back below.
+    await this.state.storage.put(cmdKey(uniqueId), pending);
+    await this.armTimeoutAlarm(pending.expiresAt);
 
-    // For Sprint 1.4 we return immediately with 'sent' — the DO waits
-    // for the matching CallResult to come back via webSocketMessage.
-    // Sprint 1.5 will wire the "wait for ack + respond" loop properly;
-    // today main-app records the command as acked on 202 return.
+    try {
+      activeWs.send(serializeCall(uniqueId, body.action, body.payload));
+    } catch (err) {
+      await this.state.storage.delete(cmdKey(uniqueId));
+      return Response.json(
+        {
+          kind: "retriable",
+          error: err instanceof Error ? err.message : String(err),
+        },
+        { status: 503 },
+      );
+    }
+
+    // We return immediately with 'sent' — the DO waits for the
+    // matching CallResult to come back via webSocketMessage, and the
+    // main app promotes/downgrades the outbox row when the
+    // `ocpp.command_result` event lands. Since P4.16 that event is
+    // guaranteed to arrive on one of three paths (correlation,
+    // disconnect sweep, timeout sweep), so a 202 no longer means
+    // "possibly never resolved".
     return Response.json(
       { kind: "ack", result: { status: "Sent", uniqueId } },
       { status: 202 },
     );
   }
 
+  /**
+   * Set the DO alarm for the earliest inflight deadline. Only moves
+   * the alarm earlier — a later command must not push an already-armed
+   * earlier deadline out.
+   */
+  private async armTimeoutAlarm(dueAt: number): Promise<void> {
+    const current = await this.state.storage.getAlarm();
+    if (current === null || current > dueAt) {
+      await this.state.storage.setAlarm(dueAt);
+    }
+  }
+
+  /**
+   * Take ownership of an inflight command by uniqueId. Reads from DO
+   * storage (not memory — this DO hibernates between frames) and uses
+   * `delete()`'s existence result as the claim: whoever observes the
+   * key emits the terminal event, everyone else is a duplicate. That
+   * makes a repeated CallResult, or a CallResult racing the timeout
+   * sweep, produce exactly one `ocpp.command_result`.
+   */
+  private async claimPending(uniqueId: string): Promise<OutboundPending | null> {
+    const pending = await this.state.storage.get<OutboundPending>(cmdKey(uniqueId));
+    if (!pending) return null;
+    const claimed = await this.state.storage.delete(cmdKey(uniqueId));
+    return claimed ? pending : null;
+  }
+
   private async handleInboundCallResult(
     frame: { kind: "call_result"; uniqueId: string; payload: Record<string, unknown> },
   ): Promise<void> {
-    const pending = this.pendingOutbound.get(frame.uniqueId);
+    const pending = await this.claimPending(frame.uniqueId);
     if (!pending) {
-      // Spurious CallResult — log and drop.
+      // Spurious, duplicate, or already-swept CallResult — log and drop.
       console.warn("[ocpp-gw] unmatched CallResult uniqueId", frame.uniqueId);
       return;
     }
-    this.pendingOutbound.delete(frame.uniqueId);
     await this.recordCommandResult(pending, {
       outcome: "accepted",
       result: frame.payload,
@@ -448,12 +711,11 @@ export class IdentityDurableObject {
   private async handleInboundCallError(
     frame: { kind: "call_error"; uniqueId: string; errorCode: string; errorDescription: string },
   ): Promise<void> {
-    const pending = this.pendingOutbound.get(frame.uniqueId);
+    const pending = await this.claimPending(frame.uniqueId);
     if (!pending) {
       console.warn("[ocpp-gw] unmatched CallError", frame.uniqueId);
       return;
     }
-    this.pendingOutbound.delete(frame.uniqueId);
     await this.recordCommandResult(pending, {
       outcome: "rejected",
       result: {
@@ -472,7 +734,17 @@ export class IdentityDurableObject {
     pending: OutboundPending,
     outcome: { outcome: "accepted" | "rejected"; result: Record<string, unknown> },
   ): Promise<void> {
-    if (!this.meta) return;
+    await this.ensureMeta();
+    if (!this.meta) {
+      // Should be unreachable — meta is persisted on the first upgrade
+      // and every path here follows one. Log loudly rather than drop
+      // silently, because dropping means an outbox row hangs.
+      console.error("[ocpp-gw] command_result dropped, no identity meta", {
+        commandId: pending.commandId,
+        uniqueId: pending.uniqueId,
+      });
+      return;
+    }
     const event = {
       eventId: crypto.randomUUID(),
       orgId: this.meta.orgId,

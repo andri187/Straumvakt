@@ -86,14 +86,23 @@ async function handleChargerUpgrade(
   const id = env.IDENTITY_DO.idFromName(auth.identityId);
   const stub = env.IDENTITY_DO.get(id);
 
+  const headers: Record<string, string> = {
+    upgrade: "websocket",
+    "x-straumvakt-identity-id": auth.identityId,
+    "x-straumvakt-org-id": auth.orgId,
+    "x-straumvakt-identity-string": identityString,
+  };
+
+  // P4.17 — this request is rebuilt from scratch, so the client's
+  // `Sec-WebSocket-Protocol` offer would be lost. Carry it on a custom
+  // header (the Sec-* names are reserved on outbound subrequests) so
+  // the DO can negotiate and echo it on the 101.
+  const offeredProtocols = request.headers.get("sec-websocket-protocol");
+  if (offeredProtocols) headers["x-straumvakt-ws-protocol"] = offeredProtocols;
+
   const forward = new Request("https://do.internal/ws", {
     method: "GET",
-    headers: {
-      upgrade: "websocket",
-      "x-straumvakt-identity-id": auth.identityId,
-      "x-straumvakt-org-id": auth.orgId,
-      "x-straumvakt-identity-string": identityString,
-    },
+    headers,
   });
   return stub.fetch(forward);
 }
