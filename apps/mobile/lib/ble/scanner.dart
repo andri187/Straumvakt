@@ -14,7 +14,7 @@
 
 import 'dart:async';
 import 'dart:math' as math;
-import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../api/types.dart';
@@ -104,15 +104,30 @@ class _RealBleScanner implements BleScanner {
 
     if (_byZaptecSerial.isEmpty && _byMac.isEmpty) {
       // No chargers in this driver's list have BLE IDs configured yet.
-      // Don't start a scan that can't possibly match.
-      return false;
+      // Don't start a scan that can't possibly match — except in debug,
+      // where we still scan so _onScanResults can LOG every advertisement
+      // seen (diagnostic: "is the charger broadcasting anything at all?").
+      if (!kDebugMode) return false;
+      debugPrint('[BLE] no chargers have bleAdvertisingId — '
+          'scanning anyway (debug) to log raw advertisements');
     }
 
     await _scanSub?.cancel();
     _scanSub = FlutterBluePlus.scanResults.listen(_onScanResults);
     await FlutterBluePlus.startScan(
-      timeout: const Duration(seconds: 0), // continuous
+      // Continuous scan — NO timeout. flutter_blue_plus reads
+      // Duration(seconds: 0) as "scan for 0 seconds" and stops the scan
+      // instantly, so the old value silently disabled scanning entirely
+      // (zero results, no error — exactly what we saw on-device).
+      // continuousUpdates streams repeated RSSI samples for the same
+      // device, which the proximity gate needs (not just first-detection).
       androidUsesFineLocation: false,
+      continuousUpdates: true,
+      // Low-latency = frequent RSSI delivery. The default (low-power) mode
+      // batches results and delivers sparsely — one burst then long gaps,
+      // useless for live proximity. Higher battery cost, fine while the
+      // tap UI is foregrounded.
+      androidScanMode: AndroidScanMode.lowLatency,
     );
     return true;
   }
@@ -131,6 +146,15 @@ class _RealBleScanner implements BleScanner {
   void _onScanResults(List<ScanResult> results) {
     final now = DateTime.now();
     for (final r in results) {
+      // DIAGNOSTIC (debug only): log every advertisement we see, before
+      // any filtering — so we can answer "is the charger broadcasting
+      // anything, under what name, at what RSSI?" Watch the flutter
+      // console with the phone on the charger.
+      if (kDebugMode && r.rssi > -75) {
+        final nm = r.advertisementData.advName;
+        debugPrint('[BLE] ${nm.isEmpty ? "(no-name)" : nm} '
+            'id=${r.device.remoteId.str} rssi=${r.rssi} dBm');
+      }
       // Filter weak signals — driver isn't actually close to this
       // charger. Threshold tuned for Zaptec advertising at typical
       // mounting height; weaker than -78 dBm is "across the parking
@@ -170,15 +194,23 @@ class _RealBleScanner implements BleScanner {
   }
 
   Future<bool> _requestPermissions() async {
-    if (!kDebugMode) {
-      // Production: use the user-grant flow.
+    // Android 12+ (API 31+): BLUETOOTH_SCAN is declared neverForLocation in
+    // the manifest, so BLE scanning needs BLUETOOTH_SCAN (+ CONNECT) and NOT
+    // location. Location is capped at maxSdkVersion=30, so on API 31+
+    // Permission.locationWhenInUse resolves to a denied "no manifest entry"
+    // status — requiring it (the old `.every(...)`) silently blocked the
+    // scan on every modern phone. Gate on the scan permission; request the
+    // others best-effort. Pass if EITHER the 31+ scan grant OR the ≤30
+    // location grant succeeds.
+    final scan = await Permission.bluetoothScan.request();
+    await Permission.bluetoothConnect.request();
+    final loc = await Permission.locationWhenInUse.request();
+    final ok = scan.isGranted || scan.isLimited || loc.isGranted || loc.isLimited;
+    if (kDebugMode) {
+      debugPrint('[BLE] permissions: scan=$scan connect requested '
+          'loc=$loc -> ${ok ? "OK (scanning)" : "BLOCKED"}');
     }
-    final results = await [
-      Permission.bluetoothScan,
-      Permission.bluetoothConnect,
-      Permission.locationWhenInUse,
-    ].request();
-    return results.values.every((s) => s.isGranted || s.isLimited);
+    return ok;
   }
 
   @override

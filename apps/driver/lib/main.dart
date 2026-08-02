@@ -487,7 +487,7 @@ class _LogoMark extends StatelessWidget {
           'assets/images/straumvakt_logo_mark.png',
           fit: BoxFit.cover,
           filterQuality: FilterQuality.high,
-          errorBuilder: (_, __, ___) {
+          errorBuilder: (_, _, _) {
             return const DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -517,7 +517,7 @@ class _HeroCar extends StatelessWidget {
             'assets/images/straumvakt_hero_image.png',
             fit: BoxFit.contain,
             filterQuality: FilterQuality.high,
-            errorBuilder: (_, __, ___) {
+            errorBuilder: (_, _, _) {
               // Fallback while the car PNG hasn't been dropped into
               // assets/images/ yet.
               return const SizedBox(
@@ -553,7 +553,7 @@ class _LogoWordmark extends StatelessWidget {
       'assets/images/straumvakt_logo_full.png',
       fit: BoxFit.contain,
       filterQuality: FilterQuality.high,
-      errorBuilder: (_, __, ___) {
+      errorBuilder: (_, _, _) {
         return const Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -1614,7 +1614,7 @@ class _AppHeader extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 class _PhoneTapBanner extends StatefulWidget {
-  const _PhoneTapBanner({this.onSimulate});
+  const _PhoneTapBanner();
 
   final VoidCallback? onSimulate;
 
@@ -1657,7 +1657,7 @@ class _PhoneTapBannerState extends State<_PhoneTapBanner>
               children: [
                 AnimatedBuilder(
                   animation: _pulse,
-                  builder: (_, __) {
+                  builder: (_, _) {
                     final t = (math.sin(_pulse.value * math.pi * 2) + 1) / 2;
                     return Container(
                       width: 36,
@@ -2058,7 +2058,7 @@ class _ChargersListState extends State<_ChargersList> {
             child: ListView.separated(
               padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
               itemCount: filtered.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              separatorBuilder: (_, _) => const SizedBox(height: 8),
               itemBuilder: (_, i) {
                 final c = filtered[i];
                 return _ChargerRow(
@@ -2800,7 +2800,7 @@ class _DetectedReaderSheetState extends State<_DetectedReaderSheet>
                   height: 110,
                   child: AnimatedBuilder(
                     animation: _ring,
-                    builder: (_, __) => CircularProgressIndicator(
+                    builder: (_, _) => CircularProgressIndicator(
                       value: _ring.value,
                       strokeWidth: 5,
                       color: accent,

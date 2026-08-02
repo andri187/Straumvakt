@@ -125,7 +125,9 @@ class _ChargerDetailSheetState extends State<ChargerDetailSheet> {
                     Text(
                       c.locationName,
                       style: const TextStyle(
-                          color: BrandPalette.muted, fontSize: 13),
+                        color: BrandPalette.muted,
+                        fontSize: 13,
+                      ),
                     ),
                   ],
                 ),
@@ -157,10 +159,7 @@ class _ChargerDetailSheetState extends State<ChargerDetailSheet> {
                       : '—',
                 ),
                 _Divider(),
-                _Stat(
-                  label: 'Price',
-                  value: c.priceLabel ?? '—',
-                ),
+                _Stat(label: 'Price', value: c.priceLabel ?? '—'),
               ],
             ),
           ),
@@ -179,8 +178,11 @@ class _ChargerDetailSheetState extends State<ChargerDetailSheet> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.check_circle_rounded,
-                      color: BrandPalette.cyan, size: 22),
+                  const Icon(
+                    Icons.check_circle_rounded,
+                    color: BrandPalette.cyan,
+                    size: 22,
+                  ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
@@ -223,8 +225,11 @@ class _ChargerDetailSheetState extends State<ChargerDetailSheet> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.error_outline,
-                      color: BrandPalette.danger, size: 20),
+                  const Icon(
+                    Icons.error_outline,
+                    color: BrandPalette.danger,
+                    size: 20,
+                  ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
@@ -248,7 +253,7 @@ class _ChargerDetailSheetState extends State<ChargerDetailSheet> {
                   ? _start
                   : null,
               style: FilledButton.styleFrom(
-                backgroundColor: BrandPalette.mint,
+                backgroundColor: BrandPalette.blue,
                 foregroundColor: BrandPalette.midnight,
                 disabledBackgroundColor: BrandPalette.surface,
                 disabledForegroundColor: BrandPalette.muted,
@@ -270,8 +275,9 @@ class _ChargerDetailSheetState extends State<ChargerDetailSheet> {
                       height: 18,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        valueColor:
-                            AlwaysStoppedAnimation(BrandPalette.midnight),
+                        valueColor: AlwaysStoppedAnimation(
+                          BrandPalette.midnight,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -279,9 +285,11 @@ class _ChargerDetailSheetState extends State<ChargerDetailSheet> {
                   ] else if (c.status.canStart) ...[
                     const Icon(Icons.bolt_rounded, size: 22),
                     const SizedBox(width: 8),
-                    Text(_state == _StartState.failed
-                        ? 'Try again'
-                        : 'Start charging'),
+                    Text(
+                      _state == _StartState.failed
+                          ? 'Try again'
+                          : 'Start charging',
+                    ),
                   ] else ...[
                     Text('Charger is ${c.status.label.toLowerCase()}'),
                   ],
@@ -296,9 +304,8 @@ class _ChargerDetailSheetState extends State<ChargerDetailSheet> {
                 Navigator.of(context).pop();
                 Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (_) => ActiveSessionScreen(
-                      chargerName: c.displayName,
-                    ),
+                    builder: (_) =>
+                        ActiveSessionScreen(chargerName: c.displayName),
                   ),
                 );
               },
@@ -309,8 +316,10 @@ class _ChargerDetailSheetState extends State<ChargerDetailSheet> {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
                 ),
-                textStyle:
-                    const TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
+                textStyle: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
               icon: const Icon(Icons.electric_bolt_rounded, size: 20),
               label: const Text('View charging'),
@@ -351,14 +360,12 @@ class _ChargerDetailSheetState extends State<ChargerDetailSheet> {
 }
 
 Color _statusTint(ConnectorStatus s) => switch (s) {
-      ConnectorStatus.available => BrandPalette.mint,
-      ConnectorStatus.charging => BrandPalette.cyan,
-      ConnectorStatus.preparing ||
-      ConnectorStatus.finishing => BrandPalette.amber,
-      ConnectorStatus.faulted ||
-      ConnectorStatus.unavailable => BrandPalette.danger,
-      _ => BrandPalette.muted,
-    };
+  ConnectorStatus.available => BrandPalette.mint,
+  ConnectorStatus.charging => BrandPalette.cyan,
+  ConnectorStatus.preparing || ConnectorStatus.finishing => BrandPalette.amber,
+  ConnectorStatus.faulted || ConnectorStatus.unavailable => BrandPalette.danger,
+  _ => BrandPalette.muted,
+};
 
 class _ChargerBadge extends StatelessWidget {
   const _ChargerBadge({required this.status});
@@ -374,10 +381,7 @@ class _ChargerBadge extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            tint.withValues(alpha: 0.20),
-            tint.withValues(alpha: 0.05),
-          ],
+          colors: [tint.withValues(alpha: 0.20), tint.withValues(alpha: 0.05)],
         ),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: tint.withValues(alpha: 0.5)),
