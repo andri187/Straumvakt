@@ -74,3 +74,48 @@ describe("entry Worker upgrade forwarding", () => {
     expect(forwarded[0]!.headers.get("x-straumvakt-ws-protocol")).toBeNull();
   });
 });
+
+describe("P4.18 invalidate-authorize routing", () => {
+  function invalidateRequest(headers: Record<string, string>, body: unknown): Request {
+    return new Request(`https://gw.internal/invalidate-authorize/${IDENTITY_ID}`, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...headers },
+      body: JSON.stringify(body),
+    });
+  }
+
+  it("forwards an authenticated call to the identity's DO", async () => {
+    const { env, forwarded } = makeEnv();
+
+    const res = await worker.fetch(
+      invalidateRequest({ "x-straumvakt-ingest": "test-secret" }, { idTag: "TAG-A" }),
+      env,
+    );
+
+    expect(res.status).toBe(200);
+    expect(forwarded).toHaveLength(1);
+    expect(new URL(forwarded[0]!.url).pathname).toBe("/invalidate-authorize");
+    expect(await forwarded[0]!.json()).toEqual({ idTag: "TAG-A" });
+  });
+
+  it("rejects a call without the ingest secret and never reaches the DO", async () => {
+    const { env, forwarded } = makeEnv();
+
+    const res = await worker.fetch(invalidateRequest({}, { idTag: "TAG-A" }), env);
+
+    expect(res.status).toBe(401);
+    expect(forwarded).toHaveLength(0);
+  });
+
+  it("rejects a wrong ingest secret", async () => {
+    const { env, forwarded } = makeEnv();
+
+    const res = await worker.fetch(
+      invalidateRequest({ "x-straumvakt-ingest": "nope" }, { idTag: "TAG-A" }),
+      env,
+    );
+
+    expect(res.status).toBe(401);
+    expect(forwarded).toHaveLength(0);
+  });
+});

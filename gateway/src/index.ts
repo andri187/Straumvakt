@@ -7,6 +7,9 @@
  *   • GET  /ocpp/1.6/:identityString        — same, version-prefixed alias
  *   • POST /dispatch/:identityId            — outbound command from main-app
  *                                             dispatcher (Service Binding only)
+ *   • POST /invalidate-authorize/:identityId — drop cached Authorize
+ *                                             verdicts for that identity
+ *                                             (P4.18, Service Binding only)
  *
  * Both `/ocpp/<id>` and `/ocpp/1.6/<id>` are accepted because vendors
  * differ on whether they include the protocol version in the URL —
@@ -62,6 +65,30 @@ export default {
       return forwardToDo(request, env, identityId, "/dispatch");
     }
 
+    // P4.18 — main-app → gateway Authorize-cache invalidation. Same
+    // shared-secret gate as dispatch: it is a Service-Binding-only
+    // control-plane call, and an unauthenticated one would let anyone
+    // force the fleet back onto the uncached (Postgres) path.
+    const invalidateMatch = /^\/invalidate-authorize\/([0-9a-f-]+)$/.exec(url.pathname);
+    if (invalidateMatch && invalidateMatch[1] && request.method === "POST") {
+      const secret = request.headers.get("x-straumvakt-ingest");
+      if (!secret || secret !== env.OCPP_INGEST_SECRET) {
+        return new Response("unauthorized", { status: 401 });
+      }
+      // Body is read here rather than streamed through: it is a couple
+      // of dozen bytes of control-plane JSON, and a buffered body keeps
+      // the forward constructible outside the Workers runtime (node's
+      // Request demands `duplex` for a stream body), which is what
+      // makes this route testable.
+      return forwardToDo(
+        request,
+        env,
+        invalidateMatch[1],
+        "/invalidate-authorize",
+        await request.text(),
+      );
+    }
+
     return new Response("not found", { status: 404 });
   },
 } satisfies ExportedHandler<Env>;
@@ -112,13 +139,15 @@ async function forwardToDo(
   env: Env,
   identityId: string,
   path: string,
+  /** Pre-read body; falls back to streaming the original through. */
+  body?: string,
 ): Promise<Response> {
   const id = env.IDENTITY_DO.idFromName(identityId);
   const stub = env.IDENTITY_DO.get(id);
   const forward = new Request(`https://do.internal${path}`, {
     method: request.method,
     headers: request.headers,
-    body: request.body,
+    body: body ?? request.body,
   });
   return stub.fetch(forward);
 }

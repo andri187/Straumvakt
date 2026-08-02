@@ -22,6 +22,9 @@
  *   • Handle outbound commands injected via `/dispatch` (main app →
  *     gateway direction): mint a uniqueId, send Call frame, match
  *     CallResult by uniqueId to resolve the dispatch.
+ *   • Cache Authorize verdicts in DO storage for a short TTL (P4.18)
+ *     and expose `/invalidate-authorize` so a revocation does not have
+ *     to wait the TTL out.
  *
  * Crash-resilience:
  *   • Inbound: Cloudflare Queues handles redelivery (max_retries=3 →
@@ -113,6 +116,22 @@ export function selectSubprotocol(header: string | null): SubprotocolChoice {
   return { ok: true, selected: match };
 }
 
+/**
+ * A verdict parked in DO storage with the wall-clock instant it stops
+ * being usable. Stored — not held in an in-memory Map — because this
+ * DO hibernates between WebSocket frames: an `Authorize` and the
+ * `StartTransaction` that follows it seconds later are very often
+ * served by two different in-memory instances over the same storage.
+ * A memory-backed cache would miss on exactly the pair it exists to
+ * serve, which is the same class of bug P4.16 fixed for outbound
+ * commands.
+ */
+interface CachedAuthorizeVerdict {
+  verdict: AuthorizeVerdict;
+  /** Wall-clock ms; at or after this the entry is treated as a miss. */
+  expiresAt: number;
+}
+
 interface SessionMeta {
   identityId: string;
   orgId: string;
@@ -161,6 +180,43 @@ function cmdKey(uniqueId: string): string {
  */
 const COMMAND_TIMEOUT_MS = 30_000;
 
+/**
+ * DO-storage key prefix for cached Authorize verdicts (P4.18). The DO
+ * is per-identity, so the idTag alone is a sufficient key *within* it
+ * — the identity and org are implied by which object you are talking
+ * to, and are what the upstream lookup was scoped by.
+ */
+const AUTHZ_PREFIX = "authz:";
+
+function authzKey(idTag: string): string {
+  return `${AUTHZ_PREFIX}${idTag}`;
+}
+
+/**
+ * How long a cached Authorize verdict stays usable (P4.18).
+ *
+ * 60 seconds, chosen because:
+ *   • The dominant win is the `Authorize` → `StartTransaction` pair.
+ *     A driver taps, the charger asks `Authorize`, and the same idTag
+ *     comes back on `StartTransaction` a few seconds later. That is
+ *     two Postgres round-trips on the charger hot path for one
+ *     decision; 60s collapses it to one with room to spare for a
+ *     driver who plugs in slowly.
+ *   • It bounds the staleness cost. A cached "Accepted" for a token
+ *     revoked one second ago is an access-control decision, not a
+ *     performance detail — but the worst case is *at most one extra
+ *     session start* per charger per revocation, and that session is
+ *     still metered, still billed, and still stoppable remotely.
+ *     Longer TTLs start to allow repeated starts on a dead token.
+ *   • Anything shorter stops covering the tap→plug gap on a slow
+ *     driver, which is the case the cache exists for.
+ *
+ * When one extra session start is not acceptable — revocation,
+ * non-payment suspension — the caller uses `/invalidate-authorize`
+ * rather than waiting the window out.
+ */
+const AUTHORIZE_CACHE_TTL_MS = 60_000;
+
 export class IdentityDurableObject {
   private readonly state: DurableObjectState;
   private readonly env: GatewayEnv;
@@ -186,6 +242,13 @@ export class IdentityDurableObject {
     // Outbound command injection from main-app dispatcher.
     if (url.pathname === "/dispatch" && request.method === "POST") {
       return this.handleDispatch(request);
+    }
+
+    // P4.18 — drop cached Authorize verdicts on demand (revocation,
+    // non-payment suspension) so the next frame goes back upstream
+    // instead of waiting out the TTL.
+    if (url.pathname === "/invalidate-authorize" && request.method === "POST") {
+      return this.handleInvalidateAuthorize(request);
     }
 
     return new Response("not found", { status: 404 });
@@ -469,10 +532,8 @@ export class IdentityDurableObject {
     if (frame.action === "Authorize" || frame.action === "StartTransaction") {
       const idTag = stringField(frame.payload, "idTag");
       if (idTag && this.meta) {
-        authResolverVerdict = await this.requestAuthorizeVerdict(
-          idTag,
-          frame.action,
-        );
+        const resolved = await this.resolveAuthorizeVerdict(idTag, frame.action);
+        authResolverVerdict = resolved.verdict;
         // Single-line shape so Cloudflare tail / Logpush stays grep-able.
         console.log("[ocpp-gw] authorize.evaluated", {
           identityString: this.meta.identityString,
@@ -484,6 +545,12 @@ export class IdentityDurableObject {
           idTokenId: authResolverVerdict?.idTokenId,
           enforceAuthorize: authResolverVerdict?.enforceAuthorize ?? false,
           mode: authResolverVerdict?.enforceAuthorize ? "enforced" : "shadow",
+          // P4.18 — an operator validating verdicts before flipping
+          // enforceAuthorize (P4.11) must be able to tell a fresh
+          // decision from one served out of the DO's cache. Without
+          // this field that validation is done against silently-stale
+          // data.
+          cached: resolved.cached,
         });
       }
     }
@@ -533,11 +600,97 @@ export class IdentityDurableObject {
   }
 
   /**
+   * P4.18 — cache-aware wrapper around the upstream verdict lookup.
+   *
+   * Order is: usable cached entry → serve it and skip the network
+   * entirely; otherwise ask upstream and cache a successful answer.
+   *
+   * Two deliberate properties:
+   *   • An **expired entry is a miss**, not a fallback. We do not
+   *     serve stale-while-revalidate on an access-control decision.
+   *   • A **failed lookup is never cached**. `requestAuthorizeVerdict`
+   *     returns null on any upstream error; caching that would turn a
+   *     one-off blip into a full TTL of degraded behaviour, so the
+   *     next frame retries instead. It also leaves any *unexpired*
+   *     entry alone — it was written by a successful lookup and is
+   *     still within its window.
+   *
+   * The returned `cached` flag is log-only; it never influences the
+   * reply. In particular the shadow-mode path (`enforceAuthorize` =
+   * false → always Accepted) is identical whichever way the verdict
+   * arrived, because `responseFor` only ever reads the verdict object.
+   */
+  private async resolveAuthorizeVerdict(
+    idTag: string,
+    action: string,
+  ): Promise<{ verdict: AuthorizeVerdict | null; cached: boolean }> {
+    const key = authzKey(idTag);
+    const entry = await this.state.storage.get<CachedAuthorizeVerdict>(key);
+    if (entry && entry.expiresAt > Date.now()) {
+      return { verdict: entry.verdict, cached: true };
+    }
+
+    const fresh = await this.requestAuthorizeVerdict(idTag, action);
+    if (!fresh) return { verdict: null, cached: false };
+
+    await this.state.storage.put(key, {
+      verdict: fresh,
+      expiresAt: Date.now() + AUTHORIZE_CACHE_TTL_MS,
+    } satisfies CachedAuthorizeVerdict);
+    return { verdict: fresh, cached: false };
+  }
+
+  /**
+   * P4.18 — drop cached verdicts for this identity. Body is either
+   * `{ "idTag": "..." }` for a single token or `{ "all": true }` to
+   * clear every entry (used when an installation-wide flag changes,
+   * e.g. `enforceAuthorize` itself, where per-token invalidation would
+   * mean enumerating tokens).
+   *
+   * Idempotent: invalidating something that was never cached is a 200
+   * with `cleared: 0`, because the caller's contract is "this idTag is
+   * not served from cache after this returns," which is already true.
+   */
+  private async handleInvalidateAuthorize(request: Request): Promise<Response> {
+    let body: { idTag?: unknown; all?: unknown };
+    try {
+      body = ((await request.json()) ?? {}) as { idTag?: unknown; all?: unknown };
+    } catch {
+      return Response.json({ error: "invalid_json" }, { status: 400 });
+    }
+
+    if (body.all === true) {
+      const entries = await this.state.storage.list<CachedAuthorizeVerdict>({
+        prefix: AUTHZ_PREFIX,
+      });
+      let cleared = 0;
+      for (const key of entries.keys()) {
+        if (await this.state.storage.delete(key)) cleared += 1;
+      }
+      return Response.json({ ok: true, scope: "all", cleared }, { status: 200 });
+    }
+
+    const idTag = typeof body.idTag === "string" && body.idTag.length > 0 ? body.idTag : null;
+    if (!idTag) {
+      return Response.json(
+        { error: "expected { idTag: string } or { all: true }" },
+        { status: 400 },
+      );
+    }
+    const cleared = (await this.state.storage.delete(authzKey(idTag))) ? 1 : 0;
+    return Response.json({ ok: true, scope: "idTag", cleared }, { status: 200 });
+  }
+
+  /**
    * Sidecar call to `/api/internal/ocpp-authorize`. Failure is silent
-   * — we never block the charger response on this lookup because the
-   * gateway's whole point is sub-second Authorize.req turn-around. If
-   * the API errors, we return null and the caller logs it as
-   * `upstream_error`. Sprint 4 wires this to actually gate the reply.
+   * — on any upstream error we return null, the caller logs it as
+   * `upstream_error`, and `responseFor` falls back to the stub reply.
+   *
+   * This lookup *is* on the charger hot path: the CALLRESULT for
+   * `Authorize` / `StartTransaction` waits on it, which is why P4.18
+   * put a cache in front of it. (An earlier version of this comment
+   * claimed the reply was never blocked on the lookup. It was — that
+   * was finding F9.)
    */
   private async requestAuthorizeVerdict(
     idTag: string,

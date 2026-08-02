@@ -1,5 +1,5 @@
-// Tests for IdentityDurableObject — P4.16 (outbound command durability)
-// and P4.17 (OCPP subprotocol echo).
+// Tests for IdentityDurableObject — P4.16 (outbound command durability),
+// P4.17 (OCPP subprotocol echo) and P4.18 (Authorize verdict caching).
 //
 // The DO runs on the WebSocket Hibernation API, so it is evicted from
 // memory between frames. The whole point of P4.16 is that inflight
@@ -46,6 +46,7 @@ interface ResponseInitLike {
 
 class FakeResponse {
   readonly status: number;
+  readonly ok: boolean;
   readonly headers: { get(name: string): string | null };
   readonly webSocket: unknown;
   private readonly bodyValue: unknown;
@@ -53,6 +54,9 @@ class FakeResponse {
   constructor(body: unknown, init: ResponseInitLike = {}) {
     this.bodyValue = body;
     this.status = init.status ?? 200;
+    // The Authorize sidecar branches on `resp.ok`, so the fake has to
+    // carry it or every stubbed 200 would read as an upstream failure.
+    this.ok = this.status >= 200 && this.status < 300;
     this.headers = headerBag(init.headers ?? {});
     this.webSocket = init.webSocket;
   }
@@ -646,5 +650,436 @@ describe("P4.17 upgrade handshake", () => {
 
     expect(res.status).toBe(101);
     expect(res.headers.get("Sec-WebSocket-Protocol")).toBe("ocpp1.6");
+  });
+});
+
+// ───────────────────────────────────────────────────────────────────
+// P4.18 — Authorize verdict caching
+// ───────────────────────────────────────────────────────────────────
+
+const AUTHORIZE_CACHE_TTL_MS = 60_000;
+
+interface VerdictBody {
+  verdict: "Accepted" | "Blocked" | "Expired" | "Invalid";
+  reason: string;
+  userId?: string;
+  idTokenId?: string;
+  enforceAuthorize: boolean;
+}
+
+type UpstreamBehaviour =
+  | { kind: "verdict"; body: VerdictBody }
+  | { kind: "status"; status: number }
+  | { kind: "throw"; message: string };
+
+interface AuthorizeUpstream {
+  /** Every body the DO actually sent upstream — length is the miss count. */
+  calls: Array<{ idTag: string; identityId: string; orgId: string }>;
+  /** Mutable: tests flip this between frames. */
+  behaviour: UpstreamBehaviour;
+}
+
+function verdict(
+  v: VerdictBody["verdict"],
+  enforceAuthorize: boolean,
+  reason = "test",
+): UpstreamBehaviour {
+  return { kind: "verdict", body: { verdict: v, reason, enforceAuthorize, idTokenId: "tok-1" } };
+}
+
+/**
+ * Replace the throwing MAIN_APP fake with an Authorize responder whose
+ * behaviour the test can change mid-flight. Call count is the whole
+ * point of these tests: a cache hit must produce no upstream call.
+ */
+function installAuthorizeUpstream(
+  env: GatewayEnv,
+  initial: UpstreamBehaviour,
+): AuthorizeUpstream {
+  const upstream: AuthorizeUpstream = { calls: [], behaviour: initial };
+  env.MAIN_APP = {
+    fetch: async (req: Request) => {
+      upstream.calls.push(
+        (await req.json()) as { idTag: string; identityId: string; orgId: string },
+      );
+      const b = upstream.behaviour;
+      if (b.kind === "throw") throw new Error(b.message);
+      if (b.kind === "status") {
+        return new FakeResponse("upstream sad", { status: b.status }) as unknown as Response;
+      }
+      return new FakeResponse(JSON.stringify(b.body), { status: 200 }) as unknown as Response;
+    },
+  };
+  return upstream;
+}
+
+async function connect(d: IdentityDurableObject, state: FakeState): Promise<FakeWebSocket> {
+  await d.fetch(upgradeRequest("ocpp1.6"));
+  return state.getWebSockets()[0]!;
+}
+
+let uniqueIdSeq = 0;
+
+/** Send an Authorize/StartTransaction Call and return the reply payload. */
+async function sendAuthFrame(
+  d: IdentityDurableObject,
+  ws: FakeWebSocket,
+  idTag: string,
+  action: "Authorize" | "StartTransaction" = "Authorize",
+): Promise<Record<string, unknown>> {
+  const uniqueId = `auth-${(uniqueIdSeq += 1)}`;
+  const payload =
+    action === "StartTransaction" ? { connectorId: 1, idTag, meterStart: 0 } : { idTag };
+  await d.webSocketMessage(
+    ws as unknown as WebSocket,
+    JSON.stringify([2, uniqueId, action, payload]),
+  );
+  const frame = JSON.parse(ws.sent[ws.sent.length - 1]!) as [number, string, Record<string, unknown>];
+  expect(frame[0]).toBe(3);
+  expect(frame[1]).toBe(uniqueId);
+  return frame[2];
+}
+
+function idTagStatus(reply: Record<string, unknown>): unknown {
+  return (reply.idTagInfo as Record<string, unknown> | undefined)?.status;
+}
+
+/** The most recent `authorize.evaluated` structured log payload. */
+function lastAuthorizeLog(): Record<string, unknown> {
+  const calls = vi
+    .mocked(console.log)
+    .mock.calls.filter((c) => c[0] === "[ocpp-gw] authorize.evaluated");
+  expect(calls.length).toBeGreaterThan(0);
+  return calls[calls.length - 1]![1] as Record<string, unknown>;
+}
+
+function authzKeys(state: FakeState): string[] {
+  return [...state.storage.entries.keys()].filter((k) => k.startsWith("authz:"));
+}
+
+function invalidateRequest(body: unknown): Request {
+  return makeRequest("https://do.internal/invalidate-authorize", {
+    method: "POST",
+    body,
+  });
+}
+
+describe("P4.18 Authorize verdict caching", () => {
+  it("serves the StartTransaction that follows an Authorize from cache", async () => {
+    const state = new FakeState();
+    const { env } = makeEnv();
+    const upstream = installAuthorizeUpstream(env, verdict("Accepted", true));
+    const d = makeDo(state, env);
+    const ws = await connect(d, state);
+
+    const first = await sendAuthFrame(d, ws, "TAG-A", "Authorize");
+    expect(idTagStatus(first)).toBe("Accepted");
+    expect(upstream.calls).toHaveLength(1);
+    expect(lastAuthorizeLog().cached).toBe(false);
+
+    // The pair the cache exists for: same idTag, seconds later.
+    const second = await sendAuthFrame(d, ws, "TAG-A", "StartTransaction");
+    expect(idTagStatus(second)).toBe("Accepted");
+    expect(second.transactionId).toBeTypeOf("number");
+    expect(upstream.calls).toHaveLength(1);
+    expect(lastAuthorizeLog().cached).toBe(true);
+    // Cached verdicts keep every field the fresh one carried, so the
+    // operator's pre-flip validation reads the same either way.
+    expect(lastAuthorizeLog()).toMatchObject({
+      verdict: "Accepted",
+      reason: "test",
+      idTokenId: "tok-1",
+      enforceAuthorize: true,
+      mode: "enforced",
+    });
+  });
+
+  it("keys the cache by idTag — a different token is a miss", async () => {
+    const state = new FakeState();
+    const { env } = makeEnv();
+    const upstream = installAuthorizeUpstream(env, verdict("Accepted", true));
+    const d = makeDo(state, env);
+    const ws = await connect(d, state);
+
+    await sendAuthFrame(d, ws, "TAG-A");
+    await sendAuthFrame(d, ws, "TAG-B");
+
+    expect(upstream.calls.map((c) => c.idTag)).toEqual(["TAG-A", "TAG-B"]);
+    expect(authzKeys(state).sort()).toEqual(["authz:TAG-A", "authz:TAG-B"]);
+    expect(lastAuthorizeLog().cached).toBe(false);
+  });
+
+  it("survives DO eviction — the cache lives in storage, not memory", async () => {
+    const state = new FakeState();
+    const { env } = makeEnv();
+    const upstream = installAuthorizeUpstream(env, verdict("Accepted", true));
+
+    const instanceA = makeDo(state, env);
+    const ws = await connect(instanceA, state);
+    await sendAuthFrame(instanceA, ws, "TAG-HIB");
+    expect(upstream.calls).toHaveLength(1);
+
+    // Hibernation wake-up: fresh instance, same storage. An in-memory
+    // Map would miss here, which is the whole reason for DO storage.
+    const instanceB = makeDo(state, env);
+    await sendAuthFrame(instanceB, ws, "TAG-HIB", "StartTransaction");
+
+    expect(upstream.calls).toHaveLength(1);
+    expect(lastAuthorizeLog().cached).toBe(true);
+  });
+
+  it("treats an entry at or past its TTL as a miss", async () => {
+    vi.useFakeTimers();
+    const t0 = Date.parse("2026-08-02T10:00:00.000Z");
+    vi.setSystemTime(t0);
+
+    const state = new FakeState();
+    const { env } = makeEnv();
+    const upstream = installAuthorizeUpstream(env, verdict("Accepted", true));
+    const d = makeDo(state, env);
+    const ws = await connect(d, state);
+
+    await sendAuthFrame(d, ws, "TAG-TTL");
+    expect(upstream.calls).toHaveLength(1);
+    expect(state.storage.entries.get("authz:TAG-TTL")).toMatchObject({
+      expiresAt: t0 + AUTHORIZE_CACHE_TTL_MS,
+    });
+
+    // One millisecond inside the window — still a hit.
+    vi.setSystemTime(t0 + AUTHORIZE_CACHE_TTL_MS - 1);
+    await sendAuthFrame(d, ws, "TAG-TTL");
+    expect(upstream.calls).toHaveLength(1);
+    expect(lastAuthorizeLog().cached).toBe(true);
+
+    // Exactly at the deadline — expired, so back upstream.
+    vi.setSystemTime(t0 + AUTHORIZE_CACHE_TTL_MS);
+    await sendAuthFrame(d, ws, "TAG-TTL");
+    expect(upstream.calls).toHaveLength(2);
+    expect(lastAuthorizeLog().cached).toBe(false);
+    // Refreshed, not left on the old deadline.
+    expect(state.storage.entries.get("authz:TAG-TTL")).toMatchObject({
+      expiresAt: t0 + 2 * AUTHORIZE_CACHE_TTL_MS,
+    });
+  });
+
+  it("re-reads a revoked token immediately after explicit invalidation", async () => {
+    const state = new FakeState();
+    const { env } = makeEnv();
+    const upstream = installAuthorizeUpstream(env, verdict("Accepted", true));
+    const d = makeDo(state, env);
+    const ws = await connect(d, state);
+
+    expect(idTagStatus(await sendAuthFrame(d, ws, "TAG-REVOKE"))).toBe("Accepted");
+
+    // Operator revokes the token. Without this call the charger would
+    // keep getting Accepted for up to the full TTL.
+    const res = (await d.fetch(
+      invalidateRequest({ idTag: "TAG-REVOKE" }),
+    )) as unknown as FakeResponse;
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, scope: "idTag", cleared: 1 });
+    expect(authzKeys(state)).toEqual([]);
+
+    upstream.behaviour = verdict("Blocked", true, "revoked");
+    expect(idTagStatus(await sendAuthFrame(d, ws, "TAG-REVOKE"))).toBe("Blocked");
+    expect(upstream.calls).toHaveLength(2);
+    expect(lastAuthorizeLog().cached).toBe(false);
+  });
+
+  it("clears every cached verdict on the all form, and is idempotent", async () => {
+    const state = new FakeState();
+    const { env } = makeEnv();
+    const upstream = installAuthorizeUpstream(env, verdict("Accepted", true));
+    const d = makeDo(state, env);
+    const ws = await connect(d, state);
+
+    await sendAuthFrame(d, ws, "TAG-A");
+    await sendAuthFrame(d, ws, "TAG-B");
+    expect(authzKeys(state)).toHaveLength(2);
+
+    const res = (await d.fetch(invalidateRequest({ all: true }))) as unknown as FakeResponse;
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, scope: "all", cleared: 2 });
+    expect(authzKeys(state)).toEqual([]);
+
+    // Invalidating nothing is still a success — the caller's contract
+    // ("not served from cache after this") already holds.
+    const again = (await d.fetch(invalidateRequest({ all: true }))) as unknown as FakeResponse;
+    expect(await again.json()).toEqual({ ok: true, scope: "all", cleared: 0 });
+    const unknownTag = (await d.fetch(
+      invalidateRequest({ idTag: "NEVER-SEEN" }),
+    )) as unknown as FakeResponse;
+    expect(await unknownTag.json()).toEqual({ ok: true, scope: "idTag", cleared: 0 });
+
+    await sendAuthFrame(d, ws, "TAG-A");
+    expect(upstream.calls).toHaveLength(3);
+  });
+
+  it("leaves inflight command state alone when clearing the whole cache", async () => {
+    const state = new FakeState();
+    const { env } = makeEnv();
+    installAuthorizeUpstream(env, verdict("Accepted", true));
+    const d = makeDo(state, env);
+
+    const { uniqueId } = await connectAndDispatch(d, state, "cmd-untouched");
+    const ws = state.getWebSockets()[0]!;
+    await sendAuthFrame(d, ws, "TAG-A");
+
+    await d.fetch(invalidateRequest({ all: true }));
+
+    // The authz: prefix must not sweep cmd: rows with it.
+    expect(state.storage.entries.has(`cmd:${uniqueId}`)).toBe(true);
+    expect(authzKeys(state)).toEqual([]);
+  });
+
+  it("rejects an invalidation body that names neither an idTag nor all", async () => {
+    const state = new FakeState();
+    const { env } = makeEnv();
+    const d = makeDo(state, env);
+
+    expect(((await d.fetch(invalidateRequest({}))) as unknown as FakeResponse).status).toBe(400);
+    expect(
+      ((await d.fetch(invalidateRequest({ idTag: "" }))) as unknown as FakeResponse).status,
+    ).toBe(400);
+    expect(
+      ((await d.fetch(invalidateRequest({ all: false }))) as unknown as FakeResponse).status,
+    ).toBe(400);
+  });
+
+  it("rides out an upstream outage on an unexpired cached entry", async () => {
+    const state = new FakeState();
+    const { env } = makeEnv();
+    const upstream = installAuthorizeUpstream(env, verdict("Blocked", true, "not-in-list"));
+    const d = makeDo(state, env);
+    const ws = await connect(d, state);
+
+    expect(idTagStatus(await sendAuthFrame(d, ws, "TAG-OUTAGE"))).toBe("Blocked");
+
+    // Upstream falls over. The cached entry is still inside its window,
+    // so the frame is answered from cache and never touches the network.
+    upstream.behaviour = { kind: "throw", message: "service binding down" };
+    expect(idTagStatus(await sendAuthFrame(d, ws, "TAG-OUTAGE"))).toBe("Blocked");
+    expect(upstream.calls).toHaveLength(1);
+    expect(lastAuthorizeLog()).toMatchObject({ verdict: "Blocked", cached: true });
+  });
+
+  it("falls back to the stub reply on an upstream error with no cached entry", async () => {
+    const state = new FakeState();
+    const { env } = makeEnv();
+    const upstream = installAuthorizeUpstream(env, { kind: "throw", message: "boom" });
+    const d = makeDo(state, env);
+    const ws = await connect(d, state);
+
+    // No verdict at all → the pre-existing stub posture (Accepted),
+    // unchanged by P4.18.
+    expect(idTagStatus(await sendAuthFrame(d, ws, "TAG-ERR"))).toBe("Accepted");
+    expect(lastAuthorizeLog()).toMatchObject({
+      verdict: "upstream_error",
+      reason: "upstream_error",
+      cached: false,
+    });
+    // A failure must never be cached — that would freeze a transient
+    // blip in for the whole TTL.
+    expect(authzKeys(state)).toEqual([]);
+    expect(upstream.calls).toHaveLength(1);
+  });
+
+  it("does not cache a non-200 upstream reply either, and retries the next frame", async () => {
+    const state = new FakeState();
+    const { env } = makeEnv();
+    const upstream = installAuthorizeUpstream(env, { kind: "status", status: 500 });
+    const d = makeDo(state, env);
+    const ws = await connect(d, state);
+
+    await sendAuthFrame(d, ws, "TAG-500");
+    expect(authzKeys(state)).toEqual([]);
+
+    upstream.behaviour = verdict("Accepted", true);
+    expect(idTagStatus(await sendAuthFrame(d, ws, "TAG-500"))).toBe("Accepted");
+    expect(upstream.calls).toHaveLength(2);
+    expect(lastAuthorizeLog().cached).toBe(false);
+    expect(authzKeys(state)).toEqual(["authz:TAG-500"]);
+  });
+
+  it("does not resurrect an expired entry when the upstream is down", async () => {
+    vi.useFakeTimers();
+    const t0 = Date.parse("2026-08-02T10:00:00.000Z");
+    vi.setSystemTime(t0);
+
+    const state = new FakeState();
+    const { env } = makeEnv();
+    const upstream = installAuthorizeUpstream(env, verdict("Accepted", true));
+    const d = makeDo(state, env);
+    const ws = await connect(d, state);
+
+    await sendAuthFrame(d, ws, "TAG-STALE");
+    vi.setSystemTime(t0 + AUTHORIZE_CACHE_TTL_MS + 1);
+    upstream.behaviour = { kind: "throw", message: "boom" };
+
+    // Expired is a miss, not a fallback: we do not serve
+    // stale-while-error on an access-control decision.
+    await sendAuthFrame(d, ws, "TAG-STALE");
+    expect(upstream.calls).toHaveLength(2);
+    expect(lastAuthorizeLog()).toMatchObject({ verdict: "upstream_error", cached: false });
+  });
+
+  it("keeps shadow mode identical whether the verdict was cached or not", async () => {
+    const state = new FakeState();
+    const { env } = makeEnv();
+    // enforceAuthorize=false → the charger is told Accepted regardless
+    // of the verdict (P4.11 posture). Caching must not touch that.
+    installAuthorizeUpstream(env, verdict("Blocked", false, "not-in-list"));
+    const d = makeDo(state, env);
+    const ws = await connect(d, state);
+
+    const uncached = await sendAuthFrame(d, ws, "TAG-SHADOW", "Authorize");
+    const uncachedLog = { ...lastAuthorizeLog() };
+    const cached = await sendAuthFrame(d, ws, "TAG-SHADOW", "Authorize");
+    const cachedLog = { ...lastAuthorizeLog() };
+
+    expect(idTagStatus(uncached)).toBe("Accepted");
+    expect(idTagStatus(cached)).toBe("Accepted");
+    // The logged verdict is the real one both times — that log is how
+    // the operator validates before flipping the flag.
+    expect(uncachedLog).toMatchObject({ verdict: "Blocked", mode: "shadow", cached: false });
+    expect(cachedLog).toMatchObject({ verdict: "Blocked", mode: "shadow", cached: true });
+    // `cached` is the only field that may differ between the two.
+    expect({ ...cachedLog, cached: false }).toEqual(uncachedLog);
+  });
+
+  it("keeps enforced mode identical whether the verdict was cached or not", async () => {
+    const state = new FakeState();
+    const { env } = makeEnv();
+    installAuthorizeUpstream(env, verdict("Expired", true, "past-expiry"));
+    const d = makeDo(state, env);
+    const ws = await connect(d, state);
+
+    const uncached = await sendAuthFrame(d, ws, "TAG-ENF", "Authorize");
+    const cached = await sendAuthFrame(d, ws, "TAG-ENF", "StartTransaction");
+
+    expect(idTagStatus(uncached)).toBe("Expired");
+    // Refused start still carries a transactionId (OCPP 1.6 §6.6).
+    expect(idTagStatus(cached)).toBe("Expired");
+    expect(cached.transactionId).toBeTypeOf("number");
+  });
+
+  it("never consults the cache for non-authorize actions", async () => {
+    const state = new FakeState();
+    const { env } = makeEnv();
+    const upstream = installAuthorizeUpstream(env, verdict("Accepted", true));
+    const d = makeDo(state, env);
+    const ws = await connect(d, state);
+
+    await d.webSocketMessage(
+      ws as unknown as WebSocket,
+      JSON.stringify([2, "hb-1", "Heartbeat", {}]),
+    );
+    await d.webSocketMessage(
+      ws as unknown as WebSocket,
+      JSON.stringify([2, "st-1", "StopTransaction", { idTag: "TAG-A", transactionId: 7 }]),
+    );
+
+    expect(upstream.calls).toHaveLength(0);
+    expect(authzKeys(state)).toEqual([]);
   });
 });
