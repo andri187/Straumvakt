@@ -25,6 +25,28 @@
  *   • Cache Authorize verdicts in DO storage for a short TTL (P4.18)
  *     and expose `/invalidate-authorize` so a revocation does not have
  *     to wait the TTL out.
+ *   • Fail **closed** on the access gate when the verdict cannot be
+ *     established and enforcement is known to be on (F21). See
+ *     "Availability posture" below.
+ *
+ * Availability posture (F21):
+ *   "If things are offline, the user can't charge." When an
+ *   `Authorize` / `StartTransaction` lookup cannot be answered — API
+ *   Worker down, Postgres unreachable, service binding throwing — the
+ *   gateway used to fall through to the dev stub, which replies
+ *   `Accepted`. That made `Installation.enforceAuthorize` a gate that
+ *   opened whenever the API blipped. It now refuses instead, with two
+ *   deliberate carve-outs:
+ *     • An **unexpired cached verdict wins**, whatever it says. That is
+ *       what keeps the `Authorize` → `StartTransaction` pair intact
+ *       when the API drops out between the two frames, seconds apart.
+ *     • **Shadow mode is untouched.** With `enforceAuthorize` false the
+ *       verdict is logged and the reply is `Accepted` regardless — the
+ *       gate is not armed, so there is nothing to fail closed.
+ *   Because `enforceAuthorize` only ever arrives *inside* a verdict, a
+ *   failed lookup leaves us not knowing whether the gate is armed. The
+ *   DO therefore remembers the last successfully observed value of the
+ *   flag in storage (`ENFORCE_MEMO_KEY`) and decides on that.
  *
  * Crash-resilience:
  *   • Inbound: Cloudflare Queues handles redelivery (max_retries=3 →
@@ -216,6 +238,57 @@ function authzKey(idTag: string): string {
  * rather than waiting the window out.
  */
 const AUTHORIZE_CACHE_TTL_MS = 60_000;
+
+/**
+ * F21 — DO-storage key holding the last successfully observed value of
+ * `Installation.enforceAuthorize` for this identity.
+ *
+ * Deliberately **outside** the `authz:` prefix. `/invalidate-authorize`
+ * with `{ all: true }` is exactly what an operator calls when they flip
+ * `enforceAuthorize`, and it sweeps that prefix — if the memo lived
+ * under it, arming the gate would be immediately followed by forgetting
+ * that the gate is armed, and the next upstream blip would fail open
+ * again. The memo is not a cached verdict and does not expire with one.
+ */
+const ENFORCE_MEMO_KEY = "enforceAuthorize";
+
+/**
+ * F21 — remembered enforcement posture. Not TTL'd: it is a
+ * per-installation flag that changes on operator action, not on
+ * traffic, and every direction the memo could go stale in is safe:
+ *   • Stale `true` after the operator disarms the gate → we refuse
+ *     during an outage that would otherwise have been waved through.
+ *     One successful lookup corrects it, and refusing is the posture
+ *     the operator chose anyway.
+ *   • Stale `false` cannot happen in a way that matters — the memo is
+ *     only ever consulted when the lookup failed, and a `false` memo
+ *     reproduces the pre-F21 shadow behaviour, which is correct for an
+ *     installation that has not armed the gate.
+ */
+interface EnforcementMemo {
+  enforceAuthorize: boolean;
+  /** Wall-clock ms at which this value was first observed. */
+  observedAt: number;
+}
+
+/**
+ * F21 — the `idTagInfo.status` used to refuse a frame we could not
+ * verify.
+ *
+ * OCPP 1.6 §5.7 gives `AuthorizationStatus` exactly five members —
+ * Accepted / Blocked / Expired / Invalid / ConcurrentTx — none of which
+ * means "try again, the backend is unreachable". `Blocked` is the one
+ * every firmware in a mixed-vendor fleet handles predictably: it stops
+ * the session, shows a refusal on the display, and does not retry in a
+ * tight loop the way some stacks do on `Invalid`.
+ *
+ * It is *not* an accurate description of what happened, so the log line
+ * carries `availabilityRefusal: true` as a distinct field rather than
+ * overloading `reason`. Anything reading these logs must treat a
+ * `Blocked` with that flag as an availability event, not an access
+ * decision about the token.
+ */
+const AVAILABILITY_REFUSAL_STATUS = "Blocked" as const;
 
 export class IdentityDurableObject {
   private readonly state: DurableObjectState;
@@ -529,73 +602,122 @@ export class IdentityDurableObject {
     // The shadow-mode log line keeps working in both states so the
     // operator can watch verdicts pre-flip and verify post-flip.
     let authResolverVerdict: AuthorizeVerdict | null = null;
+    let authLog: { idTag: string; cached: boolean; availabilityRefusal: boolean } | null = null;
     if (frame.action === "Authorize" || frame.action === "StartTransaction") {
       const idTag = stringField(frame.payload, "idTag");
       if (idTag && this.meta) {
         const resolved = await this.resolveAuthorizeVerdict(idTag, frame.action);
         authResolverVerdict = resolved.verdict;
-        // Single-line shape so Cloudflare tail / Logpush stays grep-able.
-        console.log("[ocpp-gw] authorize.evaluated", {
-          identityString: this.meta.identityString,
-          action: frame.action,
+        authLog = {
           idTag,
-          verdict: authResolverVerdict?.verdict ?? "upstream_error",
-          reason: authResolverVerdict?.reason ?? "upstream_error",
-          userId: authResolverVerdict?.userId,
-          idTokenId: authResolverVerdict?.idTokenId,
-          enforceAuthorize: authResolverVerdict?.enforceAuthorize ?? false,
-          mode: authResolverVerdict?.enforceAuthorize ? "enforced" : "shadow",
-          // P4.18 — an operator validating verdicts before flipping
-          // enforceAuthorize (P4.11) must be able to tell a fresh
-          // decision from one served out of the DO's cache. Without
-          // this field that validation is done against silently-stale
-          // data.
           cached: resolved.cached,
-        });
+          // F21 — no verdict *and* the gate was armed the last time we
+          // heard from the API. There is no cached answer to fall back
+          // on (an unexpired one would have been returned as the
+          // verdict above), so the only honest reply is a refusal.
+          availabilityRefusal: resolved.verdict === null && resolved.lastKnownEnforce,
+        };
       }
     }
 
     // Compute the response. For Authorize and StartTransaction with
     // enforceAuthorize=true, the verdict from the API gates the reply.
-    // For everything else (heartbeat, status, meter values, or any
-    // failed lookup), the dev-stub response is used — which reads
-    // Accepted for the auth-relevant frames anyway.
+    // An unverifiable lookup on an armed gate refuses (F21). For
+    // everything else (heartbeat, status, meter values, shadow mode)
+    // the dev-stub response is used — which reads Accepted for the
+    // auth-relevant frames.
     const responsePayload = this.responseFor(
       frame.action,
       authResolverVerdict,
+      authLog?.availabilityRefusal ?? false,
     );
+
+    if (authLog && this.meta) {
+      // Single-line shape so Cloudflare tail / Logpush stays grep-able.
+      // Logged after the reply is computed so `replyStatus` is what the
+      // charger was actually told, not a second derivation of it.
+      console.log("[ocpp-gw] authorize.evaluated", {
+        identityString: this.meta.identityString,
+        action: frame.action,
+        idTag: authLog.idTag,
+        verdict: authResolverVerdict?.verdict ?? "upstream_error",
+        reason: authResolverVerdict?.reason ?? "upstream_error",
+        userId: authResolverVerdict?.userId,
+        idTokenId: authResolverVerdict?.idTokenId,
+        enforceAuthorize: authResolverVerdict?.enforceAuthorize ?? false,
+        mode:
+          authLog.availabilityRefusal || authResolverVerdict?.enforceAuthorize
+            ? "enforced"
+            : "shadow",
+        // P4.18 — an operator validating verdicts before flipping
+        // enforceAuthorize (P4.11) must be able to tell a fresh
+        // decision from one served out of the DO's cache. Without
+        // this field that validation is done against silently-stale
+        // data.
+        cached: authLog.cached,
+        // F21 — distinct from `reason` on purpose. When this is true
+        // the refusal says nothing about the token: we could not reach
+        // the authority, and the operator's posture is that an
+        // unverifiable driver does not charge. Alerting keys off this
+        // field; a spike in it is an outage, not a fraud signal.
+        availabilityRefusal: authLog.availabilityRefusal,
+        // What actually went back on the wire.
+        replyStatus: stringField(responsePayload.idTagInfo, "status"),
+      });
+    }
+
     ws.send(serializeCallResult(frame.uniqueId, responsePayload));
   }
 
   /**
-   * Build the OCPP CallResult payload for an inbound Call. For
-   * Authorize/StartTransaction with `enforceAuthorize=true`, honour
-   * the API's verdict (Reject/Block/Expire/Accept). For everything
-   * else (or when enforceAuthorize=false / upstream_error), fall back
-   * to the stub response which is Accepted for these actions.
+   * Build the OCPP CallResult payload for an inbound Call.
+   *
+   * For `Authorize` / `StartTransaction` the `idTagInfo.status` is
+   * decided in this order:
+   *   1. `availabilityRefusal` (F21) — the lookup could not be answered
+   *      and the gate is known to be armed. Refuse.
+   *   2. A verdict with `enforceAuthorize=true` — honour it verbatim
+   *      (Accepted / Blocked / Expired / Invalid).
+   *   3. Anything else — shadow mode, or a failed lookup on an
+   *      installation that has never enforced — fall through to the
+   *      stub, which reads `Accepted` for these actions.
+   *
+   * Note that case 1 cannot fire while a usable cached verdict exists:
+   * `resolveAuthorizeVerdict` returns an unexpired entry as the verdict,
+   * so a cached `Accepted` still proceeds and a cached `Blocked` still
+   * refuses through case 2 even with the API dark.
    */
   private responseFor(
     action: string,
     authVerdict: AuthorizeVerdict | null,
+    availabilityRefusal: boolean,
   ): Record<string, unknown> {
     const stub = this.stubResponseFor(action);
     if (action !== "Authorize" && action !== "StartTransaction") {
       return stub;
     }
-    if (!authVerdict || !authVerdict.enforceAuthorize) {
+
+    const status = availabilityRefusal
+      ? AVAILABILITY_REFUSAL_STATUS
+      : authVerdict?.enforceAuthorize
+        ? authVerdict.verdict
+        : null;
+    if (status === null) {
       return stub;
     }
+
     // Enforced path. Authorize and StartTransaction both reply with
-    // an idTagInfo whose status field carries the verdict verbatim.
+    // an idTagInfo whose status field carries the decision verbatim.
     // StartTransaction additionally needs a transactionId — preserved
-    // from the stub regardless of verdict (charger needs the id even
-    // on a refused start, per OCPP 1.6 §6.6).
+    // from the stub regardless of the status (charger needs the id even
+    // on a refused start, per OCPP 1.6 §6.6), which is why the refusal
+    // spreads the stub rather than replacing it.
     if (action === "Authorize") {
-      return { idTagInfo: { status: authVerdict.verdict } };
+      return { idTagInfo: { status } };
     }
     return {
       ...stub,
-      idTagInfo: { status: authVerdict.verdict },
+      idTagInfo: { status },
     };
   }
 
@@ -619,25 +741,78 @@ export class IdentityDurableObject {
    * reply. In particular the shadow-mode path (`enforceAuthorize` =
    * false → always Accepted) is identical whichever way the verdict
    * arrived, because `responseFor` only ever reads the verdict object.
+   *
+   * `lastKnownEnforce` (F21) is only load-bearing when `verdict` is
+   * null — it is what lets the caller decide whether an unverifiable
+   * frame refuses or falls through to shadow mode. It is read from the
+   * memo only on that path, so the cache-hit fast path still costs one
+   * storage read.
    */
   private async resolveAuthorizeVerdict(
     idTag: string,
     action: string,
-  ): Promise<{ verdict: AuthorizeVerdict | null; cached: boolean }> {
+  ): Promise<{
+    verdict: AuthorizeVerdict | null;
+    cached: boolean;
+    lastKnownEnforce: boolean;
+  }> {
     const key = authzKey(idTag);
     const entry = await this.state.storage.get<CachedAuthorizeVerdict>(key);
     if (entry && entry.expiresAt > Date.now()) {
-      return { verdict: entry.verdict, cached: true };
+      return {
+        verdict: entry.verdict,
+        cached: true,
+        lastKnownEnforce: entry.verdict.enforceAuthorize,
+      };
     }
 
     const fresh = await this.requestAuthorizeVerdict(idTag, action);
-    if (!fresh) return { verdict: null, cached: false };
+    if (!fresh) {
+      return {
+        verdict: null,
+        cached: false,
+        lastKnownEnforce: await this.lastKnownEnforcement(),
+      };
+    }
 
     await this.state.storage.put(key, {
       verdict: fresh,
       expiresAt: Date.now() + AUTHORIZE_CACHE_TTL_MS,
     } satisfies CachedAuthorizeVerdict);
-    return { verdict: fresh, cached: false };
+    // F21 — the only place the memo is written. A verdict we actually
+    // received is the only evidence of the installation's posture we
+    // ever get, so record it while we have it.
+    await this.rememberEnforcement(fresh.enforceAuthorize);
+    return { verdict: fresh, cached: false, lastKnownEnforce: fresh.enforceAuthorize };
+  }
+
+  /**
+   * F21 — last successfully observed `enforceAuthorize` for this
+   * identity. `false` when never observed, which is the deliberate
+   * choice: a charger that has never had a successful lookup behaves
+   * as shadow mode rather than refusing every driver. An installation
+   * that has never enforced must not start refusing because the API
+   * blipped, and "never observed" and "observed as off" are
+   * indistinguishable from here.
+   */
+  private async lastKnownEnforcement(): Promise<boolean> {
+    const memo = await this.state.storage.get<EnforcementMemo>(ENFORCE_MEMO_KEY);
+    return memo?.enforceAuthorize === true;
+  }
+
+  /**
+   * F21 — persist the observed enforcement posture, skipping the write
+   * when it has not moved. Every successful Authorize lookup would
+   * otherwise put the same value back on the charger hot path; reads
+   * are served from the DO's own storage cache, durable writes are not.
+   */
+  private async rememberEnforcement(enforceAuthorize: boolean): Promise<void> {
+    const memo = await this.state.storage.get<EnforcementMemo>(ENFORCE_MEMO_KEY);
+    if (memo && memo.enforceAuthorize === enforceAuthorize) return;
+    await this.state.storage.put(ENFORCE_MEMO_KEY, {
+      enforceAuthorize,
+      observedAt: Date.now(),
+    } satisfies EnforcementMemo);
   }
 
   /**
@@ -646,6 +821,12 @@ export class IdentityDurableObject {
    * clear every entry (used when an installation-wide flag changes,
    * e.g. `enforceAuthorize` itself, where per-token invalidation would
    * mean enumerating tokens).
+   *
+   * The F21 enforcement memo is **not** cleared by either form — it
+   * lives outside the `authz:` prefix precisely so that the call an
+   * operator makes when arming the gate does not also erase the record
+   * that the gate is armed. It is refreshed by the next successful
+   * lookup, which is the only thing that can tell us the new value.
    *
    * Idempotent: invalidating something that was never cached is a 200
    * with `cleared: 0`, because the caller's contract is "this idTag is
@@ -682,9 +863,11 @@ export class IdentityDurableObject {
   }
 
   /**
-   * Sidecar call to `/api/internal/ocpp-authorize`. Failure is silent
-   * — on any upstream error we return null, the caller logs it as
-   * `upstream_error`, and `responseFor` falls back to the stub reply.
+   * Sidecar call to `/api/internal/ocpp-authorize`. On any upstream
+   * error we return null and the caller logs it as `upstream_error`.
+   * That is no longer silent in effect: since F21, a null on an
+   * installation last known to enforce refuses the frame rather than
+   * falling through to the stub's `Accepted`.
    *
    * This lookup *is* on the charger hot path: the CALLRESULT for
    * `Authorize` / `StartTransaction` waits on it, which is why P4.18

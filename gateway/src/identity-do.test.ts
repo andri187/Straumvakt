@@ -764,6 +764,15 @@ function invalidateRequest(body: unknown): Request {
   });
 }
 
+/** F21 — the persisted last-known enforcement posture, if any. */
+function enforceMemo(
+  state: FakeState,
+): { enforceAuthorize: boolean; observedAt: number } | undefined {
+  return state.storage.entries.get("enforceAuthorize") as
+    | { enforceAuthorize: boolean; observedAt: number }
+    | undefined;
+}
+
 describe("P4.18 Authorize verdict caching", () => {
   it("serves the StartTransaction that follows an Authorize from cache", async () => {
     const state = new FakeState();
@@ -970,8 +979,9 @@ describe("P4.18 Authorize verdict caching", () => {
     const d = makeDo(state, env);
     const ws = await connect(d, state);
 
-    // No verdict at all → the pre-existing stub posture (Accepted),
-    // unchanged by P4.18.
+    // No verdict at all, and this DO has never observed enforcement →
+    // shadow posture (Accepted). See the F21 block for the case where
+    // enforcement *has* been observed, which refuses instead.
     expect(idTagStatus(await sendAuthFrame(d, ws, "TAG-ERR"))).toBe("Accepted");
     expect(lastAuthorizeLog()).toMatchObject({
       verdict: "upstream_error",
@@ -1063,6 +1073,22 @@ describe("P4.18 Authorize verdict caching", () => {
     expect(cached.transactionId).toBeTypeOf("number");
   });
 
+  it("records the enforcement memo alongside the cached verdict", async () => {
+    const state = new FakeState();
+    const { env } = makeEnv();
+    installAuthorizeUpstream(env, verdict("Accepted", true));
+    const d = makeDo(state, env);
+    const ws = await connect(d, state);
+
+    await sendAuthFrame(d, ws, "TAG-MEMO");
+
+    // The memo must not live under the authz: prefix — /invalidate-authorize
+    // { all: true } sweeps that, and it is exactly the call an operator
+    // makes when flipping enforceAuthorize.
+    expect(authzKeys(state)).toEqual(["authz:TAG-MEMO"]);
+    expect(enforceMemo(state)).toMatchObject({ enforceAuthorize: true });
+  });
+
   it("never consults the cache for non-authorize actions", async () => {
     const state = new FakeState();
     const { env } = makeEnv();
@@ -1081,5 +1107,328 @@ describe("P4.18 Authorize verdict caching", () => {
 
     expect(upstream.calls).toHaveLength(0);
     expect(authzKeys(state)).toEqual([]);
+  });
+});
+
+// ───────────────────────────────────────────────────────────────────
+// F21 — the access gate fails CLOSED when the verdict is unverifiable
+//
+// Operator posture: "if things are offline, the user can't charge."
+// The hard part is that `enforceAuthorize` only ever arrives inside a
+// verdict, so a failed lookup leaves the DO not knowing whether the
+// gate is armed. It decides on the last successfully observed value,
+// persisted in DO storage.
+//
+// Most tests below need a DO that has *seen* enforcement but has *no
+// usable cache entry* — the real-world shape is "verdict cached an hour
+// ago, TTL long gone, API now down". `armAndForget` builds it by doing
+// one successful lookup and then dropping the cached verdict, which is
+// the same end state as TTL expiry without needing fake timers.
+// ───────────────────────────────────────────────────────────────────
+
+const OUTAGE: UpstreamBehaviour = { kind: "throw", message: "service binding down" };
+
+/**
+ * Drive one successful lookup so the enforcement memo is written, then
+ * clear the verdict cache. Leaves the DO knowing the installation's
+ * posture but with nothing cached to answer from.
+ */
+async function armAndForget(
+  d: IdentityDurableObject,
+  ws: FakeWebSocket,
+  state: FakeState,
+  enforce: boolean,
+  idTag = "TAG-F21",
+): Promise<void> {
+  await sendAuthFrame(d, ws, idTag);
+  expect(enforceMemo(state)).toMatchObject({ enforceAuthorize: enforce });
+  await d.fetch(invalidateRequest({ all: true }));
+  expect(authzKeys(state)).toEqual([]);
+}
+
+describe("F21 Authorize gate fails closed on an unverifiable lookup", () => {
+  it("refuses when the upstream is down and enforcement was last known on", async () => {
+    const state = new FakeState();
+    const { env } = makeEnv();
+    const upstream = installAuthorizeUpstream(env, verdict("Accepted", true));
+    const d = makeDo(state, env);
+    const ws = await connect(d, state);
+
+    await armAndForget(d, ws, state, true);
+    expect(enforceMemo(state)).toMatchObject({ enforceAuthorize: true });
+
+    upstream.behaviour = OUTAGE;
+    const reply = await sendAuthFrame(d, ws, "TAG-F21", "Authorize");
+
+    // Pre-F21 this was Accepted — the gate opened whenever the API did.
+    expect(idTagStatus(reply)).toBe("Blocked");
+    expect(lastAuthorizeLog()).toMatchObject({
+      verdict: "upstream_error",
+      reason: "upstream_error",
+      cached: false,
+      mode: "enforced",
+      replyStatus: "Blocked",
+      // The distinct field: this Blocked says nothing about the token.
+      availabilityRefusal: true,
+    });
+    // A refusal we invented must never be cached — the next frame has
+    // to retry upstream, not inherit our guess for a whole TTL.
+    expect(authzKeys(state)).toEqual([]);
+  });
+
+  it("still proceeds on a cached Accepted while the upstream is down", async () => {
+    const state = new FakeState();
+    const { env } = makeEnv();
+    const upstream = installAuthorizeUpstream(env, verdict("Accepted", true));
+    const d = makeDo(state, env);
+    const ws = await connect(d, state);
+
+    // The pair F21 must not break: Authorize succeeds, the API drops,
+    // and the StartTransaction lands seconds later.
+    expect(idTagStatus(await sendAuthFrame(d, ws, "TAG-PAIR", "Authorize"))).toBe("Accepted");
+    upstream.behaviour = OUTAGE;
+
+    const start = await sendAuthFrame(d, ws, "TAG-PAIR", "StartTransaction");
+    expect(idTagStatus(start)).toBe("Accepted");
+    expect(start.transactionId).toBeTypeOf("number");
+    expect(upstream.calls).toHaveLength(1);
+    expect(lastAuthorizeLog()).toMatchObject({
+      verdict: "Accepted",
+      cached: true,
+      availabilityRefusal: false,
+      replyStatus: "Accepted",
+    });
+  });
+
+  it("still refuses on a cached Blocked while the upstream is down", async () => {
+    const state = new FakeState();
+    const { env } = makeEnv();
+    const upstream = installAuthorizeUpstream(env, verdict("Blocked", true, "not-in-list"));
+    const d = makeDo(state, env);
+    const ws = await connect(d, state);
+
+    expect(idTagStatus(await sendAuthFrame(d, ws, "TAG-CACHED-BLOCK"))).toBe("Blocked");
+    upstream.behaviour = OUTAGE;
+
+    expect(idTagStatus(await sendAuthFrame(d, ws, "TAG-CACHED-BLOCK"))).toBe("Blocked");
+    expect(upstream.calls).toHaveLength(1);
+    // Same wire status as an availability refusal, different meaning —
+    // this one is a real access decision, and the flag says so.
+    expect(lastAuthorizeLog()).toMatchObject({
+      verdict: "Blocked",
+      reason: "not-in-list",
+      cached: true,
+      availabilityRefusal: false,
+    });
+  });
+
+  it("stays in shadow mode when the upstream is down and enforcement was last known off", async () => {
+    const state = new FakeState();
+    const { env } = makeEnv();
+    const upstream = installAuthorizeUpstream(env, verdict("Blocked", false, "not-in-list"));
+    const d = makeDo(state, env);
+    const ws = await connect(d, state);
+
+    await armAndForget(d, ws, state, false);
+    expect(enforceMemo(state)).toMatchObject({ enforceAuthorize: false });
+
+    upstream.behaviour = OUTAGE;
+    const reply = await sendAuthFrame(d, ws, "TAG-F21");
+
+    // The gate is not armed, so there is nothing to fail closed.
+    expect(idTagStatus(reply)).toBe("Accepted");
+    expect(lastAuthorizeLog()).toMatchObject({
+      verdict: "upstream_error",
+      mode: "shadow",
+      availabilityRefusal: false,
+      replyStatus: "Accepted",
+    });
+  });
+
+  it("stays in shadow mode when enforcement has never been observed", async () => {
+    const state = new FakeState();
+    const { env } = makeEnv();
+    installAuthorizeUpstream(env, OUTAGE);
+    const d = makeDo(state, env);
+    const ws = await connect(d, state);
+
+    // A charger that has never had a successful lookup. Refusing here
+    // would mean an installation that never enforced starts refusing
+    // drivers the first time the API blips.
+    expect(enforceMemo(state)).toBeUndefined();
+    expect(idTagStatus(await sendAuthFrame(d, ws, "TAG-VIRGIN"))).toBe("Accepted");
+    expect(lastAuthorizeLog()).toMatchObject({
+      verdict: "upstream_error",
+      mode: "shadow",
+      availabilityRefusal: false,
+    });
+    expect(enforceMemo(state)).toBeUndefined();
+  });
+
+  it("refuses a StartTransaction but still returns a transactionId", async () => {
+    const state = new FakeState();
+    const { env } = makeEnv();
+    const upstream = installAuthorizeUpstream(env, verdict("Accepted", true));
+    const d = makeDo(state, env);
+    const ws = await connect(d, state);
+
+    await armAndForget(d, ws, state, true);
+    upstream.behaviour = OUTAGE;
+
+    const reply = await sendAuthFrame(d, ws, "TAG-F21", "StartTransaction");
+
+    expect(idTagStatus(reply)).toBe("Blocked");
+    // OCPP 1.6 §6.6 — the charger needs the id even on a refused start,
+    // otherwise it has no handle for the StopTransaction it will send.
+    expect(reply.transactionId).toBeTypeOf("number");
+    expect(lastAuthorizeLog()).toMatchObject({ availabilityRefusal: true, replyStatus: "Blocked" });
+  });
+
+  it("remembers enforcement across a DO eviction", async () => {
+    const state = new FakeState();
+    const { env } = makeEnv();
+    const upstream = installAuthorizeUpstream(env, verdict("Accepted", true));
+
+    const instanceA = makeDo(state, env);
+    const ws = await connect(instanceA, state);
+    await armAndForget(instanceA, ws, state, true);
+
+    // Hibernation wake-up: fresh instance, nothing in memory. If the
+    // memo were an instance field the gate would silently fail open
+    // here — the same class of bug P4.16 and P4.18 already fixed.
+    upstream.behaviour = OUTAGE;
+    const instanceB = makeDo(state, env);
+    const reply = await sendAuthFrame(instanceB, ws, "TAG-F21");
+
+    expect(idTagStatus(reply)).toBe("Blocked");
+    expect(lastAuthorizeLog()).toMatchObject({ availabilityRefusal: true });
+  });
+
+  it("keeps the memo when /invalidate-authorize clears the whole cache", async () => {
+    const state = new FakeState();
+    const { env } = makeEnv();
+    const upstream = installAuthorizeUpstream(env, verdict("Accepted", true));
+    const d = makeDo(state, env);
+    const ws = await connect(d, state);
+
+    await sendAuthFrame(d, ws, "TAG-A");
+    await sendAuthFrame(d, ws, "TAG-B");
+
+    // { all: true } is what an operator calls when flipping
+    // enforceAuthorize. It must not also erase the record that the gate
+    // is armed, or the flip would leave the DO failing open.
+    const res = (await d.fetch(invalidateRequest({ all: true }))) as unknown as FakeResponse;
+    expect(await res.json()).toEqual({ ok: true, scope: "all", cleared: 2 });
+    expect(enforceMemo(state)).toMatchObject({ enforceAuthorize: true });
+
+    upstream.behaviour = OUTAGE;
+    expect(idTagStatus(await sendAuthFrame(d, ws, "TAG-A"))).toBe("Blocked");
+  });
+
+  it("follows the memo down when the operator disarms the gate", async () => {
+    const state = new FakeState();
+    const { env } = makeEnv();
+    const upstream = installAuthorizeUpstream(env, verdict("Accepted", true));
+    const d = makeDo(state, env);
+    const ws = await connect(d, state);
+
+    await armAndForget(d, ws, state, true);
+    expect(enforceMemo(state)).toMatchObject({ enforceAuthorize: true });
+
+    // Operator turns enforcement off; the next successful lookup is the
+    // only channel that can tell the gateway.
+    upstream.behaviour = verdict("Accepted", false);
+    await armAndForget(d, ws, state, false);
+    expect(enforceMemo(state)).toMatchObject({ enforceAuthorize: false });
+
+    upstream.behaviour = OUTAGE;
+    expect(idTagStatus(await sendAuthFrame(d, ws, "TAG-F21"))).toBe("Accepted");
+    expect(lastAuthorizeLog()).toMatchObject({ availabilityRefusal: false });
+  });
+
+  it("refuses across an expired cache entry rather than serving it stale", async () => {
+    vi.useFakeTimers();
+    const t0 = Date.parse("2026-08-02T10:00:00.000Z");
+    vi.setSystemTime(t0);
+
+    const state = new FakeState();
+    const { env } = makeEnv();
+    const upstream = installAuthorizeUpstream(env, verdict("Accepted", true));
+    const d = makeDo(state, env);
+    const ws = await connect(d, state);
+
+    expect(idTagStatus(await sendAuthFrame(d, ws, "TAG-EXPIRED"))).toBe("Accepted");
+
+    // One ms past the TTL with the API dark. Expired is a miss, and a
+    // miss on an armed gate refuses — we do not serve
+    // stale-while-error on an access-control decision.
+    vi.setSystemTime(t0 + AUTHORIZE_CACHE_TTL_MS + 1);
+    upstream.behaviour = OUTAGE;
+
+    expect(idTagStatus(await sendAuthFrame(d, ws, "TAG-EXPIRED"))).toBe("Blocked");
+    expect(upstream.calls).toHaveLength(2);
+    expect(lastAuthorizeLog()).toMatchObject({ availabilityRefusal: true, cached: false });
+  });
+
+  it("refuses on a non-200 upstream too, not just a thrown binding", async () => {
+    const state = new FakeState();
+    const { env } = makeEnv();
+    const upstream = installAuthorizeUpstream(env, verdict("Accepted", true));
+    const d = makeDo(state, env);
+    const ws = await connect(d, state);
+
+    await armAndForget(d, ws, state, true);
+
+    // A 500 from the API Worker (Postgres unreachable, say) is the same
+    // availability failure as the binding throwing.
+    upstream.behaviour = { kind: "status", status: 500 };
+    expect(idTagStatus(await sendAuthFrame(d, ws, "TAG-F21"))).toBe("Blocked");
+    expect(lastAuthorizeLog()).toMatchObject({ availabilityRefusal: true });
+  });
+
+  it("recovers immediately once the upstream comes back", async () => {
+    const state = new FakeState();
+    const { env } = makeEnv();
+    const upstream = installAuthorizeUpstream(env, verdict("Accepted", true));
+    const d = makeDo(state, env);
+    const ws = await connect(d, state);
+
+    await armAndForget(d, ws, state, true);
+    upstream.behaviour = OUTAGE;
+    expect(idTagStatus(await sendAuthFrame(d, ws, "TAG-F21"))).toBe("Blocked");
+
+    // Nothing latched: the refusal was not cached, so the very next
+    // frame is answered by the API again.
+    upstream.behaviour = verdict("Accepted", true);
+    expect(idTagStatus(await sendAuthFrame(d, ws, "TAG-F21"))).toBe("Accepted");
+    expect(lastAuthorizeLog()).toMatchObject({ availabilityRefusal: false, cached: false });
+  });
+
+  it("leaves non-authorize actions alone during an outage", async () => {
+    const state = new FakeState();
+    const { env } = makeEnv();
+    const upstream = installAuthorizeUpstream(env, verdict("Accepted", true));
+    const d = makeDo(state, env);
+    const ws = await connect(d, state);
+
+    await armAndForget(d, ws, state, true);
+    upstream.behaviour = OUTAGE;
+
+    // Failing closed is an *access* posture. A charger must still be
+    // able to boot, heartbeat and report status while the API is down,
+    // or we lose the telemetry that shows us the outage.
+    await d.webSocketMessage(
+      ws as unknown as WebSocket,
+      JSON.stringify([2, "boot-f21", "BootNotification", { chargePointModel: "m" }]),
+    );
+    const boot = JSON.parse(ws.sent[ws.sent.length - 1]!) as [number, string, Record<string, unknown>];
+    expect(boot[2].status).toBe("Accepted");
+
+    await d.webSocketMessage(
+      ws as unknown as WebSocket,
+      JSON.stringify([2, "stop-f21", "StopTransaction", { idTag: "TAG-F21", transactionId: 9 }]),
+    );
+    const stop = JSON.parse(ws.sent[ws.sent.length - 1]!) as [number, string, Record<string, unknown>];
+    expect(idTagStatus(stop[2])).toBe("Accepted");
   });
 });
