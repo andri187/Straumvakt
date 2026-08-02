@@ -2,6 +2,7 @@
 import { Client } from "pg";
 import { config as dotenv } from "dotenv";
 import { resolve } from "node:path";
+import { EVENT_LOG_ALL } from "./_protocol-log-union";
 dotenv({ path: resolve(process.cwd(), "../../.env.local") });
 
 (async () => {
@@ -49,7 +50,7 @@ dotenv({ path: resolve(process.cwd(), "../../.env.local") });
   const events = await c.query(
     `select event_type, count(*)::int as n,
             max(occurred_at) as latest
-       from events.event_log
+       from ${EVENT_LOG_ALL} el
       where occurred_at > now() - interval '12 hours'
         and event_type ilike 'ocpp%'
       group by 1 order by 2 desc`,

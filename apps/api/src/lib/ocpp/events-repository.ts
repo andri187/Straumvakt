@@ -23,8 +23,10 @@
  *      retry (ADR 0004) may fire the same event multiple times if the
  *      API ack is lost; we count it exactly once.
  *
- *   2. Insert one row into `events.event_log` carrying the submitted
- *      retention class, payload, and metadata.
+ *   2. Insert one log row carrying the submitted retention class,
+ *      payload, and metadata. ADR 0039 D1 routes `raw_protocol` frames
+ *      to `events.protocol_log` and everything else to
+ *      `events.event_log`; the two tables have the same shape.
  *
  *   3. Dispatch a projection by event type. Sprint 1.2 wired
  *      handlers; today's set lives in ./projections.
@@ -110,20 +112,32 @@ export async function ingestEventInTx(
     return existing.result as unknown as IngestResult;
   }
 
-  const entry = await tx.eventLogEntry.create({
-    data: {
-      orgId,
-      aggregateType: event.aggregateType,
-      aggregateId: event.aggregateId,
-      eventType: event.eventType,
-      schemaVersion: event.schemaVersion ?? 1,
-      payload: event.payload as Prisma.InputJsonValue,
-      metadata: { correlationId: event.correlationId },
-      retentionClass: event.retentionClass,
-      occurredAt: new Date(event.occurredAt),
-    },
-    select: { id: true },
-  });
+  // ADR 0039 D1 — raw OCPP frames land in events.protocol_log, domain
+  // facts stay in events.event_log. Identical column shape, identical
+  // idempotency semantics; only the table differs. Routed by retention
+  // class, never by event type, so a new `ocpp.raw.*` frame goes to the
+  // right table without anyone updating a list.
+  //
+  // The dispatch below is deliberately UNCHANGED: projections run off
+  // the envelope, not the log row, and both writes ride the same
+  // transaction — so the Sprint 5 atomicity invariant (log row and
+  // projection commit together or not at all) holds exactly as before.
+  const data = {
+    orgId,
+    aggregateType: event.aggregateType,
+    aggregateId: event.aggregateId,
+    eventType: event.eventType,
+    schemaVersion: event.schemaVersion ?? 1,
+    payload: event.payload as Prisma.InputJsonValue,
+    metadata: { correlationId: event.correlationId },
+    retentionClass: event.retentionClass,
+    occurredAt: new Date(event.occurredAt),
+  };
+
+  const entry =
+    event.retentionClass === "raw_protocol"
+      ? await tx.protocolLogEntry.create({ data, select: { id: true } })
+      : await tx.eventLogEntry.create({ data, select: { id: true } });
 
   const handler = PROJECTIONS[event.eventType];
   if (handler) {

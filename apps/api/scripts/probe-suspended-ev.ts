@@ -5,6 +5,7 @@
 import { Client } from "pg";
 import { config as dotenv } from "dotenv";
 import { resolve } from "node:path";
+import { EVENT_LOG_ALL } from "./_protocol-log-union";
 dotenv({ path: resolve(process.cwd(), "../../.env.local") });
 (async () => {
   const c = new Client({ connectionString: process.env.DATABASE_URL });
@@ -47,7 +48,7 @@ dotenv({ path: resolve(process.cwd(), "../../.env.local") });
            el.payload->'request'->>'vendorErrorCode' as vendor_error_code,
            el.payload->'request'->>'info' as info,
            el.payload->'request'->>'vendorId' as vendor_id
-      from events.event_log el
+      from ${EVENT_LOG_ALL} el
       join ocpp.ocpp_identities oi on oi.id = el.aggregate_id
       join assets.charging_stations cs on cs.site_asset_id = oi.charging_station_id
       join properties.installations i on i.id = cs.installation_id

@@ -19,19 +19,36 @@ import type { PoolClient } from "pg";
 import type { ArchiveWatermarkRow } from "./archive-watermark";
 
 describe("planPartitions", () => {
-  it("returns 14 plans for 7 forward days × 2 tables", () => {
+  it("returns 21 plans for 7 forward days × 3 tables", () => {
     const now = new Date("2026-05-03T15:30:00.000Z");
     const plans = planPartitions(now);
-    expect(plans).toHaveLength(14);
+    expect(plans).toHaveLength(21);
   });
 
-  it("interleaves event_log + meter_values pairs day by day", () => {
+  it("interleaves event_log + protocol_log + meter_values triples day by day", () => {
     const now = new Date("2026-05-03T15:30:00.000Z");
     const plans = planPartitions(now);
     expect(plans[0].partition).toBe("event_log_p_20260503");
-    expect(plans[1].partition).toBe("meter_values_p_20260503");
-    expect(plans[2].partition).toBe("event_log_p_20260504");
-    expect(plans[13].partition).toBe("meter_values_p_20260509");
+    expect(plans[1].partition).toBe("protocol_log_p_20260503");
+    expect(plans[2].partition).toBe("meter_values_p_20260503");
+    expect(plans[3].partition).toBe("event_log_p_20260504");
+    expect(plans[20].partition).toBe("meter_values_p_20260509");
+  });
+
+  it("protocol_log gets the same 7 forward days as event_log (ADR 0039 D1)", () => {
+    // A missing protocol_log partition fails every `ocpp.raw.*` INSERT
+    // outright — ~80% of ingest. It must get identical coverage, not
+    // best-effort coverage.
+    const now = new Date("2026-05-03T15:30:00.000Z");
+    const plans = planPartitions(now);
+    const days = (parent: string) =>
+      plans.filter((p) => p.parent === parent).map((p) => p.partition.slice(-8));
+    expect(days("protocol_log")).toEqual(days("event_log"));
+    expect(days("protocol_log")).toHaveLength(7);
+    const proto = plans.find((p) => p.parent === "protocol_log");
+    expect(proto?.schema).toBe("events");
+    expect(proto?.ddl).toContain('PARTITION OF "events"."protocol_log"');
+    expect(proto?.ddl).toContain("CREATE TABLE IF NOT EXISTS");
   });
 
   it("UTC dates regardless of local-time offset of `now`", () => {
@@ -98,10 +115,10 @@ describe("ensureForwardPartitions", () => {
     } as unknown as PoolClient;
     const now = new Date("2026-05-03T00:00:00.000Z");
     const result = await ensureForwardPartitions(client, now);
-    expect(result.attempted).toBe(14);
-    expect(result.succeeded).toBe(14);
+    expect(result.attempted).toBe(21);
+    expect(result.succeeded).toBe(21);
     expect(result.failed).toEqual([]);
-    expect(queries).toHaveLength(14);
+    expect(queries).toHaveLength(21);
   });
 
   it("counts failures per partition; loop continues across them", async () => {
@@ -117,8 +134,8 @@ describe("ensureForwardPartitions", () => {
     } as unknown as PoolClient;
     const now = new Date("2026-05-03T00:00:00.000Z");
     const result = await ensureForwardPartitions(client, now);
-    expect(result.attempted).toBe(14);
-    expect(result.succeeded).toBe(12);
+    expect(result.attempted).toBe(21);
+    expect(result.succeeded).toBe(19);
     expect(result.failed).toHaveLength(2);
     expect(result.failed[0].error).toContain("simulated DDL failure");
   });
@@ -437,28 +454,34 @@ function dropClient(scenario: DropScenario): {
 } {
   const sql: string[] = [];
   const destructive: string[] = [];
+  // ADR 0039 D1 added a second droppable parent, so the catalog stub
+  // has to answer per-parent instead of handing the same partition list
+  // to every caller — otherwise every partition gets considered twice.
+  const PARTITION_RE = /"((?:event_log|protocol_log)_p_\d{8})"/;
   const client = {
-    query: vi.fn(async (text: string) => {
+    query: vi.fn(async (text: string, values?: unknown[]) => {
       sql.push(text);
       if (/DETACH PARTITION|DROP TABLE/.test(text)) {
         destructive.push(text);
         // Simulate the partition disappearing from the catalog.
-        const m = /"(event_log_p_\d{8})"/.exec(text);
+        const m = PARTITION_RE.exec(text);
         if (m && /DROP TABLE/.test(text)) {
           scenario.partitions = scenario.partitions.filter((p) => p !== m[1]);
         }
         return { rows: [], rowCount: 0 };
       }
       if (text.includes("pg_inherits")) {
-        return {
-          rows: scenario.partitions.map((partition) => ({ partition })),
-          rowCount: scenario.partitions.length,
-        };
+        // listPartitions binds [schema, parent].
+        const parent = String(values?.[1] ?? "");
+        const rows = scenario.partitions
+          .filter((p) => p.startsWith(`${parent}_p_`))
+          .map((partition) => ({ partition }));
+        return { rows, rowCount: rows.length };
       }
       if (text.includes("archive_watermark")) {
         return { rows: scenario.watermarks, rowCount: scenario.watermarks.length };
       }
-      const m = /"events"\."(event_log_p_\d{8})"/.exec(text);
+      const m = new RegExp(`"events"\\.${PARTITION_RE.source}`).exec(text);
       const rows = (m && scenario.groups[m[1]]) || [];
       return { rows, rowCount: rows.length };
     }),
@@ -596,14 +619,18 @@ describe("dropExpiredPartitions", () => {
     let calls = 0;
     const base = dropClient(scenario);
     const client = {
-      query: vi.fn(async (text: string) => {
+      query: vi.fn(async (text: string, values?: unknown[]) => {
         calls++;
         if (text.includes("event_log_p_20260724") && text.includes("GROUP BY")) {
           throw new Error("relation vanished mid-sweep");
         }
-        return (base.client as unknown as { query: (t: string) => Promise<unknown> }).query(
-          text,
-        );
+        // Forward the bind values too — the catalog stub keys the
+        // per-parent partition list off them.
+        return (
+          base.client as unknown as {
+            query: (t: string, v?: unknown[]) => Promise<unknown>;
+          }
+        ).query(text, values);
       }),
     } as unknown as PoolClient;
     const result = await dropExpiredPartitions(client, { now });
@@ -615,6 +642,64 @@ describe("dropExpiredPartitions", () => {
       },
     ]);
     expect(result.wouldDrop).toEqual(["event_log_p_20260725"]);
+  });
+
+  // ── ADR 0039 D1 — the gate can finally fire ───────────────────────
+  //
+  // Before the split, every real event_log partition mixed 7-day raw
+  // frames with `operational` rows that never expire, so the gate
+  // correctly refused every drop and nothing ever reclaimed anything
+  // (ADR 0035 F5 / F22). protocol_log holds nothing but raw_protocol,
+  // so age alone decides. These two tests are the difference.
+
+  it("drops an aged protocol_log partition — one class, no indefinite neighbour", async () => {
+    const scenario: DropScenario = {
+      partitions: ["protocol_log_p_20260725", "protocol_log_p_20260802"],
+      groups: {
+        protocol_log_p_20260725: [
+          { retention_class: "raw_protocol", occurred_day: "2026-07-25", rows: 2_000_000 },
+        ],
+      },
+      watermarks: [
+        {
+          retention_class: "raw_protocol",
+          day: "2026-07-25",
+          object_count: 2_000_000,
+          last_write_at: "2026-07-26T00:05:00.000Z",
+        },
+      ],
+    };
+    const { client, destructive } = dropClient(scenario);
+    const result = await dropExpiredPartitions(client, { now, enabled: true });
+    expect(result.dropped).toEqual(["protocol_log_p_20260725"]);
+    expect(destructive[0]).toContain(
+      'ALTER TABLE "events"."protocol_log" DETACH PARTITION',
+    );
+    expect(destructive[1]).toContain('DROP TABLE "events"."protocol_log_p_20260725"');
+  });
+
+  it("still fails closed on protocol_log — no watermark, no drop", async () => {
+    // The split makes the gate reachable; it does not soften it. R2 is
+    // the durable record for raw frames (ADR 0039 D2), so an unproven
+    // archive is exactly when dropping would lose data for real.
+    const scenario: DropScenario = {
+      partitions: ["protocol_log_p_20260725"],
+      groups: {
+        protocol_log_p_20260725: [
+          { retention_class: "raw_protocol", occurred_day: "2026-07-25", rows: 10 },
+        ],
+      },
+      watermarks: [],
+    };
+    const { client, destructive } = dropClient(scenario);
+    const result = await dropExpiredPartitions(client, { now, enabled: true });
+    expect(destructive).toEqual([]);
+    expect(result.blocked).toEqual([
+      {
+        partition: "protocol_log_p_20260725",
+        reasons: ["no_watermark:raw_protocol@2026-07-25"],
+      },
+    ]);
   });
 
   it("leaves charging.meter_values alone — no retention_class, no gate, no drop", async () => {

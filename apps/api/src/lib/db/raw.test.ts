@@ -52,7 +52,9 @@ describe("batchInsertEventLog", () => {
     expect(calls).toHaveLength(1);
     const sql = calls[0].sql;
     expect(sql).toContain("INSERT INTO");
-    expect(sql).toContain("event_log");
+    // ADR 0039 D1 — SAMPLE is raw_protocol, so it routes to
+    // events.protocol_log, not events.event_log.
+    expect(sql).toContain('"events"."protocol_log"');
     expect(sql).toContain("RETURNING");
     // Placeholders for one row: 9 columns = $1..$9
     expect(sql).toContain("$1");
@@ -117,6 +119,65 @@ describe("batchInsertEventLog", () => {
     const { client, calls } = makeClient([{ rows: [{ id: "log-1" }] }]);
     await batchInsertEventLog(client, [SAMPLE]);
     expect(calls[0].sql).toContain('::"events"."RetentionClass"');
+  });
+
+  // ── ADR 0039 D1 — routing by retention class ──────────────────────
+  //
+  // The whole point of the split: raw frames must stop landing in the
+  // table that carries billing-grade rows, because a day partition
+  // mixing the two is never droppable and nothing ever reclaimed the
+  // frames. These pin the routing rule and the input-order contract
+  // the split had to preserve.
+
+  it("routes non-raw_protocol classes to events.event_log", async () => {
+    const { client, calls } = makeClient([{ rows: [{ id: "log-1" }] }]);
+    await batchInsertEventLog(client, [
+      { ...SAMPLE, retentionClass: "operational" },
+    ]);
+    expect(calls[0].sql).toContain('"events"."event_log"');
+    expect(calls[0].sql).not.toContain("protocol_log");
+  });
+
+  it("every non-raw class lands in event_log, not just the common one", async () => {
+    for (const rc of ["financial", "operational", "aggregate", "issue_history"] as const) {
+      const { client, calls } = makeClient([{ rows: [{ id: "log-1" }] }]);
+      await batchInsertEventLog(client, [{ ...SAMPLE, retentionClass: rc }]);
+      expect(calls[0].sql).toContain('"events"."event_log"');
+    }
+  });
+
+  it("mixed batch fires one INSERT per destination table", async () => {
+    const { client, calls } = makeClient([
+      { rows: [{ id: "proto-1" }, { id: "proto-2" }] },
+      { rows: [{ id: "evt-1" }] },
+    ]);
+    const result = await batchInsertEventLog(client, [
+      SAMPLE, // raw_protocol
+      { ...SAMPLE, retentionClass: "financial" },
+      SAMPLE, // raw_protocol
+    ]);
+    expect(calls).toHaveLength(2);
+    expect(calls[0].sql).toContain('"events"."protocol_log"');
+    expect(calls[1].sql).toContain('"events"."event_log"');
+    expect(result.rowCount).toBe(3);
+    // Ids scattered back to INPUT positions, not statement order.
+    // batchIngestHeartbeats pairs inserted[i] with events[i] when it
+    // builds idempotency rows; getting this wrong would cache the wrong
+    // logEntryId against an eventId and survive every other assertion.
+    expect(result.inserted.map((i) => i.logEntryId)).toEqual([
+      "proto-1",
+      "evt-1",
+      "proto-2",
+    ]);
+  });
+
+  it("logTableFor is the single routing rule", async () => {
+    const { logTableFor } = await import("./raw");
+    expect(logTableFor("raw_protocol")).toBe("protocol_log");
+    expect(logTableFor("financial")).toBe("event_log");
+    expect(logTableFor("operational")).toBe("event_log");
+    expect(logTableFor("aggregate")).toBe("event_log");
+    expect(logTableFor("issue_history")).toBe("event_log");
   });
 });
 
@@ -302,7 +363,8 @@ describe("batchIngestHeartbeats", () => {
         calls.push({ sql, values: values ?? [] });
         if (sql.startsWith("BEGIN") || sql.startsWith("COMMIT")) return { rows: [], rowCount: 0 };
         if (sql.includes("SELECT")) return { rows: [], rowCount: 0 };
-        if (sql.includes("INSERT INTO \"events\".\"event_log\"")) {
+        // Heartbeats are raw_protocol → events.protocol_log (ADR 0039).
+        if (sql.includes("INSERT INTO \"events\".\"protocol_log\"")) {
           return {
             rows: [{ id: "log-1" }, { id: "log-2" }, { id: "log-3" }],
             rowCount: 3,

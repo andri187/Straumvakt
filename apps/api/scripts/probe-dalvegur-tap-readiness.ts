@@ -5,6 +5,7 @@
 import { Client } from "pg";
 import { config as dotenv } from "dotenv";
 import { resolve } from "node:path";
+import { EVENT_LOG_ALL } from "./_protocol-log-union";
 dotenv({ path: resolve(process.cwd(), "../../.env.local") });
 
 const DALVEGUR_INSTALLATION_ID = "37de71e8-10bc-458e-ab5d-164eaccd75e6";
@@ -84,7 +85,7 @@ const DALVEGUR_INSTALLATION_ID = "37de71e8-10bc-458e-ab5d-164eaccd75e6";
   // 6. Recent OCPP events from any of these chargers — proves connectivity
   const ev = await c.query(
     `select event_type, count(*)::int as n, max(occurred_at) as latest
-       from events.event_log
+       from ${EVENT_LOG_ALL} el
       where event_type ilike 'ocpp%'
         and occurred_at > now() - interval '24 hours'
       group by 1 order by 3 desc limit 10`,

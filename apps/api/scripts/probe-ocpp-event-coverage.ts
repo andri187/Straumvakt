@@ -7,6 +7,7 @@
 import { Client } from "pg";
 import { config as dotenv } from "dotenv";
 import { resolve } from "node:path";
+import { EVENT_LOG_ALL } from "./_protocol-log-union";
 
 dotenv({ path: resolve(process.cwd(), "../../.env.local") });
 
@@ -28,11 +29,14 @@ const REGISTERED_HANDLERS = new Set([
   const c = new Client({ connectionString: process.env.DATABASE_URL });
   await c.connect();
 
-  console.log(`=== OCPP event_log coverage  (since ${SINCE}) ===\n`);
+  // ADR 0039 D1 — coverage means "every frame the gateway wrote", which
+  // post-split spans event_log (domain facts + pre-split raw rows) and
+  // protocol_log (raw frames). Querying either alone under-reports.
+  console.log(`=== OCPP event coverage, event_log + protocol_log  (since ${SINCE}) ===\n`);
 
   const byType = await c.query(
     `select event_type, count(*)::int n, max(occurred_at) latest
-       from events.event_log
+       from ${EVENT_LOG_ALL} el
       where occurred_at >= $1::timestamptz
       group by event_type
       order by n desc`,
@@ -51,7 +55,7 @@ const REGISTERED_HANDLERS = new Set([
   // received from Dalvegur chargers today?
   const dalvActions = await c.query(
     `select el.event_type, count(*)::int n
-       from events.event_log el
+       from ${EVENT_LOG_ALL} el
        join ocpp.ocpp_identities oi on oi.id = el.aggregate_id
        join assets.charging_stations cs on cs.site_asset_id = oi.charging_station_id
        join properties.installations i on i.id = cs.installation_id
@@ -62,7 +66,7 @@ const REGISTERED_HANDLERS = new Set([
       order by n desc`,
     [SINCE],
   );
-  console.log(`\n  Dalvegur-only event_log breakdown:`);
+  console.log(`\n  Dalvegur-only breakdown (both tables):`);
   for (const row of dalvActions.rows) {
     const has = REGISTERED_HANDLERS.has(row.event_type) ? "✓" : "✗";
     console.log(`    ${row.event_type.padEnd(38)} ${String(row.n).padStart(6)}    ${has}`);

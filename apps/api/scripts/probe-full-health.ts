@@ -7,6 +7,7 @@
 import { Client } from "pg";
 import { config as dotenv } from "dotenv";
 import { resolve } from "node:path";
+import { EVENT_LOG_ALL } from "./_protocol-log-union";
 
 dotenv({ path: resolve(process.cwd(), "../../.env.local") });
 
@@ -40,15 +41,20 @@ function ageMin(d: Date | null): string {
   console.log("════════════════════════════════════════════════════════════\n");
 
   // ───────────────────────────────────────────────────────────────────
-  // 1. INGEST PIPELINE — event_log + recent rates
+  // 1. INGEST PIPELINE — event_log + protocol_log + recent rates
   // ───────────────────────────────────────────────────────────────────
-  console.log("── 1. Ingest pipeline (event_log writes) ────────────────────");
+  //
+  // ADR 0039 D1 split raw frames into events.protocol_log. Since
+  // heartbeats alone are ~80% of ingest, reading event_log alone here
+  // would show an 80% cliff on the day the migration lands and then
+  // report a healthy pipeline as STALE. The union is the whole point.
+  console.log("── 1. Ingest pipeline (event_log + protocol_log writes) ─────");
   const ingest = await c.query(`
     select count(*) filter (where recorded_at > now() - interval '5 minutes')::int last_5m,
            count(*) filter (where recorded_at > now() - interval '1 hour')::int last_1h,
            count(*) filter (where recorded_at > now() - interval '24 hours')::int last_24h,
            max(recorded_at) latest
-      from events.event_log
+      from ${EVENT_LOG_ALL} el
   `);
   const i = ingest.rows[0];
   console.log(`  last 5min:  ${i.last_5m}    last 1h: ${i.last_1h}    last 24h: ${i.last_24h}`);
@@ -58,7 +64,7 @@ function ageMin(d: Date | null): string {
   // Event type breakdown last hour
   const types = await c.query(`
     select event_type, count(*)::int n
-      from events.event_log
+      from ${EVENT_LOG_ALL} el
      where recorded_at > now() - interval '1 hour'
      group by event_type
      order by n desc

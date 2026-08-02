@@ -30,6 +30,25 @@
 //   • The atomicity invariant holds on both paths: an event's log row
 //     and its projection commit together or not at all.
 //
+// ── ADR 0039 D1 — where the log row lands ────────────────────────────
+//
+// Neither partition of this batch changed shape. What changed is the
+// TABLE each path's log row goes to: `raw_protocol` envelopes (every
+// `ocpp.raw.*` frame the gateway mints, heartbeats included) now write
+// to events.protocol_log; domain facts still write to
+// events.event_log. Both destinations keep the same idempotency
+// semantics — the idempotency_keys ON CONFLICT DO NOTHING on the raw
+// path, the Serializable findUnique/create on the Prisma path — and
+// both still report which envelopes were fresh, so the archive fanout
+// below is byte-for-byte unaffected.
+//
+// The decision lives in the write helpers (lib/db/raw.ts
+// `logTableFor`, lib/ocpp/events-repository.ts) keyed on retention
+// class, NOT here on event type. This consumer's partitioning is a
+// throughput concern and is orthogonal: a heartbeat is fast-path
+// because its projection is one batchable UPDATE, and protocol_log
+// because it is a raw frame. Do not fuse the two conditions.
+//
 // Only heartbeats are eligible for the batched path, because their
 // projection is a single batchable `UPDATE ocpp_identities SET
 // last_seen_at`. MeterValues was considered and REJECTED: its

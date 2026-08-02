@@ -2,8 +2,13 @@
 //
 // Runs from the apps/api scheduled handler (every 5 minutes per
 // wrangler.jsonc). Idempotent: ensures forward-looking partitions
-// exist for events.event_log + charging.meter_values; harmless when
-// they already do.
+// exist for events.event_log, events.protocol_log and
+// charging.meter_values; harmless when they already do.
+//
+// ADR 0039 D1 added events.protocol_log — raw OCPP frames split out of
+// event_log so retention is enforceable. It is partitioned by day on
+// the same key and follows the same naming convention, so both halves
+// of this module treat it as just another parent.
 //
 // P4.15 / ADR 0037 D5 — it now ALSO detaches and drops partitions
 // past their retention window, gated on the R2 archive watermark.
@@ -19,6 +24,7 @@
 //
 // Naming convention matches the bootstrap migration:
 //   event_log_p_<yyyymmdd>     in schema "events"
+//   protocol_log_p_<yyyymmdd>  in schema "events"
 //   meter_values_p_<yyyymmdd>  in schema "charging"
 //
 // One INSERT into a missing partition would fail with
@@ -82,6 +88,18 @@ export function planPartitions(now: Date): PartitionPlan[] {
       startUtc: isoMidnight(start),
       endUtc: isoMidnight(end),
       ddl: `CREATE TABLE IF NOT EXISTS "events"."event_log_p_${yyyy}" PARTITION OF "events"."event_log" FOR VALUES FROM ('${isoMidnight(start)}') TO ('${isoMidnight(end)}');`,
+    });
+    // ADR 0039 D1 — protocol_log carries ~80% of ingest volume, so a
+    // missing partition here is the loudest possible outage: every
+    // `ocpp.raw.*` INSERT fails with "no partition of relation found
+    // for row". Same +7-day headroom as the other two.
+    plans.push({
+      schema: "events",
+      parent: "protocol_log",
+      partition: `protocol_log_p_${yyyy}`,
+      startUtc: isoMidnight(start),
+      endUtc: isoMidnight(end),
+      ddl: `CREATE TABLE IF NOT EXISTS "events"."protocol_log_p_${yyyy}" PARTITION OF "events"."protocol_log" FOR VALUES FROM ('${isoMidnight(start)}') TO ('${isoMidnight(end)}');`,
     });
     plans.push({
       schema: "charging",
@@ -164,6 +182,11 @@ export async function ensureForwardPartitions(
  * That is the fail-closed default. Note this is the POSTGRES window
  * and is independent of the R2 lifecycle ages in ADR 0037 D2 — a row
  * leaves the hot table long before its object leaves the bucket.
+ *
+ * ADR 0039 D1 — the 7 against `raw_protocol` is unchanged, but it now
+ * has somewhere it can apply: events.protocol_log holds nothing else,
+ * so its day partitions clear the gate on age instead of being vetoed
+ * by an `operational` neighbour that never expires.
  */
 export const POSTGRES_RETENTION_DAYS: Record<RetentionClass, number | null> = {
   financial: null,
@@ -176,6 +199,24 @@ export const POSTGRES_RETENTION_DAYS: Record<RetentionClass, number | null> = {
 /**
  * Parents this cron will consider for dropping.
  *
+ * `events.protocol_log` (ADR 0039 D1) is the table this gate was
+ * really built for. Every row in it is `raw_protocol`, so a day
+ * partition past age 7 has no keep-forever neighbour to block on and
+ * the drop can actually fire — which is exactly what never happened
+ * while raw frames shared event_log with `operational` rows.
+ *
+ * `events.event_log` stays in the list. Its partitions will keep
+ * blocking on `retention_indefinite:*` for as long as they hold
+ * domain facts, which is correct and permanent; it remains here so the
+ * pre-0039 raw_protocol rows left behind (ADR 0039 D-migration §4 —
+ * NOT backfilled, NOT bulk-deleted) are still evaluated and can drop
+ * with their partition once their neighbours are droppable too.
+ *
+ * Nothing here distinguishes the two parents in code. Both are day
+ * partitioned, both carry `retention_class` and `occurred_at`, and the
+ * gate reads the actual class mix out of each partition — so the
+ * different outcomes fall out of the data, not out of a branch.
+ *
  * `charging.meter_values` is deliberately absent. It has no
  * `retention_class` column, so no class-aware gate can be built for
  * it, and rule 1 says that means it does not get dropped. Adding it
@@ -184,6 +225,7 @@ export const POSTGRES_RETENTION_DAYS: Record<RetentionClass, number | null> = {
  */
 export const DROPPABLE_PARENTS: ReadonlyArray<{ schema: string; parent: string }> = [
   { schema: "events", parent: "event_log" },
+  { schema: "events", parent: "protocol_log" },
 ];
 
 /**

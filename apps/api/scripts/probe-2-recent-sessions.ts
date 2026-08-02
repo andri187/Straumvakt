@@ -2,6 +2,7 @@
 import { Client } from "pg";
 import { config as dotenv } from "dotenv";
 import { resolve } from "node:path";
+import { EVENT_LOG_ALL } from "./_protocol-log-union";
 dotenv({ path: resolve(process.cwd(), "../../.env.local") });
 
 (async () => {
@@ -27,7 +28,7 @@ dotenv({ path: resolve(process.cwd(), "../../.env.local") });
   // Check OCPP MeterValues raw payloads for any OCMF blob
   const mv = await c.query(
     `select occurred_at, aggregate_id, payload
-       from events.event_log
+       from ${EVENT_LOG_ALL} el
       where event_type = 'ocpp.raw.MeterValues'
         and occurred_at > '2026-05-09 11:00:00+00'::timestamptz
       order by occurred_at`,
