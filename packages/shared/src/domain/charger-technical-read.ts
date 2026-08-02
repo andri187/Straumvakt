@@ -37,6 +37,13 @@ export interface ChargerLivePhase {
 export type ChargerTechnicalReadLinkStatus =
   | "ok"
   | "no_credential"
+  /** Identity row exists but `vendor` is NULL or not the expected vendor —
+   *  i.e. the charger arrived OCPP-first via gateway discovery and was
+   *  never linked to a vendor UUID. Distinct from `no_credential`, which
+   *  means the credential itself is missing. Collapsing the two sends the
+   *  operator to /onboard/zaptec to create a credential they already have,
+   *  when the actual fix is attaching the vendor resource. */
+  | "vendor_not_linked"
   | "no_vendor_resource_id"
   | "credential_unhealthy"
   | "vendor_api_failed";

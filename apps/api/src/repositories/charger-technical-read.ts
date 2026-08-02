@@ -383,6 +383,8 @@ export async function getChargerTechnicalRead(
     select: {
       orgId: true,
       installationId: true,
+      // Fallback rung 2 — see the resolution chain below.
+      installation: { select: { credentialsRef: true } },
       lastTelemetryRead: true,
       lastTelemetryAt: true,
       ocppIdentities: {
@@ -449,10 +451,30 @@ export async function getChargerTechnicalRead(
     },
   });
 
+  // Three distinct failure modes, three distinct badges. They were
+  // collapsed into `no_credential`, which told the operator to onboard a
+  // credential they already had — while the real cause (a charger that
+  // arrived OCPP-first and never got its vendor UUID) was buried in the
+  // hint text.
   const identity = station.ocppIdentities[0];
-  if (!identity || identity.vendor !== "Zaptec") {
+  if (!identity) {
     return withRoster(
-      fromCache("no_credential", "charger has no Zaptec OcppIdentity"),
+      fromCache("no_credential", "charger has no OcppIdentity row"),
+    );
+  }
+  // Case-insensitive: the importer writes "Zaptec"
+  // (zaptec-import.ts:273,302) but attachVendor writes whatever the route
+  // validated, which is lowercase "zaptec" (routes/admin/chargers.ts:317
+  // → repositories/chargers.ts:643). A strict compare meant the
+  // documented repair path — run attach-vendor — left the badge unchanged.
+  if (identity.vendor?.toLowerCase() !== "zaptec") {
+    return withRoster(
+      fromCache(
+        "vendor_not_linked",
+        identity.vendor
+          ? `OcppIdentity.vendor="${identity.vendor}" is not Zaptec`
+          : "OcppIdentity.vendor is NULL — charger arrived via OCPP discovery and was never linked to its Zaptec UUID. Attach it via the credential's discover tree, not /onboard/zaptec.",
+      ),
     );
   }
 
@@ -461,14 +483,45 @@ export async function getChargerTechnicalRead(
   //    pre-credential-vault era). Surface that as a distinct badge so
   //    the operator knows the fix is /onboard/zaptec, NOT "wait for
   //    Zaptec to come back up".
-  if (!identity.credentialsRef) {
-    return withRoster(
-      emptyRead(
-        null,
-        "no_credential",
-        "OcppIdentity.credentials_ref is NULL — onboard via /onboard/zaptec to link a vendor credential",
-      ),
-    );
+  // Resolution chain. `OcppIdentity.credentials_ref` is authoritative
+  // when set, but it is written ONLY by attachVendor
+  // (repositories/chargers.ts:645) — the Zaptec importer never populates
+  // it. Hard-failing on NULL therefore reported "no credential" for every
+  // imported charger, including ones actively serving telemetry.
+  //
+  // Rungs 2 and 3 restore the pre-rewrite behaviour without restoring the
+  // bug that motivated the rewrite: the failure there was *guessing* a
+  // credential, so rung 3 resolves only when the answer is unambiguous.
+  // Crossing tenants is fine and intended (see the header) — picking one
+  // of several candidates is not.
+  let credentialsRef = identity.credentialsRef;
+  let credentialSource: "identity" | "installation" | "sole_active" = "identity";
+
+  if (!credentialsRef && station.installation?.credentialsRef) {
+    credentialsRef = station.installation.credentialsRef;
+    credentialSource = "installation";
+  }
+
+  if (!credentialsRef) {
+    const candidates = await db.vendorCredential.findMany({
+      where: { vendor: { slug: "zaptec" }, status: "active" },
+      select: { id: true },
+      take: 2, // 2 is enough to detect ambiguity
+    });
+    if (candidates.length === 1) {
+      credentialsRef = candidates[0].id;
+      credentialSource = "sole_active";
+    } else {
+      return withRoster(
+        emptyRead(
+          null,
+          "no_credential",
+          candidates.length === 0
+            ? "no active Zaptec credential exists — onboard one via /onboard/zaptec"
+            : `credentials_ref is NULL and ${candidates.length}+ active Zaptec credentials exist — link this charger explicitly rather than guessing`,
+        ),
+      );
+    }
   }
 
   // vendor_resource_id NULL ⇒ we have a credential but no Zaptec UUID
@@ -492,7 +545,6 @@ export async function getChargerTechnicalRead(
   //    No org filter — cross-tenant credentials are the whole point of
   //    this rewrite (Straumvakt master credential managing N1 ehf
   //    chargers, etc.).
-  const credentialsRef = identity.credentialsRef;
   const credential = await db.vendorCredential.findFirst({
     where: {
       vendor: { slug: "zaptec" },
@@ -513,7 +565,7 @@ export async function getChargerTechnicalRead(
       emptyRead(
         null,
         "credential_unhealthy",
-        `no VendorCredential matches credentials_ref=${credentialsRef}`,
+        `no VendorCredential matches credentials_ref=${credentialsRef} (resolved via ${credentialSource})`,
       ),
     );
   }

@@ -116,6 +116,18 @@ function makeFakeDb(opts: FakeOpts): PrismaClient {
         }
         return null;
       },
+      // Rung 3 of the credential resolution chain — resolves only when
+      // exactly one active credential exists, so the fake honours `take`
+      // (the real query takes 2, which is enough to detect ambiguity).
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      findMany: async (args: any) => {
+        const actives = (opts.credentials ?? []).filter(
+          (c) => c.status === "active",
+        );
+        return typeof args?.take === "number"
+          ? actives.slice(0, args.take)
+          : actives;
+      },
     },
     idToken: {
       // The local-auth roster builder hits this; tests don't care
@@ -170,7 +182,22 @@ describe("getChargerTechnicalRead — linkStatus contract (PROBE-1)", () => {
     vi.mocked(getZaptecAccessToken).mockReset();
   });
 
-  it("credentials_ref NULL → linkStatus 'no_credential' + zero Zaptec calls", async () => {
+  // ── credential resolution chain ───────────────────────────────────
+  //
+  // PROBE-1 made OcppIdentity.credentials_ref authoritative and hard-
+  // failed on NULL. But nothing populates that column except
+  // attachVendor (repositories/chargers.ts:645) — the Zaptec importer
+  // never writes it. So the strict contract reported "no credential"
+  // for every imported charger, including ones actively serving
+  // telemetry, and pointed the operator at /onboard/zaptec to create a
+  // credential that already existed.
+  //
+  // The chain restores resolution WITHOUT restoring the bug PROBE-1
+  // killed: the failure there was *guessing*, so rung 3 resolves only
+  // when the answer is unambiguous. Crossing tenants is fine and
+  // intended; picking one of several candidates is not.
+
+  it("credentials_ref NULL + exactly one active credential → resolves", async () => {
     const db = makeFakeDb({
       station: baseStation({
         ocppIdentities: [
@@ -186,12 +213,98 @@ describe("getChargerTechnicalRead — linkStatus contract (PROBE-1)", () => {
 
     const read = await getChargerTechnicalRead(db, STATION_ID, KEK);
 
+    expect(read.linkStatus).not.toBe("no_credential");
+    expect(vi.mocked(getZaptecAccessToken)).toHaveBeenCalled();
+  });
+
+  it("credentials_ref NULL + no active credential → 'no_credential', zero Zaptec calls", async () => {
+    const db = makeFakeDb({
+      station: baseStation({
+        ocppIdentities: [
+          {
+            vendorResourceId: VENDOR_RESOURCE_ID,
+            vendor: "Zaptec",
+            credentialsRef: null,
+          },
+        ],
+      }),
+      credentials: [],
+    });
+
+    const read = await getChargerTechnicalRead(db, STATION_ID, KEK);
+
     expect(read.linkStatus).toBe("no_credential");
     expect(read.fresh).toBe(false);
-    // No vendor call attempted — proves the early return short-circuits.
     expect(vi.mocked(getZaptecAccessToken)).not.toHaveBeenCalled();
     expect(vi.mocked(getChargerDetail)).not.toHaveBeenCalled();
     expect(vi.mocked(getChargerState)).not.toHaveBeenCalled();
+  });
+
+  it("credentials_ref NULL + several active credentials → refuses to guess", async () => {
+    const db = makeFakeDb({
+      station: baseStation({
+        ocppIdentities: [
+          {
+            vendorResourceId: VENDOR_RESOURCE_ID,
+            vendor: "Zaptec",
+            credentialsRef: null,
+          },
+        ],
+      }),
+      credentials: [activeCredential(), activeCredential()],
+    });
+
+    const read = await getChargerTechnicalRead(db, STATION_ID, KEK);
+
+    expect(read.linkStatus).toBe("no_credential");
+    expect(read.linkStatusReason).toMatch(/rather than guessing/);
+    expect(vi.mocked(getZaptecAccessToken)).not.toHaveBeenCalled();
+  });
+
+  // ── vendor linkage, split out of no_credential ────────────────────
+
+  it("vendor NULL → 'vendor_not_linked', not 'no_credential'", async () => {
+    // zpr074002's actual state: arrived OCPP-first via gateway
+    // discovery, so vendor and vendor_resource_id were never filled.
+    // Reporting this as no_credential sent the operator to onboard a
+    // credential they already had.
+    const db = makeFakeDb({
+      station: baseStation({
+        ocppIdentities: [
+          { vendorResourceId: null, vendor: null, credentialsRef: null },
+        ],
+      }),
+      credentials: [activeCredential()],
+    });
+
+    const read = await getChargerTechnicalRead(db, STATION_ID, KEK);
+
+    expect(read.linkStatus).toBe("vendor_not_linked");
+    expect(read.linkStatusReason).toMatch(/never linked/i);
+    expect(vi.mocked(getZaptecAccessToken)).not.toHaveBeenCalled();
+  });
+
+  it("vendor is matched case-insensitively", async () => {
+    // attachVendor writes lowercase "zaptec" (the route validates that
+    // spelling); the importer writes "Zaptec". A strict compare meant
+    // running the documented repair path left the badge unchanged.
+    const db = makeFakeDb({
+      station: baseStation({
+        ocppIdentities: [
+          {
+            vendorResourceId: VENDOR_RESOURCE_ID,
+            vendor: "zaptec",
+            credentialsRef: CRED_ID,
+          },
+        ],
+      }),
+      credentials: [activeCredential()],
+    });
+
+    const read = await getChargerTechnicalRead(db, STATION_ID, KEK);
+
+    expect(read.linkStatus).not.toBe("vendor_not_linked");
+    expect(vi.mocked(getZaptecAccessToken)).toHaveBeenCalled();
   });
 
   it("credentials_ref set + vendor_resource_id NULL → linkStatus 'no_vendor_resource_id'", async () => {
