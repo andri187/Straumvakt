@@ -1352,9 +1352,9 @@ model ChargeSession {
   ocmfSignedSessionKwh     Decimal?  @map("ocmf_signed_session_kwh") @db.Decimal(14, 4)
   completedSessionSeenAt   DateTime? @map("completed_session_seen_at") @db.Timestamptz(6)
 
-  // ── Sprint 9 / ADR 0021 — Autocharge: vehicle identity capture ──
+  // ── Sprint 9 / ADR 0036 — Autocharge: vehicle identity capture ──
   // Three confidence tiers stored alongside OCMF identity above (which
-  // is the application-layer tier). See ADR 0021 for the full story.
+  // is the application-layer tier). See ADR 0036 for the full story.
   // Privacy: ev_plc_mac is PII — operator-only default, last-3-bytes
   // redaction in non-priv views.
   evPlcMac                 String?   @map("ev_plc_mac")
@@ -1397,7 +1397,7 @@ model ChargeSession {
   @@index([orgId, startedAt(sort: Desc)])
   @@index([evseId, startedAt(sort: Desc)])
   @@index([userId, startedAt(sort: Desc)])
-  // Sprint 9 / ADR 0021 — vehicle-recurrence lookup
+  // Sprint 9 / ADR 0036 — vehicle-recurrence lookup
   @@index([evPlcMac])
   @@map("sessions")
   @@schema("charging")
@@ -1491,6 +1491,36 @@ model ImportedCdrRef {
   @@unique([sourceKind, sourceCdrId])
   @@index([sessionId])
   @@map("imported_cdr_refs")
+  @@schema("charging")
+}
+
+// charging.tap_intents — Símatap tap-to-charge (ADR 0024 addendum 2).
+//
+// Driver-side half of a phone tap: "user U intends to charge at station
+// S, BLE says S is right here, valid until T". The charger-side half
+// arrives independently as an anonymous random UID over OCPP Authorize.
+// Joined on (station, time window) they authorise a session; neither
+// half does so alone. See repositories/tap-intents.ts.
+//
+// No relation fields: written on a latency-sensitive path and read from
+// the OCPP authorize resolver; the FK columns are enough.
+// chargingStationId is a SiteAsset id, matching ChargeSession.
+model TapIntent {
+  id                String    @id @default(uuid()) @db.Uuid
+  orgId             String    @map("org_id") @db.Uuid
+  userId            String    @map("user_id") @db.Uuid
+  chargingStationId String    @map("charging_station_id") @db.Uuid
+  evseId            String?   @map("evse_id") @db.Uuid
+  deviceHandle      String?   @map("device_handle")
+  bleRssi           Int?      @map("ble_rssi")
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  expiresAt         DateTime  @map("expires_at") @db.Timestamptz(6)
+  consumedAt        DateTime? @map("consumed_at") @db.Timestamptz(6)
+  consumedIdTag     String?   @map("consumed_id_tag")
+
+  @@index([chargingStationId, consumedAt, expiresAt])
+  @@index([userId, expiresAt])
+  @@map("tap_intents")
   @@schema("charging")
 }
 
@@ -3291,4 +3321,53 @@ enum OrgEmailDomainPolicy {
   disabled
 
   @@schema("tenancy")
+}
+
+// ── ADR 0039 D1 — events.protocol_log ───────────────────────────────
+//
+// Raw OCPP frames (retention_class = raw_protocol) split out of
+// events.event_log. Identical column shape, identical daily RANGE
+// partitioning on recorded_at, identical composite PK — so the write
+// path differs only in the table name and the projection dispatcher is
+// untouched.
+//
+// Why a second table rather than sub-partitioning event_log: a table
+// can only be partitioned one way per level and the axis is already
+// spent on time. Every day's partition mixed raw_protocol with
+// keep-forever classes, so P4.15's drop gate correctly blocked on
+// essentially every real partition and nothing ever reclaimed raw
+// frames. ADR 0039 D4 records why composite partitioning was rejected.
+//
+// Retention: 7 days, enforced by DROP TABLE on the day partition — see
+// DROPPABLE_PARENTS in apps/api/src/lib/db/partition-cron.ts. R2 stays
+// the durable record (ADR 0039 D2); this table is a short-window
+// forensics cache, NOT the system of record.
+//
+// No `organization` relation, deliberately. event_log's FK carries ON
+// DELETE CASCADE, and cascading an org delete across ~2M rows/day of
+// day partitions is exactly the heavy operation this ADR exists to
+// avoid — and pointless, since every row here is gone within 7 days.
+// The migration SQL creates no FK either, so schema and database agree.
+//
+// PARTITION BY lives in the migration SQL; Prisma 7 has no first-class
+// partitioning syntax.
+model ProtocolLogEntry {
+  id             String         @default(uuid()) @db.Uuid
+  orgId          String         @map("org_id") @db.Uuid
+  aggregateType  String         @map("aggregate_type")
+  aggregateId    String         @map("aggregate_id") @db.Uuid
+  eventType      String         @map("event_type")
+  schemaVersion  Int            @default(1) @map("schema_version")
+  payload        Json           @db.JsonB
+  metadata       Json           @default("{}") @db.JsonB
+  retentionClass RetentionClass @default(raw_protocol) @map("retention_class")
+  occurredAt     DateTime       @map("occurred_at") @db.Timestamptz(6)
+  recordedAt     DateTime       @default(now()) @map("recorded_at") @db.Timestamptz(6)
+
+  @@id([id, recordedAt])
+  @@index([orgId, occurredAt(sort: Desc)])
+  @@index([aggregateType, aggregateId, occurredAt])
+  @@index([eventType, occurredAt(sort: Desc)])
+  @@map("protocol_log")
+  @@schema("events")
 }

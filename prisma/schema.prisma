@@ -279,7 +279,7 @@ enum IdTokenKind {
   zaptec_proxy   // we know about it but Zaptec issues + validates it (today's mirror case)
   ocpi_token     // received from a roaming partner via OCPI
   manual         // operator-created static value (e.g. Zaptec portal default tag)
-  evccid         // Vehicle Identifier — value IS the EV's EVCCID / EV-PLC-MAC, Autocharge-derived (ADR 0021)
+  evccid         // Vehicle Identifier — value IS the EV's EVCCID / EV-PLC-MAC, Autocharge-derived (ADR 0036)
   virtual_rfid   // auto-issued at User creation. value = first 20 hex chars of User.id,
                  //   uppercased, hyphens stripped. Used by app-start RemoteStartTransaction
                  //   and any future "scan QR / link to my Straumvakt account" flow.
@@ -1586,9 +1586,9 @@ model ChargeSession {
   ocmfSignedSessionKwh     Decimal?  @map("ocmf_signed_session_kwh") @db.Decimal(14, 4)
   completedSessionSeenAt   DateTime? @map("completed_session_seen_at") @db.Timestamptz(6)
 
-  // ── Sprint 9 / ADR 0021 — Autocharge: vehicle identity capture ──
+  // ── Sprint 9 / ADR 0036 — Autocharge: vehicle identity capture ──
   // Three confidence tiers stored alongside the OCMF identity above
-  // (which is the application-layer tier). See ADR 0021 for the full
+  // (which is the application-layer tier). See ADR 0036 for the full
   // story.
   //
   //   Link layer:        ev_plc_mac (StateId 953 MacPlcModuleEv) —
@@ -1605,7 +1605,7 @@ model ChargeSession {
   //
   //   Plus cable_type    (StateId 714) — Mode 3 / Type 2 / etc.
   //
-  // Privacy: ev_plc_mac is PII (per ADR 0021 §9). UI must gate on
+  // Privacy: ev_plc_mac is PII (per ADR 0036 §9). UI must gate on
   // operator permission and redact to last-3-bytes for non-priv views.
   evPlcMac                 String?   @map("ev_plc_mac")
   evPlcMacOuiVendor        String?   @map("ev_plc_mac_oui_vendor")
@@ -1659,7 +1659,7 @@ model ChargeSession {
   @@index([orgId, startedAt(sort: Desc)])
   @@index([evseId, startedAt(sort: Desc)])
   @@index([userId, startedAt(sort: Desc)])
-  // Sprint 9 / ADR 0021 — vehicle-recurrence lookup. Partial because the
+  // Sprint 9 / ADR 0036 — vehicle-recurrence lookup. Partial because the
   // vast majority of historical rows have ev_plc_mac NULL until AMQP
   // path lights up.
   @@index([evPlcMac])
@@ -1756,6 +1756,46 @@ model ImportedCdrRef {
   @@unique([sourceKind, sourceCdrId])
   @@index([sessionId])
   @@map("imported_cdr_refs")
+  @@schema("charging")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// charging.tap_intents — Símatap tap-to-charge (ADR 0024 addendum 2)
+//
+// The driver-side half of a phone tap. The app registers "user U intends
+// to charge at station S, BLE says S is right here" and the charger
+// independently reports the physical tap as an anonymous random UID over
+// OCPP. Joined on (station, time window) they authorise a session;
+// neither half does so alone. See repositories/tap-intents.ts.
+//
+// No relation fields: this table is written on a latency-sensitive path
+// and read from the OCPP authorize resolver, and the FK columns are
+// enough. chargingStationId is a SiteAsset id, matching ChargeSession.
+//
+// Rows are kept after expiry/consumption as the forensic record of who
+// tapped what and when — purged on a retention window, not immediately.
+// ─────────────────────────────────────────────────────────────────────────────
+model TapIntent {
+  id                String    @id @default(uuid()) @db.Uuid
+  orgId             String    @map("org_id") @db.Uuid
+  userId            String    @map("user_id") @db.Uuid
+  chargingStationId String    @map("charging_station_id") @db.Uuid
+  evseId            String?   @map("evse_id") @db.Uuid
+  // Opaque per-device handle from the app's secure storage. Audit only —
+  // never an authorisation input, since the tap carries no device identity.
+  deviceHandle      String?   @map("device_handle")
+  // RSSI the app measured for this charger's advertisement when arming.
+  bleRssi           Int?      @map("ble_rssi")
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  expiresAt         DateTime  @map("expires_at") @db.Timestamptz(6)
+  consumedAt        DateTime? @map("consumed_at") @db.Timestamptz(6)
+  // The anonymous UID that consumed this intent. Forensics only.
+  consumedIdTag     String?   @map("consumed_id_tag")
+
+  // The resolver's hot path: live intents for one station.
+  @@index([chargingStationId, consumedAt, expiresAt])
+  @@index([userId, expiresAt])
+  @@map("tap_intents")
   @@schema("charging")
 }
 
@@ -2170,6 +2210,36 @@ enum RetentionClass {
   aggregate     // 12–24 months
   issue_history // indefinite
 
+  @@schema("events")
+}
+
+// ── ADR 0037 D5 — archive confirmation for partition drop (P4.15) ───
+//
+// The archive queue consumer increments one row per (retention_class,
+// UTC day) for every object it writes to R2. The partition-drop cron
+// reads it and refuses to drop unless every (class, day) group in the
+// partition is fully accounted for. Fails closed: no row means no drop.
+//
+// `day` is the UTC day of the envelope's occurred_at — the same date
+// the R2 key carries — NOT event_log's recorded_at partition key. The
+// cron groups partition rows by occurred_at before comparing so a
+// late-arriving event is checked against the day its object actually
+// landed under.
+//
+// object_count is a running total, never a snapshot: concurrent
+// consumers must sum. R2 PUT is idempotent by key, so a queue retry
+// can re-put the same object and inflate the count — the gate treats a
+// surplus as an anomaly to log, and only a SHORTFALL as a block.
+model ArchiveWatermark {
+  retentionClass RetentionClass @map("retention_class")
+  day            DateTime       @map("day") @db.Date
+  objectCount    BigInt         @default(0) @map("object_count")
+  lastWriteAt    DateTime       @map("last_write_at") @db.Timestamptz(6)
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@id([retentionClass, day])
+  @@index([day])
+  @@map("archive_watermark")
   @@schema("events")
 }
 
@@ -3588,4 +3658,53 @@ model AgreementBillingLine {
   @@index([recipientOrgId, createdAt(sort: Desc)])
   @@map("billing_lines")
   @@schema("agreements")
+}
+
+// ── ADR 0039 D1 — events.protocol_log ───────────────────────────────
+//
+// Raw OCPP frames (retention_class = raw_protocol) split out of
+// events.event_log. Identical column shape, identical daily RANGE
+// partitioning on recorded_at, identical composite PK — so the write
+// path differs only in the table name and the projection dispatcher is
+// untouched.
+//
+// Why a second table rather than sub-partitioning event_log: a table
+// can only be partitioned one way per level and the axis is already
+// spent on time. Every day's partition mixed raw_protocol with
+// keep-forever classes, so P4.15's drop gate correctly blocked on
+// essentially every real partition and nothing ever reclaimed raw
+// frames. ADR 0039 D4 records why composite partitioning was rejected.
+//
+// Retention: 7 days, enforced by DROP TABLE on the day partition — see
+// DROPPABLE_PARENTS in apps/api/src/lib/db/partition-cron.ts. R2 stays
+// the durable record (ADR 0039 D2); this table is a short-window
+// forensics cache, NOT the system of record.
+//
+// No `organization` relation, deliberately. event_log's FK carries ON
+// DELETE CASCADE, and cascading an org delete across ~2M rows/day of
+// day partitions is exactly the heavy operation this ADR exists to
+// avoid — and pointless, since every row here is gone within 7 days.
+// The migration SQL creates no FK either, so schema and database agree.
+//
+// PARTITION BY lives in the migration SQL; Prisma 7 has no first-class
+// partitioning syntax.
+model ProtocolLogEntry {
+  id             String         @default(uuid()) @db.Uuid
+  orgId          String         @map("org_id") @db.Uuid
+  aggregateType  String         @map("aggregate_type")
+  aggregateId    String         @map("aggregate_id") @db.Uuid
+  eventType      String         @map("event_type")
+  schemaVersion  Int            @default(1) @map("schema_version")
+  payload        Json           @db.JsonB
+  metadata       Json           @default("{}") @db.JsonB
+  retentionClass RetentionClass @default(raw_protocol) @map("retention_class")
+  occurredAt     DateTime       @map("occurred_at") @db.Timestamptz(6)
+  recordedAt     DateTime       @default(now()) @map("recorded_at") @db.Timestamptz(6)
+
+  @@id([id, recordedAt])
+  @@index([orgId, occurredAt(sort: Desc)])
+  @@index([aggregateType, aggregateId, occurredAt])
+  @@index([eventType, occurredAt(sort: Desc)])
+  @@map("protocol_log")
+  @@schema("events")
 }
