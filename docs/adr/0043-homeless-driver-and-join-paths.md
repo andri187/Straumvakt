@@ -111,7 +111,43 @@ with a key the host chose to hand out.
 QR remains an *encoding* of the code, not a separate trust level. It
 inherits whatever `codeJoinPolicy` the installation sets.
 
-### D3b — The identity anchor is weaker than it looks, on every path
+### D3b — The intent is eID-only. The shipped endpoint is not.
+
+> **Corrected 2026-08-03.** The operator: *"user is never asked to insert
+> kennitala, it is only fetched via IS eID via mobile number."* That is
+> the design, and every ADR that touches it agrees — 0005, 0006, 0022,
+> 0026 and 0031 all assume Auðkenni / rafræn skilríki as the identity
+> source. The original wording below called this a design weakness. It
+> is not. It is an **unimplemented design**, which is a different problem
+> with a different fix.
+
+Verified 2026-08-03: eID appears in those five ADRs and **in no
+implementation file** — nothing under `apps/` or `src/` references
+Auðkenni, island.is or rafræn skilríki. Meanwhile
+`routes/public/register.ts:45` accepts:
+
+```ts
+kennitala: z.string().regex(/^\d{10}$/, "kennitala_must_be_10_digits")
+```
+
+Ten digits from the request body. Format-checked, never verified.
+
+**The consequence is not about the app.** If the Flutter client only ever
+populates that field from an eID response, the client is behaving
+correctly — but `POST /api/public/register` is a **public endpoint**, and
+the client's behaviour does not constrain it. Anyone can post ten digits
+directly. The identity guarantee lives in the app, where it cannot be
+enforced, rather than in the API, where it can.
+
+So the fix is not "add eID" — the design already says eID. The fix is
+that the endpoint must **stop accepting a kennitala as input at all**,
+and instead derive it from a completed eID assertion. Until it does,
+D3c's `eid_verified` assurance level cannot be trusted for accounts
+created through the public path, because the stored kennitala may never
+have been attested.
+
+*Original wording, retained because the risk it describes is real for as
+long as the endpoint is unchanged:*
 
 The argument for `grant` rests on the driver being identified and
 therefore billable. **Kennitala is currently self-asserted**:
