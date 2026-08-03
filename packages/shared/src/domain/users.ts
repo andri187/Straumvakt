@@ -94,7 +94,13 @@ export type IdTokenKind =
   | "zaptec_proxy"
   | "ocpi_token"
   | "manual"
-  | "evccid";
+  | "evccid"
+  // Auto-issued at User creation (ADR 0022, 2026-05-31 addendum). Present
+  // in the database enum and both Prisma schemas since that addendum; this
+  // union and the Zod enum in inputs/users.ts had drifted and omitted it,
+  // so a virtual_rfid token was unrepresentable in the domain type and
+  // rejected by input validation.
+  | "virtual_rfid";
 
 export type IdTokenStatus = "active" | "suspended" | "revoked" | "expired";
 

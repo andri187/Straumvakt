@@ -121,6 +121,9 @@ export const IdTokenKindEnum = z.enum([
   "ocpi_token",
   "manual",
   "evccid",
+  // See the note on IdTokenKind in domain/users.ts — this enum had
+  // drifted from the database and both Prisma schemas.
+  "virtual_rfid",
 ]);
 export type IdTokenKindValue = z.infer<typeof IdTokenKindEnum>;
 

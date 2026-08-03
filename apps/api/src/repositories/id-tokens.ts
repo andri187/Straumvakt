@@ -186,7 +186,20 @@ export async function listIdTokensForUser(
     where: { userId },
     orderBy: [{ createdAt: "asc" }],
   })) as IdTokenRow[];
-  return rows.map(toSummary);
+  // The system-issued virtual_rfid sorts first, whatever its created_at.
+  //
+  // It is the credential every driver is meant to have from the moment
+  // the account exists — the app's identity at a charge point. Cards,
+  // EVCCIDs and proxy tokens are additions to it. Ordering by
+  // created_at alone buries it for any driver whose card was enrolled
+  // first, which is every driver predating automatic issuance.
+  //
+  // A driver has at most one virtual_rfid, so this is a stable partition
+  // rather than a sort key: the vRFID, then everything else in
+  // enrolment order.
+  const virtual = rows.filter((r) => r.kind === "virtual_rfid");
+  const rest = rows.filter((r) => r.kind !== "virtual_rfid");
+  return [...virtual, ...rest].map(toSummary);
 }
 
 /**
