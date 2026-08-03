@@ -79,7 +79,7 @@ export interface SessionFullDetail {
     status: boolean | null;           // OCMF IS — was it identified
   } | null;
 
-  // ── Sprint 9 / ADR 0021 — Vehicle identity (Autocharge) ──
+  // ── Sprint 9 / ADR 0036 — Vehicle identity (Autocharge) ──
   // Three confidence tiers stored alongside OCMF identity above
   // (which is the application-layer tier). When AMQP is alive AND
   // the firmware populates these, all three layers light up; when
@@ -182,7 +182,7 @@ export async function getSessionFullDetail(
       ocmfSignedSessionKwh: true,
       completedSessionSeenAt: true,
 
-      // Sprint 9 / ADR 0021 — Autocharge vehicle identity columns
+      // Sprint 9 / ADR 0036 — Autocharge vehicle identity columns
       evPlcMac: true,
       evPlcMacOuiVendor: true,
       evPlcPibVersion: true,
@@ -513,7 +513,7 @@ function formatIsk(minor: bigint | number): string {
  * convenience for the UI — ordered combination of which layers
  * actually have data.
  *
- * Per ADR 0021 §1, the three layers are independent — a session may
+ * Per ADR 0036 §1, the three layers are independent — a session may
  * light up zero, one, two, or all three.
  */
 function buildVehicleIdentity(

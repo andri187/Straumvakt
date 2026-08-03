@@ -1,0 +1,47 @@
+﻿[
+    {
+        "file":  "_DO_NOT_USE_IN_PRODUCTION.md",
+        "sha256":  "7d18efb079fb8e80bd8f041a778c9ac64098e12dd22bf04d74efea905aeed30b",
+        "bytes":  595
+    },
+    {
+        "file":  "SCRAPED_RONAL_BMF_checkpoint.json",
+        "sha256":  "4cd51851b50216a2dbb3b970b720bb17e831512b94509ad235ae11406677554c",
+        "bytes":  2339216
+    },
+    {
+        "file":  "SCRAPED_RONAL_BMF_ev_variants.csv",
+        "sha256":  "77ce0a3441f241b6d3234d5dd03897defae08c2fff4c764261ce52331c937495",
+        "bytes":  275686
+    },
+    {
+        "file":  "SCRAPED_RONAL_BMF_ev_variants.raw.json",
+        "sha256":  "9e0fc27cc9c277eebe7bd645694b8f54d49b4c3e4e2f581ce870a07983f6dc7b",
+        "bytes":  2189350
+    },
+    {
+        "file":  "SCRAPED_RONAL_BMF_failures.json",
+        "sha256":  "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "bytes":  2
+    },
+    {
+        "file":  "SCRAPED_RONAL_BMF_make_summary.csv",
+        "sha256":  "3b77bfe440a796c6e4a8ae9948eb04b4200b9f60ad23f43544a906fd0ecdaff1",
+        "bytes":  2936
+    },
+    {
+        "file":  "SCRAPED_RONAL_BMF_summary.json",
+        "sha256":  "1de9005c12a3953270500fd008116e1b5065af2f1fb41c9ed4bcc8089598d724",
+        "bytes":  972
+    },
+    {
+        "file":  "SCRAPED_RONAL_BMF_visual_models.csv",
+        "sha256":  "6974c2462dd118bade738463dbcad36bf23398514492e54ea5cf0c92420aa507",
+        "bytes":  94150
+    },
+    {
+        "file":  "scrape-ronal-bmf-evs.mjs",
+        "sha256":  "1fec7aa5cc54c638baabb535ffc638141dd90c66630f374f957ab3e60247a3e7",
+        "bytes":  22020
+    }
+]

@@ -1,4 +1,4 @@
-// Sprint 9 / 2026-05-08 — ADR 0021 Autocharge Step E
+// Sprint 9 / 2026-05-08 — ADR 0036 Autocharge Step E
 // IEEE OUI vendor table — TRIMMED to EV / automotive / PLC-chipset
 // scope. Refresh strategy: this is a static curated subset, not the
 // full ~50,000-entry IEEE registry. We keep it lean (under 1 KB

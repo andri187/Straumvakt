@@ -38,6 +38,10 @@ class _ChargerDetailSheetState extends State<ChargerDetailSheet> {
   String? _errorMsg;
 
   Future<void> _start() async {
+    // Rule 6 (2026-08-02): a kDebugMode branch used to short-circuit this
+    // to a mocked session-journey screen, so "start charging" in every
+    // debug build opened fiction instead of calling the API. Removed —
+    // debug and release now exercise the same path.
     setState(() {
       _state = _StartState.busy;
       _errorMsg = null;
@@ -152,13 +156,10 @@ class _ChargerDetailSheetState extends State<ChargerDetailSheet> {
                   color: _statusTint(c.status),
                 ),
                 _Divider(),
-                _Stat(
-                  label: 'Power',
-                  value: c.maxPowerKw > 0
-                      ? '${c.maxPowerKw.toStringAsFixed(1)} kW'
-                      : '—',
-                ),
-                _Divider(),
+                // Rule 6 — real pricing from the API, em-dash when the
+                // backend has none. Reverted 2026-08-02: static
+                // '27 kr/kWh' / '1 kr/min' had replaced this and read as
+                // live tariff to the driver.
                 _Stat(label: 'Price', value: c.priceLabel ?? '—'),
               ],
             ),

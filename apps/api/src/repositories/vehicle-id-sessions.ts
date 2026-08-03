@@ -1,4 +1,4 @@
-// Sprint 9 / 2026-05-09 — ADR 0021 Autocharge — Vehicle IDs landing list.
+// Sprint 9 / 2026-05-09 — ADR 0036 Autocharge — Vehicle IDs landing list.
 // Returns every charging.sessions row that captured at least one
 // vehicle-identity signal. Filter:
 //   ev_plc_mac           IS NOT NULL  (link layer — StateId 953 / OCMF EVCCID)

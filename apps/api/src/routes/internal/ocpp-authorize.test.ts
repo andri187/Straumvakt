@@ -19,6 +19,10 @@ interface TokenRow {
 }
 
 interface IdentityRow {
+  // Tap & Auth (ADR 0024 addendum 2) — the station id scopes the tap-intent
+  // join. Null here in every pre-existing case, which keeps those tests
+  // on the IdToken path untouched.
+  chargingStationId: string | null;
   chargingStation: {
     installationId: string | null;
     installation: { enforceAuthorize: boolean } | null;
@@ -72,8 +76,12 @@ function makeDb({
 function id(
   installationId: string | null,
   enforceAuthorize = false,
+  chargingStationId: string | null = null,
 ): IdentityRow {
   return {
+    // Null by default: without a station id the Tap & Auth branch is skipped
+    // entirely, so every existing case stays on the IdToken path.
+    chargingStationId,
     chargingStation: {
       installationId,
       installation: installationId ? { enforceAuthorize } : null,
@@ -637,5 +645,189 @@ describe("resolveAuthorize — agreement clause-count gate (GAP-2)", () => {
     expect(result.verdict).toBe("Blocked");
     expect(result.reason).toBe("no_contract");
     expect(clauseCalls).toBe(0);
+  });
+});
+
+// ─── Tap & Auth — anonymous phone tap (ADR 0024 addendum 2) ─────────────
+//
+// Bench-established 2026-08-02 on a Zaptec Pro: a phone held to a
+// charger's RFID reader is read as a card whose UID is regenerated on
+// EVERY tap — nine taps produced nine values, all `08`-prefixed per
+// ISO 14443-3's reserved random-UID marker. Such a tag can never match
+// an IdToken, so identity comes from the tap intent the driver's app
+// registered while standing at that charger.
+//
+// These cover the paths that decide whether a stranger's tap can start a
+// charge on someone else's account. They are the reason the branch
+// exists, so they fail closed by default.
+
+/** One real UID captured from the bench, and a real 4-byte card UID. */
+const TAP_UID = "085ACDF6";
+const CARD_UID = "04A1B2C3"; // NXP prefix — a genuine card, not a phone
+const STATION = "2440557c-d1f4-41d0-972e-c7b94707fd85";
+
+interface TapIntentRow {
+  id: string;
+  userId: string;
+  orgId: string;
+}
+
+interface TapCalls {
+  findFirst: number;
+  findMany: number;
+  updateMany: number;
+}
+
+/**
+ * Build a PrismaLike whose `tapIntent` delegate is a hand-rolled fake.
+ *
+ * The production type is Prisma's real `TapIntentDelegate` — precise, and
+ * far too large to implement by hand. Casting the fake keeps the
+ * production signature honest and confines the looseness to test
+ * scaffolding, which is the same trade the rest of this file makes with
+ * `PrismaLike`.
+ */
+function makeTapDb({
+  token = null,
+  chargingStationId = STATION,
+  replayed = null,
+  live = [],
+  consumeCount = 1,
+  calls,
+}: {
+  token?: TokenRow | null;
+  chargingStationId?: string | null;
+  replayed?: TapIntentRow | null;
+  live?: TapIntentRow[];
+  /** updateMany count — 0 simulates losing the consume race. */
+  consumeCount?: number;
+  calls?: TapCalls;
+}): PrismaLike {
+  const base = makeDb({
+    token,
+    identity: id("inst-1", false, chargingStationId),
+  });
+  return {
+    ...base,
+    tapIntent: {
+      findFirst: async () => {
+        if (calls) calls.findFirst += 1;
+        return replayed;
+      },
+      findMany: async () => {
+        if (calls) calls.findMany += 1;
+        return live;
+      },
+      updateMany: async () => {
+        if (calls) calls.updateMany += 1;
+        return { count: consumeCount };
+      },
+    } as unknown as NonNullable<PrismaLike["tapIntent"]>,
+  };
+}
+
+const INTENT: TapIntentRow = {
+  id: "intent-1",
+  userId: "driver-a",
+  orgId: "org-1",
+};
+
+describe("resolveAuthorize — Tap & Auth tap intents", () => {
+  it("a real card UID never touches the tap path", async () => {
+    const calls: TapCalls = { findFirst: 0, findMany: 0, updateMany: 0 };
+    const db = makeTapDb({ token: null, calls });
+    const result = await resolveAuthorize(db, { ...INPUT, idTag: CARD_UID });
+
+    // Falls straight through to the IdToken lookup — no tap query at all.
+    expect(calls).toEqual({ findFirst: 0, findMany: 0, updateMany: 0 });
+    expect(result.verdict).toBe("Invalid");
+    expect(result.reason).toBe("unknown_id_tag");
+  });
+
+  it("matches exactly one live intent and attributes the driver", async () => {
+    const db = makeTapDb({ live: [INTENT] });
+    const result = await resolveAuthorize(db, { ...INPUT, idTag: TAP_UID });
+
+    expect(result.verdict).toBe("Accepted");
+    expect(result.reason).toBe("tap_intent");
+    expect(result.userId).toBe("driver-a");
+  });
+
+  it("re-affirms the same tag re-presented (Authorize then StartTransaction)", async () => {
+    // OCPP sends one physical tap twice. A strictly single-use intent
+    // would deny the second and block the session it just authorised.
+    const calls: TapCalls = { findFirst: 0, findMany: 0, updateMany: 0 };
+    const db = makeTapDb({ replayed: INTENT, calls });
+    const result = await resolveAuthorize(db, { ...INPUT, idTag: TAP_UID });
+
+    expect(result.verdict).toBe("Accepted");
+    expect(result.reason).toBe("tap_intent_replayed");
+    expect(result.userId).toBe("driver-a");
+    // Re-affirmation must not consume a second intent.
+    expect(calls.updateMany).toBe(0);
+    expect(calls.findMany).toBe(0);
+  });
+
+  it("fails closed when two drivers are armed at the same charger", async () => {
+    const db = makeTapDb({
+      live: [INTENT, { id: "intent-2", userId: "driver-b", orgId: "org-1" }],
+    });
+    const result = await resolveAuthorize(db, { ...INPUT, idTag: TAP_UID });
+
+    // We will not guess which of them tapped.
+    expect(result.verdict).toBe("Blocked");
+    expect(result.reason).toBe("tap_intent_ambiguous");
+    expect(result.userId).toBeUndefined();
+  });
+
+  it("fails closed when the consume race is lost", async () => {
+    // Two chargers on one station asking concurrently: exactly one wins
+    // the conditional UPDATE, the loser must not also get a session.
+    const db = makeTapDb({ live: [INTENT], consumeCount: 0 });
+    const result = await resolveAuthorize(db, { ...INPUT, idTag: TAP_UID });
+
+    expect(result.verdict).toBe("Invalid");
+    expect(result.reason).toBe("unknown_id_tag");
+    expect(result.userId).toBeUndefined();
+  });
+
+  it("falls through to the IdToken path when nobody is armed", async () => {
+    const db = makeTapDb({ live: [] });
+    const result = await resolveAuthorize(db, { ...INPUT, idTag: TAP_UID });
+
+    expect(result.verdict).toBe("Invalid");
+    expect(result.reason).toBe("unknown_id_tag");
+  });
+
+  it("skips the tap path when the identity has no station", async () => {
+    // An unmapped OCPP identity cannot scope the join, so there is no
+    // safe way to decide who tapped.
+    const calls: TapCalls = { findFirst: 0, findMany: 0, updateMany: 0 };
+    const db = makeTapDb({ chargingStationId: null, live: [INTENT], calls });
+    const result = await resolveAuthorize(db, { ...INPUT, idTag: TAP_UID });
+
+    expect(calls.findMany).toBe(0);
+    expect(result.verdict).toBe("Invalid");
+    expect(result.reason).toBe("unknown_id_tag");
+  });
+
+  it("a tap intent never outranks an explicitly revoked token", async () => {
+    // Defence in depth: if a random-looking UID ever did match a real
+    // IdToken that was revoked, the tap path must not launder it into an
+    // Accept. Nobody armed → falls through → the revocation stands.
+    const db = makeTapDb({
+      live: [],
+      token: {
+        id: "tok-1",
+        userId: "driver-a",
+        status: "revoked",
+        expiresAt: null,
+        scopeInstallationId: null,
+      },
+    });
+    const result = await resolveAuthorize(db, { ...INPUT, idTag: TAP_UID });
+
+    expect(result.verdict).toBe("Blocked");
+    expect(result.reason).toBe("revoked");
   });
 });

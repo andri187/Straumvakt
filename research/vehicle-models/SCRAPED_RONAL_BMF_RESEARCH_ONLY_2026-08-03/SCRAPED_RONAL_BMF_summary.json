@@ -1,0 +1,33 @@
+{
+  "source_marker": "SCRAPED_RONAL_BMF_RESEARCH_ONLY",
+  "production_allowed": false,
+  "scraped_at_utc": "2026-08-03T22:53:31.241Z",
+  "source_page": "https://www.ronal-wheels.com/int/configurator-promo",
+  "source_client_id": "RONAL-ae2f6cc4-64cd-c4ea-33a3-d38c43994ce8",
+  "client_script_sha256": "ea6ca27190cf45d58ac1edf3bdfdd7c63c475dba63a136cc6fa25f630f203458",
+  "source_make_count": 64,
+  "make_count": 64,
+  "completed_make_count": 64,
+  "model_count": 684,
+  "body_type_count": 3110,
+  "engine_variant_count_scanned": 25387,
+  "electric_variant_count": 494,
+  "electric_make_count": 37,
+  "visual_body_count": 210,
+  "visual_models_with_reference_count": 210,
+  "visual_models_missing_reference_count": 0,
+  "request_count": 4356,
+  "distinct_fuel_values": [
+    "BZ/Wasserstoff",
+    "Diesel",
+    "Electrical",
+    "Ethanol",
+    "Gas",
+    "Hybrid",
+    "Mild-Hybrid",
+    "Petrol",
+    "PlugIn-Hybrid",
+    "Wankel Rotary Engine"
+  ],
+  "failure_count": 0
+}

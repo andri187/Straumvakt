@@ -3,7 +3,10 @@ import '../api/auth_storage.dart';
 import '../api/client.dart';
 import '../api/types.dart';
 import 'dart:async';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart' show FlutterBluePlus;
 import '../ble/scanner.dart';
+import '../zaptec_ble_settings/zaptec_ble.dart' show ZaptecBle;
+import '../tap_auth/tap_intent.dart';
 import '../theme/logo.dart';
 import '../theme/palette.dart';
 import 'charger_detail_sheet.dart';
@@ -26,6 +29,18 @@ class _HomeScreenState extends State<HomeScreen> {
   final _storage = AuthStorage();
   final _scanner = BleScanner.instance();
   StreamSubscription<NearbyCharger>? _scanSub;
+
+  /// Tap & Auth. Arms a tap intent whenever the phone is within tap range of
+  /// a charger this driver may use, so a tap on the reader can be matched
+  /// to them server-side. Bound to the RAW sighting stream, not
+  /// `nearbyStream` — the serial is resolved by the backend, which is the
+  /// only place access can be checked.
+  late final TapIntentController _tap = TapIntentController(
+    api: _api,
+    accessToken: _storage.readAccessToken,
+  );
+  TapIntentState _tapState = TapIntentState.idle;
+  StreamSubscription<TapIntentState>? _tapSub;
 
   late Future<List<DriverCharger>> _futureChargers;
 
@@ -52,15 +67,59 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    _scanShouldRun = false;
+    _scanWatchdog?.cancel();
     _scanSub?.cancel();
+    _tapSub?.cancel();
+    _tap.dispose();
     _nearbyCleanupTimer?.cancel();
     _scanner.stop();
     super.dispose();
   }
 
+  /// Watchdog that keeps the tap-arming scan alive, and — more
+  /// importantly — out of the way.
+  ///
+  /// This screen stays mounted underneath charger settings, so its
+  /// continuous scan used to run straight through a GATT connect.
+  /// Measured on the bench 2026-08-03: three consecutive connects failed
+  /// with GATT_ERROR(133) after 5 s each, because Android will not
+  /// reliably scan and connect at the same time. `ZaptecBle.connect()`
+  /// stops the scan, but nothing restarted it afterwards, so tap-arming
+  /// then stayed dead until the app was relaunched.
+  ///
+  /// So: stop while the radio is claimed, resume once it is free.
+  Timer? _scanWatchdog;
+  bool _scanShouldRun = false;
+
+  /// Whether we have already stood down for an in-progress GATT session,
+  /// so the watchdog stops once rather than every tick.
+  bool _scanStopped = false;
+
   Future<void> _startScanning(List<DriverCharger> chargers) async {
     final ok = await _scanner.start(known: chargers);
     if (!ok) return;
+    _scanShouldRun = true;
+
+    _scanWatchdog?.cancel();
+    _scanWatchdog = Timer.periodic(const Duration(seconds: 3), (_) async {
+      if (!mounted || !_scanShouldRun) return;
+      if (ZaptecBle.isBusy) {
+        // Someone is holding the radio for a GATT session. Stand down —
+        // but only once. Calling stopScan every 3 s for the duration of a
+        // settings session put a `stopScan: already stopped` in the log
+        // between every characteristic read, and poking the stack during
+        // an open GATT link is not free.
+        if (_scanStopped) return;
+        _scanStopped = true;
+        await _scanner.stop();
+        return;
+      }
+      _scanStopped = false;
+      if (!FlutterBluePlus.isScanningNow) {
+        await _scanner.start(known: chargers);
+      }
+    });
 
     // Re-scan the map every 2s and drop entries older than 8s. Cheap
     // periodic GC instead of one Timer per detection (which got messy
@@ -86,6 +145,15 @@ class _HomeScreenState extends State<HomeScreen> {
         _nearbyMap[nearby.charger.connectorId] = nearby;
       });
     });
+
+    // Tap & Auth arming rides the same scan. Raw stream, because the server
+    // resolves the serial and checks access — the app must not need
+    // `bleAdvertisingId`, which is null across the fleet.
+    _tapSub = _tap.states.listen((s) {
+      if (!mounted) return;
+      setState(() => _tapState = s);
+    });
+    _tap.bind(_scanner.rawStream);
   }
 
   /// Currently-nearby chargers sorted strongest-first (highest RSSI).
@@ -153,6 +221,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               const SliverToBoxAdapter(child: HeroImageBanner()),
+              SliverToBoxAdapter(child: _TapBanner(state: _tapState)),
               FutureBuilder<List<DriverCharger>>(
                 future: _futureChargers,
                 builder: (context, snap) {
@@ -758,6 +827,88 @@ class _ErrorState extends StatelessWidget {
             label: const Text('Retry'),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Tap & Auth status.
+///
+/// Shown only when the phone is actually at a charger. The driver never
+/// "arms" anything — proximity does it — so this is a confirmation that
+/// the tap will be understood, and which charger it will be attributed
+/// to. That confirmation is the point: a silent tap gives no feedback
+/// until it either works or doesn't.
+///
+/// Errors are shown only when they are actionable. `noAccess` and
+/// `unknownCharger` mean "this is not your charger", which is not news
+/// worth a banner while the driver stands in a car park full of
+/// Bluetooth devices — those are swallowed. `tooFar` is actionable:
+/// move closer.
+class _TapBanner extends StatelessWidget {
+  const _TapBanner({required this.state});
+
+  final TapIntentState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final (icon, tint, title, body) = switch (state.phase) {
+      TapIntentPhase.armed => (
+          Icons.contactless_rounded,
+          BrandPalette.mint,
+          'Ready — tap the charger',
+          state.chargerName ?? state.serial ?? '',
+        ),
+      TapIntentPhase.arming => (
+          Icons.wifi_tethering_rounded,
+          BrandPalette.muted,
+          'Charger detected…',
+          state.serial ?? '',
+        ),
+      TapIntentPhase.error when state.error == TapIntentError.tooFar => (
+          Icons.social_distance_rounded,
+          BrandPalette.amber,
+          'Move closer to the charger',
+          state.serial ?? '',
+        ),
+      _ => (null, null, null, null),
+    };
+    if (icon == null) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: tint!.withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: tint.withValues(alpha: 0.5)),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: tint, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title!,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                      )),
+                  if ((body ?? '').isNotEmpty)
+                    Text(body!,
+                        style: const TextStyle(
+                          color: BrandPalette.muted,
+                          fontSize: 12,
+                        )),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

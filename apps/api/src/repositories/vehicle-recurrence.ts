@@ -1,4 +1,4 @@
-// Sprint 9 / 2026-05-09 — ADR 0021 Autocharge Step G
+// Sprint 9 / 2026-05-09 — ADR 0036 Autocharge Step G
 // Vehicle-recurrence query — answers "where else has this same vehicle
 // (PLC MAC) been seen?"
 //

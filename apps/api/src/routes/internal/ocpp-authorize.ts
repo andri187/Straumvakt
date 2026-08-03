@@ -28,6 +28,11 @@
 import { Hono } from "hono";
 import { makePrisma } from "../../lib/prisma";
 import { verifyIngest } from "../../lib/ocpp-internal-auth";
+import { isRandomEmulatedUid } from "../../lib/tap-intent/random-uid";
+import {
+  matchAndConsumeTapIntent,
+  type TapIntentReader,
+} from "../../repositories/tap-intents";
 import type { Env } from "../../bindings";
 
 export const internalOcppAuthorize = new Hono<{ Bindings: Env }>();
@@ -58,7 +63,14 @@ export type AuthorizeReason =
   | "scope_mismatch"
   | "no_contract"
   | "no_billable_clauses"
-  | "unknown_status";
+  | "unknown_status"
+  // ── Tap & Auth (ADR 0024 addendum 2) ──────────────────────────────────
+  /** Anonymous phone tap matched a live tap intent at this station. */
+  | "tap_intent"
+  /** Same tap re-presented (Authorize then StartTransaction). */
+  | "tap_intent_replayed"
+  /** Two drivers armed at one station in the same window — fail closed. */
+  | "tap_intent_ambiguous";
 
 internalOcppAuthorize.post("/", async (c) => {
   const fail = verifyIngest(c.req.raw, c.env.OCPP_INGEST_SECRET);
@@ -126,6 +138,7 @@ export async function resolveAuthorize(
   const identity = await db.ocppIdentity.findUnique({
     where: { id: input.identityId },
     select: {
+      chargingStationId: true,
       chargingStation: {
         select: {
           installationId: true,
@@ -138,6 +151,65 @@ export async function resolveAuthorize(
     identity?.chargingStation?.installationId ?? null;
   const enforceAuthorize =
     identity?.chargingStation?.installation?.enforceAuthorize ?? false;
+
+  // ── Tap & Auth — anonymous phone tap (ADR 0024 addendum 2) ────────────
+  //
+  // Bench-established 2026-08-02: a phone held to a charger's RFID
+  // reader is read as a card whose UID is regenerated on EVERY tap
+  // (nine taps, nine values, all `08`-prefixed per ISO 14443-3's
+  // reserved random-UID marker). Such an idTag can never be enrolled,
+  // so it will never match an IdToken — it is a presence event, not an
+  // identity.
+  //
+  // Identity comes from the tap intent the driver's app registered while
+  // standing at this charger. The join is scoped by STATION, so it stays
+  // O(1) at any fleet size: the question is "who is at this one charger
+  // right now", never "which of N phones was this".
+  //
+  // Ordering matters — this runs BEFORE the IdToken lookup so a random
+  // UID never burns a lookup, but it only engages for tags matching the
+  // random-UID shape. Anything else falls straight through, so no
+  // existing path changes.
+  if (
+    db.tapIntent &&
+    identity?.chargingStationId &&
+    isRandomEmulatedUid(input.idTag)
+  ) {
+    const match = await matchAndConsumeTapIntent(
+      { tapIntent: db.tapIntent },
+      identity.chargingStationId,
+      input.idTag,
+    );
+    switch (match.kind) {
+      case "matched":
+        return {
+          verdict: "Accepted",
+          reason: "tap_intent",
+          userId: match.userId,
+          enforceAuthorize,
+        };
+      case "replayed":
+        // Same physical tap, second OCPP message. Re-affirm rather than
+        // deny the session we just authorised.
+        return {
+          verdict: "Accepted",
+          reason: "tap_intent_replayed",
+          userId: match.userId,
+          enforceAuthorize,
+        };
+      case "ambiguous":
+        // Two drivers armed at one charger inside one window. We will
+        // not guess which tapped — both fall back to the in-app button.
+        return {
+          verdict: "Blocked",
+          reason: "tap_intent_ambiguous",
+          enforceAuthorize,
+        };
+      case "none":
+      case "not_a_tap":
+        break; // fall through to the normal IdToken path
+    }
+  }
 
   const token = await db.idToken.findUnique({
     where: { value: input.idTag },
@@ -271,7 +343,14 @@ export async function resolveAuthorize(
  * Narrow Prisma surface this resolver actually uses. Lets tests pass a
  * hand-rolled mock without needing a fully-typed PrismaClient.
  */
-export interface PrismaLike {
+/**
+ * `TapIntentReader` is mixed in rather than inlined so the tap-intent
+ * shape stays owned by its repository. Existing hand-rolled test mocks
+ * keep working: `tapIntent` is only reached when the idTag matches the
+ * random-UID shape, so a mock that omits it is still valid for every
+ * pre-existing case.
+ */
+export interface PrismaLike extends Partial<TapIntentReader> {
   idToken: {
     findUnique: (args: {
       where: { value: string };
@@ -294,6 +373,8 @@ export interface PrismaLike {
     findUnique: (args: {
       where: { id: string };
       select: {
+        // Tap & Auth needs the station id to scope the tap-intent join.
+        chargingStationId: true;
         chargingStation: {
           select: {
             installationId: true;
@@ -302,6 +383,7 @@ export interface PrismaLike {
         };
       };
     }) => Promise<{
+      chargingStationId: string | null;
       chargingStation: {
         installationId: string | null;
         installation: { enforceAuthorize: boolean } | null;

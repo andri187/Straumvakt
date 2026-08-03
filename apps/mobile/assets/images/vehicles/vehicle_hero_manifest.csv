@@ -1,0 +1,26 @@
+rank,type,subtype,subtype_in_traffic,asset_key,asset_path
+1,TESLA,MODEL Y,7295,tesla_model_y,assets/images/vehicles/tesla_model_y.png
+2,TESLA,MODEL 3,2603,tesla_model_3,assets/images/vehicles/tesla_model_3.png
+3,NISSAN,LEAF,1990,nissan_leaf,assets/images/vehicles/nissan_leaf.png
+4,HYUNDAI,KONA,1297,hyundai_kona_electric,assets/images/vehicles/hyundai_kona_electric.png
+5,NISSAN,LEAF 40KWH,1172,nissan_leaf,assets/images/vehicles/nissan_leaf.png
+6,KIA,NIRO,1019,kia_e_niro,assets/images/vehicles/kia_e_niro.png
+7,POLESTAR,POLESTAR 2,947,polestar_2,assets/images/vehicles/polestar_2.png
+8,TOYOTA,BZ4X,920,toyota_bz4x,assets/images/vehicles/toyota_bz4x.png
+9,"VOLKSWAGEN, VW",GOLF,843,volkswagen_e_golf,assets/images/vehicles/volkswagen_e_golf.png
+10,KIA,EV6,777,kia_ev6,assets/images/vehicles/kia_ev6.png
+11,HYUNDAI,IONIQ5,706,hyundai_ioniq_5,assets/images/vehicles/hyundai_ioniq_5.png
+12,VOLVO,XC40,702,volvo_xc40_recharge,assets/images/vehicles/volvo_xc40_recharge.png
+13,NISSAN,LEAF 62KWH,576,nissan_leaf,assets/images/vehicles/nissan_leaf.png
+14,PEUGEOT,2008,562,peugeot_e_2008,assets/images/vehicles/peugeot_e_2008.png
+15,RENAULT,ZOE,513,renault_zoe,assets/images/vehicles/renault_zoe.png
+16,XPENG,G6,471,xpeng_g6,assets/images/vehicles/xpeng_g6.png
+17,MG,MG ZS EV,467,mg_zs_ev,assets/images/vehicles/mg_zs_ev.png
+18,SKODA,ENYAQ 80X,458,skoda_enyaq_80x,assets/images/vehicles/skoda_enyaq_80x.png
+19,KIA,EV3,457,kia_ev3,assets/images/vehicles/kia_ev3.png
+20,"VOLKSWAGEN, VW",ID.3 PRO 150 KW,434,volkswagen_id_3_pro_150kw,assets/images/vehicles/volkswagen_id_3_pro_150kw.png
+21,FORD,MUSTANG MACH-E,426,ford_mustang_mach_e,assets/images/vehicles/ford_mustang_mach_e.png
+22,"VOLKSWAGEN, VW",ID.4 GTX 220 KW,425,volkswagen_id_4_gtx_220kw,assets/images/vehicles/volkswagen_id_4_gtx_220kw.png
+23,AUDI,E-TRON 55,363,audi_e_tron_55,assets/images/vehicles/audi_e_tron_55.png
+24,KIA,SOUL,353,kia_soul_ev,assets/images/vehicles/kia_soul_ev.png
+25,MG,MG4 ELECTRIC,347,mg4_electric,assets/images/vehicles/mg4_electric.png

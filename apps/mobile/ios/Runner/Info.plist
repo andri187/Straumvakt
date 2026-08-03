@@ -7,6 +7,8 @@
 	<!-- QR invite redemption (ADR 0026 §3/§5) — mobile_scanner camera use. -->
 	<key>NSCameraUsageDescription</key>
 	<string>Straumvakt uses the camera to scan invite QR codes so you can get charging access.</string>
+	<key>NFCReaderUsageDescription</key>
+	<string>Straumvakt reads an NFC charger tag when you choose to tap to identify a charger.</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>

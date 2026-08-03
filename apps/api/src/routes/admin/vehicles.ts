@@ -1,4 +1,4 @@
-// Sprint 9 / 2026-05-09 — ADR 0021 Autocharge Step G
+// Sprint 9 / 2026-05-09 — ADR 0036 Autocharge Step G
 // Vehicle-recurrence admin route. Operator opens /vehicles/[mac] in
 // the UI; that page calls this endpoint server-side to render the
 // "this same EV PLC MAC has plugged in N times across these chargers"

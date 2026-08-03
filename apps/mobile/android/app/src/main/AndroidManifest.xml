@@ -14,6 +14,11 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="30" />
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
 
+    <!-- Optional NFC reader support. NFC is used only after an explicit
+         driver action; it does not trigger charging by itself. -->
+    <uses-permission android:name="android.permission.NFC" />
+    <uses-feature android:name="android.hardware.nfc" android:required="false" />
+
     <!-- QR invite redemption (ADR 0026 §3/§5). mobile_scanner uses the
          camera to decode invite QR codes. Not required so devices
          without a camera can still install + redeem by typing the code. -->

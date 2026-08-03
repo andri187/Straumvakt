@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="920" viewBox="0 0 1500 920" role="img" aria-labelledby="title desc">
+  <title id="title">Straumvakt current runtime architecture</title>
+  <desc id="desc">Implemented runtime components and their main data paths as found in the repository on 2026-08-03.</desc>
+  <style>
+    text { font-family: Arial, sans-serif; fill: #17212b; }
+    .title { font-size: 27px; font-weight: 700; }
+    .sub { font-size: 14px; fill: #52616b; }
+    .h { font-size: 17px; font-weight: 700; }
+    .b { font-size: 13px; }
+    .small { font-size: 12px; fill: #52616b; }
+    .box { stroke: #22313f; stroke-width: 1.5; rx: 8; }
+    .edge { stroke: #276f86; stroke-width: 3; fill: none; marker-end: url(#arrow); }
+    .dash { stroke: #b7771e; stroke-width: 2.5; fill: none; stroke-dasharray: 8 6; marker-end: url(#amberArrow); }
+    .boundary { fill: #f4f7f8; stroke: #9cadb8; stroke-width: 1.5; stroke-dasharray: 7 5; rx: 12; }
+  </style>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L10,3 L0,6 Z" fill="#276f86"/></marker>
+    <marker id="amberArrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L10,3 L0,6 Z" fill="#b7771e"/></marker>
+  </defs>
+  <rect width="1500" height="920" fill="#ffffff"/>
+  <text x="52" y="55" class="title">Straumvakt: current runtime architecture</text>
+  <text x="52" y="80" class="sub">Repository-based review, 2026-08-03. Solid arrows are implemented code paths; dashed arrows are configured or conditional integration paths.</text>
+
+  <rect x="42" y="118" width="240" height="650" class="boundary"/>
+  <text x="62" y="149" class="h">People and devices</text>
+  <rect x="66" y="181" width="190" height="92" class="box" fill="#e5f3f5"/>
+  <text x="84" y="213" class="h">Operator / host</text><text x="84" y="236" class="b">Next.js web console</text><text x="84" y="256" class="small">Browser</text>
+  <rect x="66" y="329" width="190" height="92" class="box" fill="#e5f3f5"/>
+  <text x="84" y="361" class="h">Driver</text><text x="84" y="384" class="b">Flutter mobile app</text><text x="84" y="404" class="small">Android / iOS</text>
+  <rect x="66" y="477" width="190" height="92" class="box" fill="#f9efe0"/>
+  <text x="84" y="509" class="h">Charging station</text><text x="84" y="532" class="b">OCPP 1.6 WebSocket</text><text x="84" y="552" class="small">BLE advertisement nearby</text>
+  <rect x="66" y="625" width="190" height="92" class="box" fill="#f9efe0"/>
+  <text x="84" y="657" class="h">Zaptec cloud</text><text x="84" y="680" class="b">REST + Azure Service Bus</text><text x="84" y="700" class="small">Vendor integration</text>
+
+  <rect x="330" y="118" width="790" height="650" class="boundary"/>
+  <text x="351" y="149" class="h">Cloudflare application plane</text>
+  <rect x="361" y="181" width="295" height="105" class="box" fill="#dceef1"/>
+  <text x="382" y="213" class="h">Console worker: hlada</text><text x="382" y="236" class="b">Next.js / OpenNext</text><text x="382" y="258" class="small">Admin, operator, host and web driver pages</text>
+  <rect x="764" y="181" width="295" height="105" class="box" fill="#dceef1"/>
+  <text x="785" y="213" class="h">API worker: hlada-api</text><text x="785" y="236" class="b">Hono + Prisma</text><text x="785" y="258" class="small">Auth, tenancy, sessions, billing, admin routes</text>
+  <rect x="361" y="389" width="295" height="115" class="box" fill="#e8f1e5"/>
+  <text x="382" y="421" class="h">OCPP gateway worker</text><text x="382" y="444" class="b">WebSocket ingress / dispatch</text><text x="382" y="466" class="small">One Durable Object per OCPP identity</text><text x="382" y="486" class="small">Queues station events</text>
+  <rect x="764" y="389" width="295" height="115" class="box" fill="#e8f1e5"/>
+  <text x="785" y="421" class="h">Queues and cron</text><text x="785" y="444" class="b">OCPP events, commands, archive</text><text x="785" y="466" class="small">Retries / DLQs; minute and 5-minute jobs</text>
+  <rect x="361" y="604" width="295" height="105" class="box" fill="#eee8f5"/>
+  <text x="382" y="636" class="h">Neon Postgres</text><text x="382" y="659" class="b">Prisma, 18 schemas</text><text x="382" y="681" class="small">System of record for operational data</text>
+  <rect x="764" y="604" width="295" height="105" class="box" fill="#eee8f5"/>
+  <text x="785" y="636" class="h">R2 evidence store</text><text x="785" y="659" class="b">Evidence / archive object storage</text><text x="785" y="681" class="small">Bound in staging API configuration</text>
+
+  <rect x="1170" y="118" width="286" height="650" class="boundary"/>
+  <text x="1192" y="149" class="h">External runtime</text>
+  <rect x="1201" y="227" width="224" height="105" class="box" fill="#fff3d9"/>
+  <text x="1222" y="259" class="h">Fly consumer</text><text x="1222" y="282" class="b">Zaptec AMQP subscriber</text><text x="1222" y="304" class="small">Signal -> API claim check</text>
+  <rect x="1201" y="432" width="224" height="105" class="box" fill="#fff3d9"/>
+  <text x="1222" y="464" class="h">Azure Service Bus</text><text x="1222" y="487" class="b">Zaptec AMQP stream</text><text x="1222" y="509" class="small">Vendor notification source</text>
+
+  <path d="M256 227 H361" class="edge"/><path d="M256 375 H764" class="edge"/>
+  <path d="M256 523 H361" class="edge"/><path d="M656 446 H764" class="edge"/>
+  <path d="M911 286 V389" class="edge"/><path d="M911 504 V604" class="edge"/>
+  <path d="M656 656 H764" class="edge"/><path d="M1201 279 H1059" class="edge"/>
+  <path d="M1313 432 V332" class="edge"/>
+  <path d="M1201 279 H1059" class="edge"/>
+  <text x="1080" y="261" class="small">trigger sync</text><text x="512" y="365" class="small">HTTPS API</text><text x="505" y="434" class="small">OCPP WS</text><text x="659" y="635" class="small">database access</text>
+  <rect x="52" y="812" width="18" height="12" fill="#276f86"/><text x="78" y="823" class="small">Implemented path in source/configuration</text>
+  <line x1="330" y1="818" x2="370" y2="818" class="dash"/><text x="382" y="823" class="small">Configured or conditional vendor path</text>
+  <text x="1000" y="823" class="small">Not shown: CDN, auth mail delivery, future OCPI and payment integrations.</text>
+</svg>

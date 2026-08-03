@@ -140,7 +140,7 @@ archived). **Builds on:** existing `client.dart`, `home.dart` empty-state,
 | P3.3 | Kennitala + password capture | Validate kennitala, set password at redemption; wire to the consume endpoint. |
 | P3.4 | Mobile API client | Extend `client.dart` for redeem + new endpoints; DTOs in `types.dart`. |
 | P3.5 | Icelandic i18n | Flutter localization, extract strings, `is`/`en` from `driver.locale`. **Market blocker today (English-only).** |
-| P3.6 | Live session feedback | Poll session status post-start; active-session view (currently set-and-forget). |
+| P3.6 | Live session feedback | Active-session view (currently set-and-forget). **Do not build as a poll** — [ADR 0038](../adr/0038-read-serving-tier-and-state-propagation.md) makes session state Hot-tier, served by subscription from the installation DO. Depends on 0038; if 0038 slips, ship the view against a bounded short-lived poll rather than a standing timer. |
 | P3.7 | Stop session | UI + `POST /api/driver/stop-session` (missing today). |
 | P3.8 | Email-change UI | Consume P2.9 `/me/email-change-request` from the app. |
 | P3.9 | Build / release | Signed AAB/APK, Play Console listing + testers (see pending upload note). |
@@ -162,7 +162,7 @@ access actually gated. **Depends:** P0 only (independent of Track E).
 | P4.2 | Structured logs + correlation IDs | 10.2 | `correlation_id, org_id, station_id, event_id, command_id`. |
 | P4.3 | Alert thresholds | 10.3 | 8 scenarios (queue age, DLQ, auth-failure spike, charger drop, DB latency, archive/partition cron, command timeout). |
 | P4.4 | Runbooks | 10.4 | 14 named failure scenarios. |
-| P4.5 | Postgres **RLS** | 10.5 | Per-tenant tables (sessions, users, memberships, sites, stations, ledger). |
+| P4.5 | Postgres **RLS** | 10.5 | Per-tenant tables (sessions, users, memberships, sites, stations, ledger). **Sequencing: RLS lands before any read-serving tier** — RLS only guards rows read through Postgres, so [ADR 0038](../adr/0038-read-serving-tier-and-state-propagation.md) §A makes the tier's fill path run through an RLS-scoped session. Build RLS second and the tier routes around it silently. |
 | P4.6 | AuditAction append-only | 10.6 | Revoke UPDATE/DELETE on `audit.audit_actions`. |
 | P4.7 | **MFA** on PlatformGrant | 10.7 | Passkey + TOTP mandatory. |
 | P4.8 | SMS/OTP provider | 10.8 | Final pick (Twilio / CF-friendly). |

@@ -1,0 +1,38 @@
+source_marker,production_allowed,make_key,make_name,visual_model_count,electric_variant_count,model_names
+SCRAPED_RONAL_BMF_RESEARCH_ONLY,false,Mercedes,Mercedes,20,55,B-Class|Citan|EQA|EQB|EQC|EQE|EQS|EQT|EQV|Sprinter|Vito
+SCRAPED_RONAL_BMF_RESEARCH_ONLY,false,VW,VW,18,49,Crafter|Golf VI|Golf VII|ID.3|ID.4|ID.5|ID.7|ID.Buzz|UP
+SCRAPED_RONAL_BMF_RESEARCH_ONLY,false,Peugeot,Peugeot,13,19,2008|208|308|Boxer|Expert|Partner|Rifter|Traveller
+SCRAPED_RONAL_BMF_RESEARCH_ONLY,false,Audi,Audi,12,28,E-Tron|Q4|Q8|RS E-Tron
+SCRAPED_RONAL_BMF_RESEARCH_ONLY,false,BMW,BMW,12,24,i4|i5|i7|iX|iX1|iX2|iX3
+SCRAPED_RONAL_BMF_RESEARCH_ONLY,false,Opel,Opel,11,18,Ampera|Astra|Combo|Corsa|Mokka|Movano|Vivaro|Zafira
+SCRAPED_RONAL_BMF_RESEARCH_ONLY,false,Skoda,Skoda,11,27,Citigo|Elroq|Enyaq
+SCRAPED_RONAL_BMF_RESEARCH_ONLY,false,Hyundai,Hyundai,9,27,Inster|Ioniq|Kona
+SCRAPED_RONAL_BMF_RESEARCH_ONLY,false,Kia,Kia,9,17,EV3|EV4|EV5|EV6|EV9|Niro|Soul
+SCRAPED_RONAL_BMF_RESEARCH_ONLY,false,MCC Smart,MCC Smart,9,14,#1|#3|#5|Forfour|Fortwo
+SCRAPED_RONAL_BMF_RESEARCH_ONLY,false,Renault,Renault,8,10,Kangoo|Mégane|Scénic V|Twingo|Zoe
+SCRAPED_RONAL_BMF_RESEARCH_ONLY,false,Citroën,Citroën,7,10,Berlingo|C4|Jumper|Jumpy|SpaceTourer
+SCRAPED_RONAL_BMF_RESEARCH_ONLY,false,Fiat,Fiat,7,17,500|Doblo|Ducato|Scudo|Ulysse
+SCRAPED_RONAL_BMF_RESEARCH_ONLY,false,Volvo,Volvo,7,23,C30/S40/V50/C70|C40|EC40|EX30|EX40|XC40
+SCRAPED_RONAL_BMF_RESEARCH_ONLY,false,Ford,Ford,6,19,Explorer|Mustang|Transit/Tourneo
+SCRAPED_RONAL_BMF_RESEARCH_ONLY,false,Tesla,Tesla,6,50,Model 3|Model S|Model Y
+SCRAPED_RONAL_BMF_RESEARCH_ONLY,false,BYD,BYD,5,7,Atto 2|Atto 3|Dolphin|Seal|Sealion 7
+SCRAPED_RONAL_BMF_RESEARCH_ONLY,false,MG,MG,5,9,MG4|MG5|Marvel R|ZS
+SCRAPED_RONAL_BMF_RESEARCH_ONLY,false,Nissan,Nissan,5,7,Ariya|Leaf|NV200|Townstar
+SCRAPED_RONAL_BMF_RESEARCH_ONLY,false,Mazda,Mazda,3,3,6|MX-30
+SCRAPED_RONAL_BMF_RESEARCH_ONLY,false,Mini,Mini,3,3,Mini
+SCRAPED_RONAL_BMF_RESEARCH_ONLY,false,Polestar,Polestar,3,7,Polestar 2|Polestar 4
+SCRAPED_RONAL_BMF_RESEARCH_ONLY,false,Toyota,Toyota,3,7,Proace|bZ4X
+SCRAPED_RONAL_BMF_RESEARCH_ONLY,false,Cupra,Cupra,2,15,Born|Tavascan
+SCRAPED_RONAL_BMF_RESEARCH_ONLY,false,GWM,GWM,2,4,Ora 07|Ora Funky Cat
+SCRAPED_RONAL_BMF_RESEARCH_ONLY,false,Porsche,Porsche,2,10,Taycan
+SCRAPED_RONAL_BMF_RESEARCH_ONLY,false,Ssangyong,Ssangyong,2,3,Korando
+SCRAPED_RONAL_BMF_RESEARCH_ONLY,false,Dacia,Dacia,1,2,Spring
+SCRAPED_RONAL_BMF_RESEARCH_ONLY,false,DS,DS,1,2,No 8
+SCRAPED_RONAL_BMF_RESEARCH_ONLY,false,Genesis,Genesis,1,1,GV60
+SCRAPED_RONAL_BMF_RESEARCH_ONLY,false,Honda,Honda,1,1,Honda e
+SCRAPED_RONAL_BMF_RESEARCH_ONLY,false,Jaguar,Jaguar,1,1,I-Pace
+SCRAPED_RONAL_BMF_RESEARCH_ONLY,false,Jeep,Jeep,1,1,Avenger
+SCRAPED_RONAL_BMF_RESEARCH_ONLY,false,MAN,MAN,1,1,TGE
+SCRAPED_RONAL_BMF_RESEARCH_ONLY,false,Maxus,Maxus,1,1,Mifa 9
+SCRAPED_RONAL_BMF_RESEARCH_ONLY,false,Seat,Seat,1,1,MII
+SCRAPED_RONAL_BMF_RESEARCH_ONLY,false,Subaru,Subaru,1,1,Solterra

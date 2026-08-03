@@ -290,3 +290,34 @@ class DriverCharger {
     );
   }
 }
+
+/// Tap & Auth — result of arming a tap intent (ADR 0024 addendum 2).
+///
+/// Arming declares "this driver is at this charger, now". It grants
+/// nothing on its own: a session starts only when the charger
+/// independently reports a physical tap over OCPP and the server joins
+/// the two. See lib/tap/tap_intent.dart.
+class TapIntentResult {
+  const TapIntentResult({
+    required this.intentId,
+    required this.expiresAt,
+    this.chargerName,
+    this.ttlSeconds,
+  });
+
+  final String intentId;
+  final DateTime expiresAt;
+  final String? chargerName;
+  final int? ttlSeconds;
+
+  factory TapIntentResult.fromJson(Map<String, dynamic> json) {
+    return TapIntentResult(
+      intentId: json['intentId'] as String,
+      expiresAt:
+          DateTime.tryParse((json['expiresAt'] ?? '') as String)?.toLocal() ??
+              DateTime.now().add(const Duration(seconds: 120)),
+      chargerName: json['chargerName'] as String?,
+      ttlSeconds: (json['ttlSeconds'] as num?)?.toInt(),
+    );
+  }
+}

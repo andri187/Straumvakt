@@ -61,7 +61,7 @@ internalZaptecStateEvent.post("/", async (c) => {
   // 722 — ChargerCurrentUserUuid (real-time driver enrichment)
   // 723 — CompletedSession (full session JSON + OCMF SignedSession at session-end)
   //
-  // ADR 0021 Autocharge — Step B additions (vehicle identity capture):
+  // ADR 0036 Autocharge — Step B additions (vehicle identity capture):
   // 953 — MacPlcModuleEv (link-layer EV PLC modem MAC; the gold signal)
   // 716 — DetectedCar (plug/unplug event)
   // 714 — CableType (Mode 3 / Type 2 / etc.)
@@ -420,7 +420,7 @@ internalZaptecStateEvent.post("/", async (c) => {
         // mirrors the signed-session blob so an operator can answer
         // "did AMQP land OCMF on this row?" without having to inspect
         // ocmf_signed_session (which both AMQP and OCPP MeterValues
-        // populate — first-arrival-wins per ADR 0021). CDR > AMQP in
+        // populate — first-arrival-wins per ADR 0036). CDR > AMQP in
         // priority per spec, so AMQP does NOT touch verified_source
         // / canonical energy_wh / canonical ended_at.
         ...(energyKwh != null
@@ -449,7 +449,7 @@ internalZaptecStateEvent.post("/", async (c) => {
     });
   }
 
-  // ── ADR 0021 Autocharge — Step B handlers ─────────────────────────
+  // ── ADR 0036 Autocharge — Step B handlers ─────────────────────────
   //
   // These StateIds populate the vehicle-identity columns added in
   // Step A. All resolve the active charging.sessions row via the

@@ -59,8 +59,49 @@ class NearbyCharger {
   }
 }
 
+/// One BLE advertisement, before any attempt to say which charger it is.
+///
+/// `nearbyStream` can only emit chargers the app already recognises — it
+/// matches the advertised name against `bleAdvertisingId` from the
+/// driver's charger list. That field is null across the whole fleet, so
+/// that stream is silent in practice.
+///
+/// Tap-arming does not need local recognition and must not depend on it.
+/// The server resolves an advertised serial to a station and checks
+/// access (`resolveDriverStationBySerial`), which is the only place that
+/// decision can be trusted anyway. So this stream carries what the radio
+/// actually heard and lets the server decide.
+///
+/// It is also the vendor-neutral shape: nothing here knows what a Zaptec
+/// is. Another brand advertising a resolvable serial works unchanged.
+class RawSighting {
+  const RawSighting({
+    required this.name,
+    required this.remoteId,
+    required this.rssi,
+    required this.seenAt,
+  });
+
+  /// Advertised local name, verbatim. Zaptec broadcasts "ZPR074002 2305";
+  /// the leading token is the serial the backend knows.
+  final String name;
+  final String remoteId;
+  final int rssi;
+  final DateTime seenAt;
+
+  /// First whitespace-delimited token, uppercased — the serial candidate.
+  /// Deliberately dumb: the server is the authority on whether it names a
+  /// real charger, and a 404 costs nothing.
+  String get serialCandidate => name.trim().split(RegExp(r'\s+')).first.toUpperCase();
+}
+
 abstract class BleScanner {
   Stream<NearbyCharger> get nearbyStream;
+
+  /// Every named advertisement the radio hears, unmatched and unfiltered
+  /// beyond a signal floor. Feeds tap-arming.
+  Stream<RawSighting> get rawStream;
+
   Future<bool> start({required List<DriverCharger> known});
   Future<void> stop();
 
@@ -75,12 +116,16 @@ abstract class BleScanner {
 
 class _RealBleScanner implements BleScanner {
   final _controller = StreamController<NearbyCharger>.broadcast();
+  final _raw = StreamController<RawSighting>.broadcast();
   StreamSubscription<List<ScanResult>>? _scanSub;
   Map<String, DriverCharger> _byZaptecSerial = {};
   Map<String, DriverCharger> _byMac = {};
 
   @override
   Stream<NearbyCharger> get nearbyStream => _controller.stream;
+
+  @override
+  Stream<RawSighting> get rawStream => _raw.stream;
 
   @override
   Future<bool> start({required List<DriverCharger> known}) async {
@@ -103,13 +148,15 @@ class _RealBleScanner implements BleScanner {
     };
 
     if (_byZaptecSerial.isEmpty && _byMac.isEmpty) {
-      // No chargers in this driver's list have BLE IDs configured yet.
-      // Don't start a scan that can't possibly match — except in debug,
-      // where we still scan so _onScanResults can LOG every advertisement
-      // seen (diagnostic: "is the charger broadcasting anything at all?").
-      if (!kDebugMode) return false;
-      debugPrint('[BLE] no chargers have bleAdvertisingId — '
-          'scanning anyway (debug) to log raw advertisements');
+      // No charger in this driver's list carries a BLE id, so
+      // `nearbyStream` cannot match anything. We scan regardless: the
+      // raw stream feeds tap-arming, which resolves serials server-side
+      // and does not need this index at all. Bailing out here is what
+      // previously made tap-arming impossible on the whole fleet.
+      if (kDebugMode) {
+        debugPrint('[BLE] no chargers have bleAdvertisingId — '
+            'nearbyStream will stay silent; rawStream still feeds tap-arming');
+      }
     }
 
     await _scanSub?.cancel();
@@ -155,6 +202,20 @@ class _RealBleScanner implements BleScanner {
         debugPrint('[BLE] ${nm.isEmpty ? "(no-name)" : nm} '
             'id=${r.device.remoteId.str} rssi=${r.rssi} dBm');
       }
+      // Raw sighting — emitted BEFORE any matching, because tap-arming
+      // resolves server-side and must not depend on `bleAdvertisingId`
+      // being populated (it is null fleet-wide). Named advertisements
+      // only: an unnamed peripheral carries no serial to resolve.
+      final advName = r.advertisementData.advName;
+      if (advName.trim().isNotEmpty && r.rssi >= kNearbyRssiThreshold) {
+        _raw.add(RawSighting(
+          name: advName,
+          remoteId: r.device.remoteId.str,
+          rssi: r.rssi,
+          seenAt: now,
+        ));
+      }
+
       // Filter weak signals — driver isn't actually close to this
       // charger. Threshold tuned for Zaptec advertising at typical
       // mounting height; weaker than -78 dBm is "across the parking

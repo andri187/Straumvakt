@@ -13,6 +13,7 @@ import '../api/types.dart';
 import '../i18n/strings.dart';
 import '../theme/palette.dart';
 import 'login.dart';
+import '../zaptec_ble_settings/settings_screen.dart';
 
 class MenuDrawer extends StatelessWidget {
   const MenuDrawer({super.key, required this.driver, this.plate = 'N1 742'});
@@ -26,11 +27,13 @@ class MenuDrawer extends StatelessWidget {
       builder: (ctx) => AlertDialog(
         backgroundColor: BrandPalette.surface,
         shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-            side: const BorderSide(color: BrandPalette.border)),
-        title: const Text('Sign out?',
-            style:
-                TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+          borderRadius: BorderRadius.circular(18),
+          side: const BorderSide(color: BrandPalette.border),
+        ),
+        title: const Text(
+          'Sign out?',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
+        ),
         content: const Text(
           'You\'ll need to enter your password again next time.',
           style: TextStyle(color: BrandPalette.muted),
@@ -38,8 +41,10 @@ class MenuDrawer extends StatelessWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel',
-                style: TextStyle(color: BrandPalette.muted)),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: BrandPalette.muted),
+            ),
           ),
           FilledButton(
             style: FilledButton.styleFrom(
@@ -98,7 +103,10 @@ class MenuDrawer extends StatelessWidget {
                     trailing: const _SoonBadge(),
                     onTap: () {
                       Navigator.of(context).pop();
-                      _showSnack(context, 'Vehicle details — Phase 2 (Autocharge)');
+                      _showSnack(
+                        context,
+                        'Vehicle details — Phase 2 (Autocharge)',
+                      );
                     },
                   ),
                   const _SectionLabel('Charging'),
@@ -143,6 +151,19 @@ class MenuDrawer extends StatelessWidget {
                     },
                   ),
                   const _SectionLabel('Settings'),
+                  _MenuTile(
+                    icon: Icons.ev_station_rounded,
+                    label: 'Charger settings',
+                    subtitle: 'Connect over Bluetooth',
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const ChargerPickerScreen(),
+                        ),
+                      );
+                    },
+                  ),
                   ValueListenableBuilder<AppLocale>(
                     valueListenable: localeNotifier,
                     builder: (context, locale, _) => _MenuTile(
@@ -186,8 +207,10 @@ class MenuDrawer extends StatelessWidget {
             ),
             const Divider(color: BrandPalette.border, height: 1),
             ListTile(
-              leading: const Icon(Icons.logout_rounded,
-                  color: BrandPalette.danger),
+              leading: const Icon(
+                Icons.logout_rounded,
+                color: BrandPalette.danger,
+              ),
               title: const Text(
                 'Sign out',
                 style: TextStyle(
@@ -266,8 +289,10 @@ class MenuDrawer extends StatelessWidget {
     final token = await storage.readAccessToken();
     if (token != null) {
       try {
-        await StraumvaktApi()
-            .updateLocale(accessToken: token, locale: picked.code);
+        await StraumvaktApi().updateLocale(
+          accessToken: token,
+          locale: picked.code,
+        );
       } catch (_) {
         // Non-fatal — local choice stands; /me reconciles on next boot.
       }
@@ -358,7 +383,9 @@ class _DriverHeader extends StatelessWidget {
                     Text(
                       driver.email,
                       style: const TextStyle(
-                          color: BrandPalette.muted, fontSize: 12),
+                        color: BrandPalette.muted,
+                        fontSize: 12,
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -371,14 +398,19 @@ class _DriverHeader extends StatelessWidget {
             const SizedBox(height: 14),
             Row(
               children: [
-                const Icon(Icons.business_rounded,
-                    size: 14, color: BrandPalette.muted),
+                const Icon(
+                  Icons.business_rounded,
+                  size: 14,
+                  color: BrandPalette.muted,
+                ),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
                     driver.organizationName!,
                     style: const TextStyle(
-                        color: BrandPalette.muted, fontSize: 12),
+                      color: BrandPalette.muted,
+                      fontSize: 12,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -487,8 +519,11 @@ class _MenuTile extends StatelessWidget {
               trailing!,
               const SizedBox(width: 8),
             ] else ...[
-              const Icon(Icons.chevron_right_rounded,
-                  color: BrandPalette.muted, size: 20),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: BrandPalette.muted,
+                size: 20,
+              ),
               const SizedBox(width: 8),
             ],
           ],

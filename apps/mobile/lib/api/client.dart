@@ -226,6 +226,130 @@ class StraumvaktApi {
         .toList();
   }
 
+  // ── Tap & Auth tap-intent (ADR 0024 addendum 2) ─────────────────────
+  //
+  // Arming records "driver D is at charger S, now" and grants nothing on
+  // its own. A session starts only when the charger independently
+  // reports a physical tap on its RFID reader (an anonymous, per-tap
+  // random UID) and the server joins the two on (station, time window).
+  //
+  // Bench-established 2026-08-02: a phone tap produces a DIFFERENT UID
+  // every time, so the tap can never carry identity. This intent is the
+  // identity half; the charger's report is the proof-of-presence half.
+
+  Future<TapIntentResult> armTapIntent({
+    required String accessToken,
+    required String serial,
+    int? rssi,
+    String? deviceHandle,
+  }) async {
+    final res = await http.post(
+      Uri.parse('$baseUrl/api/driver/tap-intent'),
+      headers: _authHeaders(accessToken),
+      body: jsonEncode({
+        'serial': serial,
+        'rssi': ?rssi,
+        'deviceHandle': ?deviceHandle,
+      }),
+    );
+    final body = _decode(res);
+    if (res.statusCode != 201 && res.statusCode != 200) {
+      throw ApiException(
+        res.statusCode,
+        (body['message'] ?? 'Could not arm tap.') as String,
+      );
+    }
+    return TapIntentResult.fromJson(body);
+  }
+
+  /// Disarm. 404 is success — the intent already lapsed or was consumed,
+  /// which is the outcome the caller wanted.
+  Future<void> disarmTapIntent({
+    required String accessToken,
+    required String intentId,
+  }) async {
+    final res = await http.delete(
+      Uri.parse('$baseUrl/api/driver/tap-intent/$intentId'),
+      headers: _authHeaders(accessToken),
+    );
+    if (res.statusCode != 200 && res.statusCode != 404) {
+      final body = _decode(res);
+      throw ApiException(
+        res.statusCode,
+        (body['message'] ?? 'Could not disarm tap.') as String,
+      );
+    }
+  }
+
+  /// Fetch a charger's local BLE PIN for a driver who has access to it.
+  ///
+  /// The PIN is factory-set and cannot be rotated, so releasing it is
+  /// effectively a permanent grant — the backend endpoint is therefore a
+  /// Rule 5 change (privilege-gated credential release, audited per fetch)
+  /// and is NOT yet implemented.
+  ///
+  /// Until it lands this returns null and the UI falls back to one-time
+  /// manual entry, which is then cached securely. Deliberately null rather
+  /// than throwing: a missing endpoint is an expected state today, not a
+  /// fault to show the driver.
+  Future<String?> getChargerBlePin({
+    required String accessToken,
+    required String serial,
+  }) async {
+    try {
+      final res = await http.get(
+        Uri.parse('$baseUrl/api/driver/chargers/$serial/ble-pin'),
+        headers: _authHeaders(accessToken),
+      );
+      if (res.statusCode != 200) return null;
+      final body = _decode(res);
+      final pin = body['pin'] as String?;
+      return (pin == null || pin.isEmpty) ? null : pin;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Does this driver hold approval to open a charger's ADVANCED settings?
+  ///
+  /// Advanced covers network re-provisioning, current limits, PLC keys and
+  /// MID test mode — several of which can strand the charger. It is not a
+  /// driver-level capability: it requires an explicit grant from a
+  /// host-admin or the CPO.
+  ///
+  /// Returns one of `granted` | `pending` | `locked`. **Anything it cannot
+  /// determine is `locked`** — a missing endpoint, a network failure, an
+  /// unparseable body. Failing open here would hand every driver a
+  /// charger-bricking surface.
+  ///
+  /// The endpoint is a Rule 5 change (access-grant resolution) and is not
+  /// built yet, so today this always returns `locked`.
+  Future<String> getAdvancedSettingsGrant({
+    required String accessToken,
+    required String serial,
+  }) async {
+    try {
+      final res = await http.get(
+        Uri.parse('$baseUrl/api/driver/chargers/$serial/advanced-grant'),
+        headers: _authHeaders(accessToken),
+      );
+      if (res.statusCode != 200) return 'locked';
+      final status = _decode(res)['status'] as String?;
+      return switch (status) {
+        'granted' => 'granted',
+        'pending' => 'pending',
+        _ => 'locked',
+      };
+    } catch (_) {
+      return 'locked';
+    }
+  }
+
+  // requestAdvancedSettings() removed 2026-08-03. It POSTed to an
+  // endpoint that does not exist (404) and returned false, so the UI it
+  // backed offered a "Request access" button that lodged nothing. Access
+  // is granted operator-side; the app only reads the answer.
+
   Map<String, String> _authHeaders(String token) => {
         'authorization': 'Bearer $token',
         'content-type': 'application/json',

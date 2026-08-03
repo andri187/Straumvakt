@@ -93,7 +93,9 @@ publicDriver.use(
 //
 // Reads Authorization: Bearer <access-token>, verifies, attaches the
 // payload to the context. Used by every route except /login.
-async function requireDriver(c: any, next: any) {
+// Exported so sibling driver-route modules (e.g. driver-tap-intent.ts)
+// mount under the same CORS + bearer contract instead of re-deriving it.
+export async function requireDriver(c: any, next: any) {
   const auth = c.req.header("authorization") ?? c.req.header("Authorization");
   if (!auth || !auth.toLowerCase().startsWith("bearer ")) {
     return c.json({ error: "unauthenticated", message: "Missing bearer token." }, 401);
