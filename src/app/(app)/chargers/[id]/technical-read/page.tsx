@@ -693,6 +693,16 @@ function LinkStatusBadge({
       cls: "border-amber-500/40 bg-amber-500/10 text-amber-300",
       hint: "This charger is not linked to a vendor credential — onboard via /onboard/zaptec to enable Technical Read.",
     },
+    // Split out of no_credential: the charger arrived OCPP-first via
+    // gateway discovery, so its vendor columns were never filled. The
+    // credential may well exist and be healthy — sending the operator to
+    // /onboard/zaptec to create one they already have was the original
+    // misdiagnosis this status exists to prevent.
+    vendor_not_linked: {
+      label: "Vendor not linked",
+      cls: "border-amber-500/40 bg-amber-500/10 text-amber-300",
+      hint: "OcppIdentity has no Zaptec vendor link — this charger was discovered over OCPP and never matched to its Zaptec UUID. Attach it from the credential's discover tree; a new credential is not needed.",
+    },
     no_vendor_resource_id: {
       label: "No vendor ID",
       cls: "border-amber-500/40 bg-amber-500/10 text-amber-300",
