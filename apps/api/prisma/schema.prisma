@@ -3351,6 +3351,23 @@ enum OrgEmailDomainPolicy {
 //
 // PARTITION BY lives in the migration SQL; Prisma 7 has no first-class
 // partitioning syntax.
+// ADR 0037 — gate for partition detach-and-drop: a partition may only be
+// dropped once its rows are confirmed present in the R2 archive. Was
+// present in prisma/schema.prisma but missing here, so check:schema-parity
+// reported drift between the two schemas.
+model ArchiveWatermark {
+  retentionClass RetentionClass @map("retention_class")
+  day            DateTime       @map("day") @db.Date
+  objectCount    BigInt         @default(0) @map("object_count")
+  lastWriteAt    DateTime       @map("last_write_at") @db.Timestamptz(6)
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@id([retentionClass, day])
+  @@index([day])
+  @@map("archive_watermark")
+  @@schema("events")
+}
+
 model ProtocolLogEntry {
   id             String         @default(uuid()) @db.Uuid
   orgId          String         @map("org_id") @db.Uuid
