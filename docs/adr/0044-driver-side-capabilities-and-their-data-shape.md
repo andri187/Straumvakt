@@ -53,7 +53,40 @@ Concretely: losing the DriverGroupMembership must revoke settings access
 **immediately and server-side**, whether or not the app ever deletes the
 PIN. The app deleting it is hygiene, not enforcement.
 
-### D2 — Session exclusivity is runtime state, not a permission
+#### D1b — Remote wipe is defence in depth, not the control
+
+**Operator, 2026-08-03:** a self-destruct method for the stored PIN will
+follow, for the case where a device goes rogue.
+
+Right thing to build, and it must not be mistaken for the revocation
+path. A remote wipe is **best-effort by construction**: the device may
+be offline, may have network blocked, may be rooted with the wipe
+disabled, or may simply never open the app again. Every one of those is
+exactly the case where you most want the access gone.
+
+So the two layers stack, and only one of them is load-bearing:
+
+| layer | guarantees |
+|---|---|
+| server-side grant check (D1) | **access is gone immediately**, whatever the device does |
+| remote wipe | the secret stops sitting on hardware you do not control |
+
+The wipe reduces the blast radius of a stolen phone. It does not decide
+whether charging or settings are permitted — that stays server-side, and
+must keep working with the wipe never delivered.
+
+**Prerequisites, both already on the roadmap and both unbuilt:** you
+cannot wipe a device you do not know about, so this needs the **device
+registry (ADR 0030, GOING_PUBLIC P6.3)**, and a delivery channel, which
+is **FCM/APNs push (P6.2)**. Neither exists yet.
+
+**Trigger set — wider than "stolen".** The obvious trigger is a driver or
+support reporting a lost device. The one that matters more is automatic:
+**revoking a DriverGroupMembership should enqueue a wipe for that
+driver's devices.** A driver who leaves an org is the common case; a
+stolen phone is the rare one. If the wipe is only ever manual, the common
+case leaves PINs on devices indefinitely — harmless because of D1, but
+needless.
 
 *"No settings while someone else's session is active"* is **not** an
 access-grant rule. It cannot live in a membership, because it depends on
