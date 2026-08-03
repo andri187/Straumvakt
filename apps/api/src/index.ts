@@ -40,6 +40,8 @@ import { adminAccessRequests } from "./routes/admin/access-requests";
 import { adminHostApplications } from "./routes/admin/host-applications";
 import { adminBillObjects } from "./routes/admin/bill-objects";
 import { publicDriver } from "./routes/public/driver";
+import { driverTapIntent } from "./routes/public/driver-tap-intent";
+import { driverChargerPin } from "./routes/public/driver-charger-pin";
 import { publicInvites } from "./routes/public/invites";
 import { publicRegister } from "./routes/public/register";
 import { publicEmailVerification } from "./routes/public/email-verification";
@@ -57,7 +59,11 @@ import { buildRegistry } from "./lib/dispatch-targets";
 import { processCommand, sweepStuckPending } from "./lib/dispatcher";
 import { handleOcppEventsBatch } from "./queues/ocpp-events";
 import { handleArchiveEventsBatch } from "./queues/archive-events";
-import { ensureForwardPartitions } from "./lib/db/partition-cron";
+import {
+  ensureForwardPartitions,
+  dropExpiredPartitions,
+  isPartitionDropEnabled,
+} from "./lib/db/partition-cron";
 import { makePool } from "./lib/db/raw";
 import { runZaptecCronSync, runZaptecSessionsOnlyCron } from "./lib/zaptec-sync-cron";
 import { runAgreementsBillingTick } from "./lib/agreement/billing-tick";
@@ -222,6 +228,13 @@ app.route("/api/public/password-reset", publicPasswordReset);
 //   GET  /api/driver/me
 //   GET  /api/driver/chargers
 //   GET  /api/driver/health
+// Tap & Auth tap-intent (ADR 0024 addendum 2). MUST be mounted before the
+// catch-all /api/driver mount below — Hono matches by prefix, so
+// publicDriver would otherwise swallow /api/driver/tap-intent and 404.
+app.route("/api/driver/tap-intent", driverTapIntent);
+// ADR 0044 — local BLE PIN release. Mounted before the catch-all for the
+// same prefix-matching reason as tap-intent above.
+app.route("/api/driver/chargers", driverChargerPin);
 app.route("/api/driver", publicDriver);
 
 // Internal — gateway → API auth lookup. Gated by OCPP_INGEST_SECRET
@@ -364,6 +377,25 @@ const handler: ExportedHandler<Env, AnyQueueMessage> = {
                 succeeded: result.succeeded,
                 failed: result.failed.length,
                 failures: result.failed.slice(0, 5),
+              });
+            }
+
+            // P4.15 / ADR 0037 D5 — retention side of the same cron.
+            // Dry run unless PARTITION_DROP_ENABLED is explicitly set;
+            // every decision is gated on the archive watermark and
+            // fails closed. Logs only when it looked at something.
+            const drops = await dropExpiredPartitions(client, {
+              enabled: isPartitionDropEnabled(env),
+            });
+            if (drops.considered > 0 || drops.failed.length > 0) {
+              console.log("[partition-drop]", {
+                dryRun: drops.dryRun,
+                considered: drops.considered,
+                dropped: drops.dropped.length,
+                wouldDrop: drops.wouldDrop.length,
+                blocked: drops.blocked.length,
+                failed: drops.failed.length,
+                failures: drops.failed.slice(0, 5),
               });
             }
           } finally {

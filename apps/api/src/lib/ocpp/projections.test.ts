@@ -42,6 +42,14 @@ function makeTx() {
     eventLogEntry: {
       create: vi.fn(async () => ({ id: "log-1" })),
     },
+    // ADR 0039 D1 — `raw_protocol` envelopes write their log row to
+    // events.protocol_log instead. Same transaction, same position in
+    // ingestEventInTx, so projections are unaffected; the mock exists
+    // so the raw-frame tests below exercise the real routing rather
+    // than a missing-model TypeError.
+    protocolLogEntry: {
+      create: vi.fn(async () => ({ id: "protolog-1" })),
+    },
     ocppIdentity: {
       // BootNotification handler reads `chargingStationId` off the
       // returned row; default to a populated shape so the station-
@@ -76,7 +84,7 @@ function makeTx() {
       update: vi.fn(async (args: unknown) => args),
     },
     chargeSession: {
-      // ADR 0021 Step C — onOcppRawMeterValues uses findFirst to
+      // ADR 0036 Step C — onOcppRawMeterValues uses findFirst to
       // resolve the in-progress session for an identity. Default
       // returns null (no active session); the OCMF-projection test
       // overrides per-call.
@@ -541,11 +549,14 @@ describe("projections — per-event handlers", () => {
         payload: { action: "GetConfiguration", raw: {} },
       }),
     );
-    expect(tx.eventLogEntry.create).toHaveBeenCalledOnce();
+    // ADR 0039 D1 — raw_protocol, so the log row goes to protocol_log
+    // and event_log is not touched at all.
+    expect(tx.protocolLogEntry.create).toHaveBeenCalledOnce();
+    expect(tx.eventLogEntry.create).not.toHaveBeenCalled();
     expect(tx.ocppIdentity.update).not.toHaveBeenCalled();
   });
 
-  // ── ADR 0021 Step C — ocpp.raw.MeterValues OCMF projection ─────────
+  // ── ADR 0036 Step C — ocpp.raw.MeterValues OCMF projection ─────────
   describe("ocpp.raw.MeterValues — OCMF projection (Autocharge Step C)", () => {
     const sampleOcmf =
       "OCMF|" +

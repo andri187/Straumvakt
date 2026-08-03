@@ -1,4 +1,4 @@
-// Sprint 9 / 2026-05-09 — ADR 0021 Autocharge Step D
+// Sprint 9 / 2026-05-09 — ADR 0036 Autocharge Step D
 // idTag format classifier.
 //
 // OCPP 1.6 carries the user's identifier in a single opaque CiString20
