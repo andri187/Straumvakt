@@ -1,6 +1,6 @@
 # ADR 0042 — Real per-driver identity and tap attribution
 
-**Status:** Proposed — 2026-08-03.
+**Status:** Proposed — 2026-08-03. **Held 2026-08-03:** its premise is not met — zero users currently have a kennitala, so the real-world identity anchor it rests on does not exist in practice. Implement schema-audit F1 (conditional-kennitala enforcement + group_owner_user_id) before revisiting.
 **Relates to:** [ADR 0020](./0020-driver-access-via-driver-groups.md),
 [ADR 0022](./0022-driver-self-onboarding.md),
 [ADR 0028](./0028-driver-invite-mechanism.md),

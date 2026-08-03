@@ -1,6 +1,6 @@
 # ADR 0037 — R2 key scheme: add a retention-class segment
 
-**Status:** Proposed — 2026-08-02.
+**Status:** Accepted — operator, 2026-08-03 (proposed 2026-08-02).
 **Amends:** [ADR 0018](./0018-data-platform-and-orm-boundary.md)
 Decisions **3b** (key scheme) and **3c** (retention policy). Decision 3a
 (one bucket per env) and 3d (separate archive consumer) stand unchanged.

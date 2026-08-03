@@ -1,6 +1,6 @@
 # ADR 0045 — Electrical topology is a graph, not a level
 
-**Status:** Proposed — 2026-08-03.
+**Status:** Accepted — operator, 2026-08-03 (proposed 2026-08-03).
 **Amends:** the asset-hierarchy description in
 [STRAUMVAKT_ARCHITECTURE_V3](../architecture/STRAUMVAKT_ARCHITECTURE_V3.md)
 and CLAUDE.md's "Property → Site → Installation → Circuit → Charger →

@@ -1,6 +1,6 @@
 # ADR 0039 — Split the raw protocol log out of the event log
 
-**Status:** Proposed — 2026-08-02.
+**Status:** Accepted — operator, 2026-08-03 (proposed 2026-08-02).
 **Amends:** [ADR 0018](./0018-data-platform-and-orm-boundary.md) Decision 1
 (single partitioned `events.event_log` carrying every retention class).
 Decision 2 (ORM boundary) and Decision 3 (R2 archive) stand.

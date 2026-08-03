@@ -1,6 +1,6 @@
 # ADR 0044 — Driver-side capabilities and the data they require
 
-**Status:** Proposed — 2026-08-03.
+**Status:** Accepted in part — operator, 2026-08-03 (proposed 2026-08-03). D6/D7/D8 accepted; **D3 struck** (auth method IS recorded — see D6); D1/D2 deferred, they depend on ADR 0038's serving tier which does not exist yet.
 **Relates to:** [ADR 0020](./0020-driver-access-via-driver-groups.md),
 [ADR 0024](./0024-ble-proximity-authentication.md),
 [ADR 0031](./0031-cost-model-and-money-flow.md),
@@ -202,3 +202,205 @@ D1 and D2 gate the settings feature itself. D4 can follow the app.
 **Rule 5.** D1 and D2 are access-grant resolution. D3 touches CDR
 content, which is dispute evidence under ADR 0031 §15. All three want
 stop-and-summarise before code.
+
+---
+
+## D6 — Correction: D3 was wrong, and the real gap is one column
+
+**2026-08-03.** D3 above claims the authentication method is *"today
+unrecoverable after the fact."* That is **incorrect**, and it was written
+without reading the session table.
+
+`charging.sessions` already carries the OCMF identification block:
+
+```
+auth_id_type    auth_id_value    auth_id_level
+auth_id_status  auth_id_flags
+```
+
+These are OCMF's IT / ID / IL / IS / IF fields — the authentication
+method, signed by the meter. For any session carrying OCMF the method is
+not merely recorded, it is **cryptographic evidence**, which is stronger
+than the enum D3 proposed to add.
+
+`sessions.user_id` also already exists, so the owner is captured on the
+session row rather than only resolvable by join. Two of the four
+enrichments requested for the CDR were already present.
+
+**D3 is therefore struck.** Do not add an authentication-method enum. The
+remaining problem is coverage, not absence: sessions without OCMF have no
+method recorded, and the answer there is the token reference below, not a
+parallel enum.
+
+### The actual gap
+
+`charging.sessions` has **no `id_token_id`**. It holds `id_tag` — the
+value as it arrived on the wire — and nothing pointing at the token row.
+So the RFID **label** is reachable only by matching `id_tag` against
+`id_tokens.value`, which breaks the moment a token is revoked, re-issued
+or deleted. The CDR silently loses the label on exactly the historical
+sessions a dispute would concern.
+
+Driivz solves this by carrying **both**: `cardId` (row reference) and
+`cardNumber` (value snapshot) on every transaction, with a `Card.status`
+that includes `LOST` and `STOLEN` so a revoked card still resolves for
+history. That is the pattern to copy.
+
+**Decision:** add `charging.sessions.id_token_id → identity.id_tokens.id`,
+nullable, **ON DELETE RESTRICT**. Restrict, not cascade — deleting a
+token must never erase billing history. Keep `id_tag` alongside it as the
+wire-value snapshot; the two answer different questions and neither
+replaces the other.
+
+With that one column the CDR resolves **label + hex + kind** by row
+reference, and **name + kennitala** through `user_id`. All four
+enrichments, one column.
+
+**Not yet applied.** It is five parts — migration, backfill, both Prisma
+schemas, and capture in `projections.ts` — and `projections.ts` is Rule 5
+(CDR content is dispute evidence under ADR 0031 §15). The open question
+inside it: resolve the token at **StartTransaction** (when the credential
+was actually presented) or at **StopTransaction** (where a lookup already
+happens). Start is correct.
+
+### D7 — The creation-time vRFID is the app's identity, not its credential
+
+**Operator, 2026-08-03:** *"the upon-creation RFID should be the
+Straumvakt mobile app token, right?"*
+
+Substantially yes, with one distinction that matters:
+
+| | `virtual_rfid` | `app_jwt` |
+|---|---|---|
+| Wire | OCPP `idTag` | HTTPS `Authorization` |
+| Length | ≤20 chars (CiString20Type) | hundreds |
+| Lifetime | years — stable | hours — rotates |
+| Answers | *who is charging* | *who is calling the API* |
+
+A JWT **cannot** be an OCPP idTag; it does not fit in the field. So they
+cannot be the same row.
+
+But the intuition is right about what the vRFID is *for*. When a driver
+starts a charge from the app, `RemoteStartTransaction` must carry an
+idTag, and that idTag is **the driver's `virtual_rfid`**. The app
+authenticates with the JWT, then acts as the vRFID. Authentication and
+identification are separate steps, and the vRFID is the identification
+half.
+
+This is what makes D6 work: with `id_token_id` on the session, token
+`kind` *is* the authentication method for non-OCMF sessions —
+`virtual_rfid` means app-initiated, `rfid` means a physical card was
+presented, `evccid` means Plug & Charge. No enum required, which is the
+second reason D3 is struck.
+
+It also means **every driver must have one**, including the four creation
+paths that currently issue none (`invites.ts`, `host-invites.ts`,
+`users.ts`, `admin-bootstrap.ts`). A driver without a vRFID cannot start
+a charge from the app at all — there is nothing to put in the idTag.
+
+### D8 — Token kind is the authentication method, in OCPP 2.0.1's vocabulary
+
+**Operator, 2026-08-03.** The vRFID question is simpler than several
+paragraphs above make it look, and the record should say so plainly:
+
+> A driver needs a credential to hand the charger. The app's start button
+> is the first one he has. Issue it at creation.
+
+That is the entire justification. Every CPMS does this; it is not a
+Straumvakt design question. The value is *"merely a hex string for
+handshaking with the charger"* — its uniqueness is the only property that
+matters, and `value @unique` already guarantees it.
+
+**The `kind` carries the meaning: it identifies the authentication
+method.** OCPP 2.0.1 standardised exactly this as `IdTokenEnumType`:
+
+| OCPP 2.0.1 | Meaning | Straumvakt |
+|---|---|---|
+| `Central` | CSMS-authorised, no physical token — app remote start | `virtual_rfid` |
+| `ISO14443` | MIFARE-class card | `rfid` |
+| `ISO15693` | other RFID standard | — |
+| `eMAID` | ISO 15118 Plug & Charge, contract certificate | **absent** |
+| `MacAddress` | Autocharge, EV PLC MAC | **conflated into `evccid`** |
+| `KeyCode` | PIN at the charger | — |
+| `Local` | charger's local list | `manual` |
+| `NoAuthorization` | free vend | — |
+
+OCPP **1.6J has no equivalent** — `idTag` is an opaque CiString20. So the
+classification must live on our side, and adopting 2.0.1's vocabulary now
+costs nothing while inventing our own would cost a migration later. The
+same reasoning applies to roaming: OCPI's `TokenType` (`RFID`,
+`APP_USER`, `AD_HOC_USER`, `OTHER`) is the partner's classification and
+must round-trip unchanged, so it belongs in a separate field on
+`ocpi_token` rows rather than being folded into `kind`.
+
+#### The decision: leave room for both, build neither yet
+
+`evccid` today covers **both** Autocharge and Plug & Charge. They are not
+the same authentication method:
+
+- **Autocharge** matches the EV's PLC MAC address. No cryptography,
+  spoofable, a convenience feature.
+- **Plug & Charge** presents a signed ISO 15118 contract certificate.
+
+On a disputed CDR under ADR 0031 §15 those carry very different
+evidential weight, and right now they are indistinguishable after the
+fact.
+
+**Add both enum values now; implement neither.** Adding a value to a
+Postgres enum is one additive line and is safe at any time. Renaming or
+splitting one *after* sessions reference it is a data migration across
+billing history. The cost asymmetry is the whole argument — this is
+reserving the space, not building the feature.
+
+`evccid` stays as a deprecated alias until its rows are reclassified;
+nothing needs to happen to it on any deadline.
+
+**Not in scope.** No ISO 15118 work, no certificate handling, no
+Autocharge changes beyond what ADR 0036 already covers. Implementation is
+deferred deliberately.
+
+**Note the separate axis:** `charging.sessions.auth_id_type` already
+carries OCMF's own IT field, signed by the meter. That is evidence of how
+the *meter* saw the authentication; `id_tokens.kind` is what *we* issued.
+They corroborate each other and neither replaces the other.
+
+#### D8 amendment 2026-08-03 — OCPP 2.0.1 is the vocabulary, and detection already exists
+
+**Operator: "we follow the OCPP 2.0.1."** `IdTokenEnumType` is therefore
+the single naming authority. Everything else conforms to it rather than
+translating between dialects.
+
+`apps/api/src/lib/idtag-classifier.ts` was found *after* D8 was written
+and already implements the distinction D8 proposed to reserve space for:
+
+- `evccid_mac` — EV PLC modem MAC, 12 hex chars, with OUI vendor
+  matching → OCPP `MacAddress` (Autocharge)
+- `EMAID_PATTERN` — a real eMAID regex → OCPP `eMAID` (Plug & Charge)
+
+It also carries a `Confidence` level (`high | medium | low`) that the
+standard has no equivalent for, and which is genuinely useful: format
+detection is a heuristic, and a low-confidence guess should not be stored
+as though it were asserted.
+
+**So the detection is built; only the persistence is missing.** The
+earlier claim in D8 that Autocharge and Plug & Charge are "conflated"
+holds at the enum layer only — the code distinguishes them today.
+
+**Three vocabularies must be reconciled to one before any migration:**
+
+| | Where | Role |
+|---|---|---|
+| `IdTagKind` | idtag-classifier.ts | what the code detects |
+| `IdTokenKind` | both Prisma schemas | what gets stored |
+| `IdTokenEnumType` | OCPP 2.0.1 | **the authority** |
+
+Writing D8's enum values without reading the classifier would have
+created a second competing taxonomy — the same three-generations pattern
+seen in the billing layer, reproduced in miniature. Read the classifier
+first; the migration follows from the mapping, not the other way round.
+
+**Open, and to be settled by that reading:** where `zaptec_proxy` and
+`ocpi_token` land. Neither is an OCPP authentication method — the first
+is a vendor artifact, the second is a roaming provenance marker whose
+OCPI `TokenType` must round-trip unchanged. Both may belong on a separate
+axis from `kind` rather than as values within it.

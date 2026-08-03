@@ -1,6 +1,6 @@
 # ADR 0043 — The homeless driver, and how a driver joins an installation
 
-**Status:** Proposed — 2026-08-03.
+**Status:** Accepted — operator, 2026-08-03 (proposed 2026-08-03).
 **Relates to:** [ADR 0020](./0020-driver-access-via-driver-groups.md),
 [ADR 0022](./0022-driver-self-onboarding.md),
 [ADR 0028](./0028-driver-invite-mechanism.md),

@@ -1,6 +1,6 @@
 # ADR 0040 — Tier storage by volume and access pattern, not by age
 
-**Status:** Proposed — 2026-08-02.
+**Status:** Accepted — operator, 2026-08-03 (proposed 2026-08-02).
 **Amends:** [ADR 0037](./0037-r2-key-scheme-retention-class-segment.md) §D2
 (retention table) and [ADR 0039](./0039-split-protocol-log-from-event-log.md)
 (its 2026-08-02 amendment). Both stand; this refines the tiers they set.
