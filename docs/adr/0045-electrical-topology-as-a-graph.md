@@ -211,3 +211,35 @@ treat them as a field on an asset. This is where that difference pays.
 model is right, but **do not populate it from vendor data**, and treat
 the balancer as flat wherever the graph is unconfirmed. Real topology
 arrives with the installer product.
+
+### D6 — The topology is ours alone; there is nothing to sync with
+
+Checked against `public/zaptec/openapi.json`:
+
+- **No circuit endpoints exist.** Not one path touches circuits. The word
+  appears only in response schemas — `InstallationTreeCircuitModel`,
+  `circuits`, `circuitId`, `maxCircuits`, `maxCircuitCurrent` — all
+  returned by `GET /api/installation/{id}/hierarchy`.
+- The installation surface is `GET` list, `GET` details, `GET` hierarchy,
+  and `POST /{id}/update` for installation-level fields. **Structure is
+  read-only.**
+- **OCPP cannot express it at all.** Circuits are not in the protocol's
+  vocabulary in 1.6 or 2.0.1; it knows charge points, connectors and
+  transactions.
+
+So we are not *bound* by the portal — we are **independent of it**.
+Zaptec's circuit data cannot propagate into our model unless we import
+it, and it could not be corrected through any channel we control even if
+we wanted to.
+
+That removes a whole class of problem before it starts: **no
+reconciliation, no drift, no question of which system wins.** The graph
+is ours, single-sourced, and the only write path is the installer
+product.
+
+One thing worth keeping from their side: the hierarchy response carries
+`maxCircuitCurrent` and `maxCircuits`. Treat those as a **starting
+hypothesis for an electrician to confirm or correct** — a prompt, not a
+fact. Better than a blank form, worse than a drawing.
+
+**Do not build a topology sync.** There is nothing to sync to.
