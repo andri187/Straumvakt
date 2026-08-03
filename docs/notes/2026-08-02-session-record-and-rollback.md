@@ -229,3 +229,92 @@ uncommitted: `prisma/schema.prisma` (holds `TapIntent` **and**
 **Also in flight at write time:** an agent implementing ADR 0039, which
 had already created `prisma/migrations/20260802220000_protocol_log/` and
 modified `apps/api/src/lib/db/raw.ts`.
+
+---
+
+# Addendum — 2026-08-03
+
+Seven further commits after `656f5ba` (where §1–§8 above stop). Nothing
+in the Cloudflare/Neon section changed — **no new infrastructure
+mutations were made**, so §3's reversal table is still complete.
+
+## Commits
+
+| hash | what |
+|---|---|
+| `c11bba7` | ADR 0039 implemented — `raw_protocol` writes routed to `events.protocol_log` |
+| `9ac5c53` | fix: technical-read badge reported the wrong cause for unlinked chargers |
+| `20eedc3` | ADR 0039 amendment — `raw_protocol` is too coarse to expire |
+| `2de1734` | ADR 0040 — tier storage by volume and access pattern, not age |
+| `65f4514` | classify retention by OCPP action at the gateway |
+| `c436ff9` | ADR 0040 D4 — stop archiving heartbeats to R2 |
+| `29fce37` | backfill migration: reclassify historical `retention_class` |
+
+Additional rollback anchors:
+
+| Want | Command |
+|---|---|
+| Keep everything up to the protocol-log split | `git reset --keep c11bba7` |
+| Drop only the retention-classification work | `git reset --keep 9ac5c53` |
+
+## The defect this addendum exists to record
+
+ADRs 0037 and 0039, as originally written, **would have deleted signed
+billing evidence on a timer.**
+
+`gateway/src/identity-do.ts` stamped `retention_class = 'raw_protocol'`
+on every inbound OCPP frame. That class did not mean "disposable" — it
+meant "arrived over OCPP", and that set includes `MeterValues` (which
+carries the OCMF signed meter reading) and `StopTransaction` (the
+charger's own record of delivered energy). ADR 0037 expires the
+`raw_protocol/` prefix from R2 at 7 days; ADR 0039 drops `protocol_log`
+partitions at 7 days. Both would have fired on billing evidence, while
+ADR 0031 §15 settles metering disputes on exactly those logs.
+
+Caught by the operator asking for retention to be limited to *heartbeats
+only*. Worth recording plainly: P4.12 had already refused to risk OCMF
+for 19% of ingest throughput, and the same evidence was then put on a
+deletion timer two ADRs later. The ingest-layer instinct was right and
+was not carried through to the retention layer.
+
+**Fixed in `65f4514`:** `Heartbeat` → `raw_protocol` (7d);
+`MeterValues`/`StartTransaction`/`StopTransaction` → `financial`
+(indefinite); everything else → `operational` (90d). Default is
+`operational`, never `raw_protocol` — fail long, not short.
+
+## Retention is gated. Nothing is live.
+
+No R2 lifecycle rule is applied and `PARTITION_DROP_ENABLED` is unset,
+so there is **no exposure today**. Before either is switched on, in
+order:
+
+1. **Apply `20260802220000_protocol_log`** — and it must land *before*
+   the code deploys, or every `ocpp.raw.*` INSERT fails with "no
+   partition of relation found for row". Total ingest failure, not
+   degradation.
+2. **Apply `20260803090000_reclassify_retention_by_action`** and verify
+   the only rows left as `raw_protocol` are heartbeats.
+3. **Handle R2 separately.** ⚠️ The Postgres backfill does **not** make
+   R2 safe. Retention class is baked into the object key (ADR 0037 D1),
+   so historical objects stay under `raw_protocol/` whatever Postgres
+   says. A lifecycle rule on that prefix would still delete historical
+   OCMF frames. Either exclude the pre-migration date range from the
+   rule, or re-key those objects first. **This is not written yet.**
+4. Only then enable R2 lifecycle rules and `PARTITION_DROP_ENABLED`.
+
+## Test state
+
+`apps/api` 641 passed / 1 skipped · `gateway` 91 passed · all three
+typechecks clean.
+
+The skipped test is deliberate, not a regression:
+`ocpp-events.test.ts` "archives the events the insert reported fresh"
+(F2). The fast path handles only heartbeats and heartbeats are no longer
+archived, so the assertion has no reachable path. The underlying
+contract is still correct and still covered in `lib/db/raw.test.ts`.
+
+## Still stranded in the working tree
+
+`prisma/schema.prisma` and `apps/api/prisma/schema.prisma` hold the
+`ProtocolLogEntry` model, entangled with concurrent tap-intent work.
+**The committed `protocol_log` code does not function without them.**
