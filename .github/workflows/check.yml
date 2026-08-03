@@ -24,6 +24,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-      - run: npm ci
+      # `npm ci` and `cache: npm` both require a committed lockfile.
+      # package-lock.json is gitignored here (.gitignore:51), a deliberate
+      # choice, so use `npm install` and forgo the cache rather than
+      # reverse it. Costs ~30s per run; revisit if that becomes annoying.
+      - run: npm install --no-audit --no-fund
       - run: npm run check
