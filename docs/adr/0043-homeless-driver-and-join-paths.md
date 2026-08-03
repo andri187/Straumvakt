@@ -130,6 +130,67 @@ here because it is the actual load-bearing assumption behind "they are
 billable anyway," and it does not currently hold. Verified identity is a
 separate piece of work and should not gate this one.
 
+### D3c — Identity assurance is required at *join* time, per installation
+
+**Operator, 2026-08-03:** *"if the installation requires it, the user must
+either sign in by Icelandic electric ID, or harden the account with eID
+sign in upon adding the installation."*
+
+This is the answer to D3b, and it is better than verifying at
+registration. Verification is a property of **what you are joining**, not
+of signing up:
+
+```
+Installation.identityAssurance : self_asserted | eid_verified
+User.assuranceLevel            : self_asserted | eid_verified
+```
+
+- Signup stays frictionless. A homeless self-enrolled user with a
+  self-asserted kennitala is harmless — they cannot charge anywhere.
+- The moment they attempt to join an installation set to
+  `eid_verified`, they must complete **rafræn skilríki / Auðkenni**
+  sign-in — either as their original login method, or as a **step-up on
+  the existing account** at join time.
+- Hardening is permanent and account-wide. Verify once; every later join
+  is already satisfied.
+
+This also puts the cost on the party that wants the assurance. A
+free-vend host absorbing energy has no reason to demand eID; an MDU
+billing forty apartments individually very much does. Same shape as
+`codeJoinPolicy` — the CPO chooses.
+
+**Why this genuinely closes D3b:** Icelandic eID does not merely prove
+*a* person is present, it returns the **verified kennitala**. That is
+exactly the field `registration.ts` currently accepts on trust, so a
+successful hardening replaces an assertion with an attestation.
+
+#### The edge case that must not be silent
+
+If the eID-verified kennitala **differs** from the self-asserted one
+already on the account, that is not a correction to apply quietly. It
+means either a typo or someone who registered under a kennitala that is
+not theirs — and the account may already carry sessions, invoices and a
+ledger history billed to the asserted identity.
+
+Changing the billing identity of an account with financial history is a
+Rule 5 event. The mismatch must **block the join and surface to an
+operator**, never auto-resolve. ADR 0031 makes the invoice a real claim
+against a real kennitala; silently repointing it is the one outcome
+worse than refusing the join.
+
+#### Interaction with kennitala-less dependents
+
+[ADR 0031 §18](./0031-cost-model-and-money-flow.md) permits a user
+without their own kennitala where they are bound to a group whose owner
+has one — the HOA teenager case. Such a user **cannot** complete eID.
+
+So an installation set to `eid_verified` cannot admit dependents
+directly. The group **owner** verifies and joins; dependents inherit
+access through the group and are never independently asserted. That is
+consistent — §18 already routes their billing to the owner — but it must
+be explicit, or the first HOA with a teenager hits a wall nobody
+predicted.
+
 ### D3-original — A shared installation code is a *request*, never a grant *(superseded, retained for the reasoning)*
 
 An installation identity code plus password — printed in a stairwell,
