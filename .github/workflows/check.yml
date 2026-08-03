@@ -1,0 +1,29 @@
+# Runs the offline correctness checks that already existed in the repo but
+# were never wired to anything. Two of them were silently not running:
+#
+#   - `typecheck` was bare `tsc --noEmit`, which uses the root tsconfig and
+#     excludes apps/**, gateway/** and packages/** — about a third of the
+#     codebase went unverified while the check reported success (4130daf).
+#   - `check:schema-parity` existed but nothing called it, so the two Prisma
+#     schemas drifted (ArchiveWatermark missing from apps/api) unnoticed.
+#
+# `check:migrations` is deliberately NOT here: `prisma migrate status` needs
+# a live DATABASE_URL. Run it against staging before deploying, not in CI.
+name: check
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run check

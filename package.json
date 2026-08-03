@@ -21,7 +21,10 @@
     "db:studio": "prisma studio",
     "db:validate": "prisma validate",
     "check:schema-parity": "prisma migrate diff --from-schema apps/api/prisma/schema.prisma --to-schema prisma/schema.prisma --exit-code",
-    "sync:detour-assets": "node scripts/sync-detour-assets.mjs"
+    "sync:detour-assets": "node scripts/sync-detour-assets.mjs",
+    "check": "npm run typecheck && npm run check:schemas && npm run check:schema-parity",
+    "check:schemas": "prisma validate --schema prisma/schema.prisma && prisma validate --schema apps/api/prisma/schema.prisma",
+    "check:migrations": "prisma migrate status --schema prisma/schema.prisma"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
