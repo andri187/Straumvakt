@@ -159,3 +159,55 @@ capacity. **Do it before P4's load balancing, not after.**
 **Not included.** No change to Property, Site, Installation or the
 station↔installation reference. No new tables. This is one column and a
 decision about what the root means.
+
+---
+
+## D5 — Vendor circuit data is not ground truth
+
+**Operator, 2026-08-03:** *"the circuit set up from the Zaptec portal is
+not very reliable."*
+
+`circuits.vendor_circuit_ref` exists because the current 8 rows came in
+with the Zaptec import. So the topology we hold is **whatever was typed
+into a vendor portal during commissioning** — not a survey, not a
+drawing, and nothing that was verified against the actual panel.
+
+That has two consequences:
+
+1. **Parent links cannot be inferred from what we have.** Not merely
+   absent — the child rows themselves are of unknown accuracy, so
+   inferring a parent from them would compound an error rather than fill
+   a gap.
+2. **A wrong topology is worse than a flat one.** A flat list at least
+   fails honestly: it enforces the leaf breaker and says nothing about
+   the incomer. A graph asserting a 200 A incomer that is really 100 A
+   would let load balancing exceed the supply while believing itself
+   compliant — the failure mode being fixed, restored with more
+   confidence attached.
+
+**So `parent_circuit_id` must stay nullable and unpopulated until
+someone competent confirms the wiring.** Absent parent = "unknown", not
+"root". Only an explicit confirmation makes a circuit a grid connection
+point; the balancer must treat an unconfirmed graph as flat and refuse
+to claim headroom it cannot prove.
+
+### This is what the installer/contractor product is for
+
+Topology capture is not a data-entry chore to be got through. **The
+contractor commissioning a site is the only party who knows the
+wiring** — which sub-panel feeds which chargers, and what the incomer is
+rated at.
+
+That makes the installer/contractor surface (deferred, but on the list
+next to overlay mode) the natural **acquisition mechanism**: give the
+electrician a tool worth using — their own fleet view, their own SLA
+position, their own commissioning record — and correct topology falls
+out as a by-product rather than as unpaid work done for our benefit.
+
+Neither Driivz nor AMPECO treats the contractor as a customer; both
+treat them as a field on an asset. This is where that difference pays.
+
+**Sequencing, revised:** ship the column with P4's load balancing so the
+model is right, but **do not populate it from vendor data**, and treat
+the balancer as flat wherever the graph is unconfirmed. Real topology
+arrives with the installer product.
