@@ -266,6 +266,37 @@ requester the payer. Bearer comes from the agreement, always.
 
 ---
 
+### D6 — This lands as one enrolment module, serving both surfaces
+
+**Operator, 2026-08-03:** the eID/registration work is deferred to the
+enrolment module, *"it should be the same module as will possible on the
+web UI anyways."*
+
+Right, and it settles D3b's fix rather than postponing it. If one module
+backs both the Flutter app and the driver web portal
+([ADR 0033](./0033-driver-web-portal-scope.md)), then no client can be
+the place identity is guaranteed — two clients cannot both hold the
+invariant, and whichever is written second will drift. **The guarantee
+has to sit in the API**, which is exactly what D3b concluded for a
+different reason.
+
+So the sequencing is: register, verify, join and redeem are built once,
+API-side, with the app and the web portal as two thin callers. Everything
+in D1–D3c is module scope rather than separate work:
+
+| Decision | Lands as |
+|---|---|
+| D1 homeless state | the module's empty state, shared by both surfaces |
+| D2 four join paths | four entry points on one join API |
+| D3 `codeJoinPolicy` | installation setting, enforced server-side |
+| D3b kennitala derived from eID, not accepted as input | the register endpoint's contract change |
+| D3c `identityAssurance` + step-up hardening | the module's verification step |
+
+Until then the public register endpoint keeps accepting a typed
+kennitala, so `eid_verified` cannot be trusted for accounts created
+through it. That is a known, bounded gap with a scheduled fix rather
+than an open question.
+
 ## Consequences
 
 **Positive.** Self-enrolment stops being a dead end. The four paths cover
