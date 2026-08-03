@@ -472,7 +472,7 @@ const onSessionStopped: ProjectionHandler = async (tx, event) => {
 };
 
 /**
- * ocpp.raw.MeterValues — Sprint 9 / ADR 0021 Autocharge Step C.
+ * ocpp.raw.MeterValues — Sprint 9 / ADR 0036 Autocharge Step C.
  *
  * MeterValues frames can carry OCMF blobs in their `signedMeterData`
  * field (OCPP 1.6 SignedMeterValue extension; format="SignedData").
@@ -480,7 +480,7 @@ const onSessionStopped: ProjectionHandler = async (tx, event) => {
  * delivers post-session, but MeterValues fires DURING the session at
  * the configured sample interval — earlier visibility, plus a
  * transport-symmetric capture path (closes the gap I flagged in
- * ADR 0021 §4).
+ * ADR 0036 §4).
  *
  * Resolution strategy: the gateway sets aggregateId = identity_id on
  * every raw frame. We find the in-progress ChargeSession for that
@@ -493,11 +493,11 @@ const onSessionStopped: ProjectionHandler = async (tx, event) => {
  *
  * When the parsed OCMF identity has type=EVCCID, we ALSO populate
  * ev_plc_mac + ev_plc_mac_oui_vendor (the link-layer columns from
- * ADR 0021 §2). EVCCID per OCMF spec is the EV's PLC modem MAC.
+ * ADR 0036 §2). EVCCID per OCMF spec is the EV's PLC modem MAC.
  *
  * Note: the gateway DO emits ocpp.raw.X (raw protocol frame name) —
  * not the translated session.X / charger.X domain event names that
- * the older projection handlers register against. Per ADR 0021 §4
+ * the older projection handlers register against. Per ADR 0036 §4
  * we register on the raw name directly, which is the live wire format
  * Dalvegur produces.
  */
@@ -1038,7 +1038,7 @@ export function registerAllProjections(): void {
   registerProjection("session.meter_value_recorded", onSessionMeterValueRecorded);
   registerProjection("session.stopped", onSessionStopped);
   registerProjection("ocpp.command_result", onCommandResult);
-  // ADR 0021 Autocharge Step C — projection on the raw MeterValues
+  // ADR 0036 Autocharge Step C — projection on the raw MeterValues
   // frame to capture OCMF signedMeterData when the firmware embeds
   // it. Closes the OCPP-side OCMF capture gap (AMQP 723 was the only
   // path before this).

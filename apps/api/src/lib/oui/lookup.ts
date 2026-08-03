@@ -1,4 +1,4 @@
-// Sprint 9 / 2026-05-08 — ADR 0021 Autocharge Step E
+// Sprint 9 / 2026-05-08 — ADR 0036 Autocharge Step E
 // Vendor lookup helper — resolves a MAC address to its IEEE-registered
 // vendor name via the OUI table.
 //
@@ -83,7 +83,7 @@ export function formatMac(mac: string | null | undefined): string | null {
  * Privacy-preserving redaction for non-privileged views. Returns the
  * MAC with the first three octets replaced by "xx:xx:xx" — preserves
  * the NIC-specific tail (which is per-vehicle but doesn't reveal the
- * vendor). Per ADR 0021 §9.
+ * vendor). Per ADR 0036 §9.
  */
 export function redactMac(mac: string | null | undefined): string | null {
   if (!mac) return null;
