@@ -29,7 +29,6 @@ import {
   FileText,
   KeyRound,
   Activity,
-  Fingerprint,
   Handshake,
   Inbox,
   Palette,
@@ -106,12 +105,24 @@ const nav: NavItem[] = [
         label: { is: "Charge log", en: "Charge log" },
         icon: Activity,
       },
-      {
-        kind: "leaf",
-        href: "/vehicle-ids",
-        label: { is: "Vehicle IDs", en: "Vehicle IDs" },
-        icon: Fingerprint,
-      },
+      // Vehicle IDs — hidden from nav, page still reachable at /vehicle-ids.
+      //
+      // The feature is built and correct; it has no data. EVCCID arrives
+      // inside OCMF on OCPP MeterValues, and 110 sessions carry OCMF —
+      // but `charging.sessions.ev_plc_mac` is 0 across all 1,567. No
+      // vehicle has ever identified itself over PLC on this fleet, so the
+      // page has always been empty and a nav item that always shows
+      // nothing reads as broken rather than unfed.
+      //
+      // Nothing to do with the Azure bus being parked — that carried the
+      // same OCMF redundantly and never delivered a single session.
+      //
+      // Restore this entry when a vehicle first identifies itself. The
+      // open question is whether autocharge is unexercised or
+      // unexercisable on this hardware (ADR 0036) — one charge with a
+      // known-supporting car answers it. If it is unexercisable, the
+      // plate-based path in ADR 0044 D4 becomes the only vehicle
+      // identity available.
     ],
   },
   {
