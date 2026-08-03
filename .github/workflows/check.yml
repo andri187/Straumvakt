@@ -29,4 +29,9 @@ jobs:
       # choice, so use `npm install` and forgo the cache rather than
       # reverse it. Costs ~30s per run; revisit if that becomes annoying.
       - run: npm install --no-audit --no-fund
+      # The workspaces import `straumvakt-prisma-cf-client/client`, a
+      # Workers-targeted Prisma client built by scripts/compile-cf-prisma.sh
+      # and not committed. Without this, typecheck fails with TS2307 on
+      # every file that touches the database.
+      - run: npm run db:generate
       - run: npm run check
