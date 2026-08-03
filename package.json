@@ -8,7 +8,7 @@
     "build": "prisma generate && cp prisma/cf-client-package.json node_modules/straumvakt-prisma-cf-client/package.json && bash scripts/compile-cf-prisma.sh && next build --webpack",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && npm run typecheck --workspaces --if-present && npm --prefix gateway run typecheck",
     "format": "prettier --write \"src/**/*.{ts,tsx,css,md}\"",
     "deploy": "prisma generate && cp prisma/cf-client-package.json node_modules/straumvakt-prisma-cf-client/package.json && bash scripts/compile-cf-prisma.sh && next build --webpack && opennextjs-cloudflare build --skipNextBuild && bash scripts/post-opennext-cf-prisma.sh && opennextjs-cloudflare deploy",
     "deploy:staging": "prisma generate && cp prisma/cf-client-package.json node_modules/straumvakt-prisma-cf-client/package.json && bash scripts/compile-cf-prisma.sh && next build --webpack && opennextjs-cloudflare build --skipNextBuild && bash scripts/post-opennext-cf-prisma.sh && opennextjs-cloudflare deploy --env staging",
