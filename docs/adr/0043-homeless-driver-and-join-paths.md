@@ -67,7 +67,70 @@ not an error.** The app's job is to make it obviously temporary.
 The first two are host-push and already designed. The last two are
 driver-pull and are what "self-enrol then join" actually needs.
 
-### D3 — A shared installation code is a *request*, never a grant
+### D3 — Whether a code grants or requests is the CPO's choice
+
+> **Amended 2026-08-03**, before acceptance. The original D3 forbade a
+> shared code from granting access outright. The operator's objection:
+> *"the user needs to provide information to be invoiced anyway, I don't
+> see the harm if the CPO wants the id for access to be just installation
+> code without pass or permission."*
+>
+> That is correct and the original was wrong on ownership.
+> [ADR 0031 §1](./0031-cost-model-and-money-flow.md) makes the **host the
+> principal** — they sell the electricity and they carry the cost. A
+> blanket ban made a risk decision on behalf of the party who bears the
+> risk. An MDU with forty apartments where every resident needs manual
+> approval is a support burden that makes the product worse, and a
+> free-vend host has no reason to care who charges at all.
+>
+> The design is therefore **configurable per installation**, with a safe
+> default rather than a prohibition:
+
+```
+Installation.codeJoinPolicy : request | grant     (default: request)
+```
+
+- `request` — presenting a valid code opens a pre-filled access request
+  naming that installation. Host approves. *Default.*
+- `grant` — presenting a valid code creates the membership directly.
+  The CPO has decided the convenience is worth the exposure.
+
+Two things stay non-negotiable, because they are what make `grant`
+recoverable rather than permanent:
+
+1. **Codes must be rotatable**, and rotation must not require touching
+   existing members. A leaked code cannot be un-leaked; the only remedy
+   is a new one.
+2. **Memberships must record how they were created.** A membership
+   granted by code is revocable as a class — "remove everyone who joined
+   via the old code" has to be one operation, not an audit.
+
+Without those two, `grant` is a door with no lock rather than a door
+with a key the host chose to hand out.
+
+QR remains an *encoding* of the code, not a separate trust level. It
+inherits whatever `codeJoinPolicy` the installation sets.
+
+### D3b — The identity anchor is weaker than it looks, on every path
+
+The argument for `grant` rests on the driver being identified and
+therefore billable. **Kennitala is currently self-asserted**:
+`repositories/registration.ts` checks only that it is not already taken
+(`kennitala_taken`), with no verification against Þjóðskrá, Auðkenni or
+island.is.
+
+So a registrant can enter any unused kennitala, and the resulting invoice
+goes through the Icelandic e-bill flow to whoever really owns it. That is
+worse than non-payment — it is mis-invoicing a stranger.
+
+**This is not an argument against `grant`.** The same self-asserted
+kennitala backs invite redemption and every other path equally; the
+weakness is in registration, not in how someone joins. It is recorded
+here because it is the actual load-bearing assumption behind "they are
+billable anyway," and it does not currently hold. Verified identity is a
+separate piece of work and should not gate this one.
+
+### D3-original — A shared installation code is a *request*, never a grant *(superseded, retained for the reasoning)*
 
 An installation identity code plus password — printed in a stairwell,
 on a charger, in a building handbook — is a **shared** secret. Shared
