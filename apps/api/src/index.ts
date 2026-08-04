@@ -232,8 +232,9 @@ app.route("/api/public/password-reset", publicPasswordReset);
 // catch-all /api/driver mount below — Hono matches by prefix, so
 // publicDriver would otherwise swallow /api/driver/tap-intent and 404.
 app.route("/api/driver/tap-intent", driverTapIntent);
-// ADR 0044 — local BLE PIN release. Mounted before the catch-all for the
-// same prefix-matching reason as tap-intent above.
+// ADR 0046 (renumbered from 0044, 2026-08-04) — local BLE PIN release.
+// Mounted before the catch-all for the same prefix-matching reason as
+// tap-intent above.
 app.route("/api/driver/chargers", driverChargerPin);
 app.route("/api/driver", publicDriver);
 

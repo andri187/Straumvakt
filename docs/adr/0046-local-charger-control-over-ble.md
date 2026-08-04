@@ -1,4 +1,11 @@
-# ADR 0044 — Local charger control over BLE, and the deferred approval model
+# ADR 0046 — Local charger control over BLE, and the deferred approval model
+
+> **Renumbered 2026-08-04.** This ADR was written as 0044 and collided with
+> [ADR 0044 — Driver-side capabilities](./0044-driver-side-capabilities-and-their-data-shape.md)
+> (both dated 2026-08-03). That one keeps 0044 because three call sites cite
+> its decision numbers (`sidebar.tsx` D4, handoff §7 D6, driivz note D3);
+> this one had only two bare prose references. Older references to "ADR 0044"
+> in a BLE/PIN context mean this document.
 
 **Status:** Partially implemented — 2026-08-03. Client built and verified
 against hardware; **the two backend grant endpoints are deliberately

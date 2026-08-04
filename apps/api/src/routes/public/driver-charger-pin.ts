@@ -1,4 +1,5 @@
-// Driver-facing release of a charger's local BLE PIN (ADR 0044).
+// Driver-facing release of a charger's local BLE PIN (ADR 0046 — renumbered
+// from 0044 on 2026-08-04 to resolve a collision; see the ADR header).
 //
 //   GET /api/driver/chargers/:serial/ble-pin  →  { pin }
 //
