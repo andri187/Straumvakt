@@ -718,7 +718,13 @@ export function Sidebar() {
         </nav>
 
         <div className="border-t border-bg-border px-5 py-4 text-xs text-ink-400 md:hidden lg:block">
-          {language === "is" ? "v0.1.0 · Áfangi 2 (næst)" : "v0.1.0 · Sprint 2 (next)"}
+          {/* Was a hardcoded "Sprint 2 (next)" that drifted 13 sprints before anyone
+              noticed. APP_VERSION and BUILD_TIME are inlined at build time by
+              next.config.mjs and already used on the login page, so this cannot
+              go stale — it changes every deploy by construction. */}
+          {`v${process.env.APP_VERSION ?? "dev"}`}
+          {" · "}
+          {language === "is" ? "Uppfært" : "Updated"} {process.env.BUILD_TIME ?? "unknown"}
         </div>
       </aside>
     </>
