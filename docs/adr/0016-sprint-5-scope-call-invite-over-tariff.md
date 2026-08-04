@@ -1,6 +1,6 @@
 # ADR 0016 — Sprint 5 Scope Call: Invite Flow over Commercial Model
 
-**Status:** Proposed
+**Status:** Historical — a past sprint-scope decision, not a proposal awaiting approval. Reclassified 2026-08-04; the sprints it governs are long finished. Kept for the reasoning, not as an open question.
 **Date:** 2026-05-03
 **Sprint:** Records the Sprint 5 scope call before code lands.
 **Supersedes (in part):** Sprint 5 milestones 5.1–5.5 in [STRAUMVAKT_V3_DELIVERY_PLAN.md §8](../architecture/STRAUMVAKT_V3_DELIVERY_PLAN.md) (Commercial Model). Those milestones move to Sprint 6.

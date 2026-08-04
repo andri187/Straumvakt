@@ -1,6 +1,6 @@
 # ADR 0017 — Pre-Pilot Rescope For 4k-Charger Target
 
-**Status:** Proposed
+**Status:** Historical — a past sprint-scope decision, not a proposal awaiting approval. Reclassified 2026-08-04; the sprints it governs are long finished. Kept for the reasoning, not as an open question.
 **Date:** 2026-05-03
 **Sprint:** Records the rescope before any code lands. Sprints 5–11 reshape per this ADR.
 **Supersedes (in part):** Sprint 5 milestones from [ADR 0016](./0016-sprint-5-scope-call-invite-over-tariff.md), and Sprint 6–10 sections of [STRAUMVAKT_V3_DELIVERY_PLAN.md](../architecture/STRAUMVAKT_V3_DELIVERY_PLAN.md). [ADR 0006](./0006-pilot-scope-rev2-2026-04-25.md)'s "20 chargers, demonstrable" pilot framing tightens to "first batch on scale-validated infrastructure."

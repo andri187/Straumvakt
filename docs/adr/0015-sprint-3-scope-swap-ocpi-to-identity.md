@@ -1,6 +1,6 @@
 # ADR 0015 — Sprint 3 Scope Swap: OCPI Foundation Deferred, Identity Work Substituted
 
-**Status:** Proposed
+**Status:** Historical — a past sprint-scope decision, not a proposal awaiting approval. Reclassified 2026-08-04; the sprints it governs are long finished. Kept for the reasoning, not as an open question.
 **Date:** 2026-05-02
 **Sprint:** Documents an already-in-flight swap. Lands alongside the Sprint 3 closure retro.
 **Supersedes (in part):** Sprint 3 milestones 3.1–3.5 in [STRAUMVAKT_V3_DELIVERY_PLAN.md §6](../architecture/STRAUMVAKT_V3_DELIVERY_PLAN.md).
