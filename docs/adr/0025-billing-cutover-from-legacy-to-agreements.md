@@ -1,11 +1,80 @@
 # ADR 0025 — Billing Cutover: Legacy Resolver to Agreements Resolver
 
-**Status:** Proposed
+**Status:** Proposed — **premises superseded.** Several factual claims below were
+measured against the database on 2026-08-04 and are wrong in ways that change the
+retirement plan. Read [§Verification (2026-08-04)](#verification-2026-08-04) before
+acting on §Decision or §Step 6. The accept/reject decision itself is still open.
 **Date:** 2026-05-31
 **Sprint:** Sprint 9 (cutover gate) / Sprint 10 (legacy retirement)
 **Supersedes (in scope):** the "Coexistence with ADR 0008 tables" resolution in [ADR 0019](./0019-agreement-and-bearer-architecture.md) — specifically the deferral that left session-stop on the legacy resolver pending A.6 evidence.
 **Relates to:** [ADR 0008](./0008-cost-center-splitting.md) (legacy contract model — tables being retired), [ADR 0019](./0019-agreement-and-bearer-architecture.md) (agreements architecture — the cutover target), [ADR 0021](./0021-reference-catalogue-and-tariff-propagation.md) (rate-reference propagation)
 **Rollback anchor:** `feat/agreement-architecture` HEAD before this cutover lands (tag `pre-cutover-co4` recommended at merge)
+
+---
+
+## Verification (2026-08-04)
+
+Measured directly against the live database. **Branch: `staging`
+(`br-tiny-river-abgpqq37`).** Read-only queries only; the CO-3 harness was
+*not* run (Rule 5 — operator runs it).
+
+> **Branch trap, read this first.** The Neon *default* branch is `production`
+> (`br-fragrant-bonus-abrc01g6`, 37 MB) and it is **abandoned** — it carries an
+> older PascalCase `public` schema (`Charger`, `Dso`, `Retailer`, `DsoRate`,
+> `RateProfile`, …) and **has no `agreements` schema at all**. `staging`
+> (518 MB) is the live database. Any tool, script, or MCP query that omits an
+> explicit branch reads the abandoned generation and will describe a system
+> that no longer exists. Two of the counts in §Context below have this shape.
+
+### Corrections to §Context and §Step 6
+
+| ADR claim | Measured 2026-08-04 |
+|---|---|
+| `billing.billing_lines` holds historical session costs; **"must not be dropped"** | **0 rows, and zero writers in the entire codebase.** The only billing-line write anywhere is `agreementBillingLine.createMany` (`persist.ts:401`). The table is dead, not merely empty. |
+| (cost of record, implied to be `billing.billing_lines`) | **`reports.session_ledger.cost_isk_minor`** — 1555 rows, 1555 priced. This is the actual billing record of truth and ADR 0025 never names it. |
+| "489 of 489 sessions priced in the past 30 days" | 451 priced in trailing 30 days (1555 lifetime). Direction of the claim holds; the number is stale. |
+| Drop columns on `assets.sites` / `assets.installations` | Wrong schemas. They are **`properties.sites.dso_tariff_id`** and **`properties.installations.retailer_tariff_id`**. Only `assets.charging_stations.chrgrf_tariff_id` is correct as written. |
+| "2 stub `agreements.agreements` rows with no clauses; 0 `rate_references`" | **4 agreements, 4 clauses, 2 rate_references, 1 driver group, 1 membership.** Partial A.10 seeding happened after this ADR was written and was not recorded. |
+| "`billing.contracts*` designed but never populated" | **Confirmed.** `contracts`=1, `contract_factor_assignments`=0, `driver_contracts`=0, `driver_contract_factor_overrides`=0, `contract_period_accumulators`=0. |
+| `billing.tariff_definitions` — 4 in active use | **Confirmed**, 4 rows. `billing.cost_factors`=8, `agreements.cost_factors`=17. |
+
+### What actually happened instead of Steps 4–5
+
+**The cutover was never implemented as designed.** `useAgreementsResolver` and
+`resolver_kind` appear **only inside this ADR** — zero occurrences in code. There
+is no feature flag, no per-installation rollout, no `resolver-flags.ts`.
+
+What exists instead is an arrangement nobody wrote down: **both resolvers run
+concurrently, ungated.**
+
+- **Legacy** prices every session at session-stop via `computeSessionCost`, from
+  all three session-creation paths (`projections.ts` ×2, `webhooks/zaptec.ts`,
+  `zaptec-session-sync.ts`), writing cost to `reports.session_ledger`.
+- **Agreements** runs as a per-minute cron (`runAgreementsBillingTick`,
+  wired at `index.ts:435`) that picks up completed + user-enriched sessions
+  and writes `agreements.billing_lines`.
+
+This is *shadow mode without the comparison* — the safety property Step 2 made a
+hard go-gate is absent, because nothing compares the two outputs.
+
+**It has also never done anything.** `agreements.billing_lines` = 0 rows after
+~2 months of running every minute. The tick's eligibility predicate currently
+matches **0 sessions**, because it requires `user_id IS NOT NULL` and there is
+1 driver-group membership in the system (cf. handoff §4 — essentially no real
+drivers exist yet). The cron is a silent no-op, not a working parallel path.
+
+### Consequence for the retirement plan
+
+Step 6's protective carve-out is inverted. `billing.billing_lines` is named as
+the thing that must survive, and it is the emptiest, deadest object in the set.
+Meanwhile `reports.session_ledger` — which genuinely is the irreplaceable record
+of 1555 priced sessions — is not mentioned in this ADR at all, and therefore has
+no stated protection.
+
+**A fourth generation exists that this ADR never mentions:** `billing.tariffs`,
+`invoices`, `invoice_lines`, `billing_transactions`, `statements`,
+`subscriptions`, `customer_plans`, `bill_objects`, `bill_object_members` — all
+**0 rows**. Scoping a retirement from §Step 6 alone would leave these in place.
 
 ---
 

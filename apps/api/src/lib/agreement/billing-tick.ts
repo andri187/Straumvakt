@@ -5,6 +5,31 @@
 // inserts the result. Idempotent — resolveAndPersistForSession skips
 // sessions that already have lines, so a double-tick is safe.
 //
+// ─── STATUS 2026-08-04: this tick is a silent no-op ────────────────────
+//
+// Measured on staging (br-tiny-river-abgpqq37): agreements.billing_lines
+// has 0 rows after ~2 months of firing every minute, because the
+// eligibility predicate below currently matches 0 sessions. The binding
+// constraint is `userId != null` — there is 1 driver_group_membership in
+// the system, so essentially no session is ever attributable to a driver.
+// Nothing is broken; there is simply no input.
+//
+// Two consequences worth knowing before you touch this:
+//
+//   1. This is NOT the ADR 0025 cutover. That ADR specifies a
+//      per-installation `useAgreementsResolver` flag at session-stop;
+//      no such flag exists in code. What runs instead is BOTH resolvers
+//      concurrently and ungated — legacy prices every session at stop
+//      into reports.session_ledger, this cron writes agreements
+//      billing lines afterwards. That is shadow mode WITHOUT the
+//      comparison ADR 0025 §Step 2 made a hard go-gate.
+//
+//   2. Because it has never emitted a row, this path has never been
+//      exercised against real data. Green logs mean "scanned 0", not
+//      "works". Do not read its silence as validation.
+//
+// See docs/adr/0025-…md §Verification (2026-08-04).
+//
 // Selection criteria (a session is eligible iff ALL of):
 //   - status = 'completed'                  (finalized, not in-progress)
 //   - userId IS NOT NULL                    (Zaptec enrichment ran)

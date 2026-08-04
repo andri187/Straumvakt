@@ -18,9 +18,16 @@
 //     the driver lacks membership — the route then surfaces 404 either
 //     way (don't leak existence).
 //
-// Pricing returned here is a PREVIEW. The session-stop resolver in
-// apps/api/src/lib/agreement/resolve.ts is the canonical billing path;
-// this module deliberately doesn't import it. The headline summary is
+// Pricing returned here is a PREVIEW. The intended canonical billing path
+// is apps/api/src/lib/agreement/resolve.ts; this module deliberately
+// doesn't import it.
+//
+// NB (2026-08-04): "canonical" is aspirational, not current. As of today
+// agreement/resolve.ts has priced 0 sessions — what actually prices every
+// session is the legacy path (lib/tariff/compute-session-cost.ts) writing
+// to reports.session_ledger. So this preview is not yet guaranteed to
+// agree with what the driver is actually billed, and no comparison
+// enforces that it does. See docs/adr/0025-…md §Verification (2026-08-04). The headline summary is
 // "what the driver would pay if every clause's default bearer/rate ref
 // applied unchanged" — BearerRule overrides and TRD/WRK substitutions
 // are out of scope for the preview headline. The legend on the driver
