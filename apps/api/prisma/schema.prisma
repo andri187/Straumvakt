@@ -2091,7 +2091,13 @@ model VendorAssetRef {
   organization        Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
   chargingStation     ChargingStation  @relation(fields: [chargingStationId], references: [siteAssetId], onDelete: Cascade)
 
-  @@unique([vendorSlug, vendorAssetId])
+  // A vendor asset may be covered by SEVERAL credentials — a credential is
+  // a capability ("can read this charger"), not ownership ("owns this
+  // charger"). Two Zaptec accounts seeing the same serial is normal, and
+  // recording both means revoking one falls through to the other instead
+  // of blanking the technical read.
+  @@unique([vendorSlug, vendorAssetId, credentialsRef])
+  @@index([chargingStationId, vendorSlug])
   @@index([orgId, vendorSlug])
   @@map("vendor_asset_refs")
   @@schema("vendors")
