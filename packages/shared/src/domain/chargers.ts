@@ -21,9 +21,29 @@ export interface ChargerSummary {
   hardwareVersion: string | null;        // StateId 913
   lifetimeKwh: number | null;            // ChargingStation.lifetimeKwhCached
   status: string | null;                 // OcppIdentity.status (offline | available | charging | …)
+  // ── VENDOR-API liveness ─────────────────────────────────────────────
+  // `online` / `lastSeenAt` are written by the Zaptec status sync, NOT by
+  // OCPP. They say "the vendor's API told us about this charger", which is
+  // a different question from "this charger is talking to us".
+  //
+  // The distinction is not academic: between 2026-05-13 and 2026-08-04 the
+  // entire Dalvegur fleet was disconnected from our OCPP gateway for three
+  // months while these fields read "online for 6d 15h" throughout, because
+  // the vendor poll kept succeeding. Nothing surfaced the outage.
   online: boolean;                       // status !== "offline" && lastSeenAt within 12 min
   onlineSinceAt: string | null;          // ISO; populated only when online=true
-  lastSeenAt: string | null;             // ISO
+  lastSeenAt: string | null;             // ISO — vendor poll freshness
+  // ── OCPP liveness ───────────────────────────────────────────────────
+  // Derived from the newest actual protocol frame for this identity
+  // (events.event_log ∪ events.protocol_log). This is the charger
+  // genuinely speaking to us, and it is what the fleet view must show
+  // separately from the vendor path above.
+  ocppLastSeenAt: string | null;         // ISO; null = no frame in the lookback window
+  ocppOnline: boolean;                   // a frame within the same 12-min window
+  /** Installation.enforceAuthorize — whether a charge on this charger
+   *  requires an Authorize verdict. null when the charger has no
+   *  installation. False means anyone who plugs in may charge. */
+  enforceAuthorize: boolean | null;
   /** Sprint 9.7 — true when the vendor (Zaptec) no longer lists this
    *  charger in any credential's listChargers (Active=false / retired).
    *  null when we couldn't verify (no credential / Zaptec outage). */

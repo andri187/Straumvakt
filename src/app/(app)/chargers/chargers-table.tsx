@@ -162,6 +162,127 @@ interface CircuitGroup {
   chargers: ChargerSummary[];
 }
 
+/** Flatten a group back to a flat charger list — the lamps below report
+ *  on the installation as a whole, not per circuit. */
+function allChargersIn(g: InstallationGroup): ChargerSummary[] {
+  return g.circuits.flatMap((c) => c.chargers);
+}
+
+/**
+ * Two independent data paths reach every charger, and until now the UI
+ * showed only one of them.
+ *
+ *   API   — the Zaptec status sync. Writes `online` / `lastSeenAt`.
+ *   OCPP  — the charger's own WebSocket to our gateway. `ocppOnline`.
+ *
+ * They are not the same question, and they diverged for three months
+ * (13 May → 4 Aug 2026) while the fleet view read "online for 6d 15h"
+ * throughout, because the vendor poll kept answering. A green API lamp
+ * beside a red OCPP lamp is exactly that state, made visible.
+ *
+ * Lit when *any* charger in the installation is reporting on that path;
+ * an installation is "dark" on a path only when none of its chargers is.
+ */
+function PathLamps({ chargers }: { chargers: ChargerSummary[] }) {
+  if (chargers.length === 0) return null;
+  const api = chargers.some((c) => c.online);
+  const ocpp = chargers.some((c) => c.ocppOnline);
+  return (
+    <span className="ml-3 inline-flex items-center gap-1.5 align-middle">
+      <Lamp label="API" on={api} title={
+        api
+          ? "Vendor API is reporting on this installation"
+          : "No charger here has been seen by the vendor API recently"
+      } />
+      <Lamp label="OCPP" on={ocpp} title={
+        ocpp
+          ? "Chargers here are connected to the OCPP gateway"
+          : "No OCPP frames from this installation — chargers are not talking to us"
+      } />
+    </span>
+  );
+}
+
+function Lamp({ label, on, title }: { label: string; on: boolean; title: string }) {
+  return (
+    <span
+      title={title}
+      className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-brand ${
+        on
+          ? "border-emerald-600/40 bg-emerald-950/30 text-emerald-300"
+          : "border-red-700/50 bg-red-950/30 text-red-300"
+      }`}
+    >
+      <span
+        aria-hidden="true"
+        className={`h-1.5 w-1.5 rounded-full ${
+          on
+            ? "bg-emerald-400 shadow-[0_0_5px_1px_rgba(52,211,153,0.85)]"
+            : "bg-red-500 shadow-[0_0_5px_1px_rgba(239,68,68,0.6)]"
+        }`}
+      />
+      {label}
+    </span>
+  );
+}
+
+/**
+ * Whether a charge here needs an Authorize verdict.
+ *
+ * A lit key means an unknown token is turned away. A struck-through dark
+ * key means the charger will start for anyone who plugs in — which is a
+ * legitimate configuration (free vend, cost borne by the site) but should
+ * never be a surprise, because it is also why sessions arrive carrying a
+ * vendor placeholder tag instead of a driver.
+ *
+ * null — the charger has no installation, so there is nothing to enforce.
+ */
+function AuthKey({ required }: { required: boolean | null }) {
+  if (required === null) {
+    return (
+      <span
+        title="No installation — authorization is not configured"
+        className="mr-1.5 inline-block h-3 w-3 align-[-1px] text-ink-700"
+        aria-hidden="true"
+      >
+        <KeyGlyph struck={false} />
+      </span>
+    );
+  }
+  return (
+    <span
+      title={
+        required
+          ? "Authorization required — an unknown token is rejected"
+          : "No authorization required — this charger starts for anyone who plugs in"
+      }
+      className={`mr-1.5 inline-block h-3 w-3 align-[-1px] ${
+        required
+          ? "text-emerald-400 drop-shadow-[0_0_4px_rgba(52,211,153,0.9)]"
+          : "text-ink-600"
+      }`}
+    >
+      <KeyGlyph struck={!required} />
+      <span className="sr-only">
+        {required ? "Authorization required" : "No authorization required"}
+      </span>
+    </span>
+  );
+}
+
+function KeyGlyph({ struck }: { struck: boolean }) {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6"
+      strokeLinecap="round" strokeLinejoin="round" className="h-full w-full">
+      <circle cx="5.5" cy="5.5" r="3" />
+      <path d="M7.7 7.7 13 13" />
+      <path d="M11 11l-1.4 1.4" />
+      <path d="M13 13l1.2-1.2" />
+      {struck && <path d="M2 14 14 2" strokeWidth="1.5" />}
+    </svg>
+  );
+}
+
 interface InstallationGroup {
   installationId: string | null;
   installationDisplayName: string | null;
@@ -251,6 +372,7 @@ export function ChargersTable({ chargers }: { chargers: ChargerSummary[] }) {
                     <span className="ml-2 text-[10px] font-normal text-ink-500">
                       ({g.totalCount} charger{g.totalCount === 1 ? "" : "s"})
                     </span>
+                    <PathLamps chargers={allChargersIn(g)} />
                   </td>
                 </tr>
                 {g.circuits.map((circuit) => {
@@ -331,6 +453,7 @@ function ChargerRow({ c, sameSerial }: { c: ChargerSummary; sameSerial: boolean 
   return (
     <tr className={`hover:bg-bg-base/20 ${dim}`}>
       <td className="px-3 py-1.5">
+        <AuthKey required={c.enforceAuthorize} />
         <Link
           href={`/chargers/${c.chargingStationId}`}
           className="font-mono text-sm font-medium text-ink-50 hover:text-sv-sky"

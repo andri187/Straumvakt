@@ -33,6 +33,11 @@ function generatePassword(): string {
 // is considered offline regardless of what status field carries.
 const ONLINE_WINDOW_MS = 12 * 60 * 1000;
 
+// How far back to look for a genuine OCPP frame. Anything older is
+// offline under any definition, and the bound keeps the grouped scan off
+// the older daily partitions of events.protocol_log.
+const OCPP_LOOKBACK_MS = 24 * 60 * 60 * 1000;
+
 /**
  * Sprint 9.7 — collect all vendor_resource_ids visible across every
  * active Zaptec credential's bulk listing. Anything in our DB whose
@@ -101,7 +106,9 @@ export async function listAllChargers(
     include: {
       organization: { select: { displayName: true } },
       siteAsset: { select: { site: { select: { displayName: true } } } },
-      installation: { select: { id: true, displayName: true } },
+      installation: {
+        select: { id: true, displayName: true, enforceAuthorize: true },
+      },
       circuit: { select: { id: true, displayName: true } },
       evses: {
         take: 1,
@@ -111,6 +118,48 @@ export async function listAllChargers(
       ocppIdentities: { take: 1, orderBy: { createdAt: "asc" } },
     },
   });
+
+  // Newest genuine OCPP frame per identity — the other half of the
+  // liveness picture. `OcppIdentity.lastSeenAt` is written by the Zaptec
+  // status sync, so it reports the vendor poll rather than the protocol
+  // connection; the two diverged for three months without anything
+  // noticing (13 May → 4 Aug 2026). The fleet view must show both.
+  //
+  // Frames are split across two tables by retention class (ADR 0039):
+  // heartbeats land in events.protocol_log, everything else in
+  // events.event_log. Newest wins across both.
+  const identityIds = rows
+    .map((r) => r.ocppIdentities[0]?.id)
+    .filter((id): id is string => typeof id === "string" && id.length > 0);
+
+  const ocppLastSeen = new Map<string, Date>();
+  if (identityIds.length > 0) {
+    // Bounded lookback: anything older than this is offline by any
+    // definition, and the bound keeps the scan off the older partitions.
+    const since = new Date(Date.now() - OCPP_LOOKBACK_MS);
+    const noteNewest = (rowsIn: { aggregateId: string; _max: { occurredAt: Date | null } }[]) => {
+      for (const g of rowsIn) {
+        const at = g._max.occurredAt;
+        if (!at) continue;
+        const prev = ocppLastSeen.get(g.aggregateId);
+        if (!prev || at > prev) ocppLastSeen.set(g.aggregateId, at);
+      }
+    };
+    const [fromEvents, fromProtocol] = await Promise.all([
+      db.eventLogEntry.groupBy({
+        by: ["aggregateId"],
+        where: { aggregateId: { in: identityIds }, occurredAt: { gte: since } },
+        _max: { occurredAt: true },
+      }),
+      db.protocolLogEntry.groupBy({
+        by: ["aggregateId"],
+        where: { aggregateId: { in: identityIds }, occurredAt: { gte: since } },
+        _max: { occurredAt: true },
+      }),
+    ]);
+    noteNewest(fromEvents);
+    noteNewest(fromProtocol);
+  }
 
   // 9.8 — signalDbm + commMode now come from dedicated columns
   // populated by the */1 cron. JSONB-cache fallback removed since
@@ -130,6 +179,7 @@ export async function listAllChargers(
     const lastSeen = identity?.lastSeenAt ?? null;
     const within = lastSeen != null && now - lastSeen.getTime() < ONLINE_WINDOW_MS;
     const online = within && identity?.status !== "offline";
+    const ocppSeen = identity?.id ? (ocppLastSeen.get(identity.id) ?? null) : null;
     return {
       chargingStationId: r.siteAssetId,
       evseId: r.evses[0]?.id ?? "",
@@ -158,6 +208,10 @@ export async function listAllChargers(
       online,
       onlineSinceAt: online && r.onlineSinceAt ? r.onlineSinceAt.toISOString() : null,
       lastSeenAt: lastSeen ? lastSeen.toISOString() : null,
+      // OCPP liveness — deliberately independent of `online` above.
+      ocppLastSeenAt: ocppSeen ? ocppSeen.toISOString() : null,
+      ocppOnline: ocppSeen != null && now - ocppSeen.getTime() < ONLINE_WINDOW_MS,
+      enforceAuthorize: r.installation?.enforceAuthorize ?? null,
       // Sprint 9.7 — decommissioned-by-omission. null when we couldn't
       // verify with Zaptec; true when the charger's vendorResourceId
       // wasn't in any credential's listChargers; false when it was.
@@ -391,6 +445,12 @@ export async function createCharger(
     online: false,
     onlineSinceAt: null,
     lastSeenAt: null,
+    // A charger that was created a moment ago has, by definition, never
+    // sent a frame. enforceAuthorize is unknown until it is attached to
+    // an installation, which is a separate step.
+    ocppLastSeenAt: null,
+    ocppOnline: false,
+    enforceAuthorize: null,
     // 9.7/9.8 — fresh row; assume not decommissioned. Will be
     // re-evaluated on the next list-chargers fetch + cron tick.
     decommissioned: false,
