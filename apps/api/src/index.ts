@@ -67,6 +67,7 @@ import {
 import { makePool } from "./lib/db/raw";
 import { runZaptecCronSync, runZaptecSessionsOnlyCron } from "./lib/zaptec-sync-cron";
 import { runAgreementsBillingTick } from "./lib/agreement/billing-tick";
+import { checkOcppSilence } from "./lib/ocpp-silence-watch";
 import type {
   Env,
   OutboundCommandMessage,
@@ -430,6 +431,39 @@ const handler: ExportedHandler<Env, AnyQueueMessage> = {
     // yet have agreements.billing_lines and runs the resolver. Gated
     // off the same cadence as the other crons. Logs only when
     // something actually happened so operator log noise stays low.
+    // OCPP silence watch. Reads only the protocol tables — never
+    // lastSeenAt or vendor status, which stayed green throughout the
+    // three-month outage this exists to catch. Logs nothing while the
+    // fleet is healthy, so a line here always means something.
+    ctx.waitUntil(
+      (async () => {
+        try {
+          const report = await checkOcppSilence(db);
+          if (report.fleetWide) {
+            console.error("[ocpp-silence] FLEET-WIDE — no charger is speaking OCPP", {
+              watched: report.watched,
+              lastFrames: report.silent
+                .slice(0, 5)
+                .map((s) => `${s.identityString}@${s.lastFrameAt ?? "never"}`),
+            });
+          } else if (report.silent.length > 0) {
+            console.warn("[ocpp-silence]", {
+              watched: report.watched,
+              speaking: report.speaking,
+              silent: report.silent.length,
+              chargers: report.silent
+                .slice(0, 10)
+                .map((s) => `${s.identityString}:${s.silentForMinutes ?? "never"}m`),
+            });
+          }
+        } catch (err) {
+          console.error("[ocpp-silence] failed", {
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      })(),
+    );
+
     ctx.waitUntil(
       (async () => {
         try {
