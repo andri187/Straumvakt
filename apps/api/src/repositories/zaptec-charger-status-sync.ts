@@ -259,6 +259,25 @@ export async function syncZaptecChargerStatus(
       // technical-read page to keep it fresh — which doesn't happen
       // for a 30-charger fleet.
       stationData.lastTelemetryAt = now;
+      // Vendor auth state, straight off the bulk listing — no extra
+      // round trip. Until now neither value was stored anywhere, so the
+      // fleet view could only show Straumvakt's own `enforce_authorize`,
+      // a column nothing writes. The key emblem on /chargers was
+      // therefore reporting an untouched default rather than the setting
+      // that actually governs the charger.
+      //
+      // Written only when present: `undefined` from Zaptec means "this
+      // response didn't carry it", which must not overwrite a known value
+      // with null. vendorAuthSeenAt is stamped only alongside a real
+      // value, so NULL there keeps meaning "never synced".
+      if (charger.IsAuthorizationRequired !== undefined) {
+        stationData.vendorAuthRequired = charger.IsAuthorizationRequired;
+        stationData.vendorAuthSeenAt = now;
+      }
+      if (charger.AuthenticationType !== undefined) {
+        stationData.vendorAuthenticationType = charger.AuthenticationType;
+        stationData.vendorAuthSeenAt = now;
+      }
       if (Object.keys(stationData).length > 0) {
         await db.chargingStation
           .update({ where: { siteAssetId: stationId }, data: stationData })

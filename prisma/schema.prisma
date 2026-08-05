@@ -1107,6 +1107,26 @@ model ChargingStation {
   lastTelemetryRead      Json?     @map("last_telemetry_read") @db.JsonB
   lastTelemetryAt        DateTime? @map("last_telemetry_at") @db.Timestamptz(6)
 
+  // ── Vendor-side authentication state (Zaptec) ─────────────────────
+  // Two different things, and the names invite conflating them.
+  //
+  // vendorAuthRequired       StateId 120 — whether the CHARGER sends OCPP
+  //                          Basic-Auth on the WSS upgrade. About the
+  //                          charger authenticating to our gateway. This
+  //                          is what the /sites tree toggle writes.
+  // vendorAuthenticationType Who authorises the DRIVER — the setting that
+  //                          decides whether an unknown card may charge.
+  //
+  // The enum is documented two contradictory ways in our own code
+  // (lib/zaptec.ts:212 vs charger-technical-read.ts:156), so it is stored
+  // raw and deliberately not mapped to a label until confirmed.
+  //
+  // vendorAuthSeenAt NULL means never synced — which is not the same as
+  // "no auth", and must not render as though it were.
+  vendorAuthRequired       Boolean?  @map("vendor_auth_required")
+  vendorAuthenticationType Int?      @map("vendor_authentication_type")
+  vendorAuthSeenAt         DateTime? @map("vendor_auth_seen_at") @db.Timestamptz(6)
+
   // ── Firmware detail + online-since (Sprint 8.4.7) ─────────────────
   // Extracted from Zaptec /state observations on every cron tick (8.13.2)
   // so the /chargers list view can show them without a per-row Zaptec

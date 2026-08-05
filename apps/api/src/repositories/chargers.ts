@@ -212,6 +212,9 @@ export async function listAllChargers(
       ocppLastSeenAt: ocppSeen ? ocppSeen.toISOString() : null,
       ocppOnline: ocppSeen != null && now - ocppSeen.getTime() < ONLINE_WINDOW_MS,
       enforceAuthorize: r.installation?.enforceAuthorize ?? null,
+      vendorAuthRequired: r.vendorAuthRequired ?? null,
+      vendorAuthenticationType: r.vendorAuthenticationType ?? null,
+      vendorAuthSeenAt: r.vendorAuthSeenAt ? r.vendorAuthSeenAt.toISOString() : null,
       // Sprint 9.7 — decommissioned-by-omission. null when we couldn't
       // verify with Zaptec; true when the charger's vendorResourceId
       // wasn't in any credential's listChargers; false when it was.
@@ -451,6 +454,9 @@ export async function createCharger(
     ocppLastSeenAt: null,
     ocppOnline: false,
     enforceAuthorize: null,
+    vendorAuthRequired: null,
+    vendorAuthenticationType: null,
+    vendorAuthSeenAt: null,
     // 9.7/9.8 — fresh row; assume not decommissioned. Will be
     // re-evaluated on the next list-chargers fetch + cron tick.
     decommissioned: false,

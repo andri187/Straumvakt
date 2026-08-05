@@ -40,10 +40,25 @@ export interface ChargerSummary {
   // separately from the vendor path above.
   ocppLastSeenAt: string | null;         // ISO; null = no frame in the lookback window
   ocppOnline: boolean;                   // a frame within the same 12-min window
-  /** Installation.enforceAuthorize — whether a charge on this charger
-   *  requires an Authorize verdict. null when the charger has no
-   *  installation. False means anyone who plugs in may charge. */
+  /** Installation.enforceAuthorize — Straumvakt's own gate on the OCPP
+   *  Authorize path. Nothing currently writes it and no installation has
+   *  ever had it set, so it is the column default rather than a decision.
+   *  Kept visible precisely because that is worth knowing. */
   enforceAuthorize: boolean | null;
+  // ── Vendor-side auth (Zaptec) — the settings that actually govern ───
+  /** StateId 120 — whether the CHARGER sends OCPP Basic-Auth on the WSS
+   *  upgrade. About the charger authenticating to our gateway, not about
+   *  drivers. This is what the /sites tree toggle writes. */
+  vendorAuthRequired: boolean | null;
+  /** Who authorises the DRIVER. Raw integer, deliberately unmapped: the
+   *  enum is documented two contradictory ways in our own code
+   *  (lib/zaptec.ts:212 vs charger-technical-read.ts:156), and a wrong
+   *  mapping would render an open charger as closed or the reverse. */
+  vendorAuthenticationType: number | null;
+  /** When the two above were last refreshed from the vendor. null means
+   *  never synced — which is NOT the same as "no auth", and must not be
+   *  rendered as though it were. */
+  vendorAuthSeenAt: string | null;
   /** Sprint 9.7 — true when the vendor (Zaptec) no longer lists this
    *  charger in any credential's listChargers (Active=false / retired).
    *  null when we couldn't verify (no credential / Zaptec outage). */

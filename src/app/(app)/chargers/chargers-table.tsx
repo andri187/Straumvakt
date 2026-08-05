@@ -227,44 +227,69 @@ function Lamp({ label, on, title }: { label: string; on: boolean; title: string 
 }
 
 /**
- * Whether a charge here needs an Authorize verdict.
+ * Whether a charge here needs authorization — reported from the setting
+ * that actually governs it, which is the VENDOR's, not ours.
  *
- * A lit key means an unknown token is turned away. A struck-through dark
- * key means the charger will start for anyone who plugs in — which is a
- * legitimate configuration (free vend, cost borne by the site) but should
- * never be a surprise, because it is also why sessions arrive carrying a
- * vendor placeholder tag instead of a driver.
+ * `enforceAuthorize` is Straumvakt's own gate on the OCPP Authorize path.
+ * Nothing writes it and no installation has ever had it set, so it is a
+ * column default rather than a decision. Rendering it would show a struck
+ * key on chargers that are in fact closed — which is exactly what this
+ * emblem did on its first outing.
  *
- * null — the charger has no installation, so there is nothing to enforce.
+ * `vendorAuthenticationType` is who authorises the driver. It is stored
+ * raw and deliberately unmapped: the enum is documented two contradictory
+ * ways in our own code (lib/zaptec.ts:212 says 0=None, technical-read
+ * says 0=Zaptec-managed), and guessing would render an open charger as
+ * closed or the reverse. So the key reports only what is safe to claim —
+ * whether a driver-auth mode is configured at all — and the tooltip
+ * carries the raw value for anyone who needs it.
+ *
+ * Three states, and the third matters: never-synced is not "no auth".
  */
-function AuthKey({ required }: { required: boolean | null }) {
-  if (required === null) {
+function AuthKey({ c }: { c: ChargerSummary }) {
+  const synced = c.vendorAuthSeenAt != null;
+  const mode = c.vendorAuthenticationType;
+
+  if (!synced) {
     return (
       <span
-        title="No installation — authorization is not configured"
+        title="Vendor auth state has never been synced for this charger — unknown, not 'no auth'"
         className="mr-1.5 inline-block h-3 w-3 align-[-1px] text-ink-700"
-        aria-hidden="true"
       >
         <KeyGlyph struck={false} />
+        <span className="sr-only">Authorization state unknown</span>
       </span>
     );
   }
+
+  // mode 0 is the one value both readings of the enum agree is "not our
+  // token list deciding" — either no auth at all, or Zaptec-managed.
+  // Anything else means a driver-auth mode is configured.
+  const configured = mode != null && mode !== 0;
+  const detail = [
+    `Zaptec AuthenticationType: ${mode ?? "—"}`,
+    `Charger Basic-Auth to gateway: ${c.vendorAuthRequired === null ? "unknown" : c.vendorAuthRequired ? "yes" : "no"}`,
+    `Straumvakt enforceAuthorize: ${c.enforceAuthorize === null ? "—" : String(c.enforceAuthorize)} (unused)`,
+  ].join(" · ");
+
   return (
     <span
       title={
-        required
-          ? "Authorization required — an unknown token is rejected"
-          : "No authorization required — this charger starts for anyone who plugs in"
+        (configured
+          ? "Driver authorization is configured at the vendor"
+          : "No driver authorization — this charger starts for anyone who plugs in") +
+        "\n" +
+        detail
       }
       className={`mr-1.5 inline-block h-3 w-3 align-[-1px] ${
-        required
+        configured
           ? "text-emerald-400 drop-shadow-[0_0_4px_rgba(52,211,153,0.9)]"
           : "text-ink-600"
       }`}
     >
-      <KeyGlyph struck={!required} />
+      <KeyGlyph struck={!configured} />
       <span className="sr-only">
-        {required ? "Authorization required" : "No authorization required"}
+        {configured ? "Authorization required" : "No authorization required"}
       </span>
     </span>
   );
@@ -453,7 +478,7 @@ function ChargerRow({ c, sameSerial }: { c: ChargerSummary; sameSerial: boolean 
   return (
     <tr className={`hover:bg-bg-base/20 ${dim}`}>
       <td className="px-3 py-1.5">
-        <AuthKey required={c.enforceAuthorize} />
+        <AuthKey c={c} />
         <Link
           href={`/chargers/${c.chargingStationId}`}
           className="font-mono text-sm font-medium text-ink-50 hover:text-sv-sky"
