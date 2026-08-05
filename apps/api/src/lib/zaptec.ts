@@ -202,14 +202,31 @@ export interface ZaptecChargerLite {
   InstallationId?: string;
   CircuitId?: string;
   /**
-   * Reflects the AuthenticationRequired flag (StateId 120). True when
-   * Zaptec is configured to send OCPP Basic-Auth on the WSS upgrade,
-   * false when it connects anonymously. We write this via
-   * updateChargerSettings({"120": "true|false"}) and read it via
-   * IsAuthorizationRequired on the bulk + detail responses.
+   * DRIVER authorization (StateId 120) — true when a user must present a
+   * credential before this charger will start. Read from
+   * IsAuthorizationRequired on the bulk + detail responses; written via
+   * updateChargerSettings({"120": "true|false"}).
+   *
+   * CORRECTED 2026-08-05. Previously documented here as "Zaptec sends OCPP
+   * Basic-Auth on the WSS upgrade", which is wrong. Verified against the
+   * live fleet: true on exactly one charger (zpr074002 — the one confirmed
+   * to have auth enabled in the portal) and false on the twenty that
+   * accept Zaptec's default idTag on every session. Do not confuse it with
+   * AuthenticationType below, which is the integration path.
    */
   IsAuthorizationRequired?: boolean;
-  /** Auth mode enum: 0=None, 1=Vendor app, 2=OCPP cloud, 3=Native OCPP. */
+  /**
+   * INTEGRATION PATH, not authentication — per Zaptec's own OpenAPI:
+   * 0=Native, 1=WebHooks, 2=Ocpp, 3=OcppNative. Describes how the
+   * installation is wired to a CSMS.
+   *
+   * CORRECTED 2026-08-05. Previously documented here as
+   * "0=None, 1=Vendor app, 2=OCPP cloud" and in charger-technical-read.ts
+   * as "0 = Zaptec Portal owns the list" — two different wrong readings of
+   * the same field. It reads 2 uniformly across the whole fleet because it
+   * is an installation property; it can never indicate per-charger driver
+   * auth. Use IsAuthorizationRequired for that.
+   */
   AuthenticationType?: number;
   /**
    * ChargerOperationMode — same enum as StateId 710 on /state. Carries

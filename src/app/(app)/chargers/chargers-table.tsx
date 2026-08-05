@@ -262,13 +262,22 @@ function AuthKey({ c }: { c: ChargerSummary }) {
     );
   }
 
-  // mode 0 is the one value both readings of the enum agree is "not our
-  // token list deciding" — either no auth at all, or Zaptec-managed.
-  // Anything else means a driver-auth mode is configured.
-  const configured = mode != null && mode !== 0;
+  // Driver auth is `vendorAuthRequired`, NOT `vendorAuthenticationType`.
+  // The latter is Zaptec's integration path — their own spec gives
+  // 0=Native, 1=WebHooks, 2=Ocpp, 3=OcppNative — and it reads 2 on all 21
+  // chargers because it describes how the installation is wired to a
+  // CSMS, not whether a driver needs a credential. Testing it lit every
+  // key on the fleet.
+  const configured = c.vendorAuthRequired === true;
+  const pathLabel =
+    mode === 0 ? "Native" :
+    mode === 1 ? "WebHooks" :
+    mode === 2 ? "OCPP" :
+    mode === 3 ? "OCPP native" :
+    "—";
   const detail = [
-    `Zaptec AuthenticationType: ${mode ?? "—"}`,
-    `Charger Basic-Auth to gateway: ${c.vendorAuthRequired === null ? "unknown" : c.vendorAuthRequired ? "yes" : "no"}`,
+    `Driver auth required: ${c.vendorAuthRequired === null ? "unknown" : c.vendorAuthRequired ? "yes" : "no"}`,
+    `Zaptec integration path: ${pathLabel}`,
     `Straumvakt enforceAuthorize: ${c.enforceAuthorize === null ? "—" : String(c.enforceAuthorize)} (unused)`,
   ].join(" · ");
 

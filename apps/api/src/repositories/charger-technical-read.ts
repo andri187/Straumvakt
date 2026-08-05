@@ -153,8 +153,14 @@ async function getLocalAuthRosterForInstallation(
       entries: [],
     };
   }
-  // AuthenticationType 0 = Zaptec Portal owns the list; our IdToken table
-  // is not the source of truth for that install.
+  // AuthenticationType is Zaptec's INTEGRATION PATH, not an auth policy —
+  // their OpenAPI gives 0=Native, 1=WebHooks, 2=Ocpp, 3=OcppNative. The
+  // branch below is still correct: 0 (Native) means Zaptec's own cloud
+  // holds the authorization list, so our IdToken table is not the source
+  // of truth for that install. The reasoning was right; the label on it
+  // ("0 = Zaptec Portal owns the list") described a field that also got
+  // documented differently again in lib/zaptec.ts. Both corrected
+  // 2026-08-05 — driver auth lives in IsAuthorizationRequired.
   if (authenticationType === 0) {
     return {
       installationId,
