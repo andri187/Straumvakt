@@ -1,0 +1,340 @@
+// ───────────────────────────────────────────────────────────────────────────
+// charging — sessions and what happened during them
+// Postgres schemas: charging
+// Depends on: assets, identity.
+// ───────────────────────────────────────────────────────────────────────────
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// charging — sessions, meter values, reservations
+// ─────────────────────────────────────────────────────────────────────────────
+
+model ChargeSession {
+  // ── Rev-5 (ADR 0012) — anchors on EVSE; ocppIdentity/connector now optional ─
+  id                String        @id @default(uuid()) @db.Uuid
+  orgId             String        @map("org_id") @db.Uuid
+  siteId            String        @map("site_id") @db.Uuid
+  chargingStationId String        @map("charging_station_id") @db.Uuid
+  evseId            String        @map("evse_id") @db.Uuid
+  connectorId       String?       @map("connector_id") @db.Uuid
+  ocppIdentityId    String?       @map("ocpp_identity_id") @db.Uuid
+  userId            String?       @map("user_id") @db.Uuid
+  idTag             String?       @map("id_tag")
+  startedAt         DateTime      @map("started_at") @db.Timestamptz(6)
+  endedAt           DateTime?     @map("ended_at") @db.Timestamptz(6)
+  energyWh          BigInt?       @map("energy_wh")
+  stopReason        String?       @map("stop_reason")
+  status            SessionStatus @default(in_progress)
+  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // ── Rev-3 (ADR 0008) — rolled-up summary from billing_lines at session-stop ─
+  costExVatMinor    BigInt?   @map("cost_ex_vat_minor")
+  costIncVatMinor   BigInt?   @map("cost_inc_vat_minor")
+
+  // ── Sprint 9 / 2026-05-08 — Zaptec StateId 723 (CompletedSession) capture ──
+  // Persisted by the AMQP handler when 723 fires at session-end. Same
+  // shape as /api/chargehistory but arrives on the AMQP path within
+  // milliseconds of session-stop. Includes parsed OCMF IS/IT/ID/IL/IF
+  // identity (RFID today, EVCCID/EMAID once Zaptec ships PnC firmware).
+  completedSessionRawJson  Json?     @map("completed_session_raw_json") @db.JsonB
+  ocmfSignedSession        String?   @map("ocmf_signed_session") @db.Text
+  ocmfFormatVersion        String?   @map("ocmf_format_version")
+  ocmfGatewayId            String?   @map("ocmf_gateway_id")
+  ocmfGatewaySerial        String?   @map("ocmf_gateway_serial")
+  ocmfGatewayVersion       String?   @map("ocmf_gateway_version")
+  authIdStatus             Boolean?  @map("auth_id_status")
+  authIdLevel              String?   @map("auth_id_level")
+  authIdType               String?   @map("auth_id_type")
+  authIdValue              String?   @map("auth_id_value")
+  authIdFlags              String[]  @map("auth_id_flags")
+  ocmfFirstReadingKwh      Decimal?  @map("ocmf_first_reading_kwh") @db.Decimal(14, 4)
+  ocmfLastReadingKwh       Decimal?  @map("ocmf_last_reading_kwh") @db.Decimal(14, 4)
+  ocmfSignedSessionKwh     Decimal?  @map("ocmf_signed_session_kwh") @db.Decimal(14, 4)
+  completedSessionSeenAt   DateTime? @map("completed_session_seen_at") @db.Timestamptz(6)
+
+  // ── Sprint 9 / ADR 0036 — Autocharge: vehicle identity capture ──
+  // Three confidence tiers stored alongside the OCMF identity above
+  // (which is the application-layer tier). See ADR 0036 for the full
+  // story.
+  //
+  //   Link layer:        ev_plc_mac (StateId 953 MacPlcModuleEv) —
+  //                      EV's PLC modem MAC, exchanged during HomePlug
+  //                      GreenPHY pairing. Persistent vehicle ID.
+  //                      OUI prefix → vendor name (ev_plc_mac_oui_vendor).
+  //                      ev_plc_pib_version (StateId 921) — vehicle's
+  //                      PLC firmware version.
+  //
+  //   Protocol layer:    pnc_attempted (StateId 724) — vehicle initiated
+  //                      ISO 15118 PnC. pnc_succeeded null/true/false
+  //                      tracks the outcome. pnc_rejected_uuid (StateId
+  //                      725) carries the UUID denied if PnC failed.
+  //
+  //   Plus cable_type    (StateId 714) — Mode 3 / Type 2 / etc.
+  //
+  // Privacy: ev_plc_mac is PII (per ADR 0036 §9). UI must gate on
+  // operator permission and redact to last-3-bytes for non-priv views.
+  evPlcMac                 String?   @map("ev_plc_mac")
+  evPlcMacOuiVendor        String?   @map("ev_plc_mac_oui_vendor")
+  evPlcPibVersion          String?   @map("ev_plc_pib_version")
+  cableType                String?   @map("cable_type")
+  pncAttempted             Boolean?  @map("pnc_attempted")
+  pncSucceeded             Boolean?  @map("pnc_succeeded")
+  pncRejectedUuid          String?   @map("pnc_rejected_uuid")
+
+  // ── Sprint 9 / ENRICH-1 — per-source enrichment columns ─────────
+  // Three feeds converge into charging.sessions: the OCPP gateway
+  // (StartTransaction / MeterValues / StopTransaction), Zaptec REST
+  // /chargehistory (CDR sync), and Zaptec AMQP (StateId 723
+  // CompletedSession). Before ENRICH-1, the later writers silently
+  // overwrote the OCPP-side `energy_wh` and `ended_at` — billing
+  // had no audit trail of which source produced the final number.
+  //
+  // ENRICH-1 adds per-source mirror columns so each writer records
+  // its own figure WITHOUT clobbering the canonical column. The
+  // canonical columns (`energy_wh`, `ended_at`) remain the billing-
+  // read source of truth for back-compat; CDR (the authoritative
+  // figure today) overlays them in addition to populating
+  // `cdr_energy_kwh` / `cdr_stopped_at`. AMQP enriches with the
+  // OCMF reference but never touches the canonical columns.
+  //
+  // SessionLedger.verifiedSource + enrichmentStatus document which
+  // source produced the canonical figure. All columns NULLABLE so
+  // legacy rows survive without backfill.
+  ocppEnergyKwh   Decimal?  @map("ocpp_energy_kwh") @db.Decimal(10, 4)
+  cdrEnergyKwh    Decimal?  @map("cdr_energy_kwh")  @db.Decimal(10, 4)
+  amqpEnergyKwh   Decimal?  @map("amqp_energy_kwh") @db.Decimal(10, 4)
+  ocppStoppedAt   DateTime? @map("ocpp_stopped_at") @db.Timestamptz(6)
+  cdrStoppedAt    DateTime? @map("cdr_stopped_at")  @db.Timestamptz(6)
+  ocmfBlobRef     String?   @map("ocmf_blob_ref")
+
+  organization      Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  site              Site             @relation(fields: [siteId], references: [id])
+  chargingStation   ChargingStation  @relation(fields: [chargingStationId], references: [siteAssetId])
+  evse              EVSE             @relation(fields: [evseId], references: [id])
+  connector         Connector?       @relation(fields: [connectorId], references: [id])
+  ocppIdentity      OcppIdentity?    @relation(fields: [ocppIdentityId], references: [id])
+  user              User?            @relation(fields: [userId], references: [id])
+  meterValues       MeterValue[]
+  billingLines      BillingLine[]
+  protocolTransactionRefs ProtocolTransactionRef[]
+  importedCdrRefs   ImportedCdrRef[]
+
+  // ── Sprint 9 / ADR 0019 — agreements schema back-relation ───────
+  agreementBillingLines AgreementBillingLine[] @relation("AgreementBillingLineSession")
+
+  @@index([orgId, startedAt(sort: Desc)])
+  @@index([evseId, startedAt(sort: Desc)])
+  @@index([userId, startedAt(sort: Desc)])
+  // Sprint 9 / ADR 0036 — vehicle-recurrence lookup. Partial because the
+  // vast majority of historical rows have ev_plc_mac NULL until AMQP
+  // path lights up.
+  @@index([evPlcMac])
+  @@map("sessions")
+  @@schema("charging")
+}
+
+enum SessionStatus {
+  in_progress
+  completed
+  aborted
+
+  @@schema("charging")
+}
+
+// Sprint 7.2 / ADR 0018 Decision 1 — charging.meter_values is now a
+// PARTITIONED table (RANGE on measured_at, daily partitions). Same
+// composite-PK rule as event_log above: PK is (id, measured_at) so
+// Postgres can route INSERTs to the correct partition.
+model MeterValue {
+  id          String        @default(uuid()) @db.Uuid
+  orgId       String        @map("org_id") @db.Uuid
+  sessionId   String        @map("session_id") @db.Uuid
+  measuredAt  DateTime      @map("measured_at") @db.Timestamptz(6)
+  energyWh    BigInt?       @map("energy_wh")
+  powerW      Int?          @map("power_w")
+  voltageV    Decimal?      @map("voltage_v") @db.Decimal(6, 2)
+  currentA    Decimal?      @map("current_a") @db.Decimal(6, 2)
+  socPercent  Decimal?      @map("soc_percent") @db.Decimal(5, 2)
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  session     ChargeSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@id([id, measuredAt])
+  @@index([sessionId, measuredAt])
+  @@map("meter_values")
+  @@schema("charging")
+}
+
+model Reservation {
+  id            String    @id @default(uuid()) @db.Uuid
+  orgId         String    @map("org_id") @db.Uuid
+  connectorId   String    @map("connector_id") @db.Uuid
+  userId        String?   @map("user_id") @db.Uuid
+  reservedFrom  DateTime  @map("reserved_from") @db.Timestamptz(6)
+  reservedUntil DateTime  @map("reserved_until") @db.Timestamptz(6)
+  status        String    @default("confirmed")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  connector     Connector    @relation(fields: [connectorId], references: [id])
+
+  @@index([orgId, reservedFrom])
+  @@map("reservations")
+  @@schema("charging")
+}
+
+// ── Rev-5 (ADR 0012) — protocol-side and import-side session refs.
+// Allow zero-or-many per session. A native-OCPP session has one
+// ProtocolTransactionRef. An imported CDR has one ImportedCdrRef and
+// zero ProtocolTransactionRefs.
+
+model ProtocolTransactionRef {
+  id           String   @id @default(uuid()) @db.Uuid
+  orgId        String   @map("org_id") @db.Uuid
+  sessionId    String   @map("session_id") @db.Uuid
+  sourceKind   String   @map("source_kind")
+  sourceId     String   @map("source_id")
+  metadata     Json     @default("{}") @db.JsonB
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  session      ChargeSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceKind, sourceId])
+  @@index([sessionId])
+  @@map("protocol_transaction_refs")
+  @@schema("charging")
+}
+
+model ImportedCdrRef {
+  id            String   @id @default(uuid()) @db.Uuid
+  orgId         String   @map("org_id") @db.Uuid
+  sessionId     String   @map("session_id") @db.Uuid
+  sourceKind    String   @map("source_kind")
+  sourceCdrId   String   @map("source_cdr_id")
+  importedAt    DateTime @map("imported_at") @db.Timestamptz(6)
+  rawPayload    Json?    @map("raw_payload") @db.JsonB
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization  Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  session       ChargeSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceKind, sourceCdrId])
+  @@index([sessionId])
+  @@map("imported_cdr_refs")
+  @@schema("charging")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// charging.tap_intents — Símatap tap-to-charge (ADR 0024 addendum 2)
+//
+// The driver-side half of a phone tap. The app registers "user U intends
+// to charge at station S, BLE says S is right here" and the charger
+// independently reports the physical tap as an anonymous random UID over
+// OCPP. Joined on (station, time window) they authorise a session;
+// neither half does so alone. See repositories/tap-intents.ts.
+//
+// No relation fields: this table is written on a latency-sensitive path
+// and read from the OCPP authorize resolver, and the FK columns are
+// enough. chargingStationId is a SiteAsset id, matching ChargeSession.
+//
+// Rows are kept after expiry/consumption as the forensic record of who
+// tapped what and when — purged on a retention window, not immediately.
+// ─────────────────────────────────────────────────────────────────────────────
+model TapIntent {
+  id                String    @id @default(uuid()) @db.Uuid
+  orgId             String    @map("org_id") @db.Uuid
+  userId            String    @map("user_id") @db.Uuid
+  chargingStationId String    @map("charging_station_id") @db.Uuid
+  evseId            String?   @map("evse_id") @db.Uuid
+  // Opaque per-device handle from the app's secure storage. Audit only —
+  // never an authorisation input, since the tap carries no device identity.
+  deviceHandle      String?   @map("device_handle")
+  // RSSI the app measured for this charger's advertisement when arming.
+  bleRssi           Int?      @map("ble_rssi")
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  expiresAt         DateTime  @map("expires_at") @db.Timestamptz(6)
+  consumedAt        DateTime? @map("consumed_at") @db.Timestamptz(6)
+  // The anonymous UID that consumed this intent. Forensics only.
+  consumedIdTag     String?   @map("consumed_id_tag")
+
+  // The resolver's hot path: live intents for one station.
+  @@index([chargingStationId, consumedAt, expiresAt])
+  @@index([userId, expiresAt])
+  @@map("tap_intents")
+  @@schema("charging")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// charging.live_sessions — Sprint 9.6 active-session tracker
+//
+// One row per charger that has a session in progress. Created when the
+// AMQP consumer sees StateId 710 transition to 3 (Charging). Updated as
+// later observations land (StateId 513 power, 553 session-energy).
+// Deleted on transition to 5 (Finished) or 1 (Disconnected) — at which
+// point the consumer also fires the chargehistory claim-check trigger
+// to enrich the closed CDR.
+//
+// chargingStationId is the primary key (one active session per charger).
+// ─────────────────────────────────────────────────────────────────────────────
+model LiveSession {
+  chargingStationId    String   @id @map("charging_station_id") @db.Uuid
+  orgId                String   @map("org_id") @db.Uuid
+  ocppIdentityId       String   @unique @map("ocpp_identity_id") @db.Uuid
+  vendorResourceId     String   @map("vendor_resource_id")
+  startedAt            DateTime @map("started_at") @db.Timestamptz(6)
+  lastObservedAt       DateTime @map("last_observed_at") @db.Timestamptz(6)
+  lastOperationMode    Int?     @map("last_operation_mode")
+  lastPowerW           Decimal? @map("last_power_w") @db.Decimal(10, 0)
+  lastSessionEnergyWh  Decimal? @map("last_session_energy_wh") @db.Decimal(12, 0)
+
+  // Sprint 9 / 2026-05-08 — plug / charge / non-charge timers maintained
+  // by the AMQP state-event handler across OperationMode transitions.
+  connectedAt          DateTime? @map("connected_at") @db.Timestamptz(6)
+  chargingStartedAt    DateTime? @map("charging_started_at") @db.Timestamptz(6)
+  lastModeAt           DateTime? @map("last_mode_at") @db.Timestamptz(6)
+  chargingSeconds      Int       @default(0) @map("charging_seconds")
+  nonChargingSeconds   Int       @default(0) @map("non_charging_seconds")
+
+  // Sprint 9 / 2026-05-08 — real-time driver enrichment from StateId 722.
+  // Resolved Zaptec UUID -> identity.user_vendor_refs (vendor_slug='zaptec')
+  // -> identity.users.id. Set as soon as 722 arrives; survives mode
+  // transitions; cleared when live_sessions row is deleted on session end.
+  userId               String?  @map("user_id") @db.Uuid
+
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization         Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  chargingStation      ChargingStation  @relation(fields: [chargingStationId], references: [siteAssetId], onDelete: Cascade)
+  ocppIdentity         OcppIdentity     @relation(fields: [ocppIdentityId], references: [id], onDelete: Cascade)
+  user                 User?            @relation("LiveSessionUser", fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([orgId])
+  @@index([lastObservedAt])
+  @@index([userId])
+  @@map("live_sessions")
+  @@schema("charging")
+}
+
+// Sprint 9 / 2026-05-08 — AMQP-derived telemetry samples. One row per
+// StateId 513 (TotalChargePower) or 553 (TotalChargeEnergy) observation.
+// Provides denser time-series than EnergyDetails alone for the charge-log
+// chart. No FK to charging.sessions yet — reconciliation to ChargeSession
+// after Zaptec /chargehistory enrichment lands as a follow-up.
+model LiveSessionSample {
+  id          String   @id @default(uuid()) @db.Uuid
+  chargerId   String   @map("charger_id") @db.Uuid
+  observedAt  DateTime @map("observed_at") @db.Timestamptz(6)
+  powerW      Int?     @map("power_w")
+  energyWh    BigInt?  @map("energy_wh")
+  stateId     Int      @map("state_id")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  charger     ChargingStation @relation("LiveSessionSampleCharger", fields: [chargerId], references: [siteAssetId], onDelete: Cascade)
+
+  @@index([chargerId, observedAt(sort: Desc)])
+  @@map("live_session_samples")
+  @@schema("charging")
+}

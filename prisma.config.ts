@@ -24,7 +24,10 @@ if (existsSync(".env")) loadEnv(); // .env as fallback
 const databaseUrl = process.env.DATABASE_URL ?? "";
 
 export default defineConfig({
-  schema: path.join("prisma", "schema.prisma"),
+  // A directory, not a file: prisma/schema/ is a Prisma schema folder (GA
+  // since 6.7). Generators + datasource live in prisma/schema/schema.prisma;
+  // models live in seven domain files beside it.
+  schema: path.join("prisma", "schema"),
   datasource: {
     url: databaseUrl,
   },

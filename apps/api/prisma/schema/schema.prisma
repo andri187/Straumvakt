@@ -1,0 +1,39 @@
+// ╔══════════════════════════════════════════════════════════════════════╗
+// ║  GENERATED FILE — DO NOT EDIT                                        ║
+// ║                                                                      ║
+// ║  Source:    prisma/schema/schema.prisma (datasource only — generator is apps/api/prisma/header.prisma)
+// ║  Generator: scripts/sync-api-prisma-schema.mjs                       ║
+// ║                                                                      ║
+// ║  Edit the source, then run `npm run sync:api-schema`.                ║
+// ║  `npm run check` fails if this file is stale.                        ║
+// ╚══════════════════════════════════════════════════════════════════════╝
+
+// Straumvakt API Worker — Prisma generator block.
+//
+// HAND-MAINTAINED. This is the only file under apps/api/prisma/ that is not
+// generated. Everything else in apps/api/prisma/schema/ is written by
+// scripts/sync-api-prisma-schema.mjs from prisma/schema/, including the
+// datasource block, which is lifted from the console schema so the two
+// cannot describe different databases.
+//
+// Prisma 7 prisma-client generator with runtime: cloudflare. Wrangler+esbuild
+// bundles the WASM via the static `?module` import natively — no externalize
+// shim, no compile-cf-prisma.sh, no post-opennext-cf-prisma.sh, no `as never`
+// casts. Output lands in src/generated/prisma/ and is gitignored.
+//
+// The output path is relative to apps/api/prisma/schema/, one level deeper
+// than the old single-file layout.
+
+generator client {
+  provider        = "prisma-client"
+  output          = "../../src/generated/prisma"
+  runtime         = "cloudflare"
+  moduleFormat    = "esm"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  schemas    = ["identity", "tenancy", "hosts", "properties", "assets", "hardware", "ocpp", "charging", "billing", "issues", "events", "audit", "entitlements", "people", "vendors", "roaming", "energy", "webhooks", "reports", "agreements"]
+  extensions = [citext]
+}

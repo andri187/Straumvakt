@@ -1,0 +1,181 @@
+// ───────────────────────────────────────────────────────────────────────────
+// vendor — the edge where external systems are named
+// Postgres schemas: vendors, hardware
+// NOTHING MAY IMPORT THIS. Vendor identifiers belong at the boundary.
+// Today three leaks exist and are deliberate for now:
+//   circuits.vendor_circuit_ref, Installation.credentialsRef,
+//   OcppIdentity.vendorResourceId
+// ───────────────────────────────────────────────────────────────────────────
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// hardware — platform-level catalog of supported vendors and models.
+// Not tenant-scoped: all Orgs see the same catalog. Model profiles are the
+// template for charger / meter / modem / controller records. Credential
+// scope on the model drives where adapter credentials attach (installation
+// vs. OCPP identity vs. none).
+// ─────────────────────────────────────────────────────────────────────────────
+
+model HardwareVendor {
+  id             String              @id @default(uuid()) @db.Uuid
+  slug           String              @unique // e.g. "zaptec", "easee", "kempower", "shelly", "generic-ocpp"
+  displayName    String              @map("display_name")
+  kind           HardwareVendorKind
+  website        String?
+  apiKind        VendorApiKind       @map("api_kind") @default(none)
+  supportContact Json                @default("{}") @map("support_contact") @db.JsonB
+  status         String              @default("active")
+  createdAt      DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  models         HardwareModel[]
+  installations  Installation[]
+  credentials    VendorCredential[]
+
+  @@map("vendors")
+  @@schema("hardware")
+}
+
+// Per-org vendor portal credentials. The operator stores Zaptec / Easee /
+// Kempower / etc. portal username + password under one of their orgs.
+// Password is AES-GCM encrypted with a Worker-side KEK before insert
+// (see apps/api/src/lib/credential-crypto.ts) — the DB never holds
+// plaintext. Multiple installations can share one credential row, and
+// org-scoped UI filters by ownerOrgId so an org user only sees their
+// own org's credentials.
+model VendorCredential {
+  id             String          @id @default(uuid()) @db.Uuid
+  ownerOrgId     String          @map("owner_org_id") @db.Uuid
+  vendorId       String          @map("vendor_id") @db.Uuid
+  username       String          @db.VarChar(200)
+  passwordCipher Bytes?          @map("password_cipher")
+  passwordIv     Bytes?          @map("password_iv")
+  status         String          @default("active") // active | expired | revoked
+  lastUsedAt     DateTime?       @map("last_used_at") @db.Timestamptz(6)
+  notes          String?         @db.VarChar(500)
+  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  ownerOrg       Organization    @relation("OrgVendorCredentials", fields: [ownerOrgId], references: [id], onDelete: Cascade)
+  vendor         HardwareVendor  @relation(fields: [vendorId], references: [id])
+  installations  Installation[]  @relation("InstallationCredential")
+
+  @@unique([ownerOrgId, vendorId, username])
+  @@index([ownerOrgId])
+  @@map("vendor_credentials")
+  @@schema("hardware")
+}
+
+enum HardwareVendorKind {
+  charger_ac
+  charger_dc
+  meter
+  modem
+  controller
+  multi // vendors that span kinds (e.g. Shelly: modem + controller)
+
+  @@schema("hardware")
+}
+
+enum VendorApiKind {
+  oauth       // Zaptec Pro style — exchange user/pass for token, then refresh
+  basic_auth  // Easee-style user/pass sent per request, or per-identity DC
+  none        // no vendor API; OCPP-only
+
+  @@schema("hardware")
+}
+
+model HardwareModel {
+  id               String                @id @default(uuid()) @db.Uuid
+  vendorId         String                @map("vendor_id") @db.Uuid
+  slug             String                // unique per vendor, e.g. "zaptec-pro", "easee-one"
+  displayName      String                @map("display_name")
+  kind             HardwareVendorKind
+  assetClass       AssetClass?           @map("asset_class") // ac/dc for chargers; null for non-chargers
+  credentialScope  VendorCredentialScope @map("credential_scope") @default(none)
+  profile          Json                  @default("{}") @db.JsonB // technical spec template: power, phases, connectors, OCPP versions
+  status           String                @default("active")
+  createdAt        DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  vendor           HardwareVendor        @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  chargingStations ChargingStation[]
+  installations    Installation[]
+
+  @@unique([vendorId, slug])
+  @@index([kind, status])
+  @@map("models")
+  @@schema("hardware")
+}
+
+enum VendorCredentialScope {
+  installation // AC vendor-managed: creds on properties.installations
+  identity     // DC vendor-managed: creds on ocpp.ocpp_identities
+  none         // OCPP-only: no vendor API
+
+  @@schema("hardware")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// vendors — adapter health + contract test results
+// ─────────────────────────────────────────────────────────────────────────────
+
+model VendorAdapterHealth {
+  id            String   @id @default(uuid()) @db.Uuid
+  vendor        String
+  windowStart   DateTime @map("window_start") @db.Timestamptz(6)
+  windowEnd     DateTime @map("window_end") @db.Timestamptz(6)
+  errorRate     Decimal  @map("error_rate") @db.Decimal(6, 4)
+  p50LatencyMs  Int      @map("p50_latency_ms")
+  p95LatencyMs  Int      @map("p95_latency_ms")
+  lastSuccessAt DateTime? @map("last_success_at") @db.Timestamptz(6)
+
+  @@index([vendor, windowStart])
+  @@map("adapter_health")
+  @@schema("vendors")
+}
+
+model VendorContractTest {
+  id        String   @id @default(uuid()) @db.Uuid
+  vendor    String
+  testName  String   @map("test_name")
+  result    String   // pass/fail/skip
+  runAt     DateTime @map("run_at") @db.Timestamptz(6)
+  details   Json     @default("{}") @db.JsonB
+
+  @@index([vendor, runAt(sort: Desc)])
+  @@map("contract_tests")
+  @@schema("vendors")
+}
+
+// ── Rev-5 (ADR 0012) — vendor API control attachment.
+// Anchors a ChargingStation to its OEM API resource (Easee, Zaptec,
+// Monta) when control flows through the vendor API rather than OCPP.
+
+model VendorAssetRef {
+  id                  String   @id @default(uuid()) @db.Uuid
+  orgId               String   @map("org_id") @db.Uuid
+  chargingStationId   String   @map("charging_station_id") @db.Uuid
+  vendorSlug          String   @map("vendor_slug")
+  vendorAssetId       String   @map("vendor_asset_id")
+  credentialsRef      String?  @map("credentials_ref")
+  capabilities        Json     @default("{}") @db.JsonB
+  status              String   @default("pending")
+  lastSyncedAt        DateTime? @map("last_synced_at") @db.Timestamptz(6)
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization        Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  chargingStation     ChargingStation  @relation(fields: [chargingStationId], references: [siteAssetId], onDelete: Cascade)
+
+  // A vendor asset may be covered by SEVERAL credentials — a credential is
+  // a capability ("can read this charger"), not ownership ("owns this
+  // charger"). Two Zaptec accounts seeing the same serial is normal, and
+  // recording both means revoking one falls through to the other instead
+  // of blanking the technical read.
+  @@unique([vendorSlug, vendorAssetId, credentialsRef])
+  @@index([chargingStationId, vendorSlug])
+  @@index([orgId, vendorSlug])
+  @@map("vendor_asset_refs")
+  @@schema("vendors")
+}

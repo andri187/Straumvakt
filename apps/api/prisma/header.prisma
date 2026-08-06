@@ -1,0 +1,23 @@
+// Straumvakt API Worker — Prisma generator block.
+//
+// HAND-MAINTAINED. This is the only file under apps/api/prisma/ that is not
+// generated. Everything else in apps/api/prisma/schema/ is written by
+// scripts/sync-api-prisma-schema.mjs from prisma/schema/, including the
+// datasource block, which is lifted from the console schema so the two
+// cannot describe different databases.
+//
+// Prisma 7 prisma-client generator with runtime: cloudflare. Wrangler+esbuild
+// bundles the WASM via the static `?module` import natively — no externalize
+// shim, no compile-cf-prisma.sh, no post-opennext-cf-prisma.sh, no `as never`
+// casts. Output lands in src/generated/prisma/ and is gitignored.
+//
+// The output path is relative to apps/api/prisma/schema/, one level deeper
+// than the old single-file layout.
+
+generator client {
+  provider        = "prisma-client"
+  output          = "../../src/generated/prisma"
+  runtime         = "cloudflare"
+  moduleFormat    = "esm"
+  previewFeatures = ["postgresqlExtensions"]
+}

@@ -1,0 +1,879 @@
+// ───────────────────────────────────────────────────────────────────────────
+// identity — people, organisations, memberships, credentials
+// Postgres schemas: identity, tenancy, people
+// Depends on: nothing. This is the bottom of the dependency chain.
+// ───────────────────────────────────────────────────────────────────────────
+
+
+// Connection URL lives in prisma.config.ts (Prisma 7 requirement).
+// Runtime client passes a PrismaNeon adapter to PrismaClient — see src/lib/prisma.ts.
+
+// ─────────────────────────────────────────────────────────────────────────────
+// identity — users and their credentials
+// ─────────────────────────────────────────────────────────────────────────────
+
+model User {
+  // ── Sprint 0 (ADR 0001) ──────────────────────────────────────────
+  id             String           @id @default(uuid()) @db.Uuid
+  email          String           @unique @db.Citext
+  displayName    String?          @map("display_name")
+  status         UserStatus       @default(active)
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt      DateTime?        @map("deleted_at") @db.Timestamptz(6)
+
+  // ── Profile enrichment per ADR 0010 (Sprint 2.6) ─────────────────
+  kennitala      String?          @unique
+  phone          String?
+  locale         String           @default("is")
+  timezone       String           @default("Atlantic/Reykjavik")
+  notes          String?          @db.Text
+
+  // ── Profile enrichment round 2 (Sprint 3) ────────────────────────
+  firstName      String?          @map("first_name")
+  middleName     String?          @map("middle_name")
+  lastName       String?          @map("last_name")
+  dateOfBirth    DateTime?        @map("date_of_birth") @db.Date
+  photoUrl       String?          @map("photo_url")
+  address        Json             @default("{}") @map("address") @db.JsonB
+
+  // ── ADR 0014 (audience + verification + activity + GDPR) ─────────
+  // audience: operator (web portal agent of an org), driver (mobile
+  // app / RFID consumer), service (API-key principal — Sprint 11+).
+  // Designed in ADR 0014; landed during user-profile enrichment so
+  // API-onboarded drivers can be distinguished from invited agents
+  // without a schema retrofit when OCPP-auth comes online.
+  audience       UserAudience     @default(operator)
+
+  // Verification timestamps (set when email/phone OTP completes).
+  // Required for driver self-registration flow; used today as a soft
+  // signal in the UI — operator-side users have no verification path
+  // yet so values stay null for that audience.
+  emailVerifiedAt DateTime?       @map("email_verified_at") @db.Timestamptz(6)
+  phoneVerifiedAt DateTime?       @map("phone_verified_at") @db.Timestamptz(6)
+
+  // lastSeenAt is updated on any user-attributable event (login,
+  // session, future Authorize). Useful for stale-account cleanup
+  // and as a hint for the future token cache layer's invalidation
+  // signal. Cheap to write, cheap to skip — no event coupling yet.
+  lastSeenAt     DateTime?        @map("last_seen_at") @db.Timestamptz(6)
+
+  // GDPR consent timestamps. ToS + privacy are operator-facing
+  // (operator agents accepted on signup); marketing is opt-in for
+  // drivers in the app. All three nullable; UI shows the date when set.
+  consentTosAt        DateTime?   @map("consent_tos_at") @db.Timestamptz(6)
+  consentPrivacyAt    DateTime?   @map("consent_privacy_at") @db.Timestamptz(6)
+  consentMarketingAt  DateTime?   @map("consent_marketing_at") @db.Timestamptz(6)
+
+  // Catch-all metadata. Vendor-imported users land any extra Zaptec
+  // fields here so we don't lose them across re-syncs. Avoid using
+  // for fields that are queryable — those get proper columns.
+  metadata       Json             @default("{}") @db.JsonB
+
+  // ── Existing relations ───────────────────────────────────────────
+  credentials    UserCredential?
+  // Sprint 5.6 — one-shot tokens (invite, magic-link, password-reset).
+  // Many-to-one because a user can have multiple kinds active at once
+  // (e.g. an invite they haven't consumed AND a password-reset they
+  // requested). UserToken's own (userId, kind, expiresAt) index keeps
+  // lookups cheap.
+  tokens         UserToken[]
+  memberships    Membership[]
+  primaryFamily  FamilyGroup[]    @relation("FamilyGroupPrimary")
+  familyMember   FamilyMembership[]
+  sessions       ChargeSession[]
+  auditActions   AuditAction[]
+  commandsAsked  OutboundCommand[] @relation("OutboundCommandRequester")
+  ocpiTokens     OcpiToken[]
+
+  // ── Rev-3 / Rev-4 relations (ADRs 0008 + 0010) ───────────────────
+  // ── ADR 0014 / Sprint 4 — PlatformAdmin replaced by PlatformGrant.
+  platformGrant          PlatformGrant?  @relation("PlatformGrantUser")
+  platformGrantsMade     PlatformGrant[] @relation("PlatformGrantedBy")
+  platformGrantsRevoked  PlatformGrant[] @relation("PlatformGrantRevokedBy")
+  // Membership lifecycle — invitedBy back-relation (ADR 0014).
+  membershipsInvited     Membership[]    @relation("MembershipInviter")
+  // ── ADR 0014 ──
+  orgsAsMainContact       Organization[]   @relation("OrgMainContact")
+  configKeysSet           OcppConfigurationKey[] @relation("ConfigKeySetBy")
+  costCentersAsPayer      CostCenter[]     @relation("CostCenterPayerUser")
+  driverContracts         DriverContract[]
+
+  // ── Vendor identity + auth artefacts (API-onboarding scaffolding) ─
+  // UserVendorRef bridges our User.id ↔ vendor user IDs (Zaptec UUIDs).
+  // One human can hold multiple Zaptec accounts across installations —
+  // each becomes a row here. Stable join key for re-syncs.
+  vendorRefs     UserVendorRef[]
+  // IdToken is the polymorphic auth artefact (RFID UID, app JWT,
+  // magic link). Indexed for hot-path Authorize lookups when OCPP-auth
+  // comes online. Today populated by Zaptec sync; tomorrow self-issued
+  // tokens land here too with kind="app_jwt".
+  idTokens       IdToken[]
+  // Vendor user-group memberships (Zaptec UserGroup mirror).
+  vendorGroupMemberships VendorUserGroupMembership[]
+  // EVs the driver has registered. Optional but useful for fleet
+  // contracts and driver-side UX ("which car charged?").
+  vehicles       Vehicle[]
+
+  // ── Sprint 9 / ADR 0019 — agreements schema back-relation ───────
+  driverGroupMemberships DriverGroupMembership[] @relation("DriverGroupMembershipUser")
+
+  // ── ADR 0022 (2026-05-31 addendum) — self-onboarding access requests ──
+  driverAccessRequests         DriverAccessRequest[] @relation("DriverAccessRequestUser")
+  driverAccessRequestsReviewed DriverAccessRequest[] @relation("DriverAccessRequestReviewer")
+
+  // ── Sprint 9 / 2026-05-08 — AMQP StateId 722 driver enrichment ──
+  liveSessions   LiveSession[]    @relation("LiveSessionUser")
+
+  // ── ADR 0029 — billing attribution back-relations ───────────────
+  billObjectsOwned        BillObject[]       @relation("BillObjectOwnerUser")
+  billObjectMemberships   BillObjectMember[] @relation("BillObjectMemberUser")
+
+  @@map("users")
+  @@schema("identity")
+}
+
+enum UserStatus {
+  active
+  suspended
+  deleted
+
+  @@schema("identity")
+}
+
+// ── ADR 0014 (audience discriminator) ──────────────────────────────
+// Distinguishes web-portal users (operator agents) from mobile-app
+// end-users (drivers). Today every operator-imported user defaults
+// to "operator"; Zaptec-synced drivers get "driver". Service kind
+// reserved for API-key principals.
+enum UserAudience {
+  operator
+  driver
+  service
+
+  @@schema("identity")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// identity — UserVendorRef (ADR 0014 / API-onboarding)
+// Maps our User.id ↔ vendor user IDs. Many-to-one (one User can hold
+// multiple vendor refs across installations). Sync-friendly: stable
+// composite uniqueness on (vendor_slug, vendor_user_id) survives
+// re-syncs and dedup-by-email.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model UserVendorRef {
+  id                  String           @id @default(uuid()) @db.Uuid
+  userId              String           @map("user_id") @db.Uuid
+  vendorSlug          String           @map("vendor_slug")    // e.g. "zaptec"
+  vendorUserId        String           @map("vendor_user_id")
+  vendorEmail         String?          @map("vendor_email")
+  vendorRoleHint      String?          @map("vendor_role_hint") // "Owner" | "Admin" | "User" — vendor-shaped, display only
+  scopeInstallationId String?          @map("scope_installation_id") @db.Uuid
+  status              VendorRefStatus  @default(active)
+  lastSyncedAt        DateTime         @default(now()) @map("last_synced_at") @db.Timestamptz(6)
+  metadata            Json             @default("{}") @db.JsonB
+  createdAt           DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user                User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scopeInstallation   Installation?    @relation("InstallationVendorUserRefs", fields: [scopeInstallationId], references: [id], onDelete: SetNull)
+
+  @@unique([vendorSlug, vendorUserId])
+  @@index([userId])
+  @@index([scopeInstallationId])
+  @@map("user_vendor_refs")
+  @@schema("identity")
+}
+
+enum VendorRefStatus {
+  active
+  inactive_at_vendor   // user removed from vendor side; we keep history
+  removed_at_vendor    // hard-removed at vendor, not just deactivated
+
+  @@schema("identity")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// identity — IdToken (RFID, app JWT, magic link, …)
+// Polymorphic auth artefact. Built with `kind` discriminator from day
+// one so that when OCPP-auth flips, self-issued tokens (kind="app_jwt")
+// land in the same table without schema retrofit. The hot-path
+// Authorize lookup (future Sprint H) will go through (status, value)
+// composite index.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model IdToken {
+  id                  String           @id @default(uuid()) @db.Uuid
+  userId              String           @map("user_id") @db.Uuid
+  kind                IdTokenKind
+  // Canonical OCPP idTag value. For RFID this is the UID hex; for
+  // app/JWT tokens this is the JWT-derived ID. UNIQUE so any
+  // Authorize lookup is O(1).
+  value               String           @unique
+  // Who issued it. "zaptec" when we mirror a Zaptec RFID; null when
+  // we issued (future). Set so we can route re-sync vs self-managed
+  // updates correctly.
+  vendorIssuedBy      String?          @map("vendor_issued_by")
+  // Vendor's internal ID for re-sync correlation.
+  vendorTokenId       String?          @map("vendor_token_id")
+  // Operator-friendly label ("Andri black tag"). Optional.
+  label               String?
+  status              IdTokenStatus    @default(active)
+  expiresAt           DateTime?        @map("expires_at") @db.Timestamptz(6)
+  lastUsedAt          DateTime?        @map("last_used_at") @db.Timestamptz(6)
+  // Optional narrowing: this token only valid at one installation.
+  // Empty = valid wherever the user has access.
+  scopeInstallationId String?          @map("scope_installation_id") @db.Uuid
+  metadata            Json             @default("{}") @db.JsonB
+  createdAt           DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user                User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scopeInstallation   Installation?    @relation("InstallationIdTokens", fields: [scopeInstallationId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([status, value])
+  @@index([scopeInstallationId])
+  @@index([vendorIssuedBy, vendorTokenId])
+  @@map("id_tokens")
+  @@schema("identity")
+}
+
+enum IdTokenKind {
+  rfid           // physical RFID card / chip (MIFARE / DESFire)
+  app_jwt
+  magic_link
+  zaptec_proxy   // we know about it but Zaptec issues + validates it (today's mirror case)
+  ocpi_token     // received from a roaming partner via OCPI
+  manual         // operator-created static value (e.g. Zaptec portal default tag)
+  evccid         // Vehicle Identifier — value IS the EV's EVCCID / EV-PLC-MAC, Autocharge-derived (ADR 0036)
+  virtual_rfid   // auto-issued at User creation. value = first 20 hex chars of User.id,
+                 //   uppercased, hyphens stripped. Used by app-start RemoteStartTransaction
+                 //   and any future "scan QR / link to my Straumvakt account" flow.
+                 //   Same User.id appears across all sessions, reports, billing rows.
+                 //   ADR 0022 2026-05-31 addendum.
+
+  @@schema("identity")
+}
+
+enum IdTokenStatus {
+  active
+  suspended
+  revoked
+  expired
+
+  @@schema("identity")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// identity — VendorUserGroup mirror (Zaptec UserGroups)
+// Captures vendor-side group membership + role-within-group so policy
+// information survives sync. When OCPP-auth lands, this informs the
+// Authorize handler ("user has Admin role in this installation's group
+// → reject if charger is in a restricted-to-Admin sub-scope").
+// ─────────────────────────────────────────────────────────────────────────────
+
+model VendorUserGroup {
+  id              String           @id @default(uuid()) @db.Uuid
+  vendorSlug      String           @map("vendor_slug")
+  vendorGroupId   String           @map("vendor_group_id")
+  installationId  String           @map("installation_id") @db.Uuid
+  name            String
+  metadata        Json             @default("{}") @db.JsonB
+  lastSyncedAt    DateTime         @default(now()) @map("last_synced_at") @db.Timestamptz(6)
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  installation    Installation     @relation("InstallationVendorUserGroups", fields: [installationId], references: [id], onDelete: Cascade)
+  memberships     VendorUserGroupMembership[]
+
+  @@unique([vendorSlug, vendorGroupId])
+  @@index([installationId])
+  @@map("vendor_user_groups")
+  @@schema("identity")
+}
+
+model VendorUserGroupMembership {
+  groupId    String           @map("group_id") @db.Uuid
+  userId     String           @map("user_id") @db.Uuid
+  // Vendor-shaped role string. "Owner" | "Admin" | "User" for Zaptec.
+  // Kept as string so other vendors with different role taxonomies
+  // can land here without enum changes.
+  role       String
+  metadata   Json             @default("{}") @db.JsonB
+  createdAt  DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  group      VendorUserGroup  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, userId])
+  @@index([userId])
+  @@map("vendor_user_group_memberships")
+  @@schema("identity")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// people — Vehicle (driver-owned EV)
+// One user can have many vehicles. Useful for fleet contract scoping,
+// session attribution UX ("which car was charging?"), and battery-aware
+// smart charging when that lands.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Vehicle {
+  id                  String           @id @default(uuid()) @db.Uuid
+  userId              String           @map("user_id") @db.Uuid
+  make                String?
+  model               String?
+  year                Int?
+  licensePlate        String?          @map("license_plate")
+  vin                 String?          @unique
+  batteryCapacityKwh  Decimal?         @map("battery_capacity_kwh") @db.Decimal(6, 2)
+  metadata            Json             @default("{}") @db.JsonB
+  createdAt           DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user                User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("vehicles")
+  @@schema("people")
+}
+
+model UserCredential {
+  userId        String   @id @map("user_id") @db.Uuid
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  passwordHash  String?  @map("password_hash")
+  totpSecret    String?  @map("totp_secret")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("user_credentials")
+  @@schema("identity")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// identity — UserToken (Sprint 5.6 / ADR 0017)
+// One-shot, time-boxed authentication artefacts: invite links, magic
+// links, future password-reset links. Different lifecycle from
+// UserCredential (which holds long-lived password / TOTP), so it
+// lives in its own table — Rule 4 additive change.
+//
+// We never store plaintext tokens. The plaintext is generated at
+// create time, returned to the caller ONCE for them to embed in a
+// link, then only the SHA-256 hash is persisted. consume() looks
+// up by hash, verifies not expired, not used, marks used,
+// returns the user + metadata.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model UserToken {
+  id            String         @id @default(uuid()) @db.Uuid
+  userId        String         @map("user_id") @db.Uuid
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind          UserTokenKind
+  // SHA-256 hex of the plaintext token. Plaintext is returned once
+  // at create-time; never persisted.
+  tokenHash     String         @unique @map("token_hash")
+  expiresAt     DateTime       @map("expires_at") @db.Timestamptz(6)
+  // Set once on consume. Re-consume attempts find the row but the
+  // non-null usedAt rejects them.
+  usedAt        DateTime?      @map("used_at") @db.Timestamptz(6)
+  // Optional inviter / actor for audit trail. Nullable for system-
+  // initiated tokens (password reset triggered by self-service).
+  createdById   String?        @map("created_by_id") @db.Uuid
+  // Kind-specific bits: e.g. invite tokens carry orgId + role +
+  // installationId scope. Freeform JSONB so adding a new kind
+  // doesn't require a migration.
+  metadata      Json           @default("{}") @db.JsonB
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  // ── ADR 0028 — driver invite (code / QR / email) ────────────────
+  // Populated when kind = driver. driverGroupId = the access grant the
+  // invite confers; billObjectId = the billing home to attach at
+  // redemption (nullable → "Unattributed" fallback, ADR 0029). security
+  // gates redemption. maxRedemptions: null = unlimited (shared poster),
+  // 1 = single-use.
+  driverGroupId   String?              @map("driver_group_id") @db.Uuid
+  billObjectId    String?              @map("bill_object_id") @db.Uuid
+  security        DriverInviteSecurity @default(none)
+  passwordKeyHash String?              @map("password_key_hash")
+  maxRedemptions  Int?                 @map("max_redemptions")
+  driverGroup     DriverGroup?         @relation("UserTokenDriverGroup", fields: [driverGroupId], references: [id], onDelete: SetNull)
+  billObject      BillObject?          @relation("UserTokenBillObject", fields: [billObjectId], references: [id], onDelete: SetNull)
+
+  @@index([userId, kind, expiresAt])
+  @@map("user_tokens")
+  @@schema("identity")
+}
+
+enum UserTokenKind {
+  invite
+  magic_link
+  password_reset
+  // ADR 0028 — driver invite (code / QR / email).
+  driver
+
+  @@schema("identity")
+}
+
+// ADR 0028 — optional QR security layers chosen by the host-admin.
+enum DriverInviteSecurity {
+  none
+  password_key
+  allow_term
+
+  @@schema("identity")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// tenancy — organizations (SaaS tenants / CPOs) and memberships
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Organization {
+  // ── Sprint 0 (ADR 0001) ──────────────────────────────────────────
+  id                  String              @id @default(uuid()) @db.Uuid
+  displayName         String              @map("display_name")
+  countryCode         String              @map("country_code") // ISO 3166-1 alpha-2
+  status              OrgStatus           @default(active)
+  createdAt           DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // ── Profile per ADR 0014 (Iceland-aligned, Fyrirtækjaskrá fields) ─
+  // kennitala is the canonical disambiguator now that slug is gone.
+  // legalName + legalForm + legalFormCode mirror Fyrirtækjaskrá's
+  // (heiti, rekstrarform). postalAddress + legalAddress carry the
+  // structured address shape ({ street, postalCode, city }).
+  // municipalityCode is the 4-digit Hagstofa code; municipalityName
+  // is the denormalised label for display.
+  legalName           String?             @map("legal_name")
+  legalForm           String?             @map("legal_form")             // Human label, e.g. "Hlutafélag, almennt (hf)"
+  legalFormCode       String?             @map("legal_form_code")        // Fyrirtækjaskrá code, e.g. "D1"
+  kennitala           String?             @unique
+  vskNr               String?             @map("vsk_nr")
+  leiCode             String?             @map("lei_code")
+  defaultCurrency     String              @map("default_currency") @default("ISK")
+  postalAddress       Json?               @map("postal_address") @db.JsonB
+  legalAddress        Json?               @map("legal_address") @db.JsonB
+  municipalityCode    String?             @map("municipality_code")
+  municipalityName    String?             @map("municipality_name")
+  branding            Json                @default("{}") @db.JsonB
+  regulatorLicenceNo  String?             @map("regulator_licence_no")
+  roles               OrganizationRole[]  @default([])
+  notes               String?             @db.Text
+
+  // ── ADR 0026 — going-public host classification ──────────────────
+  // Null for non-host orgs (operators, vendors, DSOs…). Set for customer
+  // host orgs: multi_dwelling (HOA/building) or company (employer/fleet).
+  kind                OrganizationKind?
+
+  // ── Contacts (ADR 0014 follow-up) ────────────────────────────────
+  // Structured array of contact rows. Shape per item:
+  //   { role: "main" | "billing" | "technical" | "support" |
+  //           "emergency" | "other",
+  //     name: string,
+  //     email?: string,
+  //     phone?: string,
+  //     notes?: string }
+  // The "main" role is the org's primary point of contact. When a
+  // mainContactUserId is set (FK below), it takes precedence over
+  // any role=main entry here — the typed FK is authoritative once a
+  // User exists. Pre-User orgs (operator types contact info before
+  // inviting) keep the raw entry; invite flow promotes it to a User
+  // and clears the raw "main" role.
+  contacts            Json                @default("[]") @db.JsonB
+
+  // ── Main contact (ADR 0014) ──────────────────────────────────────
+  // FK to User. Nullable; SET NULL on user delete so the org row
+  // survives a contact's offboarding. UI ensures the picker only
+  // surfaces users with an active Membership in this org.
+  mainContactUserId   String?             @map("main_contact_user_id") @db.Uuid
+  mainContact         User?               @relation("OrgMainContact", fields: [mainContactUserId], references: [id], onDelete: SetNull)
+
+  // ── Existing relations (ChargerHost / ChargerServicePlan dropped per ADR 0009) ─
+  memberships         Membership[]
+  properties          Property[]
+  sites               Site[]
+  installations       Installation[]
+  vendorCredentials   VendorCredential[] @relation("OrgVendorCredentials")
+  circuits            Circuit[]
+  siteAssets          SiteAsset[]
+  // Rev-5 (ADR 0012) — Charger renamed to ChargingStation
+  chargingStations         ChargingStation[]    @relation("StationOperator")
+  chargingStationsOwned    ChargingStation[]    @relation("StationOwner")
+  evses                    EVSE[]
+  ocppIdentities      OcppIdentity[]
+  connectors          Connector[]
+  outboundCommands    OutboundCommand[]
+  chargeSessions      ChargeSession[]
+  meterValues         MeterValue[]
+  reservations        Reservation[]
+  // Rev-5 (ADR 0012) — control-plane attachments + protocol/import refs
+  vendorAssetRefs         VendorAssetRef[]
+  externalCpmsRefs        ExternalCpmsRef[]
+  capabilityProfiles      CapabilityProfile[]
+  controlRoutingPolicies  ControlRoutingPolicy[]
+  protocolTransactionRefs ProtocolTransactionRef[]
+  importedCdrRefs         ImportedCdrRef[]
+  liveSessions            LiveSession[]
+  tariffs             Tariff[]
+  customerPlans       CustomerPlan[]
+  subscriptions       Subscription[]
+  billingTransactions BillingTransaction[]
+  invoices            Invoice[]
+  statements          Statement[]
+  tickets             IssueTicket[]
+  detectionRules      DetectionRule[]
+  eventLog            EventLogEntry[]
+  auditActions        AuditAction[]
+  featureFlags        FeatureFlag[]
+  enterpriseLicenses  EnterpriseLicense[]
+  familyGroups        FamilyGroup[]
+  ocpiTokens          OcpiToken[]
+  hubConnections      HubConnection[]
+  cdrQueueEntries     CdrQueueEntry[]
+  siteEnergyPolicies  SiteEnergyPolicy[]
+  propertyEnergyPolicies PropertyEnergyPolicy[]
+  energyPlanningResults EnergyPlanningResult[]
+  webhookSubscriptions WebhookSubscription[]
+
+  // ── Rev-3 billing relations (ADR 0008) ──────────────────────────
+  tariffDefinitions   TariffDefinition[]
+  costCenters         CostCenter[]         @relation("CostCenterOrg")
+  costCentersAsPayer  CostCenter[]         @relation("CostCenterPayer")
+  costCentersAsBeneficiary CostCenter[]    @relation("CostCenterBeneficiary")
+  contracts           Contract[]                  @relation("ContractOwnerOrg")
+  // ── Sprint 8.14 — bilateral contract counterparty link ──────────
+  // Added when collapsing the dual-row Dalvegur contracts into a
+  // single row visible to BOTH sides. Operator org (Straumvakt) is
+  // the counterparty for every customer-org contract.
+  contractsAsCounterparty Contract[]              @relation("ContractCounterpartyOrg")
+  contractAccumulators ContractPeriodAccumulator[]
+  driverContracts     DriverContract[]
+  billingLines        BillingLine[]
+  configurationKeys   OcppConfigurationKey[]
+
+  // ── Sprint 7.5 — reports schema back-relations ──────────────────
+  billingPeriodSummaries BillingPeriodSummary[]
+  sessionLedgers      SessionLedger[]
+  siteEnergyDaily     SiteEnergyDaily[]
+  chargerUptimeDaily  ChargerUptimeDaily[]
+  commandHistory      CommandHistory[]
+
+  // ── Sprint 9 / ADR 0019 — agreements schema back-relations ──────
+  agreementsAsCounterparty Agreement[]   @relation("AgreementCounterparty")
+  agreementsAsCpo          Agreement[]   @relation("AgreementCpo")
+  rateReferencesAsSupplier RateReference[] @relation("RateReferenceSupplier")
+  driverGroupsOwned        DriverGroup[] @relation("DriverGroupOwner")
+
+  // ── ADR 0022 (2026-05-31 addendum) — self-onboarding email-domain rules ──
+  emailDomains             OrgEmailDomain[]
+
+  // ── ADR 0026 / 0029 — going-public host + billing back-relations ─
+  billObjects              BillObject[]      @relation("BillObjectOrg")
+  billObjectsOwned         BillObject[]      @relation("BillObjectOwnerOrg")
+  hostApplications         HostApplication[] @relation("HostApplicationConvertedOrg")
+
+  @@map("organizations")
+  @@schema("tenancy")
+}
+
+enum OrgStatus {
+  active
+  suspended
+  archived
+
+  @@schema("tenancy")
+}
+
+// ADR 0026 — host org classification (going-public).
+enum OrganizationKind {
+  multi_dwelling
+  company
+
+  @@schema("tenancy")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// tenancy — host applications (ADR 0026 §6, going-public RFQ inbox)
+// Public /apply submissions land here; operator works them in the
+// /applications inbox and converts a "won" row into a host org.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model HostApplication {
+  id             String                @id @default(uuid()) @db.Uuid
+  companyName    String                @map("company_name")
+  contactName    String                @map("contact_name")
+  contactEmail   String                @map("contact_email")
+  contactPhone   String?               @map("contact_phone")
+  kennitala      String?
+  siteType       OrganizationKind      @map("site_type")
+  // [{ address, estChargers, estDrivers }, …]
+  sites          Json                  @default("[]") @db.JsonB
+  description    String?               @db.Text
+  status         HostApplicationStatus @default(new)
+  convertedOrgId String?               @map("converted_org_id") @db.Uuid
+  createdAt      DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  convertedOrg   Organization?         @relation("HostApplicationConvertedOrg", fields: [convertedOrgId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@map("host_applications")
+  @@schema("tenancy")
+}
+
+enum HostApplicationStatus {
+  new
+  in_review
+  offered
+  won
+  lost
+
+  @@schema("tenancy")
+}
+
+model Membership {
+  orgId        String           @map("org_id") @db.Uuid
+  userId       String           @map("user_id") @db.Uuid
+  role         MembershipRole
+  createdAt    DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  // ── ADR 0014 / Sprint 4 — lifecycle + invite-flow plumbing ───────
+  // status drives whether a Membership grants permissions: only
+  // 'active' rows are honoured by requirePermission. 'invited' rows
+  // exist between admin sending an invite and the user accepting; the
+  // accept-invite flow flips to 'active'. Sprint 5 wires the flow.
+  status       MembershipStatus @default(active)
+
+  // Lifecycle / provenance audit trail. invitedById is null for the
+  // backfilled bootstrap admin (created at org-init, not invited).
+  invitedById      String?  @map("invited_by_id") @db.Uuid
+  invitedAt        DateTime? @map("invited_at") @db.Timestamptz(6)
+  acceptedAt       DateTime? @map("accepted_at") @db.Timestamptz(6)
+  suspendedAt      DateTime? @map("suspended_at") @db.Timestamptz(6)
+  revokedAt        DateTime? @map("revoked_at") @db.Timestamptz(6)
+
+  // Optional scope narrowing within the org. Empty arrays = full
+  // org access; non-empty = narrowed to those site/property IDs at
+  // the repo layer (Sprint 4 milestone 4.3 wiring). Postgres uuid[]
+  // columns; we don't validate the UUIDs as belonging to the org at
+  // the DB level — that's the repo's job.
+  scopeSiteIds     String[] @default([]) @map("scope_site_ids") @db.Uuid
+  scopePropertyIds String[] @default([]) @map("scope_property_ids") @db.Uuid
+
+  organization Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invitedBy    User?            @relation("MembershipInviter", fields: [invitedById], references: [id])
+
+  @@id([orgId, userId])
+  @@index([orgId, status])
+  @@map("memberships")
+  @@schema("tenancy")
+}
+
+enum MembershipRole {
+  // ── Pre-ADR-0014 values; deprecated but retained until the Sprint 9
+  // RLS rebuild lets us reshape this enum cleanly. No code references
+  // them after Sprint 4 milestone 4.2; the permission catalogue maps
+  // only the new values (owner, admin, manager, technician, finance,
+  // support, viewer). 'driver' is particularly stale — drivers carry
+  // audience='driver' on User now, not a Membership.
+  owner
+  admin
+  operator      // deprecated — remap to 'manager' Sprint 9
+  helper        // deprecated — remap to 'technician' Sprint 9
+  contractor    // deprecated — moves to OrganizationRole.service_contractor Sprint 9
+  driver        // deprecated — User.audience='driver' is the right place Sprint 9
+  viewer
+
+  // ── ADR 0014 — new role bundles ──────────────────────────────────
+  manager       // operational; no member-management
+  technician    // read + remote commands + charger config
+  finance       // billing, contracts, exports; no fleet ops
+  support       // read-only across the org
+
+  // ── ADR 0027 — going-public host self-management (tenancy-scoped;
+  // manages the host's own drivers + reads its billing; no platform
+  // surface) ───────────────────────────────────────────────────────
+  host_admin
+
+  @@schema("tenancy")
+}
+
+enum MembershipStatus {
+  invited
+  active
+  suspended
+  revoked
+
+  @@schema("tenancy")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// tenancy — OrgEmailDomain (ADR 0022 / 2026-05-31 addendum)
+//
+// Drives the registration → driver-group flow. When a self-registered driver
+// finishes email verification, the handler looks up this table by the
+// lowercased email domain. Three outcomes per the policy enum:
+//
+//   • auto_join         — insert agreements.driver_group_memberships pointing
+//                         at defaultDriverGroupId. Driver can charge
+//                         immediately at every Installation the group covers.
+//   • request_approval  — insert agreements.driver_access_requests with
+//                         triggeredBy='email_domain_match'. Operator inbox
+//                         handles approve/deny. (Default.)
+//   • disabled          — ignore. Lets the operator pause auto-join without
+//                         deleting the rule.
+//
+// `domain` is globally UNIQUE — one org owns each domain; no overlap between
+// tenants. Operator UX surfaces a conflict error at create time.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model OrgEmailDomain {
+  id                       String                @id @default(uuid()) @db.Uuid
+  orgId                    String                @map("org_id") @db.Uuid
+  domain                   String                                  // lowercased — e.g. "n1.is"
+  policy                   OrgEmailDomainPolicy  @default(request_approval)
+  defaultDriverGroupId     String?               @map("default_driver_group_id") @db.Uuid
+  createdAt                DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization             Organization          @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  defaultDriverGroup       DriverGroup?          @relation("OrgEmailDomainDefaultGroup", fields: [defaultDriverGroupId], references: [id], onDelete: SetNull)
+  triggeredRequests        DriverAccessRequest[] @relation("DriverAccessRequestFromDomain")
+
+  @@unique([domain])
+  @@index([orgId])
+  @@map("org_email_domains")
+  @@schema("tenancy")
+}
+
+enum OrgEmailDomainPolicy {
+  auto_join
+  request_approval
+  disabled
+
+  @@schema("tenancy")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// people — family groups (primary driver + family members for AC pricing)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model FamilyGroup {
+  id             String            @id @default(uuid()) @db.Uuid
+  orgId          String            @map("org_id") @db.Uuid
+  displayName    String            @map("display_name")
+  primaryUserId  String            @map("primary_user_id") @db.Uuid
+  createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization   Organization      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  primaryUser    User              @relation("FamilyGroupPrimary", fields: [primaryUserId], references: [id])
+  members        FamilyMembership[]
+
+  @@index([orgId])
+  @@map("family_groups")
+  @@schema("people")
+}
+
+model FamilyMembership {
+  familyGroupId String       @map("family_group_id") @db.Uuid
+  userId        String       @map("user_id") @db.Uuid
+  memberKind    MemberKind   @map("member_kind")
+  joinedAt      DateTime     @default(now()) @map("joined_at") @db.Timestamptz(6)
+
+  familyGroup   FamilyGroup  @relation(fields: [familyGroupId], references: [id], onDelete: Cascade)
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([familyGroupId, userId])
+  @@map("family_memberships")
+  @@schema("people")
+}
+
+enum MemberKind {
+  primary
+  family_user
+
+  @@schema("people")
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// REV-3 / REV-4 ADDITIONS — ADRs 0007 + 0008 + 0009 + 0010 (Sprint 2.6)
+// ═════════════════════════════════════════════════════════════════════════════
+
+// ─────────────────────────────────────────────────────────────────────────────
+// tenancy — OrganizationRole enum (ADR 0010)
+// 21-value enum supporting multi-role Org rows.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// OCPI-aligned tenant taxonomy (ADR 0014). Values describe who the
+// org IS, not billing roles (those belong on Contract / CostCenter /
+// DriverContract). Trimmed from the original 21-value set; dropped
+// values were unused by any code consumer and conflated identity
+// with relationships.
+enum OrganizationRole {
+  cpo                   // Charge Point Operator (OCPI)
+  emsp                  // E-Mobility Service Provider (OCPI)
+  hub                   // Roaming hub (OCPI)
+  nsp                   // Navigation/data provider (OCPI)
+  site_host             // Owns the parking/building
+  service_contractor    // Performs maintenance / installation
+  installer             // Sub-set of service_contractor; physical install
+  vendor                // Hardware vendor (Zaptec, Easee, …)
+  regulator             // Regulatory body
+  dso                   // Distribution System Operator
+  tso                   // Transmission System Operator
+  retailer              // Electricity retailer
+  payment_processor     // Stripe, Adyen, …
+
+  @@schema("tenancy")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// identity — PlatformGrant (ADR 0014, replaces PlatformAdmin from ADR 0008)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── ADR 0014 / Sprint 4 — replaces PlatformAdmin ────────────────────
+// Migration backfills every PlatformAdmin row into PlatformGrant with
+// role mapped from PlatformAdminLevel: superuser → 'platform_admin',
+// read_only → 'auditor'. Old table dropped after backfill.
+model PlatformGrant {
+  userId        String              @id @map("user_id") @db.Uuid
+  role          PlatformRole
+  status        PlatformGrantStatus @default(active)
+  grantedById   String?             @map("granted_by_id") @db.Uuid
+  grantedAt     DateTime            @default(now()) @map("granted_at") @db.Timestamptz(6)
+  // Optional expiry — auditor / time-limited support_agent grants set
+  // this; null means no expiry. Sprint 9 hardening enforces it.
+  expiresAt     DateTime?           @map("expires_at") @db.Timestamptz(6)
+  revokedAt     DateTime?           @map("revoked_at") @db.Timestamptz(6)
+  revokedById   String?             @map("revoked_by_id") @db.Uuid
+  // Optional per-grant scope: e.g. {"tenantIds": [...]} for a
+  // limited-tenant support engagement. Null = full scope per role.
+  scope         Json?
+
+  user          User @relation("PlatformGrantUser", fields: [userId], references: [id], onDelete: Cascade)
+  grantedBy     User? @relation("PlatformGrantedBy", fields: [grantedById], references: [id])
+  revokedBy     User? @relation("PlatformGrantRevokedBy", fields: [revokedById], references: [id])
+
+  @@map("platform_grants")
+  @@schema("identity")
+}
+
+enum PlatformRole {
+  super_user        // founders, CTO; can mint/revoke platform grants
+  platform_admin    // lead engineers / on-call; full cross-tenant ops
+  support_agent     // read all tenants + impersonate + password-reset; no tenant writes
+  sales_cs          // read tenants + write only on org notes/tags/contract metadata
+  finance_internal  // Straumvakt's own books — NOT customer billing
+  auditor           // read-only across everything; time-limited via expiresAt
+
+  @@schema("identity")
+}
+
+enum PlatformGrantStatus {
+  active
+  suspended
+  revoked
+
+  @@schema("identity")
+}

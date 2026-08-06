@@ -1,0 +1,268 @@
+// ╔══════════════════════════════════════════════════════════════════════╗
+// ║  GENERATED FILE — DO NOT EDIT                                        ║
+// ║                                                                      ║
+// ║  Source:    prisma/schema/protocol.prisma
+// ║  Generator: scripts/sync-api-prisma-schema.mjs                       ║
+// ║                                                                      ║
+// ║  Edit the source, then run `npm run sync:api-schema`.                ║
+// ║  `npm run check` fails if this file is stale.                        ║
+// ╚══════════════════════════════════════════════════════════════════════╝
+
+// ───────────────────────────────────────────────────────────────────────────
+// protocol — OCPP and OCPI wire-level state
+// Postgres schemas: ocpp, roaming
+// ───────────────────────────────────────────────────────────────────────────
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ocpp — OCPP identities (control endpoints), connectors, outbound commands
+// ─────────────────────────────────────────────────────────────────────────────
+
+model OcppIdentity {
+  // ── Rev-5 (ADR 0012) ──────────────────────────────────────────────
+  // Now a control attachment on ChargingStation, not the parent of the
+  // physical hierarchy. Capabilities + control routing moved to
+  // assets.capability_profiles + assets.control_routing_policies.
+  id                   String         @id @default(uuid()) @db.Uuid
+  orgId                String         @map("org_id") @db.Uuid
+  chargingStationId    String         @map("charging_station_id") @db.Uuid
+  identityString       String         @map("identity_string")
+  // Nullable since the no-auth installation feature: NULL means "this
+  // identity accepts WebSocket upgrades without Basic Auth." Operator
+  // opts in per installation by submitting an empty plaintext through
+  // the password manager. Default for newly-onboarded chargers stays
+  // populated; only the explicit empty-set path nulls this column.
+  authSecretHash       String?        @map("auth_secret_hash")
+  ocppVersion          OcppVersion    @map("ocpp_version")
+  assetClass           AssetClass     @map("asset_class") @default(ac)
+  vendor               String?
+  vendorResourceId     String?        @map("vendor_resource_id")
+  credentialsRef       String?        @map("credentials_ref")
+  credentialsStatus    String?        @map("credentials_status")
+  status               String         @default("provisioned")
+  lastSeenAt           DateTime?      @map("last_seen_at") @db.Timestamptz(6)
+  createdAt            DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization         Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  chargingStation      ChargingStation  @relation(fields: [chargingStationId], references: [siteAssetId], onDelete: Cascade)
+  outboundCommands     OutboundCommand[]
+  configurationKeys    OcppConfigurationKey[]
+  sessions             ChargeSession[]
+  liveSession          LiveSession?
+
+  @@unique([orgId, identityString])
+  @@index([orgId, chargingStationId])
+  @@map("ocpp_identities")
+  @@schema("ocpp")
+}
+
+// Pre-onboarding discoveries — populated by the OCPP gateway auth path
+// when a charger presents Basic-Auth that does not match any
+// OcppIdentity row. Operators see these in /chargers/pending and click
+// Claim to pre-fill the create-charger form. The row is deleted on
+// successful provision (charger create with matching identity_string).
+//
+// Identity-string is PK because the discovery is platform-wide before
+// any org claims it.
+model PendingDiscovery {
+  identityString     String   @id @map("identity_string") @db.VarChar(64)
+  firstSeenAt        DateTime @default(now()) @map("first_seen_at") @db.Timestamptz(6)
+  lastSeenAt         DateTime @default(now()) @map("last_seen_at") @db.Timestamptz(6)
+  attemptCount       Int      @default(0) @map("attempt_count")
+  remoteAddr         String?  @map("remote_addr") @db.VarChar(64)
+  userAgent          String?  @map("user_agent") @db.VarChar(255)
+  lastPayloadSummary Json?    @map("last_payload_summary") @db.JsonB
+
+  @@index([lastSeenAt(sort: Desc)])
+  @@map("pending_discoveries")
+  @@schema("ocpp")
+}
+
+enum OcppVersion {
+  ocpp_1_6
+  ocpp_2_0_1
+  ocpp_2_1
+
+  @@schema("ocpp")
+}
+
+enum AssetClass {
+  ac
+  dc
+
+  @@schema("ocpp")
+}
+
+// ── Rev-5 (ADR 0012) — Connector moved to assets schema (defined
+// above near ChargingStation/EVSE). Old definition removed.
+
+model OutboundCommand {
+  id              String       @id @default(uuid()) @db.Uuid
+  orgId           String       @map("org_id") @db.Uuid
+  identityId      String       @map("identity_id") @db.Uuid
+  controlDomain   String       @map("control_domain")
+  routedTo        String       @map("routed_to") // 'ocpp' or 'vendor:<name>'
+  payload         Json         @db.JsonB
+  status          CommandStatus @default(pending)
+  attempts        Int          @default(0)
+  notBefore       DateTime     @map("not_before") @db.Timestamptz(6)
+  lastAttemptAt   DateTime?    @map("last_attempt_at") @db.Timestamptz(6)
+  result          Json?        @db.JsonB
+  correlationId   String       @map("correlation_id") @db.Uuid
+  requestedBy     String?      @map("requested_by") @db.Uuid
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  identity        OcppIdentity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+  requester       User?        @relation("OutboundCommandRequester", fields: [requestedBy], references: [id])
+
+  @@index([status, notBefore])
+  @@index([orgId, identityId])
+  @@map("outbound_commands")
+  @@schema("ocpp")
+}
+
+enum CommandStatus {
+  pending
+  sent
+  acked
+  failed
+  cancelled
+
+  @@schema("ocpp")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// roaming — OCPI tokens, hub connections, CDR queue
+// ─────────────────────────────────────────────────────────────────────────────
+
+model OcpiToken {
+  id          String       @id @default(uuid()) @db.Uuid
+  orgId       String       @map("org_id") @db.Uuid
+  tokenUid    String       @map("token_uid")
+  tokenType   String       @map("token_type") // RFID/APP_USER/AD_HOC_USER/OTHER
+  partyId     String       @map("party_id")
+  countryCode String       @map("country_code")
+  valid       Boolean      @default(true)
+  userId      String?      @map("user_id") @db.Uuid
+  expiresAt   DateTime?    @map("expires_at") @db.Timestamptz(6)
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user        User?        @relation(fields: [userId], references: [id])
+
+  @@unique([countryCode, partyId, tokenUid])
+  @@index([orgId])
+  @@map("ocpi_tokens")
+  @@schema("roaming")
+}
+
+model HubConnection {
+  id              String       @id @default(uuid()) @db.Uuid
+  orgId           String       @map("org_id") @db.Uuid
+  hub             HubKind
+  partyId         String       @map("party_id")
+  countryCode     String       @map("country_code")
+  endpointUrl     String       @map("endpoint_url")
+  credentialsRef  String       @map("credentials_ref") // secret store key
+  status          String       @default("active")
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, hub])
+  @@map("hub_connections")
+  @@schema("roaming")
+}
+
+enum HubKind {
+  hubject
+  gireve
+  direct
+
+  @@schema("roaming")
+}
+
+model CdrQueueEntry {
+  id          String       @id @default(uuid()) @db.Uuid
+  orgId       String       @map("org_id") @db.Uuid
+  direction   CdrDirection
+  partnerRef  String       @map("partner_ref")
+  payload     Json         @db.JsonB
+  status      String       @default("pending")
+  attempts    Int          @default(0)
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, status])
+  @@map("cdr_queue")
+  @@schema("roaming")
+}
+
+enum CdrDirection {
+  inbound
+  outbound
+
+  @@schema("roaming")
+}
+
+// ── Rev-5 (ADR 0012) — external CPMS overlay attachment.
+// Anchors a ChargingStation to an externally-operated CPMS asset when
+// Straumvakt is the operating/commercial layer above another CPMS.
+
+model ExternalCpmsRef {
+  id                  String   @id @default(uuid()) @db.Uuid
+  orgId               String   @map("org_id") @db.Uuid
+  chargingStationId   String   @map("charging_station_id") @db.Uuid
+  externalCpmsSlug    String   @map("external_cpms_slug")
+  externalAssetId     String   @map("external_asset_id")
+  importMode          String   @map("import_mode")
+  credentialsRef      String?  @map("credentials_ref")
+  status              String   @default("pending")
+  lastImportedAt      DateTime? @map("last_imported_at") @db.Timestamptz(6)
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization        Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  chargingStation     ChargingStation  @relation(fields: [chargingStationId], references: [siteAssetId], onDelete: Cascade)
+
+  @@unique([externalCpmsSlug, externalAssetId])
+  @@index([orgId])
+  @@map("external_cpms_refs")
+  @@schema("roaming")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ocpp — OcppConfigurationKey registry (ADR 0010)
+// Populated by GetConfiguration / ChangeConfiguration round-trips.
+// Closes OCPP 1.6 spec gap — operator can see what's actually set on
+// each charger with audit trail.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model OcppConfigurationKey {
+  id                  String        @id @default(uuid()) @db.Uuid
+  orgId               String        @map("org_id") @db.Uuid
+  ocppIdentityId      String        @map("ocpp_identity_id") @db.Uuid
+  keyName             String        @map("key_name")
+  keyValue            String?       @map("key_value")
+  readonly            Boolean       @default(false)
+  observedAt          DateTime      @map("observed_at") @db.Timestamptz(6)
+  setByActorUserId    String?       @map("set_by_actor_user_id") @db.Uuid
+  setAt               DateTime?     @map("set_at") @db.Timestamptz(6)
+  notes               String?
+
+  organization        Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  ocppIdentity        OcppIdentity  @relation(fields: [ocppIdentityId], references: [id], onDelete: Cascade)
+  setByActor          User?         @relation("ConfigKeySetBy", fields: [setByActorUserId], references: [id])
+
+  @@unique([ocppIdentityId, keyName])
+  @@index([orgId, ocppIdentityId])
+  @@map("configuration_keys")
+  @@schema("ocpp")
+}

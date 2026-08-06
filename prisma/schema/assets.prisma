@@ -1,0 +1,642 @@
+// ───────────────────────────────────────────────────────────────────────────
+// assets — where things are and what they are
+// Postgres schemas: properties, assets, energy
+// Depends on: identity.
+// ───────────────────────────────────────────────────────────────────────────
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// hosts — schema namespace reserved for future host-domain tables
+// (e.g. ServiceAgreement when Issue Engine ships post-pilot).
+// ChargerHost + ChargerServicePlan dropped per ADR 0009 (2026-04-26).
+// HostType enum moved to properties.SiteType.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────────────────
+// properties — physical locations and their sublocations
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Property {
+  id                 String         @id @default(uuid()) @db.Uuid
+  orgId              String         @map("org_id") @db.Uuid
+  // ChargerHost dropped per ADR 0009 — Property attaches directly to Org.
+  // host_id column dropped in the consolidated migration.
+  displayName        String         @map("display_name")
+  address            Json           @default("{}") @db.JsonB
+  locationType       String?        @map("location_type")
+  latitude           Decimal?       @db.Decimal(9, 6)
+  longitude          Decimal?       @db.Decimal(9, 6)
+  provisioningStatus String         @map("provisioning_status") @default("provisioned")
+  external           Boolean        @default(false) // shadow record from OCPI roaming partner
+  createdAt          DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization       Organization   @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  sites              Site[]
+  energyPolicies     PropertyEnergyPolicy[]
+
+  @@index([orgId])
+  @@map("properties")
+  @@schema("properties")
+}
+
+model Site {
+  // ── Sprint 0 (ADR 0001) ──────────────────────────────────────────
+  id                 String          @id @default(uuid()) @db.Uuid
+  orgId              String          @map("org_id") @db.Uuid
+  propertyId         String          @map("property_id") @db.Uuid
+  displayName        String          @map("display_name")
+  timezone           String          @default("Atlantic/Reykjavik")
+  accessLevel        SiteAccessLevel @map("access_level") @default(private)
+  powerClass         SitePowerClass? @map("power_class")
+  provisioningStatus String          @map("provisioning_status") @default("provisioned")
+  external           Boolean         @default(false)
+  createdAt          DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // ── Rev-4 (ADR 0009 — HostType moved here as site_type) ──────────
+  siteType           SiteType        @map("site_type") @default(standard)
+
+  // ── Rev-3 tariff anchor FKs (ADR 0008) ───────────────────────────
+  dsoTariffId        String?         @map("dso_tariff_id") @db.Uuid
+  usrfTariffId       String?         @map("usrf_tariff_id") @db.Uuid
+  usrfPremTariffId   String?         @map("usrf_prem_tariff_id") @db.Uuid
+  xtrrfTariffId      String?         @map("xtrrf_tariff_id") @db.Uuid
+  spvivfTariffId     String?         @map("spvivf_tariff_id") @db.Uuid
+
+  // ── Profile enrichment round 2 (Sprint 3) ────────────────────────
+  // openingHours: weekly schedule + holiday overrides (free JSON shape).
+  // accessNote: free-text notes for drivers / installers (entrance,
+  // intercom, code).
+  // photoUrl: site hero image for the operator console + driver app.
+  openingHours       Json            @default("{}") @map("opening_hours") @db.JsonB
+  accessNote         String?         @map("access_note") @db.Text
+  photoUrl           String?         @map("photo_url")
+
+  // ── Existing relations ───────────────────────────────────────────
+  organization       Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  property           Property        @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  assets             SiteAsset[]
+  installations      Installation[]
+  circuits           Circuit[]
+  sessions           ChargeSession[]
+  energyPolicies     SiteEnergyPolicy[]
+  energyPlanningResults EnergyPlanningResult[]
+
+  // ── Tariff-definition relations (rev-3) ──────────────────────────
+  dsoTariff          TariffDefinition? @relation("SiteDsoTariff", fields: [dsoTariffId], references: [id])
+  usrfTariff         TariffDefinition? @relation("SiteUsrfTariff", fields: [usrfTariffId], references: [id])
+  usrfPremTariff     TariffDefinition? @relation("SiteUsrfPremTariff", fields: [usrfPremTariffId], references: [id])
+  xtrrfTariff        TariffDefinition? @relation("SiteXtrrfTariff", fields: [xtrrfTariffId], references: [id])
+  spvivfTariff       TariffDefinition? @relation("SiteSpvivfTariff", fields: [spvivfTariffId], references: [id])
+
+  @@index([orgId, propertyId])
+  @@map("sites")
+  @@schema("properties")
+}
+
+enum SiteAccessLevel {
+  public
+  private
+  taxi_only
+
+  @@schema("properties")
+}
+
+enum SitePowerClass {
+  lt_50kw
+  between_50_150kw
+  between_150_500kw
+  gt_500kw
+
+  @@schema("properties")
+}
+
+// SiteAsset is the polymorphic "thing at a site". Specific kinds (charger,
+// meter, modem, controller) extend this via separate rows in `assets`.
+model SiteAsset {
+  id            String        @id @default(uuid()) @db.Uuid
+  orgId         String        @map("org_id") @db.Uuid
+  siteId        String        @map("site_id") @db.Uuid
+  kind          SiteAssetKind
+  displayName   String        @map("display_name")
+  status        String        @default("active")
+  metadata      Json          @default("{}") @db.JsonB
+  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization  Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  site          Site          @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  chargingStation ChargingStation?
+  meter         Meter?
+  modem         Modem?
+  controller    Controller?
+
+  @@index([orgId, siteId])
+  @@index([kind, status])
+  @@map("site_assets")
+  @@schema("properties")
+}
+
+enum SiteAssetKind {
+  charger
+  meter
+  modem
+  controller
+
+  @@schema("properties")
+}
+
+// Installation — optional grouping between Site and charger-kind SiteAssets.
+// Used for AC vendor-managed hardware (Zaptec Pro, Easee One) where the vendor
+// portal models an installation and credentials cover the whole group.
+// OCPP-only chargers and DC chargers typically have no Installation.
+model Installation {
+  // ── Sprint 0 (ADR 0001 + ADR 0002) ───────────────────────────────
+  id                     String                        @id @default(uuid()) @db.Uuid
+  orgId                  String                        @map("org_id") @db.Uuid
+  siteId                 String                        @map("site_id") @db.Uuid
+  vendorId               String?                       @map("vendor_id") @db.Uuid
+  modelId                String?                       @map("model_id") @db.Uuid
+  displayName            String                        @map("display_name")
+  vendorInstallationRef  String?                       @map("vendor_installation_ref")
+  credentialsRef         String?                       @map("credentials_ref")
+  credentialsId          String?                       @map("credentials_id") @db.Uuid
+  credentialsStatus      String?                       @map("credentials_status")
+  onboardingStatus       InstallationOnboardingStatus  @map("onboarding_status") @default(pending_credentials)
+  metadata               Json                          @default("{}") @db.JsonB
+  createdAt              DateTime                      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime                      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // ── Rev-3 (ADR 0008 — REPF anchor) ───────────────────────────────
+  retailerTariffId       String?                       @map("retailer_tariff_id") @db.Uuid
+
+  // ── ADR 0014 / Sprint 4 milestone 4.6 — auth-enforce gate ────────
+  // When true, the OCPP gateway honours the verdict from
+  // /api/internal/ocpp-authorize for every Authorize.req at this
+  // installation's chargers (Reject/Block/Expire/Accept). When false
+  // (default), the gateway logs the verdict for observability but
+  // always replies Accepted — today's shadow-mode behaviour.
+  // Operator flips per-installation once the IdToken table is
+  // verified seeded (Sprint 3 backfill) AND every operator-known
+  // card has a row.
+  enforceAuthorize       Boolean                       @default(false) @map("enforce_authorize")
+
+  // ── Sprint 9 / ADR 0019 (2026-05-08) — load-bearing for agreements ──
+  // Gates: factor enlistment (IDL/NET MDU-only), DriverGroup audience
+  // flavors, TRD bearer applicability, public-vs-membership semantics.
+  installationType       InstallationType              @default(workplace) @map("installation_type")
+
+  // ── Existing relations ───────────────────────────────────────────
+  organization           Organization                  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  site                   Site                          @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  vendor                 HardwareVendor?               @relation(fields: [vendorId], references: [id])
+  model                  HardwareModel?                @relation(fields: [modelId], references: [id])
+  credentials            VendorCredential?             @relation("InstallationCredential", fields: [credentialsId], references: [id])
+  chargingStations       ChargingStation[]
+  circuits               Circuit[]
+
+  // ── Tariff-definition relation (rev-3) ───────────────────────────
+  retailerTariff         TariffDefinition?             @relation("InstallationRetailerTariff", fields: [retailerTariffId], references: [id])
+
+  // ── ADR 0014 / API onboarding (back-relations) ───────────────────
+  vendorUserRefs         UserVendorRef[]               @relation("InstallationVendorUserRefs")
+  scopedIdTokens         IdToken[]                     @relation("InstallationIdTokens")
+  vendorUserGroups       VendorUserGroup[]             @relation("InstallationVendorUserGroups")
+
+  // ── Sprint 9 / ADR 0019 (2026-05-08) — agreements back-relation ──
+  agreementsAtInstallation Agreement[]                 @relation("AgreementInstallation")
+
+  // ── ADR 0029 — billing child-objects under this installation ─────
+  billObjects              BillObject[]                @relation("BillObjectInstallation")
+
+  // ── ADR 0022 (2026-05-31 addendum) — self-onboarding access requests ──
+  driverAccessRequests     DriverAccessRequest[]       @relation("InstallationDriverAccessRequests")
+
+  @@index([orgId, siteId])
+  @@index([vendorId])
+  @@map("installations")
+  @@schema("properties")
+}
+
+// Sprint 9 / ADR 0019 (2026-05-08) — installation classification.
+// Lives in the properties schema next to the installations table that
+// uses it.
+enum InstallationType {
+  workplace
+  mdu
+  public
+  private
+  mixed
+
+  @@schema("properties")
+}
+
+enum InstallationOnboardingStatus {
+  pending_credentials
+  discovering
+  active
+  suspended
+  error
+
+  @@schema("properties")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// assets — kind-specific hardware records, extending SiteAsset
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── Rev-5 (ADR 0012) — Charger renamed to ChargingStation ──────────
+// Physical equipment lives independently of the control plane. EVSE +
+// Connector are split out below. Control attachments (ocpp.identities,
+// vendors.vendor_asset_refs, roaming.external_cpms_refs) anchor here.
+
+model ChargingStation {
+  // Inherits ID from SiteAsset (preserves the Sprint 0 invariant that
+  // every physical asset has a SiteAsset row).
+  siteAssetId      String        @id @map("site_asset_id") @db.Uuid
+  orgId            String        @map("org_id") @db.Uuid             // operator (the SaaS tenant)
+  modelId          String?       @map("model_id") @db.Uuid
+  installationId   String?       @map("installation_id") @db.Uuid
+  vendor           String?
+  model            String?
+  // System-wide unique. Populated from Zaptec DeviceId (uppercase)
+  // on import — canonical hardware serial stamped on the device.
+  serialNumber     String?       @unique @map("serial_number")
+  installDate      DateTime?     @map("install_date") @db.Date
+  warrantyExpires  DateTime?     @map("warranty_expires") @db.Date
+  firmwareVersion  String?       @map("firmware_version")
+  createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // ── Rev-3 (ADRs 0007 + 0008) ────────────────────────────────────
+  circuitId        String?       @map("circuit_id") @db.Uuid
+  ownerOrgId       String?       @map("owner_org_id") @db.Uuid
+  chrgrfTariffId   String?       @map("chrgrf_tariff_id") @db.Uuid
+
+  // ── OCPP BootNotification profile (1.6 §6.2 / 2.0.1 §1.4) ────────
+  // Auto-populated by the charger.booted projection on each
+  // BootNotification. Operator-edited fields below the dashed line.
+  chargeBoxSerialNumber String? @map("charge_box_serial_number") // legacy 1.6 alt-serial
+  meterType             String? @map("meter_type")
+  meterSerialNumber     String? @map("meter_serial_number")
+  iccid                 String?                                  // SIM ICCID (cellular chargers)
+  imsi                  String?                                  // SIM IMSI
+
+  // ── Operator-domain fields (Sprint 3 enrichment) ──────────────────
+  locationNote     String?       @map("location_note") @db.Text  // "north wall, slot 3"
+  mountingType     String?       @map("mounting_type")            // wall | pedestal | floor | other
+  photoUrl         String?       @map("photo_url")
+  ipRating         String?       @map("ip_rating")                // IP54, IP65, …
+  breakerAmps      Int?          @map("breaker_amps")             // upstream breaker
+
+  // ── BLE tap-and-access (Sprint 9 / 2026-05-10) ───────────────────
+  // What the charger broadcasts over BLE so the Flutter driver app
+  // can detect proximity. kind='zaptec_serial' | 'ibeacon_uuid' | 'mac'.
+  bleAdvertisingId   String?     @map("ble_advertising_id")
+  bleAdvertisingKind String?     @map("ble_advertising_kind")
+
+  // ── Lifetime kWh cache (Sprint 3 / ADR 0013) ──────────────────────
+  // Persisted snapshot of Zaptec SignedMeterValueKwh (the OCMF-signed
+  // cumulative meter reading). Updated write-through on every successful
+  // per-charger detail fetch where the new value ≥ the cached one
+  // (regressions are rejected — meters don't run backwards). Two reasons
+  // to cache:
+  //   1) Survival across offline windows. When Zaptec stops returning
+  //      the value (or returns a stale one) we still show the last known
+  //      total instead of "—".
+  //   2) Survival across decommissioning. Zaptec sometimes drops the
+  //      meter value when a charger goes Active=false; once we've
+  //      observed it we own it.
+  // Decimal(12,3) holds up to 999_999_999.999 kWh — well past any single
+  // charger's lifetime (a 22 kW charger running flat-out for 100 years
+  // would reach ~19M kWh).
+  lifetimeKwhCached      Decimal?  @map("lifetime_kwh_cached") @db.Decimal(12, 3)
+  lifetimeKwhObservedAt  DateTime? @map("lifetime_kwh_observed_at") @db.Timestamptz(6)
+
+  // ── Telemetry snapshot cache (Sprint 8.4.3) ───────────────────────
+  // Last-known live read from Zaptec /api/chargers/{id}/state. Stored
+  // verbatim as JSONB so the technical-read panel can render
+  // last-known values when the live fetch fails (charger offline from
+  // Zaptec's cloud, transient network blip, vendor rate limit). The
+  // panel marks fields stale when reading from cache and shows the
+  // observed-at timestamp. Write-through happens after every
+  // successful state fetch.
+  lastTelemetryRead      Json?     @map("last_telemetry_read") @db.JsonB
+  lastTelemetryAt        DateTime? @map("last_telemetry_at") @db.Timestamptz(6)
+
+  // ── Vendor-side authentication state (Zaptec) ─────────────────────
+  // Two different things, and the names invite conflating them.
+  //
+  // vendorAuthRequired       StateId 120 — whether the CHARGER sends OCPP
+  //                          Basic-Auth on the WSS upgrade. About the
+  //                          charger authenticating to our gateway. This
+  //                          is what the /sites tree toggle writes.
+  // vendorAuthenticationType Who authorises the DRIVER — the setting that
+  //                          decides whether an unknown card may charge.
+  //
+  // The enum is documented two contradictory ways in our own code
+  // (lib/zaptec.ts:212 vs charger-technical-read.ts:156), so it is stored
+  // raw and deliberately not mapped to a label until confirmed.
+  //
+  // vendorAuthSeenAt NULL means never synced — which is not the same as
+  // "no auth", and must not render as though it were.
+  vendorAuthRequired       Boolean?  @map("vendor_auth_required")
+  vendorAuthenticationType Int?      @map("vendor_authentication_type")
+  vendorAuthSeenAt         DateTime? @map("vendor_auth_seen_at") @db.Timestamptz(6)
+
+  // ── Firmware detail + online-since (Sprint 8.4.7) ─────────────────
+  // Extracted from Zaptec /state observations on every cron tick (8.13.2)
+  // so the /chargers list view can show them without a per-row Zaptec
+  // round-trip. firmwareVersion above mirrors StateId 911; these three
+  // are the rest of the firmware identity. onlineSinceAt is the
+  // Timestamp on StateId -2 when ValueAsString=true — cleared when the
+  // charger flips offline.
+  mainboardSwVersion     String?   @map("mainboard_sw_version")        // StateId 908
+  smartBootloaderVersion String?   @map("smart_bootloader_version")    // StateId 912
+  hardwareVersion        String?   @map("hardware_version")             // StateId 913
+  onlineSinceAt          DateTime? @map("online_since_at") @db.Timestamptz(6)
+
+  // ── Comm-mode + signal cache (Sprint 9.8) ─────────────────────────
+  // Cron extracts StateId 150 (comm mode) + StateId 809 (signal RSSI)
+  // from the per-charger /state response on each */1 tick and writes
+  // them here so the /chargers list view can show them without a
+  // per-row Zaptec round-trip.
+  commMode               String?   @map("comm_mode")     // "Wi-Fi" / "LTE" / "PLC" / "Ethernet"
+  signalDbm              Int?      @map("signal_dbm")    // negative dBm magnitude
+
+  // Sprint 9 / 2026-05-10 — Local auth list (CSMS-side bookkeeping)
+  // Tracks the listVersion Straumvakt last pushed via OCPP SendLocalList.
+  // Per-charger because OCPP versions are per-charge-point. Defaults to 0
+  // (matches the OCPP convention "no list synced"). Bumped monotonically
+  // on each successful enqueue; on charger VersionMismatch the recovery
+  // flow re-syncs to the charger's reported StateId 751 and retries.
+  pushedAuthListVersion  Int       @default(0) @map("pushed_auth_list_version")
+
+  // ── Existing relations ───────────────────────────────────────────
+  siteAsset        SiteAsset     @relation(fields: [siteAssetId], references: [id], onDelete: Cascade)
+  organization     Organization  @relation("StationOperator", fields: [orgId], references: [id])
+  hardwareModel    HardwareModel? @relation(fields: [modelId], references: [id])
+  installation     Installation? @relation(fields: [installationId], references: [id])
+
+  // ── Rev-5 (ADR 0012) — physical children + control attachments ───
+  evses              EVSE[]
+  ocppIdentities     OcppIdentity[]
+  vendorAssetRefs    VendorAssetRef[]
+  externalCpmsRefs   ExternalCpmsRef[]
+  capabilityProfiles CapabilityProfile[]
+  controlRoutingPolicy ControlRoutingPolicy?
+  sessions           ChargeSession[]
+  liveSession        LiveSession?
+  liveSessionSamples LiveSessionSample[] @relation("LiveSessionSampleCharger")
+
+  // ── Rev-3 / Rev-4 relations ──────────────────────────────────────
+  circuit          Circuit?      @relation("CircuitStations", fields: [circuitId], references: [id])
+  ownerOrg         Organization? @relation("StationOwner", fields: [ownerOrgId], references: [id])
+  chrgrfTariff     TariffDefinition? @relation("StationChrgrfTariff", fields: [chrgrfTariffId], references: [id])
+
+  @@index([modelId])
+  @@index([installationId])
+  @@index([circuitId])
+  @@index([ownerOrgId])
+  @@map("charging_stations")
+  @@schema("assets")
+}
+
+// ── Rev-5 (ADR 0012) — EVSE: an electric vehicle supply equipment
+// unit inside a ChargingStation. OCPP 2.0.1 native concept; for OCPP
+// 1.6 chargers, one EVSE per connector.
+
+model EVSE {
+  id                  String   @id @default(uuid()) @db.Uuid
+  orgId               String   @map("org_id") @db.Uuid
+  chargingStationId   String   @map("charging_station_id") @db.Uuid
+  evseIndex           Int      @map("evse_index")
+  maxPowerKw          Decimal? @map("max_power_kw") @db.Decimal(8, 2)
+  phaseCount          Int?     @map("phase_count")
+  status              String   @default("unknown")
+  statusUpdatedAt     DateTime? @map("status_updated_at") @db.Timestamptz(6)
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization        Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  chargingStation     ChargingStation  @relation(fields: [chargingStationId], references: [siteAssetId], onDelete: Cascade)
+  connectors          Connector[]
+  sessions            ChargeSession[]
+
+  @@unique([chargingStationId, evseIndex])
+  @@index([orgId, status])
+  @@map("evses")
+  @@schema("assets")
+}
+
+// ── Rev-5 (ADR 0012) — Connector moved from ocpp schema to assets.
+// Anchors on EVSE, not on OcppIdentity.
+
+model Connector {
+  id              String          @id @default(uuid()) @db.Uuid
+  orgId           String          @map("org_id") @db.Uuid
+  evseId          String          @map("evse_id") @db.Uuid
+  connectorIndex  Int             @map("connector_index")
+  type            String          // Type2 / CCS2 / CHAdeMO / Schuko
+  maxPowerKw      Decimal?        @map("max_power_kw") @db.Decimal(8, 2)
+  status          String          @default("unknown")
+  statusUpdatedAt DateTime?       @map("status_updated_at") @db.Timestamptz(6)
+  // ── OCPP StatusNotification mirror (1.6 §4.9) ─────────────────────
+  // Auto-populated by the connector.status_updated projection when
+  // payload carries a non-NoError errorCode. Operator console renders
+  // these alongside status to differentiate "Available" from
+  // "Faulted (GroundFailure)".
+  errorCode       String?         @map("error_code")
+  vendorErrorCode String?         @map("vendor_error_code")
+  createdAt       DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization    Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  evse            EVSE            @relation(fields: [evseId], references: [id], onDelete: Cascade)
+  sessions        ChargeSession[]
+  reservations    Reservation[]
+
+  @@unique([evseId, connectorIndex])
+  @@index([orgId])
+  @@map("connectors")
+  @@schema("assets")
+}
+
+// ── Rev-5 (ADR 0012) — control-plane policy + capability tables.
+// Live in `assets` schema because they describe asset-level routing,
+// not protocol-level state.
+
+model CapabilityProfile {
+  id                String   @id @default(uuid()) @db.Uuid
+  orgId             String   @map("org_id") @db.Uuid
+  chargingStationId String   @map("charging_station_id") @db.Uuid
+  controlPlane      String   @map("control_plane")
+  capabilities      Json     @db.JsonB
+  source            String   // 'declared' / 'observed' / 'imported'
+  observedAt        DateTime? @map("observed_at") @db.Timestamptz(6)
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization      Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  chargingStation   ChargingStation @relation(fields: [chargingStationId], references: [siteAssetId], onDelete: Cascade)
+
+  @@unique([chargingStationId, controlPlane])
+  @@map("capability_profiles")
+  @@schema("assets")
+}
+
+model ControlRoutingPolicy {
+  id                String   @id @default(uuid()) @db.Uuid
+  orgId             String   @map("org_id") @db.Uuid
+  chargingStationId String   @unique @map("charging_station_id") @db.Uuid
+  routing           Json     @db.JsonB
+  fallback          String?  @map("fallback_plane")
+  status            String   @default("active")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization      Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  chargingStation   ChargingStation @relation(fields: [chargingStationId], references: [siteAssetId], onDelete: Cascade)
+
+  @@map("control_routing_policies")
+  @@schema("assets")
+}
+
+model Meter {
+  siteAssetId   String      @id @map("site_asset_id") @db.Uuid
+  meterSerial   String?     @map("meter_serial")
+  meterType     String?     @map("meter_type") // grid / submeter / pv / battery
+  maxAmps       Int?        @map("max_amps")
+  createdAt     DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  siteAsset     SiteAsset   @relation(fields: [siteAssetId], references: [id], onDelete: Cascade)
+
+  @@map("meters")
+  @@schema("assets")
+}
+
+model Modem {
+  siteAssetId  String     @id @map("site_asset_id") @db.Uuid
+  imei         String?    @unique
+  carrier      String?
+  iccid        String?
+  lastSeenAt   DateTime?  @map("last_seen_at") @db.Timestamptz(6)
+  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  siteAsset    SiteAsset  @relation(fields: [siteAssetId], references: [id], onDelete: Cascade)
+
+  @@map("modems")
+  @@schema("assets")
+}
+
+model Controller {
+  siteAssetId    String     @id @map("site_asset_id") @db.Uuid
+  vendor         String?    // e.g. "shelly"
+  deviceId       String?    @map("device_id")
+  endpointUrl    String?    @map("endpoint_url")
+  capabilities   Json       @default("{}") @db.JsonB
+  lastSeenAt     DateTime?  @map("last_seen_at") @db.Timestamptz(6)
+  createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  siteAsset      SiteAsset  @relation(fields: [siteAssetId], references: [id], onDelete: Cascade)
+
+  @@map("controllers")
+  @@schema("assets")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// energy — site/property policies and planning results
+// ─────────────────────────────────────────────────────────────────────────────
+
+model SiteEnergyPolicy {
+  id         String       @id @default(uuid()) @db.Uuid
+  orgId      String       @map("org_id") @db.Uuid
+  siteId     String       @map("site_id") @db.Uuid
+  policy     Json         @db.JsonB
+  validFrom  DateTime     @map("valid_from") @db.Timestamptz(6)
+  validUntil DateTime?    @map("valid_until") @db.Timestamptz(6)
+  createdAt  DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  site       Site         @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, siteId])
+  @@map("site_energy_policies")
+  @@schema("energy")
+}
+
+model PropertyEnergyPolicy {
+  id          String       @id @default(uuid()) @db.Uuid
+  orgId       String       @map("org_id") @db.Uuid
+  propertyId  String       @map("property_id") @db.Uuid
+  policy      Json         @db.JsonB
+  validFrom   DateTime     @map("valid_from") @db.Timestamptz(6)
+  validUntil  DateTime?    @map("valid_until") @db.Timestamptz(6)
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  property    Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, propertyId])
+  @@map("property_energy_policies")
+  @@schema("energy")
+}
+
+model EnergyPlanningResult {
+  id           String       @id @default(uuid()) @db.Uuid
+  orgId        String       @map("org_id") @db.Uuid
+  siteId       String       @map("site_id") @db.Uuid
+  calculatedAt DateTime     @default(now()) @map("calculated_at") @db.Timestamptz(6)
+  result       Json         @db.JsonB
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  site         Site         @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, siteId, calculatedAt(sort: Desc)])
+  @@map("energy_planning_results")
+  @@schema("energy")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// properties — SiteType enum (ADR 0009 — moved here from hosts.HostType)
+// + Circuit model (ADR 0007)
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum SiteType {
+  standard
+  workplace
+  mdu
+  hotel
+  fleet
+  retail
+
+  @@schema("properties")
+}
+
+model Circuit {
+  id                String        @id @default(uuid()) @db.Uuid
+  orgId             String        @map("org_id") @db.Uuid
+  siteId            String        @map("site_id") @db.Uuid
+  installationId    String?       @map("installation_id") @db.Uuid
+  displayName       String        @map("display_name")
+  ampereCeiling     Int?          @map("ampere_ceiling")
+  phaseCount        Int           @map("phase_count") @default(3)
+  vendorCircuitRef  String?       @map("vendor_circuit_ref")
+  metadata          Json          @default("{}") @db.JsonB
+  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization      Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  site              Site          @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  installation      Installation? @relation(fields: [installationId], references: [id])
+  chargingStations  ChargingStation[]   @relation("CircuitStations")
+
+  @@index([orgId, siteId])
+  @@index([installationId])
+  @@map("circuits")
+  @@schema("properties")
+}

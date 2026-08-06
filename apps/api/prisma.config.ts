@@ -14,7 +14,10 @@ if (existsSync(".env")) loadEnv();
 const databaseUrl = process.env.DATABASE_URL ?? "";
 
 export default defineConfig({
-  schema: path.join("prisma", "schema.prisma"),
+  // A directory, not a file. Everything in it except header.prisma's
+  // contribution is generated from prisma/schema/ — see
+  // scripts/sync-api-prisma-schema.mjs.
+  schema: path.join("prisma", "schema"),
   datasource: {
     url: databaseUrl,
   },

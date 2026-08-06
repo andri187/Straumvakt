@@ -1,0 +1,68 @@
+// Straumvakt — V3 Foundation Schema
+//
+// Sprint 0 deliverable. Supersedes the empty stub.
+//
+// Conventions (see docs/architecture/STRAUMVAKT_ARCHITECTURE_V3.md §10):
+//   • UUIDv7 primary keys (Postgres gen_random_uuid() is acceptable through v7 adoption)
+//   • Every operational row carries org_id (the tenant)
+//   • Money as BIGINT minor units — no Float, no Decimal ambiguity
+//   • JSONB for "shape may grow" fields; regular columns for things that must index
+//   • Soft delete only where strictly required (users for compliance); otherwise status columns
+//   • Audit columns (created_at / updated_at) on every operational table
+//
+// ───────────────────────────────────────────────────────────────────────────
+// THIS FOLDER IS THE SCHEMA (Prisma schema folder, GA since 6.7).
+//
+// Prisma merges every .prisma file in this directory. Generators and the
+// datasource live in THIS file and nowhere else; models live in the seven
+// domain files beside it. Split from a single 3,736-line schema.prisma on
+// 2026-08-05 — a pure reorganisation, no model changed.
+//
+// 20 Postgres schemas map onto 7 domain files:
+//
+//   identity.prisma    identity · tenancy · people
+//   assets.prisma      properties · assets · energy
+//   charging.prisma    charging
+//   commercial.prisma  billing · agreements · entitlements · reports
+//   vendor.prisma      vendors · hardware
+//   protocol.prisma    ocpp · roaming
+//   platform.prisma    events · audit · issues · webhooks
+//
+// (`hosts` is declared on the datasource but holds no models.)
+//
+// Dependencies are intended to flow one way —
+//   commercial → charging → assets → identity
+// with nothing importing vendor and platform importing nothing. Prisma
+// cannot express that: a relation is declared on both sides, so the
+// schema-level graph is necessarily symmetric. The rule is enforced over
+// TypeScript by dependency-cruiser (.dependency-cruiser.cjs), not here.
+//
+// apps/api/prisma/schema/ is GENERATED from these files by
+// scripts/sync-api-prisma-schema.mjs. Edit here, then run
+//   npm run sync:api-schema
+// ───────────────────────────────────────────────────────────────────────────
+
+generator client {
+  provider        = "prisma-client"
+  output          = "../../node_modules/straumvakt-prisma-cf-client"
+  runtime         = "cloudflare"
+  moduleFormat    = "esm"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+generator nodeClient {
+  provider        = "prisma-client"
+  output          = "../generated/node-client"
+  runtime         = "nodejs"
+  moduleFormat    = "esm"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  schemas    = ["identity", "tenancy", "hosts", "properties", "assets", "hardware", "ocpp", "charging", "billing", "issues", "events", "audit", "entitlements", "people", "vendors", "roaming", "energy", "webhooks", "reports", "agreements"]
+  extensions = [citext]
+}
+
+// Connection URL lives in prisma.config.ts (Prisma 7 requirement).
+// Runtime client passes a PrismaNeon adapter to PrismaClient — see src/lib/prisma.ts.

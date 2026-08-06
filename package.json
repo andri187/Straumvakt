@@ -20,11 +20,13 @@
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
     "db:validate": "prisma validate",
-    "check:schema-parity": "prisma migrate diff --from-schema apps/api/prisma/schema.prisma --to-schema prisma/schema.prisma --exit-code",
+    "check:schema-parity": "prisma migrate diff --from-schema apps/api/prisma/schema --to-schema prisma/schema --exit-code",
+    "sync:api-schema": "node scripts/sync-api-prisma-schema.mjs",
+    "check:api-schema": "node scripts/sync-api-prisma-schema.mjs --check",
     "sync:detour-assets": "node scripts/sync-detour-assets.mjs",
-    "check": "npm run typecheck && npm run check:schemas && npm run check:schema-parity",
-    "check:schemas": "prisma validate --schema prisma/schema.prisma && prisma validate --schema apps/api/prisma/schema.prisma",
-    "check:migrations": "prisma migrate status --schema prisma/schema.prisma"
+    "check": "npm run typecheck && npm run check:schemas && npm run check:api-schema && npm run check:schema-parity",
+    "check:schemas": "prisma validate --schema prisma/schema && prisma validate --schema apps/api/prisma/schema",
+    "check:migrations": "prisma migrate status --schema prisma/schema"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
