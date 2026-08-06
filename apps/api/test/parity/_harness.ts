@@ -19,6 +19,7 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { PrismaClient } from "../../../../prisma/generated/node-client/client";
+import type { PrismaClient as ApiPrismaClient } from "../../src/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 
 export const PARITY_URL = process.env.PARITY_DATABASE_URL ?? "";
@@ -44,6 +45,24 @@ export function getPrisma(): PrismaClient {
     prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: PARITY_URL }) });
   }
   return prisma;
+}
+
+/**
+ * The same client, typed as the one apps/api's repositories expect.
+ *
+ * There are two generated clients from one schema: the console's Node client
+ * (prisma/generated/node-client) and the API Worker's Cloudflare-runtime one
+ * (apps/api/src/generated/prisma). Same generator, same 157 models,
+ * structurally identical — but nominally distinct types, and the Cloudflare
+ * one cannot be instantiated under Node at all, which is why the harness uses
+ * the other.
+ *
+ * So a repository typed against the Worker client cannot be handed the Node
+ * one without a cast. One cast here, explained, rather than one per call site
+ * where it would read as noise and eventually as permission.
+ */
+export function getApiPrisma(): ApiPrismaClient {
+  return getPrisma() as unknown as ApiPrismaClient;
 }
 
 export async function closeAll() {
