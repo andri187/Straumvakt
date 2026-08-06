@@ -1,0 +1,342 @@
+[
+  {
+    "type": "cycle",
+    "from": "src/app/(app)/accounts/organizations/[id]/email-domains/email-domains-panel.tsx",
+    "to": "src/app/(app)/accounts/organizations/[id]/email-domains/page.tsx",
+    "unresolvedTo": "./page",
+    "dependencyTypes": [
+      "local",
+      "type-only",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "src/app/(app)/accounts/organizations/[id]/email-domains/page.tsx",
+        "dependencyTypes": [
+          "local",
+          "type-only",
+          "import"
+        ]
+      },
+      {
+        "name": "src/app/(app)/accounts/organizations/[id]/email-domains/email-domains-panel.tsx",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "dependency",
+    "from": "apps/api/src/index.ts",
+    "to": "apps/api/src/lib/zaptec-sync-cron.ts",
+    "unresolvedTo": "./lib/zaptec-sync-cron",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-import-from-vendor"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "apps/api/src/repositories/charger-technical-read.ts",
+    "to": "apps/api/src/lib/credential-crypto.ts",
+    "unresolvedTo": "../lib/credential-crypto",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-import-from-vendor"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "apps/api/src/repositories/charger-technical-read.ts",
+    "to": "apps/api/src/lib/zaptec.ts",
+    "unresolvedTo": "../lib/zaptec",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-import-from-vendor"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "apps/api/src/repositories/charger-zaptec-config.ts",
+    "to": "apps/api/src/lib/credential-crypto.ts",
+    "unresolvedTo": "../lib/credential-crypto",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-import-from-vendor"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "apps/api/src/repositories/charger-zaptec-config.ts",
+    "to": "apps/api/src/lib/zaptec.ts",
+    "unresolvedTo": "../lib/zaptec",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-import-from-vendor"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "apps/api/src/repositories/chargers.ts",
+    "to": "apps/api/src/lib/zaptec.ts",
+    "unresolvedTo": "../lib/zaptec",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-import-from-vendor"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "apps/api/src/repositories/chargers.ts",
+    "to": "apps/api/src/repositories/credential-management.ts",
+    "unresolvedTo": "./credential-management",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-import-from-vendor"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "apps/api/src/repositories/site-tree.ts",
+    "to": "apps/api/src/lib/credential-crypto.ts",
+    "unresolvedTo": "../lib/credential-crypto",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-import-from-vendor"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "apps/api/src/repositories/site-tree.ts",
+    "to": "apps/api/src/lib/zaptec.ts",
+    "unresolvedTo": "../lib/zaptec",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-import-from-vendor"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "apps/api/src/routes/admin/groups.ts",
+    "to": "apps/api/src/repositories/vendor-user-groups.ts",
+    "unresolvedTo": "../../repositories/vendor-user-groups",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-import-from-vendor"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "apps/api/src/routes/admin/vendor-credentials.ts",
+    "to": "apps/api/src/lib/zaptec.ts",
+    "unresolvedTo": "../../lib/zaptec",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-import-from-vendor"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "apps/api/src/routes/admin/vendor-credentials.ts",
+    "to": "apps/api/src/repositories/credential-management.ts",
+    "unresolvedTo": "../../repositories/credential-management",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-import-from-vendor"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "apps/api/src/routes/admin/vendor-credentials.ts",
+    "to": "apps/api/src/repositories/vendor-credential-probe.ts",
+    "unresolvedTo": "../../repositories/vendor-credential-probe",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-import-from-vendor"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "apps/api/src/routes/admin/vendor-credentials.ts",
+    "to": "apps/api/src/repositories/vendor-credentials.ts",
+    "unresolvedTo": "../../repositories/vendor-credentials",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-import-from-vendor"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "apps/api/src/routes/admin/vendor-credentials.ts",
+    "to": "apps/api/src/repositories/zaptec-session-probe.ts",
+    "unresolvedTo": "../../repositories/zaptec-session-probe",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-import-from-vendor"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "apps/api/src/routes/admin/vendor-credentials.ts",
+    "to": "apps/api/src/repositories/zaptec-session-sync.ts",
+    "unresolvedTo": "../../repositories/zaptec-session-sync",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-import-from-vendor"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "apps/api/src/routes/admin/zaptec.ts",
+    "to": "apps/api/src/lib/zaptec.ts",
+    "unresolvedTo": "../../lib/zaptec",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-import-from-vendor"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "apps/api/src/routes/admin/zaptec.ts",
+    "to": "apps/api/src/repositories/vendor-credentials.ts",
+    "unresolvedTo": "../../repositories/vendor-credentials",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-import-from-vendor"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "apps/api/src/routes/admin/zaptec.ts",
+    "to": "apps/api/src/repositories/zaptec-bulk-config.ts",
+    "unresolvedTo": "../../repositories/zaptec-bulk-config",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-import-from-vendor"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "apps/api/src/routes/admin/zaptec.ts",
+    "to": "apps/api/src/repositories/zaptec-import.ts",
+    "unresolvedTo": "../../repositories/zaptec-import",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-import-from-vendor"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "apps/api/src/routes/internal/zaptec-trigger-sync.ts",
+    "to": "apps/api/src/repositories/credential-management.ts",
+    "unresolvedTo": "../../repositories/credential-management",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-import-from-vendor"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "apps/api/src/routes/internal/zaptec-trigger-sync.ts",
+    "to": "apps/api/src/repositories/zaptec-session-sync.ts",
+    "unresolvedTo": "../../repositories/zaptec-session-sync",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-import-from-vendor"
+    }
+  }
+]
