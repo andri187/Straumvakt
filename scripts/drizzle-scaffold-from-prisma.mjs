@@ -223,8 +223,13 @@ function drizzleColumn(f) {
     } else if (/^"(.*)"$/.test(d)) {
       const inner = d.slice(1, -1);
       base += f.type === "Json" ? `.default(${inner || "{}"})` : `.default(${JSON.stringify(inner)})`;
-    } else if (/^\d+$/.test(d)) {
-      base += `.default(${d})`;
+    } else if (/^-?\d+(\.\d+)?$/.test(d)) {
+      // The literal has to match the column's TypeScript representation, not
+      // its SQL one. Drizzle's `numeric` is a string in `bigint` mode it is a
+      // bigint; only integer/float columns take a plain number.
+      if (f.type === "Decimal") base += `.default(${JSON.stringify(d)})`;
+      else if (f.type === "BigInt") base += `.default(${d}n)`;
+      else base += `.default(${d})`;
     } else if (d === "true" || d === "false") {
       base += `.default(${d})`;
     } else if (enumByName.has(f.type)) {
@@ -242,6 +247,19 @@ for (const e of enums) {
   );
 }
 out.push("");
+
+// A domain file merges several Postgres schemas, and two of them can hold a
+// table of the same name — `billing.cost_factors` and
+// `agreements.cost_factors` are different tables, as are the two
+// `billing_lines`. Deriving the export from the table name alone collides.
+// Only the colliding ones take a schema prefix, so every other name is
+// unaffected.
+const camelTable = (t) => t.replace(/_(\w)/g, (_, c) => c.toUpperCase());
+const tableNameCount = new Map();
+for (const m of models) {
+  const n = camelTable(m.tableName ?? m.name);
+  tableNameCount.set(n, (tableNameCount.get(n) ?? 0) + 1);
+}
 
 for (const m of models) {
   // A relation field is not a column. Prisma names them by the target model,
@@ -277,7 +295,9 @@ for (const m of models) {
   // Export name follows the TABLE, not the Prisma model: `users`, not `user`.
   // Drizzle queries read `from(users)`, and the table name is the thing that
   // has to be right anyway.
-  const exportName = tableName.replace(/_(\w)/g, (_, c) => c.toUpperCase());
+  const plain = camelTable(tableName);
+  const exportName =
+    tableNameCount.get(plain) > 1 ? camel(m.pgSchema) + plain[0].toUpperCase() + plain.slice(1) : plain;
   out.push(`/** Prisma model \`${m.name}\` — ${m.pgSchema}.${tableName} */`);
   out.push(`export const ${exportName} = ${varFor(m.pgSchema)}.table(`);
   out.push(`  ${JSON.stringify(tableName)},`);
@@ -294,7 +314,8 @@ for (const m of models) {
 }
 
 const usesCitext = out.some((l) => l.includes("citext("));
-if (usesCitext) imports.add("customType");
+const usesBytea = out.some((l) => l.includes("bytea("));
+if (usesCitext || usesBytea) imports.add("customType");
 
 const header = [
   `// DRAFT — scaffolded from prisma/schema/${domain}.prisma by`,
@@ -307,6 +328,14 @@ const header = [
         `// citext has no first-class Drizzle type. It behaves as text in TypeScript;`,
         `// the case-insensitive comparison is the database's job either way.`,
         `const citext = customType<{ data: string }>({ dataType: () => "citext" });`,
+        ``,
+      ]
+    : []),
+  ...(usesBytea
+    ? [
+        `// bytea likewise. Uint8Array rather than Buffer: this runs on Workers,`,
+        `// where Buffer is a polyfill and node-postgres hands back the former.`,
+        `const bytea = customType<{ data: Uint8Array }>({ dataType: () => "bytea" });`,
         ``,
       ]
     : []),
