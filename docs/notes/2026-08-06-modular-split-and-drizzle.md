@@ -1,6 +1,6 @@
 # Modular split and the first Drizzle domain — overnight, 2026-08-05/06
 
-Seven commits on `dev/p4-c-ingest-integrity`. Nothing deployed. No migration
+Nine commits on `dev/p4-c-ingest-integrity`. Nothing deployed. No migration
 against staging. No Prisma model, schema file or generated client deleted.
 
 | | commit | CI |
@@ -11,7 +11,9 @@ against staging. No Prisma model, schema file or generated client deleted.
 | B1 | `7ab5cc6` Drizzle: identity tables declared, and a harness that checks they are true | ✅ |
 | B2 + B3 | `1049e40` port users and id-tokens to Drizzle, in their domain home | ✅ |
 | report | `00047cc` this document | ✅ |
-| — | `a2858d0` typecheck the parity harness, which was checked by nothing | *(pushed last)* |
+| — | `a2858d0` typecheck the parity harness, which was checked by nothing | ✅ |
+| — | `5e9966f` one flapping charger could suppress the fleet-wide alarm | ✅ |
+| P2 | `—` schema/database drift reconciliation (read-only note) | |
 
 ---
 
@@ -50,12 +52,14 @@ The uncomfortable part is not the bug. It is that a branch carrying the OCPP
 silence watch — a feature whose entire premise is that silent failures must be
 made loud — ran red for three days without anyone reading it.
 
-**3. The database is drifted from the schema, and was before tonight.**
-`prisma migrate diff --from-config-datasource` produces a 212-line report:
-two legacy tables the schema no longer declares, and a long list of altered
-defaults, renamed indexes and re-added foreign keys across the agreements
-schema. Untouched, and reported here only because the A1 verification had to
-account for it. **Parked — needs a decision, see below.**
+**3. The database is drifted from the schema — and the database is the one
+that is right.** `prisma migrate diff --from-config-datasource` produces a
+212-line report. It was parked as "which side is correct?", then reconciled:
+[2026-08-06-schema-database-drift-reconciliation.md](./2026-08-06-schema-database-drift-reconciliation.md).
+Every substantive item is the Prisma schema failing to declare something the
+database correctly has, so **no migration is needed at all**. It also turned up
+a live breakage — `agreements.driver_access_requests` cannot be read by Prisma
+— and retired a stale audit finding. Details below under P2.
 
 ---
 
@@ -350,10 +354,29 @@ Three chargers were already silent before this: 84 minutes, 685 minutes and
 2,988 minutes (since 2026-08-04 09:08). Those predate the portal change and are
 separate — worth a look, but not tonight's story.
 
-**Confirm the log line landed.** The detector's first real test is in progress
-and the evidence for the last 45 minutes of it is in Cloudflare logs, which
-this session cannot read (the Cloudflare MCP servers need an interactive OAuth
-that a headless run cannot do). Everything above is from the database.
+### It failed its own test, and the fix is in
+
+At 11:14 UTC, twenty of twenty-one watched identities were past the threshold —
+and `fleetWide` was **false**. It was computed as `speaking === 0`, and one
+identity (`57f9ffd0`, **three frames in the preceding six hours**) had emitted a
+heartbeat a minute earlier.
+
+So the escalation reserved for "the path is down, not a charger" was held off by
+a unit that speaks about twice an hour, during the exact event the detector
+exists to catch. The per-charger warning still listed twenty silent chargers —
+this was not total silence — but the loud line did not run.
+
+Fixed in `5e9966f`: fleet-wide is now a ratio, at or below 10% still speaking.
+At twenty-one watched that tolerates two stragglers, and on a small fleet it
+degrades to `speaking === 0` by itself, so no minimum-fleet-size special case is
+needed. The decision is extracted as a pure `isFleetWide(watched, speaking)`
+with seven tests including the measured 2026-08-06 shape — it previously lived
+in one expression reachable only with a live database, which is why nothing
+caught it.
+
+**Still worth your eyes:** the Cloudflare logs, to confirm the line now emits.
+This session cannot read them (those MCP servers need an interactive OAuth a
+headless run cannot perform). Everything above is from the database.
 
 ---
 
@@ -364,11 +387,27 @@ One `ALTER TABLE ... SET NOT NULL` after a `SET roles = '{}' WHERE roles IS
 NULL` (which currently matches 0 rows). Blocked only because it is a migration
 against staging with 21 chargers writing. *Needs: go-ahead to run it.*
 
-**P2. The database is 212 lines drifted from `prisma/schema/`.**
-Two dropped legacy tables plus a wide set of altered defaults, renamed indexes
-and re-added FKs across `agreements`. Pre-existing and unrelated to tonight.
-*Needs: a decision on whether the schema or the database is right — they
-disagree in both directions, so it is not a single `migrate deploy`.*
+**P2. RESOLVED — see
+[2026-08-06-schema-database-drift-reconciliation.md](./2026-08-06-schema-database-drift-reconciliation.md).**
+The database is right on every substantive item; the 212 lines are the Prisma
+schema failing to declare things the database correctly has. **No migration is
+needed** — it is a schema-editing job with no staging window and no charger
+impact. Do **not** run the generated migration: it would drop 21 working
+defaults, 4 correct foreign keys, a UNIQUE index, and destroy a column's data.
+
+It surfaced two things worth their own line:
+
+- **`agreements.driver_access_requests` cannot be read by Prisma at all.**
+  `triggeredBy` is the one field in its model with no `@map`, so Prisma
+  addresses `"triggeredBy"` and the column is `triggered_by`. Confirmed with a
+  live query: *"The column `driver_access_requests.triggeredBy` does not exist
+  in the current database."* Every read and write of that model fails at
+  runtime — the whole driver access-request flow. One-line fix proposed, **not
+  applied**: it is access-grant territory and Rule 5 says ask first.
+- **The 2026-08-03 audit's Finding 2 is stale.** `charging.tap_intents` has all
+  four foreign keys, with correct delete semantics. What it called the
+  "cheapest high-value fix in the audit" is already done in the database; only
+  the schema declaration is missing.
 
 **P3. Identity is one-fifth ported.** Two of roughly a dozen identity
 repositories are on Drizzle. `orgs.ts`, `invites.ts`, `host-invites.ts`,
