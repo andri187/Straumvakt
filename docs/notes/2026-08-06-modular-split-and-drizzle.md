@@ -1,6 +1,6 @@
 # Modular split and the first Drizzle domain — overnight, 2026-08-05/06
 
-Nine commits on `dev/p4-c-ingest-integrity`. Nothing deployed. No migration
+Eleven commits on `dev/p4-c-ingest-integrity`. Nothing deployed. No migration
 against staging. No Prisma model, schema file or generated client deleted.
 
 | | commit | CI |
@@ -13,7 +13,8 @@ against staging. No Prisma model, schema file or generated client deleted.
 | report | `00047cc` this document | ✅ |
 | — | `a2858d0` typecheck the parity harness, which was checked by nothing | ✅ |
 | — | `5e9966f` one flapping charger could suppress the fleet-wide alarm | ✅ |
-| P2 | `—` schema/database drift reconciliation (read-only note) | |
+| P2 | `89cfd4c` schema/database drift reconciliation | ✅ |
+| P2·1 | `d7e8e8a` @map the field that made driver_access_requests unreadable, + an all-models guard | ✅ |
 
 ---
 
@@ -374,9 +375,25 @@ with seven tests including the measured 2026-08-06 shape — it previously lived
 in one expression reachable only with a live database, which is why nothing
 caught it.
 
+**Confirmed again at 11:57 UTC, ninety minutes in.** Staging: 20 identities
+seen in the last week, **19 silent, 1 speaking** — the same flapper, one minute
+earlier. Under the old `speaking === 0` that is still `false`, an hour and a
+half into a total outage. Under the ratio it is `1/20 = 5%` → **true**. The
+live system is sitting in the exact state the fix was written for.
+
 **Still worth your eyes:** the Cloudflare logs, to confirm the line now emits.
 This session cannot read them (those MCP servers need an interactive OAuth a
 headless run cannot perform). Everything above is from the database.
+
+**One correction, in the spirit of the rest of this document.** The background
+watch armed to catch the threshold crossing read the TEST branch for forty
+minutes — I passed the wrong connection string — and the test branch has no
+recent `protocol_log` rows, so every poll came back empty. An earlier version
+of that script would have called an empty result `0/0 silent` and declared
+FLEET-WIDE; the empty-read guard added after that first false positive is what
+stopped it. Every real observation in this section came from explicit-branchId
+queries, not from that watch. The lesson is the one already written down about
+this project: always pass the branch, and never let "no rows" mean "all quiet".
 
 ---
 
