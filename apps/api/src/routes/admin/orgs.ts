@@ -81,11 +81,11 @@ adminOrgs.post(
 // Per-org read — members of the org with org.read OR platform staff
 // (via platform.tenant.read expansion).
 adminOrgs.get(
-  "/:id",
-  requirePermission("org.read", { orgIdParam: "id" }),
+  "/:orgId",
+  requirePermission("org.read", { orgIdParam: "orgId" }),
   async (c) => {
     const db = makePrisma(c.env);
-    const org = await getOrgById(db, c.req.param("id"));
+    const org = await getOrgById(db, c.req.param("orgId"));
     if (!org) return c.json({ error: "not_found" }, 404);
     return c.json({ org });
   },
@@ -93,26 +93,26 @@ adminOrgs.get(
 
 // Per-org write — owner-level membership OR platform.tenant.write.
 adminOrgs.patch(
-  "/:id",
-  requirePermission("org.write", { orgIdParam: "id" }),
+  "/:orgId",
+  requirePermission("org.write", { orgIdParam: "orgId" }),
   async (c) => {
     const raw = (await c.req.json().catch(() => null)) as unknown;
     const parsed = OrgInputs.OrgUpdateInput.safeParse(raw);
     if (!parsed.success) return c.json({ error: "validation", issues: parsed.error.issues }, 400);
     const db = makePrisma(c.env);
-    const org = await updateOrg(db, c.req.param("id"), parsed.data);
+    const org = await updateOrg(db, c.req.param("orgId"), parsed.data);
     return c.json({ org });
   },
 );
 
 // Archive is destructive — owner-level OR platform.tenant.delete.
 adminOrgs.post(
-  "/:id/archive",
-  requirePermission("org.write", { orgIdParam: "id" }),
+  "/:orgId/archive",
+  requirePermission("org.write", { orgIdParam: "orgId" }),
   async (c) => {
     const db = makePrisma(c.env);
     const updated = await db.organization.update({
-      where: { id: c.req.param("id") },
+      where: { id: c.req.param("orgId") },
       data: { status: "archived" },
     });
     return c.json({ org: { id: updated.id, status: updated.status } });
@@ -124,11 +124,11 @@ adminOrgs.post(
 // the resource being listed; member-management uses member.* verbs.
 
 adminOrgs.get(
-  "/:id/sites",
-  requirePermission("site.read", { orgIdParam: "id" }),
+  "/:orgId/sites",
+  requirePermission("site.read", { orgIdParam: "orgId" }),
   async (c) => {
     const db = makePrisma(c.env);
-    const sites = await listSitesByOrg(db, c.req.param("id"));
+    const sites = await listSitesByOrg(db, c.req.param("orgId"));
     return c.json({ sites });
   },
 );
@@ -136,11 +136,11 @@ adminOrgs.get(
 // Installations are site-level children; site.read is the appropriate
 // gate (no separate installation.read verb in the catalogue today).
 adminOrgs.get(
-  "/:id/installations",
-  requirePermission("site.read", { orgIdParam: "id" }),
+  "/:orgId/installations",
+  requirePermission("site.read", { orgIdParam: "orgId" }),
   async (c) => {
     const db = makePrisma(c.env);
-    const installations = await listInstallationsByOrg(db, c.req.param("id"));
+    const installations = await listInstallationsByOrg(db, c.req.param("orgId"));
     return c.json({ installations });
   },
 );
@@ -151,15 +151,15 @@ adminOrgs.get(
 // is validated by requirePermission(charger.read, orgIdParam); data is
 // scoped to that org via the org-scope helper. No resolution change.
 adminOrgs.get(
-  "/:id/chargers",
-  requirePermission("charger.read", { orgIdParam: "id" }),
+  "/:orgId/chargers",
+  requirePermission("charger.read", { orgIdParam: "orgId" }),
   async (c) => {
     const db = makePrisma(c.env);
     const includeDecommissioned = c.req.query("includeDecommissioned") === "true";
     const chargers = await listAllChargers(db, {
       includeDecommissioned,
       kek: c.env.OCPP_CRED_KEK,
-      orgScope: { all: false, orgIds: [c.req.param("id")] },
+      orgScope: { all: false, orgIds: [c.req.param("orgId")] },
     });
     return c.json({ chargers });
   },
@@ -170,14 +170,14 @@ adminOrgs.get(
 // builder as the operator /sites tree, scoped to this org. charger.read +
 // orgIdParam (host_admin has charger.read via its bundle).
 adminOrgs.get(
-  "/:id/sites/tree",
-  requirePermission("charger.read", { orgIdParam: "id" }),
+  "/:orgId/sites/tree",
+  requirePermission("charger.read", { orgIdParam: "orgId" }),
   async (c) => {
     const db = makePrisma(c.env);
     const includeDecommissioned = c.req.query("includeDecommissioned") === "true";
     const tree = await listSiteTree(db, c.env.OCPP_CRED_KEK, {
       includeDecommissioned,
-      orgScope: { all: false, orgIds: [c.req.param("id")] },
+      orgScope: { all: false, orgIds: [c.req.param("orgId")] },
     });
     return c.json({ tree });
   },
@@ -186,11 +186,11 @@ adminOrgs.get(
 // Host-reachable drivers — members of the org's driver groups. member.read +
 // orgIdParam (host_admin has member.read via its bundle).
 adminOrgs.get(
-  "/:id/drivers",
-  requirePermission("member.read", { orgIdParam: "id" }),
+  "/:orgId/drivers",
+  requirePermission("member.read", { orgIdParam: "orgId" }),
   async (c) => {
     const db = makePrisma(c.env);
-    const drivers = await listOrgDrivers(db, c.req.param("id"));
+    const drivers = await listOrgDrivers(db, c.req.param("orgId"));
     return c.json({ drivers });
   },
 );
@@ -205,22 +205,22 @@ adminOrgs.get(
 
 // Driver groups the org owns — the pick list for "invite into which group".
 adminOrgs.get(
-  "/:id/driver-groups",
-  requirePermission("member.read", { orgIdParam: "id" }),
+  "/:orgId/driver-groups",
+  requirePermission("member.read", { orgIdParam: "orgId" }),
   async (c) => {
     const db = makePrisma(c.env);
-    const groups = await listOrgDriverGroups(db, c.req.param("id"));
+    const groups = await listOrgDriverGroups(db, c.req.param("orgId"));
     return c.json({ groups });
   },
 );
 
 // Pending/used driver invites for the org's groups.
 adminOrgs.get(
-  "/:id/driver-invites",
-  requirePermission("member.read", { orgIdParam: "id" }),
+  "/:orgId/driver-invites",
+  requirePermission("member.read", { orgIdParam: "orgId" }),
   async (c) => {
     const db = makePrisma(c.env);
-    const invites = await listOrgDriverInvites(db, c.req.param("id"));
+    const invites = await listOrgDriverInvites(db, c.req.param("orgId"));
     return c.json({ invites });
   },
 );
@@ -238,8 +238,8 @@ const DriverInviteCreateBody = z.object({
 });
 
 adminOrgs.post(
-  "/:id/driver-invites",
-  requirePermission("member.invite", { orgIdParam: "id" }),
+  "/:orgId/driver-invites",
+  requirePermission("member.invite", { orgIdParam: "orgId" }),
   async (c) => {
     const raw = (await c.req.json().catch(() => null)) as unknown;
     const parsed = DriverInviteCreateBody.safeParse(raw);
@@ -259,7 +259,7 @@ adminOrgs.post(
     }
     const db = makePrisma(c.env);
     const result = await createDriverInvite(db, {
-      orgId: c.req.param("id"),
+      orgId: c.req.param("orgId"),
       driverGroupId: parsed.data.driverGroupId,
       email: parsed.data.email,
       invitedByUserId,
@@ -282,11 +282,11 @@ adminOrgs.post(
 // Gated on billing.read: it's the host's own commercial data and host_admin
 // has billing.read (not contract.read, which is manager/finance and up).
 adminOrgs.get(
-  "/:id/agreements",
-  requirePermission("billing.read", { orgIdParam: "id" }),
+  "/:orgId/agreements",
+  requirePermission("billing.read", { orgIdParam: "orgId" }),
   async (c) => {
     const db = makePrisma(c.env);
-    const agreements = await listOrgAgreements(db, c.req.param("id"));
+    const agreements = await listOrgAgreements(db, c.req.param("orgId"));
     return c.json({ agreements });
   },
 );
@@ -294,11 +294,11 @@ adminOrgs.get(
 // Host-reachable session summary — aggregates + recent activity for the
 // dashboard. billing.read (host_admin has it); org-scoped by the param.
 adminOrgs.get(
-  "/:id/sessions",
-  requirePermission("billing.read", { orgIdParam: "id" }),
+  "/:orgId/sessions",
+  requirePermission("billing.read", { orgIdParam: "orgId" }),
   async (c) => {
     const db = makePrisma(c.env);
-    const summary = await getOrgSessionSummary(db, c.req.param("id"), new Date());
+    const summary = await getOrgSessionSummary(db, c.req.param("orgId"), new Date());
     return c.json({ summary });
   },
 );
@@ -310,12 +310,12 @@ adminOrgs.get(
 // leak a cross-tenant session). includeRaw omitted — heavy raw blobs are
 // operator-only via the /admin/billing/sessions/:id/full route.
 adminOrgs.get(
-  "/:id/sessions/:sessionId",
-  requirePermission("billing.read", { orgIdParam: "id" }),
+  "/:orgId/sessions/:sessionId",
+  requirePermission("billing.read", { orgIdParam: "orgId" }),
   async (c) => {
     const db = makePrisma(c.env);
     const detail = await getSessionFullDetail(db, c.req.param("sessionId"));
-    if (!detail || detail.orgId !== c.req.param("id")) {
+    if (!detail || detail.orgId !== c.req.param("orgId")) {
       return c.json({ error: "not_found" }, 404);
     }
     return c.json({ session: detail });
@@ -323,11 +323,11 @@ adminOrgs.get(
 );
 
 adminOrgs.get(
-  "/:id/contracts",
-  requirePermission("contract.read", { orgIdParam: "id" }),
+  "/:orgId/contracts",
+  requirePermission("contract.read", { orgIdParam: "orgId" }),
   async (c) => {
     const db = makePrisma(c.env);
-    const contracts = await listContractsByOrg(db, c.req.param("id"));
+    const contracts = await listContractsByOrg(db, c.req.param("orgId"));
     return c.json({ contracts });
   },
 );
@@ -337,11 +337,11 @@ adminOrgs.get(
 // tariff for each. Operator-facing answer to "what is each site
 // under this org being charged?".
 adminOrgs.get(
-  "/:id/tariff-chain",
-  requirePermission("contract.read", { orgIdParam: "id" }),
+  "/:orgId/tariff-chain",
+  requirePermission("contract.read", { orgIdParam: "orgId" }),
   async (c) => {
     const db = makePrisma(c.env);
-    const summary = await getOrgTariffChainSummary(db, c.req.param("id"));
+    const summary = await getOrgTariffChainSummary(db, c.req.param("orgId"));
     return c.json({ summary });
   },
 );
@@ -349,57 +349,57 @@ adminOrgs.get(
 // Family groups are billing-side metadata; contract.read is the
 // closest verb in the current catalogue.
 adminOrgs.get(
-  "/:id/family-groups",
-  requirePermission("contract.read", { orgIdParam: "id" }),
+  "/:orgId/family-groups",
+  requirePermission("contract.read", { orgIdParam: "orgId" }),
   async (c) => {
     const db = makeDrizzle(c.env);
-    const familyGroups = await listFamilyGroupsByOrg(db, c.req.param("id"));
+    const familyGroups = await listFamilyGroupsByOrg(db, c.req.param("orgId"));
     return c.json({ familyGroups });
   },
 );
 
 adminOrgs.get(
-  "/:id/properties",
-  requirePermission("property.read", { orgIdParam: "id" }),
+  "/:orgId/properties",
+  requirePermission("property.read", { orgIdParam: "orgId" }),
   async (c) => {
     const db = makePrisma(c.env);
-    const properties = await listPropertiesByOrg(db, c.req.param("id"));
+    const properties = await listPropertiesByOrg(db, c.req.param("orgId"));
     return c.json({ properties });
   },
 );
 
 adminOrgs.get(
-  "/:id/users",
-  requirePermission("member.read", { orgIdParam: "id" }),
+  "/:orgId/users",
+  requirePermission("member.read", { orgIdParam: "orgId" }),
   async (c) => {
     // Drizzle: the three identity reads below are ported. Everything else
     // on this route file is still Prisma — orgs itself has not been moved.
     const db = makeDrizzle(c.env);
-    const users = await listUsersByOrg(db, c.req.param("id"));
+    const users = await listUsersByOrg(db, c.req.param("orgId"));
     return c.json({ users });
   },
 );
 
 adminOrgs.get(
-  "/:id/memberships",
-  requirePermission("member.read", { orgIdParam: "id" }),
+  "/:orgId/memberships",
+  requirePermission("member.read", { orgIdParam: "orgId" }),
   async (c) => {
     const db = makeDrizzle(c.env);
-    const memberships = await listOrgMemberships(db, c.req.param("id"));
+    const memberships = await listOrgMemberships(db, c.req.param("orgId"));
     return c.json({ memberships });
   },
 );
 
 adminOrgs.post(
-  "/:id/memberships",
-  requirePermission("member.invite", { orgIdParam: "id" }),
+  "/:orgId/memberships",
+  requirePermission("member.invite", { orgIdParam: "orgId" }),
   async (c) => {
     const raw = (await c.req.json().catch(() => null)) as unknown;
     const parsed = MembershipCreateInput.safeParse(raw);
     if (!parsed.success) return c.json({ error: "validation", issues: parsed.error.issues }, 400);
     const db = makeDrizzle(c.env);
     try {
-      const membership = await addMembership(db, c.req.param("id"), parsed.data.userId, parsed.data.role);
+      const membership = await addMembership(db, c.req.param("orgId"), parsed.data.userId, parsed.data.role);
       return c.json({ membership }, 201);
     } catch (err) {
       if (err instanceof UniqueViolationError) {
