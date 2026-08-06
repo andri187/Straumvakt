@@ -39,6 +39,7 @@ interface DbColumn {
   is_nullable: "YES" | "NO";
   udt_name: string;
   udt_schema: string;
+  column_default: string | null;
 }
 
 /** Map what Drizzle would emit as DDL onto the `udt_name` Postgres reports.
@@ -76,7 +77,7 @@ describe.skipIf(!hasDb)("identity Drizzle schema matches the database", () => {
 
   async function columnsOf(schema: string, table: string): Promise<DbColumn[]> {
     const { rows } = await getPool().query<DbColumn>(
-      `select column_name, is_nullable, udt_name, udt_schema
+      `select column_name, is_nullable, udt_name, udt_schema, column_default
          from information_schema.columns
         where table_schema = $1 and table_name = $2
         order by ordinal_position`,
@@ -135,6 +136,74 @@ describe.skipIf(!hasDb)("identity Drizzle schema matches the database", () => {
         }
 
         expect(mismatches, `${qualified}`).toEqual([]);
+      });
+
+      // The quietest failure mode in the whole port.
+      //
+      // A NOT NULL column with no database default and no client-side
+      // generator means every INSERT fails — but only at runtime, only on
+      // the write path, and the type checker is perfectly happy. Prisma was
+      // filling these in from `@default(uuid())` and `@updatedAt`, neither
+      // of which leaves a trace in the DDL: identity.users.id has no
+      // default at all, while identity.id_tokens.id has gen_random_uuid()
+      // because that migration was written by hand. Half and half, with
+      // nothing to tell them apart by inspection.
+      it("can supply a value for every NOT NULL column on insert", async () => {
+        const cols = await columnsOf(cfg.schema!, cfg.name);
+        const byName = new Map(cols.map((c) => [c.column_name, c]));
+
+        const unfillable: string[] = [];
+        const lyingAboutDb: string[] = [];
+        for (const col of cfg.columns) {
+          const db = byName.get(col.name);
+          if (!db || !col.notNull) continue;
+
+          const dbSupplies = db.column_default !== null;
+          // `.$defaultFn()` is client-side and works whatever the database
+          // does. `.hasDefault` without one is a CLAIM that the database
+          // has a default — which makes the column optional on insert, so
+          // if the claim is wrong every insert fails on a NOT NULL.
+          const clientSupplies = typeof (col as { defaultFn?: unknown }).defaultFn === "function";
+          const claimsDbDefault = col.hasDefault && !clientSupplies;
+
+          if (clientSupplies) continue;
+          if (claimsDbDefault && !dbSupplies) lyingAboutDb.push(col.name);
+          if (!claimsDbDefault && !dbSupplies) unfillable.push(col.name);
+        }
+
+        expect(
+          lyingAboutDb,
+          `${qualified}: declared with a default the database does not have — optional on insert, then NOT NULL at runtime`,
+        ).toEqual([]);
+
+        // Columns the caller always passes explicitly are fine — this is
+        // about the ones nobody thinks about. Kept as an allowlist so a new
+        // one has to be argued for rather than absorbed.
+        // Database column names, because that is what `col.name` carries.
+        const CALLER_SUPPLIED: Record<string, string[]> = {
+          "identity.users": ["email"],
+          "identity.user_vendor_refs": ["user_id", "vendor_slug", "vendor_user_id", "last_synced_at"],
+          "identity.id_tokens": ["user_id", "kind", "value"],
+          "identity.vendor_user_groups": ["vendor_slug", "vendor_group_id", "installation_id", "name", "last_synced_at"],
+          "identity.vendor_user_group_memberships": ["group_id", "user_id", "role"],
+          "identity.user_credentials": ["user_id"],
+          "identity.user_tokens": ["user_id", "kind", "token_hash", "expires_at"],
+          "identity.platform_grants": ["user_id", "role", "granted_at"],
+          "tenancy.organizations": ["display_name", "country_code"],
+          "tenancy.host_applications": ["company_name", "contact_name", "contact_email", "site_type"],
+          "tenancy.memberships": ["org_id", "user_id", "role"],
+          "tenancy.org_email_domains": ["org_id", "domain"],
+          "people.vehicles": ["user_id"],
+          "people.family_groups": ["org_id", "display_name", "primary_user_id"],
+          "people.family_memberships": ["family_group_id", "user_id", "member_kind", "joined_at"],
+        };
+        const allowed = new Set(CALLER_SUPPLIED[qualified] ?? []);
+        const surprises = unfillable.filter((c) => !allowed.has(c));
+
+        expect(
+          surprises,
+          `${qualified}: NOT NULL with no database default and no client default — every insert fails`,
+        ).toEqual([]);
       });
     });
   }

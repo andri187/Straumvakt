@@ -33,6 +33,20 @@
   },
   {
     "type": "dependency",
+    "from": "apps/api/src/domains/identity/routes/admin-users.ts",
+    "to": "apps/api/src/repositories/agreements.ts",
+    "unresolvedTo": "../../../repositories/agreements",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-identity-to-higher-layer"
+    }
+  },
+  {
+    "type": "dependency",
     "from": "apps/api/src/index.ts",
     "to": "apps/api/src/lib/zaptec-sync-cron.ts",
     "unresolvedTo": "./lib/zaptec-sync-cron",

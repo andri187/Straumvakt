@@ -58,6 +58,27 @@ const LEGACY_PLATFORM = [
   "(^|/)src/lib/db/",
 ];
 
+/** Commercial modules in the legacy layout. Named so the layering rule bites
+ *  TODAY, while identity is the only domain that has moved — otherwise a
+ *  ported domain could reach up into billing and nothing would say so until
+ *  commercial itself moves, which is a year away and blocked on ADR 0025. */
+const LEGACY_COMMERCIAL = [
+  "(^|/)src/repositories/billing-.*\\.ts$",
+  "(^|/)src/repositories/agreements\\.ts$",
+  "(^|/)src/repositories/contracts\\.ts$",
+  "(^|/)src/repositories/bill-objects\\.ts$",
+  "(^|/)src/repositories/session-ledger\\.ts$",
+  "(^|/)src/repositories/driver-pricing\\.ts$",
+  "(^|/)src/repositories/driver-invoices\\.ts$",
+  "(^|/)src/repositories/driver-group-memberships\\.ts$",
+  "(^|/)src/repositories/driver-access-requests\\.ts$",
+  "(^|/)src/repositories/org-tariff-chain\\.ts$",
+  "(^|/)src/lib/agreement/",
+  "(^|/)src/lib/billing/",
+  "(^|/)src/lib/billing-shadow/",
+  "(^|/)src/lib/tariff/",
+];
+
 const vendorFrom = [domainDir("vendor"), ...LEGACY_VENDOR];
 const platformFrom = [domainDir("platform"), ...LEGACY_PLATFORM];
 
@@ -65,9 +86,20 @@ const platformFrom = [domainDir("platform"), ...LEGACY_PLATFORM];
  *  anything below it; importing anything above it is the violation. */
 const LAYERS = ["identity", "assets", "charging", "commercial"];
 
+/** Legacy-layout members, where they can be named. Empty means "only the
+ *  target layout is matched for this domain" — assets and charging are still
+ *  entirely flat and no filename pattern separates them cleanly. */
+const LEGACY_MEMBERS = {
+  identity: [],
+  assets: [],
+  charging: [],
+  commercial: LEGACY_COMMERCIAL,
+};
+
 const layerRules = LAYERS.flatMap((domain, i) => {
   const above = LAYERS.slice(i + 1);
   if (above.length === 0) return [];
+  const targets = above.flatMap((d) => [domainDir(d), ...LEGACY_MEMBERS[d]]);
   return [
     {
       name: `no-${domain}-to-higher-layer`,
@@ -77,7 +109,7 @@ const layerRules = LAYERS.flatMap((domain, i) => {
         `An import in this direction inverts it, and the inversion is what ` +
         `makes a domain impossible to extract later.`,
       from: { path: domainDir(domain) },
-      to: { path: above.map(domainDir) },
+      to: { path: targets },
     },
   ];
 });

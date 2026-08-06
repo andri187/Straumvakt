@@ -1,7 +1,18 @@
 // IdToken repo unit tests — verify the auto-mint path, the manual
-// path, the validation guards, and the collision retry. The repo
-// works against any Prisma-shaped client so tests use a hand-rolled
-// fake that mirrors the methods we actually call.
+// path, the validation guards, and the collision retry.
+//
+// The fake is now Drizzle-shaped rather than Prisma-shaped. It implements
+// exactly the two chains the repository builds and nothing else:
+//
+//   db.insert(table).values(v).returning(cols)
+//   db.select(cols).from(table).where(cond).orderBy(...)
+//
+// Conditions are ignored, as they were in the Prisma fake — `eq` and
+// `notExists` produce opaque SQL objects either way, so the fake reproduces
+// the filter's INTENT in TypeScript. What it does model faithfully is the
+// unique constraint, because the retry loop hangs off it: a duplicate value
+// throws a real SQLSTATE 23505 shape so `isUniqueViolation` fires and the
+// repository raises UniqueViolationError, exactly as node-postgres would.
 
 import { describe, expect, it } from "vitest";
 import {
@@ -9,7 +20,8 @@ import {
   createIdToken,
   mintRfidValue,
 } from "./id-tokens";
-import type { PrismaClient } from "../generated/prisma/client";
+import { idTokens, users } from "../schema";
+import type { Db } from "../../../lib/drizzle";
 
 interface StoredRow {
   id: string;
@@ -27,51 +39,95 @@ interface StoredRow {
   updatedAt: Date;
 }
 
-/**
- * Hand-rolled in-memory IdToken table. Enforces the @unique constraint
- * on `value` by throwing the same error string Prisma uses ("Unique
- * constraint failed") so the repo's collision-retry path triggers.
- *
- * Cast to PrismaClient at the call site — we only exercise the
- * `idToken.create` method, so the rest of the surface staying typed
- * but unimplemented is fine.
- */
-function makeFakeDb() {
-  const rows: StoredRow[] = [];
-  let nextId = 1;
-  return {
-    rows,
-    db: {
-      idToken: {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        create: async ({ data }: any) => {
-          if (rows.some((r) => r.value === data.value)) {
-            throw new Error(
-              "Unique constraint failed on the fields: (`value`)",
-            );
-          }
-          const now = new Date();
-          const row: StoredRow = {
-            id: `token-${nextId++}`,
-            userId: data.userId,
-            kind: data.kind,
-            value: data.value,
-            vendorIssuedBy: data.vendorIssuedBy ?? null,
-            vendorTokenId: data.vendorTokenId ?? null,
-            label: data.label ?? null,
-            status: "active",
-            expiresAt: data.expiresAt ?? null,
-            lastUsedAt: null,
-            scopeInstallationId: data.scopeInstallationId ?? null,
-            createdAt: now,
-            updatedAt: now,
-          };
-          rows.push(row);
-          return row;
-        },
-      },
-    } as unknown as PrismaClient,
+/** What node-postgres raises on a unique violation. Only `code` matters to
+ *  `isUniqueViolation`; `constraint` is carried for the message. */
+function uniqueViolation(constraint: string) {
+  return Object.assign(new Error(`duplicate key value violates unique constraint "${constraint}"`), {
+    code: "23505",
+    constraint,
+  });
+}
+
+interface FakeState {
+  tokens: StoredRow[];
+  users: Array<{ id: string; email: string; createdAt: Date }>;
+}
+
+function makeFakeDb(initial?: Partial<FakeState>) {
+  const state: FakeState = {
+    tokens: initial?.tokens ? [...initial.tokens] : [],
+    users: initial?.users ? [...initial.users] : [],
   };
+  let nextId = state.tokens.length + 1;
+
+  const db = {
+    insert(table: unknown) {
+      if (table !== idTokens) throw new Error("fake: only id_tokens inserts are modelled");
+      return {
+        values(data: Record<string, unknown>) {
+          return {
+            async returning() {
+              const value = data.value as string;
+              if (state.tokens.some((r) => r.value === value)) {
+                throw uniqueViolation("id_tokens_value_key");
+              }
+              const now = new Date();
+              const row: StoredRow = {
+                id: `token-${nextId++}`,
+                userId: data.userId as string,
+                kind: data.kind as string,
+                value,
+                vendorIssuedBy: (data.vendorIssuedBy as string | null) ?? null,
+                vendorTokenId: (data.vendorTokenId as string | null) ?? null,
+                label: (data.label as string | null) ?? null,
+                status: "active",
+                expiresAt: (data.expiresAt as Date | null) ?? null,
+                lastUsedAt: null,
+                scopeInstallationId: (data.scopeInstallationId as string | null) ?? null,
+                createdAt: now,
+                updatedAt: now,
+              };
+              state.tokens.push(row);
+              return [row];
+            },
+          };
+        },
+      };
+    },
+    select() {
+      return {
+        from(table: unknown) {
+          const chain = {
+            where() {
+              return chain;
+            },
+            orderBy() {
+              return chain;
+            },
+            // `notExists(subquery)` never awaits the subquery, so only the
+            // outer chain's `then` is ever reached.
+            then(resolve: (rows: unknown[]) => void) {
+              if (table !== users) {
+                resolve([]);
+                return;
+              }
+              // `notExists(select 1 from id_tokens where user_id = users.id)`
+              // — users with zero tokens, oldest first.
+              resolve(
+                state.users
+                  .filter((u) => !state.tokens.some((t) => t.userId === u.id))
+                  .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+                  .map((u) => ({ id: u.id, email: u.email })),
+              );
+            },
+          };
+          return chain;
+        },
+      };
+    },
+  } as unknown as Db;
+
+  return { db, state };
 }
 
 describe("mintRfidValue", () => {
@@ -144,29 +200,28 @@ describe("createIdToken", () => {
   });
 
   it("retries on collision and eventually succeeds", async () => {
-    // Pre-populate the fake DB with values mintRfidValue might collide
-    // against. We can't predict the random draw, but we can intercept
-    // crypto.getRandomValues to force the first two calls to collide.
-    const { db, rows } = makeFakeDb();
-    rows.push({
-      id: "preload-1",
-      userId: "other",
-      kind: "rfid",
-      value: "AAAAAAAA",
-      vendorIssuedBy: null,
-      vendorTokenId: null,
-      label: null,
-      status: "active",
-      expiresAt: null,
-      lastUsedAt: null,
-      scopeInstallationId: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+    // We can't predict the random draw, so intercept crypto.getRandomValues
+    // to force the first two mints to collide with a pre-loaded value.
+    const { db } = makeFakeDb({
+      tokens: [
+        {
+          id: "preload-1",
+          userId: "other",
+          kind: "rfid",
+          value: "AAAAAAAA",
+          vendorIssuedBy: null,
+          vendorTokenId: null,
+          label: null,
+          status: "active",
+          expiresAt: null,
+          lastUsedAt: null,
+          scopeInstallationId: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ],
     });
 
-    // Patch crypto.getRandomValues to return AA AA AA AA twice, then
-    // BB BB BB BB. First two attempts collide on the @unique constraint;
-    // third succeeds.
     const real = crypto.getRandomValues;
     let callCount = 0;
     crypto.getRandomValues = ((arr: Uint8Array) => {
@@ -177,10 +232,7 @@ describe("createIdToken", () => {
     }) as typeof crypto.getRandomValues;
 
     try {
-      const token = await createIdToken(db, {
-        userId: "user-1",
-        kind: "rfid",
-      });
+      const token = await createIdToken(db, { userId: "user-1", kind: "rfid" });
       expect(token.value).toBe("BBBBBBBB");
       expect(callCount).toBeGreaterThanOrEqual(2);
     } finally {
@@ -188,98 +240,26 @@ describe("createIdToken", () => {
     }
   });
 
-  it("surfaces P2002 when the operator-provided value is taken (no retry)", async () => {
+  it("surfaces the conflict when the operator-provided value is taken (no retry)", async () => {
     // Manual value collisions are NOT retried — re-minting would
     // silently swap the operator's input, which is wrong.
     const { db } = makeFakeDb();
-    await createIdToken(db, {
-      userId: "user-1",
-      kind: "rfid",
-      value: "CAFEBABE",
-    });
+    await createIdToken(db, { userId: "user-1", kind: "rfid", value: "CAFEBABE" });
     await expect(
-      createIdToken(db, {
-        userId: "user-2",
-        kind: "rfid",
-        value: "CAFEBABE",
-      }),
-    ).rejects.toThrow(/Unique constraint/);
+      createIdToken(db, { userId: "user-2", kind: "rfid", value: "CAFEBABE" }),
+    ).rejects.toThrow(/unique constraint violated/);
   });
 });
 
 describe("backfillPrimaryRfidForUsersWithoutTokens", () => {
-  function makeBackfillDb(state: {
-    users: Array<{ id: string; email: string; createdAt: Date }>;
-    initialTokens: StoredRow[];
-  }) {
-    const tokens = [...state.initialTokens];
-    let nextId = tokens.length + 1;
-    return {
-      tokens,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      db: {
-        user: {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          findMany: async ({ where }: any) => {
-            // Mirror the `idTokens: { none: {} }` filter: return only
-            // users with zero token rows. Other where clauses ignored.
-            const wantsNoTokens =
-              where?.idTokens?.none !== undefined;
-            return state.users
-              .filter((u) =>
-                wantsNoTokens
-                  ? !tokens.some((t) => t.userId === u.id)
-                  : true,
-              )
-              .sort(
-                (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
-              )
-              .map((u) => ({ id: u.id, email: u.email }));
-          },
-        },
-        idToken: {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          create: async ({ data }: any) => {
-            if (tokens.some((t) => t.value === data.value)) {
-              throw new Error(
-                "Unique constraint failed on the fields: (`value`)",
-              );
-            }
-            const now = new Date();
-            const row: StoredRow = {
-              id: `bk-${nextId++}`,
-              userId: data.userId,
-              kind: data.kind,
-              value: data.value,
-              vendorIssuedBy: null,
-              vendorTokenId: null,
-              label: data.label ?? null,
-              status: "active",
-              expiresAt: null,
-              lastUsedAt: null,
-              scopeInstallationId: null,
-              createdAt: now,
-              updatedAt: now,
-            };
-            tokens.push(row);
-            return row;
-          },
-        },
-      } as unknown as PrismaClient,
-    };
-  }
-
   it("mints one primary RFID per user with zero tokens; skips users who already have at least one", async () => {
-    const t0 = new Date("2026-01-01");
-    const t1 = new Date("2026-02-01");
-    const t2 = new Date("2026-03-01");
-    const { db, tokens } = makeBackfillDb({
+    const { db, state } = makeFakeDb({
       users: [
-        { id: "u-1", email: "anna@x.is", createdAt: t0 },
-        { id: "u-2", email: "bjorn@x.is", createdAt: t1 },
-        { id: "u-3", email: "doddi@x.is", createdAt: t2 },
+        { id: "u-1", email: "anna@x.is", createdAt: new Date("2026-01-01") },
+        { id: "u-2", email: "bjorn@x.is", createdAt: new Date("2026-02-01") },
+        { id: "u-3", email: "doddi@x.is", createdAt: new Date("2026-03-01") },
       ],
-      initialTokens: [
+      tokens: [
         // u-2 already has a token; only u-1 and u-3 should get backfilled
         {
           id: "existing-1",
@@ -309,16 +289,16 @@ describe("backfillPrimaryRfidForUsersWithoutTokens", () => {
       "doddi@x.is",
     ]);
     // u-2's pre-existing token is untouched; two new tokens created.
-    expect(tokens.length).toBe(3);
+    expect(state.tokens.length).toBe(3);
     // Newly-minted tokens carry the backfill label.
-    const minted = tokens.filter((t) => t.label === "Primary (backfill)");
+    const minted = state.tokens.filter((t) => t.label === "Primary (backfill)");
     expect(minted.map((m) => m.userId).sort()).toEqual(["u-1", "u-3"]);
   });
 
   it("re-running is idempotent (no users left to mint for)", async () => {
-    const { db } = makeBackfillDb({
+    const { db } = makeFakeDb({
       users: [{ id: "u-1", email: "x@y.is", createdAt: new Date() }],
-      initialTokens: [
+      tokens: [
         {
           id: "t-1",
           userId: "u-1",
@@ -343,10 +323,9 @@ describe("backfillPrimaryRfidForUsersWithoutTokens", () => {
   });
 
   it("collects per-user errors without aborting the whole backfill", async () => {
-    // Pre-load a token whose value happens to be the FIRST value
-    // mintRfidValue produces under our patched RNG, so the new-mint
-    // call collides 5 times in a row → throws → captured as error,
-    // backfill continues with the next user (whose RNG state advances).
+    // Pin the RNG so every mint produces the one value already taken. All
+    // five retries collide, the user is recorded as an error, and the
+    // backfill carries on to the next one.
     const fixedBytes = new Uint8Array([0xde, 0xad, 0xbe, 0xef]);
     const real = crypto.getRandomValues;
     crypto.getRandomValues = ((arr: Uint8Array) => {
@@ -354,14 +333,12 @@ describe("backfillPrimaryRfidForUsersWithoutTokens", () => {
       return arr;
     }) as typeof crypto.getRandomValues;
     try {
-      const { db } = makeBackfillDb({
+      const { db } = makeFakeDb({
         users: [
           { id: "u-1", email: "alice@x.is", createdAt: new Date(0) },
           { id: "u-2", email: "bob@x.is", createdAt: new Date(1) },
         ],
-        // Pre-existing token under user-other with the same UID the
-        // mint will produce — every retry collides.
-        initialTokens: [
+        tokens: [
           {
             id: "blocker",
             userId: "user-other",
@@ -379,8 +356,7 @@ describe("backfillPrimaryRfidForUsersWithoutTokens", () => {
           },
         ],
       });
-      const report =
-        await backfillPrimaryRfidForUsersWithoutTokens(db);
+      const report = await backfillPrimaryRfidForUsersWithoutTokens(db);
       expect(report.scanned).toBe(2);
       expect(report.minted).toBe(0);
       expect(report.errors).toBe(2);

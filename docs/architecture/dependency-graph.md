@@ -62,13 +62,18 @@ O["components"]
 P["lib"]
 end
 3-->7
+5-->7
+5-->G
+5-->3
+5-->9
 6-->3
+6-->5
 6-->7
 6-->8
 6-->A
 7-->3
-7-->9
 7-->G
+7-->9
 8-->3
 8-->7
 9-->7
@@ -78,6 +83,7 @@ A-->3
 A-->7
 A-->9
 A-->G
+A-->5
 N-->O
 N-->P
 N-->G
@@ -92,7 +98,7 @@ P-->D
 
 ## Known violations
 
-23 recorded in [`.dependency-cruiser-known-violations.json`](../../.dependency-cruiser-known-violations.json).
+24 recorded in [`.dependency-cruiser-known-violations.json`](../../.dependency-cruiser-known-violations.json).
 
 These are grandfathered, not accepted. A new one fails the build; removing
 an entry is how a leak gets fixed. Adding one requires saying why.
@@ -129,4 +135,10 @@ an entry is how a leak gets fixed. Adding one requires saying why.
 | from | to |
 |---|---|
 | `src/app/(app)/accounts/organizations/[id]/email-domains/email-domains-panel.tsx` | `src/app/(app)/accounts/organizations/[id]/email-domains/page.tsx` |
+
+### `no-identity-to-higher-layer` — 1
+
+| from | to |
+|---|---|
+| `apps/api/src/domains/identity/routes/admin-users.ts` | `apps/api/src/repositories/agreements.ts` |
 

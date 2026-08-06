@@ -109,7 +109,9 @@ for (const line of lines) {
     isId: /@id\b/.test(rest),
     isUnique: /@unique\b/.test(rest),
     isRelation: /@relation\(/.test(rest),
-    default: (rest.match(/@default\(([^)]*(?:\([^)]*\))?[^)]*)\)/) || [])[1],
+    // Balanced to one level, so `@default(uuid())` and `@default(now())`
+    // capture their trailing parens instead of stopping at the inner one.
+    default: (rest.match(/@default\(((?:[^()]|\([^()]*\))*)\)/) || [])[1],
     dbType: (rest.match(/@db\.(\w+)(\([^)]*\))?/) || []).slice(1).filter(Boolean).join(""),
     updatedAt: /@updatedAt\b/.test(rest),
   });
@@ -185,13 +187,37 @@ function drizzleColumn(f) {
   if (f.isId) base += ".primaryKey()";
   if (!f.optional && !f.isId) base += ".notNull()";
 
-  // Defaults. Deliberately NOT emitted for @default(now())/@default(uuid()):
-  // the column already carries a database default, and having Drizzle also
-  // send one means two sources for the same value.
+  // ── where the value comes from ────────────────────────────────────────
+  // Prisma splits these three ways and the split is not obvious:
+  //
+  //   @default(uuid())  CLIENT-side. Prisma generates the UUID and emits no
+  //                     database default — which is why identity.users.id
+  //                     has none, while identity.id_tokens.id has
+  //                     gen_random_uuid() from a hand-written migration.
+  //                     Leave it to the database and the insert fails on a
+  //                     NOT NULL for exactly half these tables.
+  //   @default(now())   DATABASE-side. Prisma emits CURRENT_TIMESTAMP in the
+  //                     DDL and sends nothing. Kept there — the database
+  //                     clock is the better one anyway.
+  //   @updatedAt        CLIENT-side on every write, including the insert.
+  //                     No database default and no ON UPDATE trigger.
+  if (f.isId && (f.default ?? "").trim() === "uuid()") {
+    base += `.$defaultFn(() => crypto.randomUUID())`;
+  }
+  if (f.updatedAt) {
+    base += `.$defaultFn(() => new Date()).$onUpdateFn(() => new Date())`;
+  }
+
   if (f.default !== undefined && !f.isId) {
     const d = f.default.trim();
-    if (d === "now()" || d === "uuid()" || d === "dbgenerated" || d.startsWith("dbgenerated")) {
-      // database-side; leave it there
+    if (d === "now()") {
+      // Database-side, but Drizzle still has to be TOLD — otherwise it types
+      // the column as required on insert and every caller has to pass a
+      // timestamp the database was going to write anyway. `.defaultNow()`
+      // only marks it optional here; nothing emits DDL.
+      base += `.defaultNow()`;
+    } else if (d === "uuid()" || d.startsWith("dbgenerated")) {
+      // handled above, or database-side
     } else if (d === "[]") {
       base += `.default([])`;
     } else if (/^"(.*)"$/.test(d)) {

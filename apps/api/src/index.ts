@@ -15,8 +15,8 @@ import { adminProperties } from "./routes/admin/properties";
 import { adminSites } from "./routes/admin/sites";
 import { adminInstallations } from "./routes/admin/installations";
 import { adminCircuits } from "./routes/admin/circuits";
-import { adminUsers } from "./routes/admin/users";
-import { adminMemberships } from "./routes/admin/memberships";
+import { adminUsers } from "./domains/identity/routes/admin-users";
+import { adminMemberships } from "./domains/identity/routes/admin-memberships";
 import { adminChargers } from "./routes/admin/chargers";
 import { adminVehicles } from "./routes/admin/vehicles";
 import { adminActiveSessions } from "./routes/admin/active-sessions";
@@ -29,7 +29,7 @@ import {
   adminVendorCredentialsByOrg,
 } from "./routes/admin/vendor-credentials";
 import { adminGroups } from "./routes/admin/groups";
-import { adminIdTokens } from "./routes/admin/id-tokens";
+import { adminIdTokens } from "./domains/identity/routes/admin-id-tokens";
 import { adminOrgInvites } from "./routes/admin/org-invites";
 import { adminBilling } from "./routes/admin/billing";
 import { adminContracts } from "./routes/admin/contracts";

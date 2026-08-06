@@ -1,7 +1,8 @@
-// IdToken repository — closure item 1 from sprint-03 retro. Wires the
-// previously-orphan identity.id_tokens table to a real write path so
-// the OCPP Authorize handler (sprint-03 closure item 3) has something
-// to look up.
+// IdToken repository — identity.id_tokens. Drizzle.
+//
+// Moved from src/repositories/id-tokens.ts and ported from Prisma in the same
+// commit. Behaviour is unchanged; the notes below are the original ones and
+// still apply.
 //
 // Two creation paths:
 //
@@ -16,22 +17,23 @@
 //    who already have physical cards. The value is the card's
 //    factory UID (8 hex chars for MIFARE Classic, 14 for DESFire,
 //    etc.). We accept any non-empty string and just enforce the
-//    schema's @unique constraint.
+//    schema's unique constraint.
 //
 // Revocation is soft — status flips to 'revoked' so the row stays for
 // audit history. The Authorize handler treats revoked → Blocked.
-//
-// Scope: this file is closure item 1 work. The token table existed in
-// schema since the 2026-05-02 migration; before this commit, no code
-// wrote to it. After this commit, every new user has one auto-minted
-// token; operators can add more from the user detail page.
 
-import type { PrismaClient, Prisma } from "../generated/prisma/client";
+import { asc, eq, notExists, sql } from "drizzle-orm";
 import type {
   IdTokenKind,
   IdTokenStatus,
   IdTokenSummary,
 } from "@straumvakt/shared/domain/users";
+import type { Db } from "../../../lib/drizzle";
+import { idTokens, users } from "../schema";
+import { RecordNotFoundError, UniqueViolationError, isUniqueViolation } from "./errors";
+
+/** Anything that can run a statement: the client or a transaction handle. */
+export type DbOrTx = Db | Parameters<Parameters<Db["transaction"]>[0]>[0];
 
 /**
  * Generate an 8-uppercase-hex RFID UID. Matches MIFARE Classic 4-byte
@@ -39,7 +41,7 @@ import type {
  * (e.g. "B6432D39", "EE43C609" — though Zaptec also has 14-hex DESFire
  * UIDs in places). 8 hex = 4 bytes = 4.3B combinations; collision
  * probability against a single existing token at our pilot scale is
- * negligible, but we still retry on P2002.
+ * negligible, but we still retry on a unique violation.
  *
  * Uses crypto.getRandomValues — available in Cloudflare Workers, Node
  * 20+, modern browsers. No fallback because all our targets have it.
@@ -86,19 +88,36 @@ function toSummary(row: IdTokenRow): IdTokenSummary {
   };
 }
 
+/** The columns the summary needs, and only those. Prisma's `findMany` with no
+ *  `select` returned every column; the mapper used thirteen of them. */
+const SUMMARY_COLUMNS = {
+  id: idTokens.id,
+  userId: idTokens.userId,
+  kind: idTokens.kind,
+  value: idTokens.value,
+  vendorIssuedBy: idTokens.vendorIssuedBy,
+  vendorTokenId: idTokens.vendorTokenId,
+  label: idTokens.label,
+  status: idTokens.status,
+  expiresAt: idTokens.expiresAt,
+  lastUsedAt: idTokens.lastUsedAt,
+  scopeInstallationId: idTokens.scopeInstallationId,
+  createdAt: idTokens.createdAt,
+  updatedAt: idTokens.updatedAt,
+} as const;
+
 /**
  * Create an IdToken. If `value` is omitted AND `kind === 'rfid'`, mint
- * a fresh UID. On unique-constraint collision (P2002), retry with a
- * fresh mint up to 5 times before giving up — at our scale a real
- * collision is vanishingly unlikely, but we don't want to surface a
- * confusing 500 to the operator if it ever happens.
+ * a fresh UID. On unique-constraint collision, retry with a fresh mint
+ * up to 5 times before giving up — at our scale a real collision is
+ * vanishingly unlikely, but we don't want to surface a confusing 500 to
+ * the operator if it ever happens.
  *
- * Caller may use this either inside an existing transaction (pass
- * `tx`) or against the standalone client. The signature accepts any
- * Prisma-shaped client.
+ * Caller may use this either inside an existing transaction or against
+ * the standalone client.
  */
 export async function createIdToken(
-  db: PrismaClient | Prisma.TransactionClient,
+  db: DbOrTx,
   input: {
     userId: string;
     kind: IdTokenKind;
@@ -115,12 +134,9 @@ export async function createIdToken(
     throw new Error("idtoken.value: empty string not allowed");
   }
 
-  // Manual value → single insert; surface P2002 to the caller.
+  // Manual value → single insert; surface the conflict to the caller.
   if (provided !== undefined) {
-    const created = (await db.idToken.create({
-      data: buildData(input, provided),
-    })) as IdTokenRow;
-    return toSummary(created);
+    return toSummary(await insertOne(db, input, provided));
   }
 
   // No value AND not rfid → can't auto-mint; require explicit value.
@@ -130,31 +146,20 @@ export async function createIdToken(
     );
   }
 
-  // Auto-mint with retry on collision.
   const MAX_ATTEMPTS = 5;
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-    const candidate = mintRfidValue();
     try {
-      const created = (await db.idToken.create({
-        data: buildData(input, candidate),
-      })) as IdTokenRow;
-      return toSummary(created);
+      return toSummary(await insertOne(db, input, mintRfidValue()));
     } catch (err) {
-      // Prisma P2002 on the @unique constraint on `value`.
-      if (
-        attempt < MAX_ATTEMPTS - 1 &&
-        err instanceof Error &&
-        err.message.includes("Unique constraint")
-      ) {
-        continue;
-      }
+      if (attempt < MAX_ATTEMPTS - 1 && err instanceof UniqueViolationError) continue;
       throw err;
     }
   }
   throw new Error("idtoken.mint: collided 5 times in a row — investigate");
 }
 
-function buildData(
+async function insertOne(
+  db: DbOrTx,
   input: {
     userId: string;
     kind: IdTokenKind;
@@ -165,27 +170,41 @@ function buildData(
     scopeInstallationId?: string;
   },
   value: string,
-): Prisma.IdTokenUncheckedCreateInput {
-  return {
-    userId: input.userId,
-    kind: input.kind,
-    value,
-    label: input.label ?? null,
-    vendorIssuedBy: input.vendorIssuedBy ?? null,
-    vendorTokenId: input.vendorTokenId ?? null,
-    expiresAt: input.expiresAt ?? null,
-    scopeInstallationId: input.scopeInstallationId ?? null,
-  };
+): Promise<IdTokenRow> {
+  try {
+    const [row] = await db
+      .insert(idTokens)
+      .values({
+        userId: input.userId,
+        kind: input.kind,
+        value,
+        label: input.label ?? null,
+        vendorIssuedBy: input.vendorIssuedBy ?? null,
+        vendorTokenId: input.vendorTokenId ?? null,
+        expiresAt: input.expiresAt ?? null,
+        scopeInstallationId: input.scopeInstallationId ?? null,
+        // id, created_at and updated_at come from the column declarations in
+        // ../schema.ts — id and updated_at client-side, created_at from the
+        // database. The split is not uniform; the header there explains it.
+      })
+      .returning(SUMMARY_COLUMNS);
+    return row as IdTokenRow;
+  } catch (err) {
+    if (isUniqueViolation(err)) throw new UniqueViolationError(err.constraint, err);
+    throw err;
+  }
 }
 
 export async function listIdTokensForUser(
-  db: PrismaClient,
+  db: Db,
   userId: string,
 ): Promise<IdTokenSummary[]> {
-  const rows = (await db.idToken.findMany({
-    where: { userId },
-    orderBy: [{ createdAt: "asc" }],
-  })) as IdTokenRow[];
+  const rows = (await db
+    .select(SUMMARY_COLUMNS)
+    .from(idTokens)
+    .where(eq(idTokens.userId, userId))
+    .orderBy(asc(idTokens.createdAt))) as IdTokenRow[];
+
   // The system-issued virtual_rfid sorts first, whatever its created_at.
   //
   // It is the credential every driver is meant to have from the moment
@@ -207,41 +226,43 @@ export async function listIdTokensForUser(
  * Authorize handler returns Blocked. Idempotent — revoking an already-
  * revoked token is a no-op.
  */
-export async function revokeIdToken(
-  db: PrismaClient,
-  tokenId: string,
-): Promise<IdTokenSummary> {
-  const row = (await db.idToken.update({
-    where: { id: tokenId },
-    data: { status: "revoked" },
-  })) as IdTokenRow;
-  return toSummary(row);
+export async function revokeIdToken(db: Db, tokenId: string): Promise<IdTokenSummary> {
+  const [row] = await db
+    .update(idTokens)
+    .set({ status: "revoked" })
+    .where(eq(idTokens.id, tokenId))
+    .returning(SUMMARY_COLUMNS);
+  if (!row) throw new RecordNotFoundError(`id_token ${tokenId}`);
+  return toSummary(row as IdTokenRow);
 }
 
-export async function getIdTokenById(
-  db: PrismaClient,
-  tokenId: string,
-): Promise<IdTokenSummary | null> {
-  const row = (await db.idToken.findUnique({
-    where: { id: tokenId },
-  })) as IdTokenRow | null;
-  return row ? toSummary(row) : null;
+export async function getIdTokenById(db: Db, tokenId: string): Promise<IdTokenSummary | null> {
+  const [row] = await db
+    .select(SUMMARY_COLUMNS)
+    .from(idTokens)
+    .where(eq(idTokens.id, tokenId))
+    .limit(1);
+  return row ? toSummary(row as IdTokenRow) : null;
 }
 
 /**
  * Hard delete — physically removes the row. Loses audit history.
  * Distinct from `revokeIdToken` (soft, status='revoked', row preserved).
  *
- * Throws Prisma P2003 if a FK constraint blocks deletion (e.g. a
- * ChargeSession.idTokenId references this row). The route handler
+ * Raises the driver's foreign-key error if a FK constraint blocks deletion
+ * (e.g. a ChargeSession.idTokenId references this row). The route handler
  * catches that and returns 409 so the operator gets a clear "still
  * referenced — revoke instead" instead of a 500.
  */
-export async function hardDeleteIdToken(
-  db: PrismaClient,
-  tokenId: string,
-): Promise<void> {
-  await db.idToken.delete({ where: { id: tokenId } });
+export async function hardDeleteIdToken(db: Db, tokenId: string): Promise<void> {
+  // DELETE of a row that is not there is a no-op in SQL, where Prisma raised
+  // P2025 and the route turned that into a 404. RETURNING makes the
+  // difference visible so the 404 survives the port.
+  const deleted = await db
+    .delete(idTokens)
+    .where(eq(idTokens.id, tokenId))
+    .returning({ id: idTokens.id });
+  if (deleted.length === 0) throw new RecordNotFoundError(`id_token ${tokenId}`);
 }
 
 /**
@@ -263,7 +284,7 @@ export async function hardDeleteIdToken(
  * permitted) to clear it.
  */
 export async function updateIdToken(
-  db: PrismaClient,
+  db: Db,
   tokenId: string,
   patch: {
     value?: string;
@@ -272,7 +293,7 @@ export async function updateIdToken(
     expiresAt?: Date | null;
   },
 ): Promise<IdTokenSummary> {
-  const data: Prisma.IdTokenUncheckedUpdateInput = {};
+  const data: Record<string, unknown> = {};
   if (patch.value !== undefined) {
     const v = patch.value.trim();
     if (v.length === 0) {
@@ -290,11 +311,19 @@ export async function updateIdToken(
   if (patch.expiresAt !== undefined) {
     data.expiresAt = patch.expiresAt;
   }
-  const row = (await db.idToken.update({
-    where: { id: tokenId },
-    data,
-  })) as IdTokenRow;
-  return toSummary(row);
+
+  try {
+    const [row] = await db
+      .update(idTokens)
+      .set(data)
+      .where(eq(idTokens.id, tokenId))
+      .returning(SUMMARY_COLUMNS);
+    if (!row) throw new RecordNotFoundError(`id_token ${tokenId}`);
+    return toSummary(row as IdTokenRow);
+  } catch (err) {
+    if (isUniqueViolation(err)) throw new UniqueViolationError(err.constraint, err);
+    throw err;
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -322,38 +351,36 @@ export interface BackfillRfidReport {
  * up with the new "every user has a primary RFID" invariant.
  *
  * Per-user errors are collected, not thrown. A single user failing
- * (P2002 collision against an exotic value, etc) shouldn't abort the
- * whole backfill — the operator can re-run after triage.
- *
- * Backfill operates on the entire User table; for tenant-scoped scope,
- * pass a userIds filter (Sprint 4 might want this, today we don't).
+ * (a collision against an exotic value, etc) shouldn't abort the whole
+ * backfill — the operator can re-run after triage.
  */
 export async function backfillPrimaryRfidForUsersWithoutTokens(
-  db: PrismaClient,
+  db: Db,
 ): Promise<BackfillRfidReport> {
-  const users = await db.user.findMany({
-    where: {
-      idTokens: { none: {} },
-    },
-    select: { id: true, email: true },
-    orderBy: [{ createdAt: "asc" }],
-  });
+  // Prisma expressed this as `idTokens: { none: {} }`, which it compiles to
+  // exactly this NOT EXISTS. Kept as a correlated subquery rather than a
+  // LEFT JOIN … IS NULL so the planner can stop at the first match.
+  const rows = await db
+    .select({ id: users.id, email: users.email })
+    .from(users)
+    .where(
+      notExists(
+        db.select({ one: sql`1` }).from(idTokens).where(eq(idTokens.userId, users.id)),
+      ),
+    )
+    .orderBy(asc(users.createdAt));
 
   const mintedDetails: BackfillRfidReport["mintedDetails"] = [];
   const errorDetails: BackfillRfidReport["errorDetails"] = [];
 
-  for (const u of users) {
+  for (const u of rows) {
     try {
       const token = await createIdToken(db, {
         userId: u.id,
         kind: "rfid",
         label: "Primary (backfill)",
       });
-      mintedDetails.push({
-        userId: u.id,
-        email: u.email,
-        value: token.value,
-      });
+      mintedDetails.push({ userId: u.id, email: u.email, value: token.value });
     } catch (err) {
       errorDetails.push({
         userId: u.id,
@@ -364,7 +391,7 @@ export async function backfillPrimaryRfidForUsersWithoutTokens(
   }
 
   return {
-    scanned: users.length,
+    scanned: rows.length,
     minted: mintedDetails.length,
     errors: errorDetails.length,
     mintedDetails: mintedDetails.slice(0, 100),

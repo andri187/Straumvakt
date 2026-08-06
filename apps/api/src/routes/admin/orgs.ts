@@ -2,6 +2,8 @@ import { Hono } from "hono";
 import { OrgInputs } from "@straumvakt/shared";
 import { MembershipCreateInput } from "@straumvakt/shared/inputs/users";
 import { makePrisma } from "../../lib/prisma";
+import { makeDrizzle } from "../../lib/drizzle";
+import { UniqueViolationError } from "../../domains/identity/repositories/errors";
 import { requireAdmin, type AuthVars } from "../../lib/auth-middleware";
 import { requirePermission } from "../../lib/auth/require-permission";
 import {
@@ -33,7 +35,7 @@ import {
   addMembership,
   listOrgMemberships,
   listUsersByOrg,
-} from "../../repositories/users";
+} from "../../domains/identity/repositories/users";
 import type { Env } from "../../bindings";
 
 export const adminOrgs = new Hono<{ Bindings: Env; Variables: AuthVars }>();
@@ -370,7 +372,9 @@ adminOrgs.get(
   "/:id/users",
   requirePermission("member.read", { orgIdParam: "id" }),
   async (c) => {
-    const db = makePrisma(c.env);
+    // Drizzle: the three identity reads below are ported. Everything else
+    // on this route file is still Prisma — orgs itself has not been moved.
+    const db = makeDrizzle(c.env);
     const users = await listUsersByOrg(db, c.req.param("id"));
     return c.json({ users });
   },
@@ -380,7 +384,7 @@ adminOrgs.get(
   "/:id/memberships",
   requirePermission("member.read", { orgIdParam: "id" }),
   async (c) => {
-    const db = makePrisma(c.env);
+    const db = makeDrizzle(c.env);
     const memberships = await listOrgMemberships(db, c.req.param("id"));
     return c.json({ memberships });
   },
@@ -393,13 +397,12 @@ adminOrgs.post(
     const raw = (await c.req.json().catch(() => null)) as unknown;
     const parsed = MembershipCreateInput.safeParse(raw);
     if (!parsed.success) return c.json({ error: "validation", issues: parsed.error.issues }, 400);
-    const db = makePrisma(c.env);
+    const db = makeDrizzle(c.env);
     try {
       const membership = await addMembership(db, c.req.param("id"), parsed.data.userId, parsed.data.role);
       return c.json({ membership }, 201);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes("Unique constraint")) {
+      if (err instanceof UniqueViolationError) {
         return c.json({ error: "already_member" }, 409);
       }
       throw err;

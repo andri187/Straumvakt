@@ -9,17 +9,22 @@
 // GET    /api/admin/tokens/:tokenId  → fetch one row by id
 
 import { Hono } from "hono";
-import { makePrisma } from "../../lib/prisma";
-import { requireAdmin, type AuthVars } from "../../lib/auth-middleware";
-import { requirePermission } from "../../lib/auth/require-permission";
+import { makeDrizzle } from "../../../lib/drizzle";
+import { requireAdmin, type AuthVars } from "../../../lib/auth-middleware";
+import { requirePermission } from "../../../lib/auth/require-permission";
 import {
   backfillPrimaryRfidForUsersWithoutTokens,
   getIdTokenById,
   hardDeleteIdToken,
   revokeIdToken,
   updateIdToken,
-} from "../../repositories/id-tokens";
-import type { Env } from "../../bindings";
+} from "../repositories/id-tokens";
+import {
+  RecordNotFoundError,
+  UniqueViolationError,
+  isForeignKeyViolation,
+} from "../repositories/errors";
+import type { Env } from "../../../bindings";
 
 export const adminIdTokens = new Hono<{ Bindings: Env; Variables: AuthVars }>();
 
@@ -36,7 +41,7 @@ adminIdTokens.post(
   "/backfill",
   requirePermission("platform.tenant.write"),
   async (c) => {
-    const db = makePrisma(c.env);
+    const db = makeDrizzle(c.env);
     const report = await backfillPrimaryRfidForUsersWithoutTokens(db);
     return c.json(report);
   },
@@ -46,7 +51,7 @@ adminIdTokens.get(
   "/:tokenId",
   requirePermission("member.read"),
   async (c) => {
-    const db = makePrisma(c.env);
+    const db = makeDrizzle(c.env);
     const token = await getIdTokenById(db, c.req.param("tokenId"));
     if (!token) return c.json({ error: "not_found" }, 404);
     return c.json({ token });
@@ -57,14 +62,12 @@ adminIdTokens.delete(
   "/:tokenId",
   requirePermission("member.write"),
   async (c) => {
-    const db = makePrisma(c.env);
+    const db = makeDrizzle(c.env);
     try {
       const token = await revokeIdToken(db, c.req.param("tokenId"));
       return c.json({ token });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      // Prisma P2025 — record to update not found.
-      if (msg.includes("Record to update not found")) {
+      if (err instanceof RecordNotFoundError) {
         return c.json({ error: "not_found" }, 404);
       }
       throw err;
@@ -84,18 +87,18 @@ adminIdTokens.delete(
   "/:tokenId/permanent",
   requirePermission("member.write"),
   async (c) => {
-    const db = makePrisma(c.env);
+    const db = makeDrizzle(c.env);
     try {
       await hardDeleteIdToken(db, c.req.param("tokenId"));
       return c.json({ ok: true });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes("Record to delete does not exist")) {
+      if (err instanceof RecordNotFoundError) {
         return c.json({ error: "not_found" }, 404);
       }
-      // P2003 = foreign key constraint failed. Surface as 409 with a
-      // human-readable hint so the operator knows to revoke instead.
-      if (msg.includes("Foreign key constraint") || msg.includes("P2003")) {
+      // SQLSTATE 23503 — foreign key violation, what Prisma called P2003.
+      // Surface as 409 with a human-readable hint so the operator knows to
+      // revoke instead.
+      if (isForeignKeyViolation(err)) {
         return c.json(
           {
             error: "still_referenced",
@@ -178,16 +181,15 @@ adminIdTokens.patch(
       }
     }
 
-    const db = makePrisma(c.env);
+    const db = makeDrizzle(c.env);
     try {
       const token = await updateIdToken(db, c.req.param("tokenId"), patch);
       return c.json({ token });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes("Record to update not found")) {
+      if (err instanceof RecordNotFoundError) {
         return c.json({ error: "not_found" }, 404);
       }
-      if (msg.includes("Unique constraint")) {
+      if (err instanceof UniqueViolationError) {
         return c.json(
           {
             error: "value_conflict",
@@ -197,6 +199,7 @@ adminIdTokens.patch(
           409,
         );
       }
+      const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes("idtoken.value: empty string not allowed")) {
         return c.json({ error: "value_empty" }, 400);
       }

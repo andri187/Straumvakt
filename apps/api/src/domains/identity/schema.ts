@@ -26,8 +26,17 @@
 //   • Foreign keys and relations. Drizzle needs them only for `db.query`
 //     relational reads; every ported repository uses explicit joins, and a
 //     wrong FK declaration would be a silent lie about cascade behaviour.
-//   • Defaults that the database already applies (`gen_random_uuid()`,
-//     `now()`). Two sources for one value is how they drift.
+//
+// WHERE VALUES COME FROM — this is not uniform and the trap is quiet:
+//   • `id` is generated CLIENT-side. Prisma's `@default(uuid())` emits no
+//     database default, so identity.users.id and tenancy.organizations.id
+//     have none at all. Leave it to the database and half these tables
+//     reject every insert on a NOT NULL. `$defaultFn(crypto.randomUUID)`.
+//   • `created_at` is DATABASE-side. Prisma's `@default(now())` does emit
+//     CURRENT_TIMESTAMP, so the database clock keeps it — the better one.
+//   • `updated_at` is CLIENT-side on every write including the insert.
+//     There is no default and no ON UPDATE trigger; Prisma's `@updatedAt`
+//     was doing all of it.
 
 import { customType, date, index, integer, jsonb, numeric, pgSchema, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
@@ -61,12 +70,12 @@ export const platformGrantStatusEnum = identitySchema.enum("PlatformGrantStatus"
 export const users = identitySchema.table(
   "users",
   {
-    id: uuid("id").primaryKey(),
+    id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
     email: citext("email").notNull(),
     displayName: text("display_name"),
     status: userStatusEnum("status").notNull().default("active"),
-    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true, precision: 6, mode: "date" }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().$defaultFn(() => new Date()).$onUpdateFn(() => new Date()),
     deletedAt: timestamp("deleted_at", { withTimezone: true, precision: 6, mode: "date" }),
     kennitala: text("kennitala"),
     phone: text("phone"),
@@ -94,7 +103,7 @@ export const users = identitySchema.table(
 export const userVendorRefs = identitySchema.table(
   "user_vendor_refs",
   {
-    id: uuid("id").primaryKey(),
+    id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
     userId: uuid("user_id").notNull(),
     vendorSlug: text("vendor_slug").notNull(),
     vendorUserId: text("vendor_user_id").notNull(),
@@ -102,10 +111,10 @@ export const userVendorRefs = identitySchema.table(
     vendorRoleHint: text("vendor_role_hint"),
     scopeInstallationId: uuid("scope_installation_id"),
     status: vendorRefStatusEnum("status").notNull().default("active"),
-    lastSyncedAt: timestamp("last_synced_at", { withTimezone: true, precision: 6, mode: "date" }).notNull(),
+    lastSyncedAt: timestamp("last_synced_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
     metadata: jsonb("metadata").notNull().default({}),
-    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true, precision: 6, mode: "date" }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().$defaultFn(() => new Date()).$onUpdateFn(() => new Date()),
   },
   (t) => [
     uniqueIndex().on(t.vendorSlug, t.vendorUserId),
@@ -118,7 +127,7 @@ export const userVendorRefs = identitySchema.table(
 export const idTokens = identitySchema.table(
   "id_tokens",
   {
-    id: uuid("id").primaryKey(),
+    id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
     userId: uuid("user_id").notNull(),
     kind: idTokenKindEnum("kind").notNull(),
     value: text("value").notNull(),
@@ -130,8 +139,8 @@ export const idTokens = identitySchema.table(
     lastUsedAt: timestamp("last_used_at", { withTimezone: true, precision: 6, mode: "date" }),
     scopeInstallationId: uuid("scope_installation_id"),
     metadata: jsonb("metadata").notNull().default({}),
-    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true, precision: 6, mode: "date" }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().$defaultFn(() => new Date()).$onUpdateFn(() => new Date()),
   },
   (t) => [
     index().on(t.userId),
@@ -145,15 +154,15 @@ export const idTokens = identitySchema.table(
 export const vendorUserGroups = identitySchema.table(
   "vendor_user_groups",
   {
-    id: uuid("id").primaryKey(),
+    id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
     vendorSlug: text("vendor_slug").notNull(),
     vendorGroupId: text("vendor_group_id").notNull(),
     installationId: uuid("installation_id").notNull(),
     name: text("name").notNull(),
     metadata: jsonb("metadata").notNull().default({}),
-    lastSyncedAt: timestamp("last_synced_at", { withTimezone: true, precision: 6, mode: "date" }).notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true, precision: 6, mode: "date" }).notNull(),
+    lastSyncedAt: timestamp("last_synced_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().$defaultFn(() => new Date()).$onUpdateFn(() => new Date()),
   },
   (t) => [
     uniqueIndex().on(t.vendorSlug, t.vendorGroupId),
@@ -169,7 +178,7 @@ export const vendorUserGroupMemberships = identitySchema.table(
     userId: uuid("user_id").notNull(),
     role: text("role").notNull(),
     metadata: jsonb("metadata").notNull().default({}),
-    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
   },
   (t) => [
     primaryKey({ columns: [t.groupId, t.userId] }),
@@ -181,7 +190,7 @@ export const vendorUserGroupMemberships = identitySchema.table(
 export const vehicles = peopleSchema.table(
   "vehicles",
   {
-    id: uuid("id").primaryKey(),
+    id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
     userId: uuid("user_id").notNull(),
     make: text("make"),
     model: text("model"),
@@ -190,8 +199,8 @@ export const vehicles = peopleSchema.table(
     vin: text("vin"),
     batteryCapacityKwh: numeric("battery_capacity_kwh", { precision: 6, scale: 2 }),
     metadata: jsonb("metadata").notNull().default({}),
-    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true, precision: 6, mode: "date" }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().$defaultFn(() => new Date()).$onUpdateFn(() => new Date()),
   },
   (t) => [
     index().on(t.userId),
@@ -205,7 +214,7 @@ export const userCredentials = identitySchema.table(
     userId: uuid("user_id").primaryKey(),
     passwordHash: text("password_hash"),
     totpSecret: text("totp_secret"),
-    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
   },
 );
 
@@ -213,7 +222,7 @@ export const userCredentials = identitySchema.table(
 export const userTokens = identitySchema.table(
   "user_tokens",
   {
-    id: uuid("id").primaryKey(),
+    id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
     userId: uuid("user_id").notNull(),
     kind: userTokenKindEnum("kind").notNull(),
     tokenHash: text("token_hash").notNull(),
@@ -221,7 +230,7 @@ export const userTokens = identitySchema.table(
     usedAt: timestamp("used_at", { withTimezone: true, precision: 6, mode: "date" }),
     createdById: uuid("created_by_id"),
     metadata: jsonb("metadata").notNull().default({}),
-    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
     driverGroupId: uuid("driver_group_id"),
     billObjectId: uuid("bill_object_id"),
     security: driverInviteSecurityEnum("security").notNull().default("none"),
@@ -237,12 +246,12 @@ export const userTokens = identitySchema.table(
 export const organizations = tenancySchema.table(
   "organizations",
   {
-    id: uuid("id").primaryKey(),
+    id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
     displayName: text("display_name").notNull(),
     countryCode: text("country_code").notNull(),
     status: orgStatusEnum("status").notNull().default("active"),
-    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true, precision: 6, mode: "date" }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().$defaultFn(() => new Date()).$onUpdateFn(() => new Date()),
     legalName: text("legal_name"),
     legalForm: text("legal_form"),
     legalFormCode: text("legal_form_code"),
@@ -284,7 +293,7 @@ export const organizations = tenancySchema.table(
 export const hostApplications = tenancySchema.table(
   "host_applications",
   {
-    id: uuid("id").primaryKey(),
+    id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
     companyName: text("company_name").notNull(),
     contactName: text("contact_name").notNull(),
     contactEmail: text("contact_email").notNull(),
@@ -295,8 +304,8 @@ export const hostApplications = tenancySchema.table(
     description: text("description"),
     status: hostApplicationStatusEnum("status").notNull().default("new"),
     convertedOrgId: uuid("converted_org_id"),
-    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true, precision: 6, mode: "date" }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().$defaultFn(() => new Date()).$onUpdateFn(() => new Date()),
   },
   (t) => [
     index().on(t.status),
@@ -310,7 +319,7 @@ export const memberships = tenancySchema.table(
     orgId: uuid("org_id").notNull(),
     userId: uuid("user_id").notNull(),
     role: membershipRoleEnum("role").notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
     status: membershipStatusEnum("status").notNull().default("active"),
     invitedById: uuid("invited_by_id"),
     invitedAt: timestamp("invited_at", { withTimezone: true, precision: 6, mode: "date" }),
@@ -330,13 +339,13 @@ export const memberships = tenancySchema.table(
 export const orgEmailDomains = tenancySchema.table(
   "org_email_domains",
   {
-    id: uuid("id").primaryKey(),
+    id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
     orgId: uuid("org_id").notNull(),
     domain: text("domain").notNull(),
     policy: orgEmailDomainPolicyEnum("policy").notNull().default("request_approval"),
     defaultDriverGroupId: uuid("default_driver_group_id"),
-    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true, precision: 6, mode: "date" }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().$defaultFn(() => new Date()).$onUpdateFn(() => new Date()),
   },
   (t) => [
     uniqueIndex().on(t.domain),
@@ -348,11 +357,11 @@ export const orgEmailDomains = tenancySchema.table(
 export const familyGroups = peopleSchema.table(
   "family_groups",
   {
-    id: uuid("id").primaryKey(),
+    id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
     orgId: uuid("org_id").notNull(),
     displayName: text("display_name").notNull(),
     primaryUserId: uuid("primary_user_id").notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
   },
   (t) => [
     index().on(t.orgId),
@@ -366,7 +375,7 @@ export const familyMemberships = peopleSchema.table(
     familyGroupId: uuid("family_group_id").notNull(),
     userId: uuid("user_id").notNull(),
     memberKind: memberKindEnum("member_kind").notNull(),
-    joinedAt: timestamp("joined_at", { withTimezone: true, precision: 6, mode: "date" }).notNull(),
+    joinedAt: timestamp("joined_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
   },
   (t) => [
     primaryKey({ columns: [t.familyGroupId, t.userId] }),
@@ -381,7 +390,7 @@ export const platformGrants = identitySchema.table(
     role: platformRoleEnum("role").notNull(),
     status: platformGrantStatusEnum("status").notNull().default("active"),
     grantedById: uuid("granted_by_id"),
-    grantedAt: timestamp("granted_at", { withTimezone: true, precision: 6, mode: "date" }).notNull(),
+    grantedAt: timestamp("granted_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
     expiresAt: timestamp("expires_at", { withTimezone: true, precision: 6, mode: "date" }),
     revokedAt: timestamp("revoked_at", { withTimezone: true, precision: 6, mode: "date" }),
     revokedById: uuid("revoked_by_id"),

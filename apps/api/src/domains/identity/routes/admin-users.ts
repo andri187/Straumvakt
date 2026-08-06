@@ -1,23 +1,38 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { UserCreateInput, UserUpdateInput } from "@straumvakt/shared/inputs/users";
-import { makePrisma } from "../../lib/prisma";
-import { requireAdmin, type AuthVars } from "../../lib/auth-middleware";
-import { requirePermission } from "../../lib/auth/require-permission";
-import { hashPassword } from "../../lib/password";
+import { makePrisma } from "../../../lib/prisma";
+import { makeDrizzle } from "../../../lib/drizzle";
+import { requireAdmin, type AuthVars } from "../../../lib/auth-middleware";
+import { requirePermission } from "../../../lib/auth/require-permission";
+import { hashPassword } from "../../../lib/password";
 import {
+  clearUserPasswordHash,
   createUser,
   getUserById,
   listUserMemberships,
   listUsers,
+  setUserPasswordHash,
   updateUser,
-} from "../../repositories/users";
+  userExists,
+} from "../repositories/users";
 import {
   createIdToken,
   listIdTokensForUser,
-} from "../../repositories/id-tokens";
-import { listAgreementMembershipsForUser } from "../../repositories/agreements";
-import type { Env } from "../../bindings";
+} from "../repositories/id-tokens";
+import { listAgreementMembershipsForUser } from "../../../repositories/agreements";
+import { RecordNotFoundError, UniqueViolationError } from "../repositories/errors";
+import type { Env } from "../../../bindings";
+
+// Two clients on the user-detail and password routes, deliberately and
+// temporarily.
+//
+// The identity repositories are Drizzle now; listAgreementMembershipsForUser
+// reads the agreements schema and is still Prisma, because commercial has
+// not been ported and must not be touched (ADR 0025 D1-D5 are unanswered).
+// A route that needs both opens both — one extra Hyperdrive checkout on two
+// handlers, which is the honest cost of a half-migrated system and is paid
+// back when commercial lands. It is NOT a pattern to copy into new routes.
 
 export const adminUsers = new Hono<{ Bindings: Env; Variables: AuthVars }>();
 
@@ -25,7 +40,7 @@ adminUsers.use("*", requireAdmin);
 
 // Cross-tenant user list — platform staff only.
 adminUsers.get("/", requirePermission("platform.tenant.read"), async (c) => {
-  const db = makePrisma(c.env);
+  const db = makeDrizzle(c.env);
   const users = await listUsers(db, { includeDeleted: c.req.query("includeDeleted") === "true" });
   return c.json({ users });
 });
@@ -37,13 +52,12 @@ adminUsers.post("/", requirePermission("platform.tenant.write"), async (c) => {
   const raw = (await c.req.json().catch(() => null)) as unknown;
   const parsed = UserCreateInput.safeParse(raw);
   if (!parsed.success) return c.json({ error: "validation", issues: parsed.error.issues }, 400);
-  const db = makePrisma(c.env);
+  const db = makeDrizzle(c.env);
   try {
     const { user, primaryToken } = await createUser(db, parsed.data);
     return c.json({ user, primaryToken }, 201);
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("Unique constraint")) {
+    if (err instanceof UniqueViolationError) {
       return c.json({ error: "email_taken" }, 409);
     }
     throw err;
@@ -51,7 +65,9 @@ adminUsers.post("/", requirePermission("platform.tenant.write"), async (c) => {
 });
 
 adminUsers.get("/:id", requirePermission("member.read"), async (c) => {
-  const db = makePrisma(c.env);
+  const db = makeDrizzle(c.env);
+  // Prisma as well, only for the agreements read — see the note at the top.
+  const prisma = makePrisma(c.env);
   // The id_tokens table is part of the 2026-05-02 user-profile-enrichment
   // migration. If staging Neon hasn't had `prisma migrate deploy` run for
   // that migration, listIdTokensForUser fails with "relation does not
@@ -71,7 +87,7 @@ adminUsers.get("/:id", requirePermission("member.read"), async (c) => {
       });
       return [];
     }),
-    listAgreementMembershipsForUser(db, c.req.param("id")).catch((err) => {
+    listAgreementMembershipsForUser(prisma, c.req.param("id")).catch((err) => {
       console.error("[admin/users] listAgreementMembershipsForUser failed; degrading to []", {
         userId: c.req.param("id"),
         error: err instanceof Error ? err.message : String(err),
@@ -87,9 +103,21 @@ adminUsers.patch("/:id", requirePermission("member.write"), async (c) => {
   const raw = (await c.req.json().catch(() => null)) as unknown;
   const parsed = UserUpdateInput.safeParse(raw);
   if (!parsed.success) return c.json({ error: "validation", issues: parsed.error.issues }, 400);
-  const db = makePrisma(c.env);
-  const user = await updateUser(db, c.req.param("id"), parsed.data);
-  return c.json({ user });
+  const db = makeDrizzle(c.env);
+  try {
+    const user = await updateUser(db, c.req.param("id"), parsed.data);
+    return c.json({ user });
+  } catch (err) {
+    // Prisma raised P2002 here too and nothing caught it, so a PATCH to a
+    // taken email was a 500. Now it is the 409 the POST already returned.
+    if (err instanceof UniqueViolationError) {
+      return c.json({ error: "email_taken" }, 409);
+    }
+    if (err instanceof RecordNotFoundError) {
+      return c.json({ error: "not_found" }, 404);
+    }
+    throw err;
+  }
 });
 
 // ── Password management (Sprint 9 — admin-driven set / clear) ────────
@@ -116,17 +144,11 @@ adminUsers.put(
     if (!parsed.success) {
       return c.json({ error: "validation", issues: parsed.error.issues }, 400);
     }
-    const db = makePrisma(c.env);
+    const db = makeDrizzle(c.env);
     const userId = c.req.param("id");
-    const exists = await db.user.findUnique({ where: { id: userId }, select: { id: true } });
-    if (!exists) return c.json({ error: "not_found" }, 404);
+    if (!(await userExists(db, userId))) return c.json({ error: "not_found" }, 404);
 
-    const passwordHash = await hashPassword(parsed.data.password);
-    await db.userCredential.upsert({
-      where: { userId },
-      create: { userId, passwordHash },
-      update: { passwordHash },
-    });
+    await setUserPasswordHash(db, userId, await hashPassword(parsed.data.password));
     return c.json({ ok: true });
   },
 );
@@ -135,13 +157,9 @@ adminUsers.delete(
   "/:id/password",
   requirePermission("member.write"),
   async (c) => {
-    const db = makePrisma(c.env);
-    const userId = c.req.param("id");
+    const db = makeDrizzle(c.env);
     // Idempotent — if the row doesn't exist, treat as success.
-    await db.userCredential.updateMany({
-      where: { userId },
-      data: { passwordHash: null },
-    });
+    await clearUserPasswordHash(db, c.req.param("id"));
     return c.json({ ok: true });
   },
 );
@@ -157,7 +175,7 @@ adminUsers.delete(
 // userId — tokens are unique system-wide.
 
 adminUsers.get("/:id/tokens", requirePermission("member.read"), async (c) => {
-  const db = makePrisma(c.env);
+  const db = makeDrizzle(c.env);
   const tokens = await listIdTokensForUser(db, c.req.param("id"));
   return c.json({ tokens });
 });
@@ -189,7 +207,7 @@ adminUsers.post("/:id/tokens", requirePermission("member.write"), async (c) => {
     }
     expiresAt = d;
   }
-  const db = makePrisma(c.env);
+  const db = makeDrizzle(c.env);
   try {
     const token = await createIdToken(db, {
       userId: c.req.param("id"),
@@ -201,10 +219,10 @@ adminUsers.post("/:id/tokens", requirePermission("member.write"), async (c) => {
     });
     return c.json({ token }, 201);
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("Unique constraint")) {
+    if (err instanceof UniqueViolationError) {
       return c.json({ error: "value_taken" }, 409);
     }
+    const msg = err instanceof Error ? err.message : String(err);
     if (msg.startsWith("idtoken.")) {
       return c.json({ error: "validation", message: msg }, 400);
     }
