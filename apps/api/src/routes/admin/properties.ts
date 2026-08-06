@@ -27,7 +27,7 @@ adminProperties.get(
   requirePermission("platform.tenant.read"),
   async (c) => {
     const db = makePrisma(c.env);
-    const orgScope = await resolveOrgScope(db, c.get("session"));
+    const orgScope = await resolveOrgScope(c.env, c.get("session"));
     const properties = await listAllProperties(db, orgScope);
     return c.json({ properties });
   },
@@ -51,7 +51,7 @@ adminProperties.get(
   requirePermission("property.read"),
   async (c) => {
     const db = makePrisma(c.env);
-    const orgScope = await resolveOrgScope(db, c.get("session"));
+    const orgScope = await resolveOrgScope(c.env, c.get("session"));
     const property = await getPropertyById(db, c.req.param("id"), orgScope);
     if (!property) return c.json({ error: "not_found" }, 404);
     return c.json({ property });

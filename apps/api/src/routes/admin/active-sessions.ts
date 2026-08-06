@@ -15,7 +15,7 @@ adminActiveSessions.use("*", requireAdmin);
 
 adminActiveSessions.get("/", requirePermission("charger.read"), async (c) => {
   const db = makePrisma(c.env);
-  const orgScope = await resolveOrgScope(db, c.get("session"));
+  const orgScope = await resolveOrgScope(c.env, c.get("session"));
   const rows = await db.liveSession.findMany({
     where:
       orgScope.all === false ? { orgId: { in: orgScope.orgIds } } : undefined,

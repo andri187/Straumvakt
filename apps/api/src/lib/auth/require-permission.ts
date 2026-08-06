@@ -8,7 +8,7 @@
 // Sprint 4 milestone 4.3.
 
 import type { Context, MiddlewareHandler, Next } from "hono";
-import { makePrisma } from "../prisma";
+import { makeDrizzle } from "../drizzle";
 import {
   resolveEffectivePermissions,
   type expandPermissionsSync,
@@ -70,7 +70,7 @@ export function requirePermission(
       ? c.req.param(options.orgIdParam) ?? null
       : null;
 
-    const db = makePrisma(c.env);
+    const db = makeDrizzle(c.env);
     const perms = await resolveEffectivePermissions(db, userId, orgId);
 
     if (!perms.includes(verb)) {
@@ -122,7 +122,7 @@ export async function assertPermission(
       403,
     );
   }
-  const db = makePrisma(c.env);
+  const db = makeDrizzle(c.env);
   const perms = await resolveEffectivePermissions(db, userId, orgId);
   if (!perms.includes(verb)) {
     return c.json(

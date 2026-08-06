@@ -32,7 +32,7 @@ adminInstallations.get(
   requirePermission("platform.tenant.read"),
   async (c) => {
     const db = makePrisma(c.env);
-    const orgScope = await resolveOrgScope(db, c.get("session"));
+    const orgScope = await resolveOrgScope(c.env, c.get("session"));
     const [installations, vendors, ocppMap] = await Promise.all([
       listAllInstallations(db, orgScope),
       listVendors(db),
@@ -74,7 +74,7 @@ adminInstallations.get(
   requirePermission("site.read"),
   async (c) => {
     const db = makePrisma(c.env);
-    const orgScope = await resolveOrgScope(db, c.get("session"));
+    const orgScope = await resolveOrgScope(c.env, c.get("session"));
     const installation = await getInstallationById(db, c.req.param("id"), orgScope);
     if (!installation) return c.json({ error: "not_found" }, 404);
     return c.json({ installation });

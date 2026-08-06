@@ -19,7 +19,9 @@
 
 import { Hono } from "hono";
 import { requireAdmin, type AuthVars } from "../../lib/auth-middleware";
-import { makePrisma } from "../../lib/prisma";
+import { and, eq } from "drizzle-orm";
+import { makeDrizzle } from "../../lib/drizzle";
+import { memberships as membershipsTable, organizations } from "../../domains/identity/schema";
 import { isBootstrapSession, sessionUserId } from "../../lib/auth/require-permission";
 import { getActivePlatformGrant } from "../../lib/auth/effective-permissions";
 import type { Env } from "../../bindings";
@@ -41,17 +43,23 @@ adminMe.get("/", async (c) => {
     return c.json({ ...base, userId: null, persona: "operator", isPlatform: true, orgs: [] });
   }
 
-  const db = makePrisma(c.env);
+  const db = makeDrizzle(c.env);
   const [grant, memberships] = await Promise.all([
     getActivePlatformGrant(db, userId),
-    db.membership.findMany({
-      where: { userId, status: "active" },
-      select: {
-        orgId: true,
-        role: true,
-        organization: { select: { displayName: true, kind: true } },
-      },
-    }),
+    // innerJoin, matching Prisma: `organization` is a required relation, so a
+    // membership with a dangling org FK was already invisible here.
+    db
+      .select({
+        orgId: membershipsTable.orgId,
+        role: membershipsTable.role,
+        organization: {
+          displayName: organizations.displayName,
+          kind: organizations.kind,
+        },
+      })
+      .from(membershipsTable)
+      .innerJoin(organizations, eq(organizations.id, membershipsTable.orgId))
+      .where(and(eq(membershipsTable.userId, userId), eq(membershipsTable.status, "active"))),
   ]);
 
   const isPlatform = !!grant;

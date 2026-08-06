@@ -115,6 +115,16 @@ vi.mock("../../lib/prisma", () => ({
   makePrisma: () => makeFake(),
 }));
 
+// The route still runs on Prisma; requirePermission does not. Since the
+// middleware was ported it builds its own Drizzle client from c.env, and an
+// unmocked one reads env.HYPERDRIVE_DB.connectionString off a test Env with
+// no bindings — which turned Case 8's expected 403 into a 500. Faked here so
+// the middleware reaches its mocked resolver instead of a real connection.
+vi.mock("../../lib/drizzle", () => ({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  makeDrizzle: () => ({}) as any,
+}));
+
 // ─── Session mock ─────────────────────────────────────────────────────────────
 //
 // By default returns a bootstrap-admin session (sub="admin", no userId).

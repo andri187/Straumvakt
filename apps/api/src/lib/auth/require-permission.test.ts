@@ -6,19 +6,24 @@
 
 import { describe, expect, it, vi } from "vitest";
 
-// Mock makePrisma + the resolver BEFORE importing the middleware so
+// Mock the client factory + the resolver BEFORE importing the middleware so
 // the middleware picks up the fakes. The resolver mock returns a
 // pre-set permission list per (userId, orgId) keyed by JSON pair —
 // each test seeds it.
+//
+// It is ../drizzle now, not ../prisma. When the middleware was ported these
+// four tests went from 403/200 to 500, because the unmocked makeDrizzle read
+// env.HYPERDRIVE_DB.connectionString off a test Env that has no bindings.
+// A mock that names the wrong module is not a mock.
 
 const mockPermissions = new Map<string, string[]>();
 function seedPermissions(userId: string, orgId: string | null, verbs: string[]) {
   mockPermissions.set(JSON.stringify([userId, orgId]), verbs);
 }
 
-vi.mock("../prisma", () => ({
+vi.mock("../drizzle", () => ({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  makePrisma: () => ({}) as any,
+  makeDrizzle: () => ({}) as any,
 }));
 
 vi.mock("./effective-permissions", () => ({

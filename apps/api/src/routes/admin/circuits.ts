@@ -20,7 +20,7 @@ adminCircuits.use("*", requireAdmin);
 // Circuits are site-level children; site.read/write covers them.
 adminCircuits.get("/", requirePermission("platform.tenant.read"), async (c) => {
   const db = makePrisma(c.env);
-  const orgScope = await resolveOrgScope(db, c.get("session"));
+  const orgScope = await resolveOrgScope(c.env, c.get("session"));
   const circuits = await listAllCircuits(db, orgScope);
   return c.json({ circuits });
 });
@@ -36,7 +36,7 @@ adminCircuits.post("/", requirePermission("site.write"), async (c) => {
 
 adminCircuits.get("/:id", requirePermission("site.read"), async (c) => {
   const db = makePrisma(c.env);
-  const orgScope = await resolveOrgScope(db, c.get("session"));
+  const orgScope = await resolveOrgScope(c.env, c.get("session"));
   const circuit = await getCircuitById(db, c.req.param("id"), orgScope);
   if (!circuit) return c.json({ error: "not_found" }, 404);
   return c.json({ circuit });

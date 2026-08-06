@@ -50,7 +50,7 @@ adminChargers.get("/", requirePermission("platform.tenant.read"), async (c) => {
   const includeDecommissioned =
     c.req.query("includeDecommissioned") === "1" ||
     c.req.query("includeDecommissioned") === "true";
-  const orgScope = await resolveOrgScope(db, c.get("session"));
+  const orgScope = await resolveOrgScope(c.env, c.get("session"));
   const chargers = await listAllChargers(db, {
     includeDecommissioned,
     kek: c.env.OCPP_CRED_KEK,
@@ -77,7 +77,7 @@ adminChargers.post("/", requirePermission("charger.write"), async (c) => {
 
 adminChargers.get("/:id", requirePermission("charger.read"), async (c) => {
   const db = makePrisma(c.env);
-  const orgScope = await resolveOrgScope(db, c.get("session"));
+  const orgScope = await resolveOrgScope(c.env, c.get("session"));
   const charger = await getChargerById(db, c.req.param("id"), orgScope);
   if (!charger) return c.json({ error: "not_found" }, 404);
   return c.json({ charger });

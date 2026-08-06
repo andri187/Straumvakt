@@ -15,7 +15,10 @@
 // soon as host_admin (userId-bearing, org-membership) sessions can reach a
 // route — at which point the data is row-scoped, not just verb-gated.
 
-import type { PrismaClient } from "../../generated/prisma/client";
+import { and, eq } from "drizzle-orm";
+import { makeDrizzle } from "../drizzle";
+import type { Env } from "../../bindings";
+import { memberships } from "../../domains/identity/schema";
 import type { SessionPayload } from "../admin-session";
 import { getActivePlatformGrant, expandPermissionsSync } from "./effective-permissions";
 import { isBootstrapSession, sessionUserId } from "./require-permission";
@@ -33,7 +36,7 @@ export function orgInScope(scope: OrgScope, orgId: string): boolean {
  * narrowed to their active org memberships.
  */
 export async function resolveOrgScope(
-  db: PrismaClient,
+  env: Env,
   session: SessionPayload,
 ): Promise<OrgScope> {
   if (isBootstrapSession(session)) return { all: true };
@@ -41,15 +44,20 @@ export async function resolveOrgScope(
   const userId = sessionUserId(session);
   if (!userId) return { all: false, orgIds: [] };
 
+  // Own client, matching requirePermission. Taking an Env rather than a
+  // client keeps the auth layer self-contained through the ORM change: the
+  // eight routes that call this would otherwise each have had to hold a
+  // Drizzle client alongside their Prisma one purely to answer "which orgs".
+  const db = makeDrizzle(env);
   const grant = await getActivePlatformGrant(db, userId);
   if (grant) {
     const perms = expandPermissionsSync(null, { role: grant.role });
     if (perms.includes("platform.tenant.read")) return { all: true };
   }
 
-  const memberships = await db.membership.findMany({
-    where: { userId, status: "active" },
-    select: { orgId: true },
-  });
-  return { all: false, orgIds: memberships.map((m) => m.orgId) };
+  const rows = await db
+    .select({ orgId: memberships.orgId })
+    .from(memberships)
+    .where(and(eq(memberships.userId, userId), eq(memberships.status, "active")));
+  return { all: false, orgIds: rows.map((m) => m.orgId) };
 }

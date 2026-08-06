@@ -7,7 +7,9 @@
 //
 // Sprint 4 milestone 4.3.
 
-import type { PrismaClient } from "../../generated/prisma/client";
+import { and, eq } from "drizzle-orm";
+import type { Db } from "../drizzle";
+import { memberships, platformGrants } from "../../domains/identity/schema";
 import type {
   MembershipRole,
   MembershipStatus,
@@ -31,7 +33,7 @@ import {
  * gate.
  */
 export async function getActiveMembership(
-  db: PrismaClient,
+  db: Db,
   userId: string,
   orgId: string,
 ): Promise<{
@@ -40,15 +42,16 @@ export async function getActiveMembership(
   scopeSiteIds: string[];
   scopePropertyIds: string[];
 } | null> {
-  const row = await db.membership.findUnique({
-    where: { orgId_userId: { orgId, userId } },
-    select: {
-      role: true,
-      status: true,
-      scopeSiteIds: true,
-      scopePropertyIds: true,
-    },
-  });
+  const [row] = await db
+    .select({
+      role: memberships.role,
+      status: memberships.status,
+      scopeSiteIds: memberships.scopeSiteIds,
+      scopePropertyIds: memberships.scopePropertyIds,
+    })
+    .from(memberships)
+    .where(and(eq(memberships.orgId, orgId), eq(memberships.userId, userId)))
+    .limit(1);
   if (!row) return null;
   if (row.status !== "active") return null;
   return row;
@@ -60,17 +63,22 @@ export async function getActiveMembership(
  * grants drop out automatically once expired).
  */
 export async function getActivePlatformGrant(
-  db: PrismaClient,
+  db: Db,
   userId: string,
 ): Promise<{
   role: PlatformRole;
   status: PlatformGrantStatus;
   expiresAt: Date | null;
 } | null> {
-  const row = await db.platformGrant.findUnique({
-    where: { userId },
-    select: { role: true, status: true, expiresAt: true },
-  });
+  const [row] = await db
+    .select({
+      role: platformGrants.role,
+      status: platformGrants.status,
+      expiresAt: platformGrants.expiresAt,
+    })
+    .from(platformGrants)
+    .where(eq(platformGrants.userId, userId))
+    .limit(1);
   if (!row) return null;
   if (row.status !== "active") return null;
   if (row.expiresAt && row.expiresAt.getTime() <= Date.now()) return null;
@@ -144,7 +152,7 @@ function expandPlatformTenantVerbs(perms: Permission[]): Permission[] {
  * expanded into the matching per-tenant verbs.
  */
 export async function resolveEffectivePermissions(
-  db: PrismaClient,
+  db: Db,
   userId: string,
   orgId: string | null,
 ): Promise<Permission[]> {

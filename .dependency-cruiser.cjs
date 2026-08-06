@@ -8,7 +8,7 @@
  * rather than a property of the codebase. Dependencies are meant to flow one
  * way:
  *
- *     commercial ──► charging ──► assets ──► identity
+ *     commercial ──► charging ──► protocol ──► assets ──► identity
  *
  * with two absolutes:
  *
@@ -25,7 +25,7 @@
  * TWO LAYOUTS, ONE RULE SET
  * -------------------------
  * apps/api/src is mid-migration. The target is src/domains/<domain>/..., which
- * only `identity` occupies so far. Everything else is still flat in
+ * identity and vendor occupy so far. Everything else is still flat in
  * src/repositories/, src/routes/, src/lib/. Both are matched, so a rule keeps
  * working while files move rather than switching on the day the move finishes.
  */
@@ -82,9 +82,26 @@ const LEGACY_COMMERCIAL = [
 const vendorFrom = [domainDir("vendor"), ...LEGACY_VENDOR];
 const platformFrom = [domainDir("platform"), ...LEGACY_PLATFORM];
 
-/** The four layered domains, ordered bottom-up. A domain may import itself and
- *  anything below it; importing anything above it is the violation. */
-const LAYERS = ["identity", "assets", "charging", "commercial"];
+/**
+ * The layered domains, ordered bottom-up. A domain may import itself and
+ * anything below it; importing anything above it is the violation.
+ *
+ * `protocol` was added to the chain on 2026-08-06. The original rule ordered
+ * four domains out of seven, which was fine while nothing had moved — and
+ * became the single blocker once porting started, because roughly fifteen
+ * files touch protocol alongside charging, assets or commercial and cannot be
+ * placed until it has a position. Files placed before answering it are the
+ * ones that get moved twice.
+ *
+ * It sits between charging and assets: OCPP addresses chargers and produces
+ * sessions, so it reads downward into assets and identity, and nothing above
+ * it should be reaching down into wire-level state. Reversible — it is a lint
+ * rule and a directory, not a schema.
+ *
+ * `vendor` stays off the chain entirely (imported by nothing) and `platform`
+ * below it (importing nothing); neither is a layer, both are absolutes.
+ */
+const LAYERS = ["identity", "assets", "protocol", "charging", "commercial"];
 
 /** Legacy-layout members, where they can be named. Empty means "only the
  *  target layout is matched for this domain" — assets and charging are still
@@ -92,6 +109,7 @@ const LAYERS = ["identity", "assets", "charging", "commercial"];
 const LEGACY_MEMBERS = {
   identity: [],
   assets: [],
+  protocol: [],
   charging: [],
   commercial: LEGACY_COMMERCIAL,
 };

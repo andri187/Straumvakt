@@ -177,7 +177,7 @@ adminBilling.get(
  */
 adminBilling.get("/tariffs", requirePermission("billing.read"), async (c) => {
   const db = makePrisma(c.env);
-  const orgScope = await resolveOrgScope(db, c.get("session"));
+  const orgScope = await resolveOrgScope(c.env, c.get("session"));
 
   // Tariff rows + their costFactor codes. TariffDefinition is per-org;
   // a scoped caller (e.g. host_admin) only sees their orgs' tariffs.
