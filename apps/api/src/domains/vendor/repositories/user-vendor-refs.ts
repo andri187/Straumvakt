@@ -10,12 +10,20 @@
 //
 // Kept minimal on purpose: create + listForUser. Sprint 4 can extend
 // when the import engine ships.
+//
+// Moved from src/repositories/user-vendor-refs.ts and ported from Prisma in
+// the same commit. It lives under `vendor` because that is where the
+// dependency rules already classified it, and because a row here exists
+// only to name something on a vendor's side — the table's placement in the
+// `identity` Postgres schema predates the domain split.
 
-import type { PrismaClient, Prisma } from "../generated/prisma/client";
+import { asc, eq } from "drizzle-orm";
 import type {
   UserVendorRefSummary,
   VendorRefStatus,
 } from "@straumvakt/shared/domain/users";
+import type { Db } from "../../../lib/drizzle";
+import { userVendorRefs } from "../../identity/schema";
 
 interface UserVendorRefRow {
   id: string;
@@ -47,8 +55,22 @@ function toSummary(row: UserVendorRefRow): UserVendorRefSummary {
   };
 }
 
+const COLUMNS = {
+  id: userVendorRefs.id,
+  userId: userVendorRefs.userId,
+  vendorSlug: userVendorRefs.vendorSlug,
+  vendorUserId: userVendorRefs.vendorUserId,
+  vendorEmail: userVendorRefs.vendorEmail,
+  vendorRoleHint: userVendorRefs.vendorRoleHint,
+  scopeInstallationId: userVendorRefs.scopeInstallationId,
+  status: userVendorRefs.status,
+  lastSyncedAt: userVendorRefs.lastSyncedAt,
+  createdAt: userVendorRefs.createdAt,
+  updatedAt: userVendorRefs.updatedAt,
+} as const;
+
 export async function createUserVendorRef(
-  db: PrismaClient,
+  db: Db,
   input: {
     userId: string;
     vendorSlug: string;
@@ -59,26 +81,31 @@ export async function createUserVendorRef(
     status?: VendorRefStatus;
   },
 ): Promise<UserVendorRefSummary> {
-  const data: Prisma.UserVendorRefUncheckedCreateInput = {
-    userId: input.userId,
-    vendorSlug: input.vendorSlug,
-    vendorUserId: input.vendorUserId,
-    vendorEmail: input.vendorEmail ?? null,
-    vendorRoleHint: input.vendorRoleHint ?? null,
-    scopeInstallationId: input.scopeInstallationId ?? null,
-    status: input.status ?? "active",
-  };
-  const row = (await db.userVendorRef.create({ data })) as UserVendorRefRow;
-  return toSummary(row);
+  const [row] = await db
+    .insert(userVendorRefs)
+    .values({
+      userId: input.userId,
+      vendorSlug: input.vendorSlug,
+      vendorUserId: input.vendorUserId,
+      vendorEmail: input.vendorEmail ?? null,
+      vendorRoleHint: input.vendorRoleHint ?? null,
+      scopeInstallationId: input.scopeInstallationId ?? null,
+      status: input.status ?? "active",
+      // last_synced_at is NOT NULL with a database default of now(); a row
+      // created here has by definition just been synced.
+    })
+    .returning(COLUMNS);
+  return toSummary(row as UserVendorRefRow);
 }
 
 export async function listUserVendorRefsForUser(
-  db: PrismaClient,
+  db: Db,
   userId: string,
 ): Promise<UserVendorRefSummary[]> {
-  const rows = (await db.userVendorRef.findMany({
-    where: { userId },
-    orderBy: [{ createdAt: "asc" }],
-  })) as UserVendorRefRow[];
-  return rows.map(toSummary);
+  const rows = await db
+    .select(COLUMNS)
+    .from(userVendorRefs)
+    .where(eq(userVendorRefs.userId, userId))
+    .orderBy(asc(userVendorRefs.createdAt));
+  return (rows as UserVendorRefRow[]).map(toSummary);
 }

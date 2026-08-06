@@ -30,7 +30,7 @@ import {
   listContractsByOrg,
 } from "../../repositories/contracts";
 import { getOrgTariffChainSummary } from "../../repositories/org-tariff-chain";
-import { listFamilyGroupsByOrg } from "../../repositories/family-groups";
+import { listFamilyGroupsByOrg } from "../../domains/identity/repositories/family-groups";
 import {
   addMembership,
   listOrgMemberships,
@@ -352,7 +352,7 @@ adminOrgs.get(
   "/:id/family-groups",
   requirePermission("contract.read", { orgIdParam: "id" }),
   async (c) => {
-    const db = makePrisma(c.env);
+    const db = makeDrizzle(c.env);
     const familyGroups = await listFamilyGroupsByOrg(db, c.req.param("id"));
     return c.json({ familyGroups });
   },

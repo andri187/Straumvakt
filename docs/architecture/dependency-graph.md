@@ -72,6 +72,10 @@ end
 8-->M
 8-->3
 8-->F
+B-->D
+B-->8
+B-->M
+B-->5
 B-->A
 C-->3
 C-->8
@@ -91,6 +95,7 @@ G-->D
 G-->F
 G-->M
 G-->8
+G-->B
 T-->U
 T-->V
 T-->M
@@ -123,7 +128,7 @@ an entry is how a leak gets fixed. Adding one requires saying why.
 | `apps/api/src/repositories/chargers.ts` | `apps/api/src/repositories/credential-management.ts` |
 | `apps/api/src/repositories/site-tree.ts` | `apps/api/src/lib/credential-crypto.ts` |
 | `apps/api/src/repositories/site-tree.ts` | `apps/api/src/lib/zaptec.ts` |
-| `apps/api/src/routes/admin/groups.ts` | `apps/api/src/repositories/vendor-user-groups.ts` |
+| `apps/api/src/routes/admin/groups.ts` | `apps/api/src/domains/vendor/repositories/vendor-user-groups.ts` |
 | `apps/api/src/routes/admin/vendor-credentials.ts` | `apps/api/src/lib/zaptec.ts` |
 | `apps/api/src/routes/admin/vendor-credentials.ts` | `apps/api/src/repositories/credential-management.ts` |
 | `apps/api/src/routes/admin/vendor-credentials.ts` | `apps/api/src/repositories/vendor-credential-probe.ts` |

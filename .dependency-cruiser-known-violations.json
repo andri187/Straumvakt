@@ -174,8 +174,8 @@
   {
     "type": "dependency",
     "from": "apps/api/src/routes/admin/groups.ts",
-    "to": "apps/api/src/repositories/vendor-user-groups.ts",
-    "unresolvedTo": "../../repositories/vendor-user-groups",
+    "to": "apps/api/src/domains/vendor/repositories/vendor-user-groups.ts",
+    "unresolvedTo": "../../domains/vendor/repositories/vendor-user-groups",
     "dependencyTypes": [
       "local",
       "import"
