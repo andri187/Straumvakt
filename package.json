@@ -30,7 +30,9 @@
     "check:deps-graph": "node scripts/gen-dependency-graph.mjs --check",
     "check": "node scripts/check-all.mjs",
     "check:schemas": "prisma validate --schema prisma/schema && prisma validate --schema apps/api/prisma/schema",
-    "check:migrations": "prisma migrate status --schema prisma/schema"
+    "check:migrations": "prisma migrate status --schema prisma/schema",
+    "api:endpoints": "node scripts/gen-api-endpoints.mjs",
+    "check:api-endpoints": "node scripts/gen-api-endpoints.mjs --check"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

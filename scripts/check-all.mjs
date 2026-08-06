@@ -18,6 +18,7 @@ const CHECKS = [
   ["schema-parity", "npm run check:schema-parity"],
   ["deps", "npm run check:deps"],
   ["deps-graph", "npm run check:deps-graph"],
+  ["api-endpoints", "npm run check:api-endpoints"],
 ];
 
 const results = [];
