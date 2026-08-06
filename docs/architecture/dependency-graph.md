@@ -29,62 +29,65 @@ subgraph 0["apps"]
 subgraph 1["api"]
 subgraph 2["src"]
 3["bindings.ts"]
-4["index.ts"]
-5["lib"]
-6["queues"]
-7["repositories"]
-8["routes"]
+subgraph 4["domains"]
+5["identity"]
+end
+6["index.ts"]
+7["lib"]
+8["queues"]
+9["repositories"]
+A["routes"]
 end
 end
 end
-subgraph 9["docs"]
-subgraph A["reference"]
-B["iceland-energy-parties.json"]
+subgraph B["docs"]
+subgraph C["reference"]
+D["iceland-energy-parties.json"]
 end
 end
-C["fs"]
-subgraph D["packages"]
-E["shared"]
+E["fs"]
+subgraph F["packages"]
+G["shared"]
 end
-F["path"]
-subgraph G["public"]
-subgraph H["zaptec"]
-I["openapi.json"]
-J["zaptec-constants.json"]
+H["path"]
+subgraph I["public"]
+subgraph J["zaptec"]
+K["openapi.json"]
+L["zaptec-constants.json"]
 end
 end
-subgraph K["src"]
-L["app"]
-M["components"]
-N["lib"]
+subgraph M["src"]
+N["app"]
+O["components"]
+P["lib"]
 end
-3-->5
-4-->3
-4-->5
-4-->6
-4-->8
-5-->3
-5-->7
-5-->E
+3-->7
 6-->3
-6-->5
-7-->5
-7-->E
+6-->7
+6-->8
+6-->A
 7-->3
+7-->9
+7-->G
 8-->3
-8-->5
 8-->7
-8-->E
-L-->M
-L-->N
-L-->E
-L-->C
-L-->F
-L-->I
-L-->J
-M-->N
-M-->L
-N-->B
+9-->7
+9-->G
+9-->3
+A-->3
+A-->7
+A-->9
+A-->G
+N-->O
+N-->P
+N-->G
+N-->E
+N-->H
+N-->K
+N-->L
+O-->P
+O-->N
+P-->D
 ```
 
 ## Known violations

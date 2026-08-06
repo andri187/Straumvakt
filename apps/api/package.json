@@ -8,7 +8,8 @@
     "deploy:staging": "prisma generate && wrangler deploy --env staging",
     "deploy:prod": "prisma generate && wrangler deploy",
     "prisma:generate": "prisma generate",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:parity": "vitest run --config vitest.parity.config.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.7.0",
@@ -20,6 +21,8 @@
   "devDependencies": {
     "@azure/service-bus": "^7.9.5",
     "@cloudflare/workers-types": "^4.20251121.0",
+    "drizzle-kit": "^0.31.10",
+    "drizzle-orm": "^0.45.2",
     "prisma": "^7.7.0",
     "typescript": "5.6.3",
     "wrangler": "~4.80.0"
