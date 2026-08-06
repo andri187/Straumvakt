@@ -43,6 +43,71 @@ for (const m of index.matchAll(/import\s*\{([^}]+)\}\s*from\s*"(\.[^"]+)"/g)) {
   }
 }
 
+
+// ── domain ownership ───────────────────────────────────────────────────────
+//
+// Which domain owns each mount, under the split in
+// docs/notes/2026-08-06-drizzle-transition-plan.md:
+//
+//     commercial -> charging -> protocol -> assets -> identity
+//     vendor off the chain (nothing may import it)
+//     platform at the bottom (imports nothing)
+//
+// EXPLICIT, not inferred. Deriving this from what the handlers touch was
+// tried and abandoned: repositories import each other, so one hop lights up
+// six domains and /api/admin/users came out "commercial" because of a single
+// degraded agreements read. Forty-one mounts is a reviewable list, and a
+// wrong line here is obvious to a human in a way a wrong heuristic is not.
+const DOMAIN_OF_MOUNT = {
+  "/api/admin": "identity",                                  // admin auth/session
+  "/api/admin/me": "identity",
+  "/api/admin/users": "identity",
+  "/api/admin/orgs": "identity",
+  "/api/admin/memberships": "identity",
+  "/api/admin/tokens": "identity",
+  "/api/admin/groups": "identity",
+  "/api/admin/vehicles": "identity",
+  "/api/admin/host-applications": "identity",
+  "/api/public/register": "identity",
+  "/api/public/invites": "identity",
+  "/api/public/password-reset": "identity",
+  "/api/public/verify-email": "identity",
+  "/api/public/host-applications": "identity",
+
+  "/api/admin/properties": "assets",
+  "/api/admin/sites": "assets",
+  "/api/admin/installations": "assets",
+  "/api/admin/circuits": "assets",
+  "/api/admin/chargers": "assets",
+  "/api/admin/onboarding": "assets",
+
+  "/api/internal/ocpp-auth": "protocol",
+  "/api/internal/ocpp-authorize": "protocol",
+  "/api/internal/ocpp-events": "protocol",
+  "/api/ocpp/events": "protocol",
+  "/api/internal/pending-discovery": "protocol",
+  "/api/admin/pending-discoveries": "protocol",
+
+  "/api/admin/active-sessions": "charging",
+  "/api/driver/tap-intent": "charging",
+
+  "/api/admin/billing": "commercial",
+  "/api/admin/contracts": "commercial",
+  "/api/admin/agreements": "commercial",
+  "/api/admin/agreements/sessions": "commercial",
+  "/api/admin/access-requests": "commercial",       // driver_access_requests lives in agreements
+  "/api/driver": "commercial",                      // driver surface spans, priced reads dominate
+  "/api/driver/chargers": "commercial",
+
+  "/api/admin/zaptec": "vendor",
+  "/api/admin/vendor-credentials": "vendor",
+  "/api/admin/orgs/:orgId/vendor-credentials": "vendor",
+  "/api/internal/zaptec-state-event": "vendor",
+  "/api/internal/zaptec-trigger-sync": "vendor",
+  "/api/webhooks/zaptec": "vendor",
+};
+const DOMAIN_ORDER = ["identity", "assets", "protocol", "charging", "commercial", "vendor", "platform", "unassigned"];
+
 const METHODS = ["get", "post", "put", "patch", "delete", "all", "options", "head"];
 const endpoints = new Map(); // "METHOD path" -> { method, path, mount, file }
 
@@ -65,6 +130,7 @@ for (const m of index.matchAll(/app\.route\(\s*"([^"]+)"\s*,\s*(\w+)\s*\)/g)) {
         path: full,
         mount: prefix,
         file: rel.replace(/^\.\//, ""),
+        domain: DOMAIN_OF_MOUNT[prefix] ?? "unassigned",
       });
     }
   }
@@ -108,7 +174,6 @@ const rows = [...endpoints.values()]
   .sort((a, b) => a.path.localeCompare(b.path) || a.method.localeCompare(b.method));
 
 // ── render ─────────────────────────────────────────────────────────────────
-const surfaces = [...new Set(rows.map((r) => r.path.split("/")[2]))].sort();
 const L = [];
 L.push("# API endpoints — generated");
 L.push("");
@@ -119,6 +184,20 @@ L.push("");
 L.push("Route paths are a public contract — the Flutter app and the console both");
 L.push("consume them. This file exists so a change to that contract shows up as a");
 L.push("diff in review, rather than when someone opens the app.");
+L.push("");
+L.push("**Grouped by domain**, per the split in");
+L.push("[the transition plan](../notes/2026-08-06-drizzle-transition-plan.md):");
+L.push("");
+L.push("```");
+L.push("commercial -> charging -> protocol -> assets -> identity");
+L.push("  vendor off the chain (nothing may import it)");
+L.push("  platform at the bottom (imports nothing)");
+L.push("```");
+L.push("");
+L.push("Ownership is an explicit map in the generator, not inferred from what the");
+L.push("handlers touch. Inference was tried and abandoned: repositories import each");
+L.push("other, so one hop lights up six domains and `/api/admin/users` came out");
+L.push("\"commercial\" on the strength of a single degraded agreements read.");
 L.push("");
 L.push("## Reading the Called-by column");
 L.push("");
@@ -133,10 +212,19 @@ const byMethod = {};
 for (const r of rows) byMethod[r.method] = (byMethod[r.method] ?? 0) + 1;
 L.push(Object.entries(byMethod).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(" · "));
 L.push("");
-for (const s of surfaces) {
-  const group = rows.filter((r) => r.path.split("/")[2] === s);
+L.push("| Domain | Endpoints | No in-repo caller |");
+L.push("|---|---:|---:|");
+for (const d of DOMAIN_ORDER) {
+  const g = rows.filter((r) => r.domain === d);
+  if (!g.length) continue;
+  L.push(`| ${d} | ${g.length} | ${g.filter((r) => !r.callers.length).length} |`);
+}
+L.push("");
+for (const d of DOMAIN_ORDER) {
+  const group = rows.filter((r) => r.domain === d);
+  if (!group.length) continue;
   const un = group.filter((r) => r.callers.length === 0).length;
-  L.push(`## /api/${s} — ${group.length} endpoints${un ? `, ${un} with no in-repo caller` : ""}`);
+  L.push(`## ${d} — ${group.length} endpoints${un ? `, ${un} with no in-repo caller` : ""}`);
   L.push("");
   L.push("| Method | Path | Called by | Source |");
   L.push("|---|---|---|---|");
@@ -163,4 +251,11 @@ if (check) {
   fs.mkdirSync(path.dirname(OUT), { recursive: true });
   fs.writeFileSync(OUT, content, "utf8");
   console.log(`wrote docs/reference/api-endpoints.md — ${rows.length} endpoints, ${rows.filter((r) => !r.callers.length).length} with no in-repo caller.`);
+  // A new mount with no entry in DOMAIN_OF_MOUNT lands in "unassigned" and
+  // would otherwise slide into the file unnoticed.
+  const unassigned = rows.filter((r) => r.domain === "unassigned");
+  if (unassigned.length) {
+    console.log(`  WARNING: ${unassigned.length} endpoints have no domain. Add their mount to DOMAIN_OF_MOUNT:`);
+    for (const m of new Set(unassigned.map((r) => r.mount))) console.log(`    ${m}`);
+  }
 }
