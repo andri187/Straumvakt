@@ -42,13 +42,17 @@
 //   npm run sync:api-schema
 // ───────────────────────────────────────────────────────────────────────────
 
-generator client {
-  provider        = "prisma-client"
-  output          = "../../node_modules/straumvakt-prisma-cf-client"
-  runtime         = "cloudflare"
-  moduleFormat    = "esm"
-  previewFeatures = ["postgresqlExtensions"]
-}
+// The Cloudflare-runtime generator that used to live here is gone. It built
+// a client into node_modules/straumvakt-prisma-cf-client for the Next.js
+// console — which no longer touches Prisma at all. Nothing imports it.
+//
+// With it went scripts/compile-cf-prisma.sh, scripts/post-opennext-cf-prisma.sh,
+// prisma/cf-client-package.json, the cp shim and the webpack externalize rule:
+// four custom build steps, one of which broke CI, all of them existing to get
+// a generated-into-node_modules client past a bundler.
+//
+// nodeClient below stays: prisma/seed.ts, the parity harness and two
+// apps/api/scripts read it under Node.
 
 generator nodeClient {
   provider        = "prisma-client"
