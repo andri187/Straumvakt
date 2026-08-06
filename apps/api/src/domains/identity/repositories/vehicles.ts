@@ -15,7 +15,7 @@ import { asc, eq } from "drizzle-orm";
 import { normaliseDecimalString } from "../../../lib/decimal";
 import type { VehicleSummary } from "@straumvakt/shared/domain/users";
 import type { Db } from "../../../lib/drizzle";
-import { vehicles } from "../schema";
+import { vehicles } from "@straumvakt/shared/db/identity";
 
 interface VehicleRow {
   id: string;

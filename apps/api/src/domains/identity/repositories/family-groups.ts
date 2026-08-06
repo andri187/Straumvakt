@@ -14,7 +14,7 @@
 import { asc, eq, sql } from "drizzle-orm";
 import type { FamilyGroupSummary } from "@straumvakt/shared/domain/family-groups";
 import type { Db } from "../../../lib/drizzle";
-import { familyGroups, familyMemberships, organizations, users } from "../schema";
+import { familyGroups, familyMemberships, organizations, users } from "@straumvakt/shared/db/identity";
 
 type Row = {
   id: string;

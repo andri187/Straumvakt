@@ -19,7 +19,7 @@
 // explicit joins, and a wrong FK declaration would be a silent lie about
 // cascade behaviour.
 
-import { assetClassEnum } from "../protocol/schema";
+import { assetClassEnum } from "./protocol";
 import { customType, index, integer, jsonb, numeric, pgSchema, text, timestamp, uniqueIndex, uuid, varchar } from "drizzle-orm/pg-core";
 
 // bytea likewise. Uint8Array rather than Buffer: this runs on Workers,

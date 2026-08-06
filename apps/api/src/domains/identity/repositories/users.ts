@@ -33,7 +33,7 @@ import type {
 } from "@straumvakt/shared/domain/users";
 import type { UserCreateInput, UserUpdateInput } from "@straumvakt/shared/inputs/users";
 import type { Db } from "../../../lib/drizzle";
-import { memberships, organizations, userCredentials, users } from "../schema";
+import { memberships, organizations, userCredentials, users } from "@straumvakt/shared/db/identity";
 import { createIdToken } from "./id-tokens";
 import { RecordNotFoundError, UniqueViolationError, isUniqueViolation } from "./errors";
 

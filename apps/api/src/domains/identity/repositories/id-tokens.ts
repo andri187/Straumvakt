@@ -29,7 +29,7 @@ import type {
   IdTokenSummary,
 } from "@straumvakt/shared/domain/users";
 import type { Db } from "../../../lib/drizzle";
-import { idTokens, users } from "../schema";
+import { idTokens, users } from "@straumvakt/shared/db/identity";
 import { RecordNotFoundError, UniqueViolationError, isUniqueViolation } from "./errors";
 
 /** Anything that can run a statement: the client or a transaction handle. */

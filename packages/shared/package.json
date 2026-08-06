@@ -35,9 +35,17 @@
     "./domain/bill-objects": "./src/domain/bill-objects.ts",
     "./domain/host-applications": "./src/domain/host-applications.ts",
     "./domain/family-groups": "./src/domain/family-groups.ts",
-    "./domain/vendor-user-groups": "./src/domain/vendor-user-groups.ts"
+    "./domain/vendor-user-groups": "./src/domain/vendor-user-groups.ts",
+    "./db/identity": "./src/db/identity.ts",
+    "./db/assets": "./src/db/assets.ts",
+    "./db/charging": "./src/db/charging.ts",
+    "./db/commercial": "./src/db/commercial.ts",
+    "./db/vendor": "./src/db/vendor.ts",
+    "./db/protocol": "./src/db/protocol.ts",
+    "./db/platform": "./src/db/platform.ts"
   },
   "dependencies": {
-    "zod": "^4.3.6"
+    "zod": "^4.3.6",
+    "drizzle-orm": "^0.45.2"
   }
 }

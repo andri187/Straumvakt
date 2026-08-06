@@ -23,7 +23,7 @@ import type {
   VendorRefStatus,
 } from "@straumvakt/shared/domain/users";
 import type { Db } from "../../../lib/drizzle";
-import { userVendorRefs } from "../../identity/schema";
+import { userVendorRefs } from "@straumvakt/shared/db/identity";
 
 interface UserVendorRefRow {
   id: string;

@@ -9,7 +9,7 @@
 
 import { and, eq } from "drizzle-orm";
 import type { Db } from "../drizzle";
-import { memberships, platformGrants } from "../../domains/identity/schema";
+import { memberships, platformGrants } from "@straumvakt/shared/db/identity";
 import type {
   MembershipRole,
   MembershipStatus,

@@ -34,7 +34,7 @@ import {
   listUsersByOrg,
 } from "../../src/domains/identity/repositories/users";
 import { listIdTokensForUser } from "../../src/domains/identity/repositories/id-tokens";
-import { memberships, users } from "../../src/domains/identity/schema";
+import { memberships, users } from "@straumvakt/shared/db/identity";
 
 describe.skipIf(!hasDb)("identity repositories: Prisma vs Drizzle", () => {
   afterAll(closeAll);

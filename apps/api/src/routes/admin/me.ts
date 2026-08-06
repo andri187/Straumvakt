@@ -21,7 +21,7 @@ import { Hono } from "hono";
 import { requireAdmin, type AuthVars } from "../../lib/auth-middleware";
 import { and, eq } from "drizzle-orm";
 import { makeDrizzle } from "../../lib/drizzle";
-import { memberships as membershipsTable, organizations } from "../../domains/identity/schema";
+import { memberships as membershipsTable, organizations } from "@straumvakt/shared/db/identity";
 import { isBootstrapSession, sessionUserId } from "../../lib/auth/require-permission";
 import { getActivePlatformGrant } from "../../lib/auth/effective-permissions";
 import type { Env } from "../../bindings";

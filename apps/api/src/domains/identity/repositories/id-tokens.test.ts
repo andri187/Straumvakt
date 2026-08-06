@@ -20,7 +20,7 @@ import {
   createIdToken,
   mintRfidValue,
 } from "./id-tokens";
-import { idTokens, users } from "../schema";
+import { idTokens, users } from "@straumvakt/shared/db/identity";
 import type { Db } from "../../../lib/drizzle";
 
 interface StoredRow {

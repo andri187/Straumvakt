@@ -25,8 +25,8 @@
 import { asc, eq, sql } from "drizzle-orm";
 import type { VendorUserGroupSummary } from "@straumvakt/shared/domain/vendor-user-groups";
 import type { Db } from "../../../lib/drizzle";
-import { vendorUserGroups, vendorUserGroupMemberships, organizations } from "../../identity/schema";
-import { installations } from "../../assets/schema";
+import { vendorUserGroups, vendorUserGroupMemberships, organizations } from "@straumvakt/shared/db/identity";
+import { installations } from "@straumvakt/shared/db/assets";
 
 type Row = {
   id: string;

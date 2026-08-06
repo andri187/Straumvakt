@@ -30,83 +30,74 @@ subgraph 1["api"]
 subgraph 2["src"]
 3["bindings.ts"]
 subgraph 4["domains"]
-5["assets"]
-6["charging"]
-7["commercial"]
-8["identity"]
-9["platform"]
-A["protocol"]
-B["vendor"]
+5["identity"]
+6["vendor"]
 end
-C["index.ts"]
-D["lib"]
-E["queues"]
-F["repositories"]
-G["routes"]
+7["index.ts"]
+8["lib"]
+9["queues"]
+A["repositories"]
+B["routes"]
 end
 end
 end
-subgraph H["docs"]
-subgraph I["reference"]
-J["iceland-energy-parties.json"]
+subgraph C["docs"]
+subgraph D["reference"]
+E["iceland-energy-parties.json"]
 end
 end
-K["fs"]
-subgraph L["packages"]
-M["shared"]
+F["fs"]
+subgraph G["packages"]
+H["shared"]
 end
-N["path"]
-subgraph O["public"]
-subgraph P["zaptec"]
-Q["openapi.json"]
-R["zaptec-constants.json"]
+I["path"]
+subgraph J["public"]
+subgraph K["zaptec"]
+L["openapi.json"]
+M["zaptec-constants.json"]
 end
 end
-subgraph S["src"]
-T["app"]
-U["components"]
-V["lib"]
+subgraph N["src"]
+O["app"]
+P["components"]
+Q["lib"]
 end
-3-->D
-8-->D
-8-->M
+3-->8
+5-->8
+5-->H
+5-->3
+5-->A
+6-->8
+6-->H
+7-->3
+7-->5
+7-->8
+7-->9
+7-->B
 8-->3
-8-->F
-B-->D
+8-->H
+8-->A
+9-->3
+9-->8
+A-->8
+A-->H
+A-->3
+B-->3
 B-->8
-B-->M
-B-->5
 B-->A
-C-->3
-C-->8
-C-->D
-C-->E
-C-->G
-D-->3
-D-->8
-D-->M
-D-->F
-E-->3
-E-->D
-F-->D
-F-->M
-F-->3
-G-->3
-G-->D
-G-->F
-G-->M
-G-->8
-G-->B
-T-->U
-T-->V
-T-->M
-T-->K
-T-->N
-T-->Q
-T-->R
-U-->V
-U-->T
-V-->J
+B-->H
+B-->5
+B-->6
+O-->P
+O-->Q
+O-->H
+O-->F
+O-->I
+O-->L
+O-->M
+P-->Q
+P-->O
+Q-->E
 ```
 
 ## Known violations

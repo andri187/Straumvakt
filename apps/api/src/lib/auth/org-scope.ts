@@ -18,7 +18,7 @@
 import { and, eq } from "drizzle-orm";
 import { makeDrizzle } from "../drizzle";
 import type { Env } from "../../bindings";
-import { memberships } from "../../domains/identity/schema";
+import { memberships } from "@straumvakt/shared/db/identity";
 import type { SessionPayload } from "../admin-session";
 import { getActivePlatformGrant, expandPermissionsSync } from "./effective-permissions";
 import { isBootstrapSession, sessionUserId } from "./require-permission";

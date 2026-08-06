@@ -19,13 +19,13 @@
 import { afterAll, describe, expect, it } from "vitest";
 import { getTableConfig, type PgTable } from "drizzle-orm/pg-core";
 import { closeAll, getPool, hasDb } from "./_harness";
-import * as identity from "../../src/domains/identity/schema";
-import * as assets from "../../src/domains/assets/schema";
-import * as charging from "../../src/domains/charging/schema";
-import * as commercial from "../../src/domains/commercial/schema";
-import * as vendor from "../../src/domains/vendor/schema";
-import * as protocol from "../../src/domains/protocol/schema";
-import * as platform from "../../src/domains/platform/schema";
+import * as identity from "@straumvakt/shared/db/identity";
+import * as assets from "@straumvakt/shared/db/assets";
+import * as charging from "@straumvakt/shared/db/charging";
+import * as commercial from "@straumvakt/shared/db/commercial";
+import * as vendor from "@straumvakt/shared/db/vendor";
+import * as protocol from "@straumvakt/shared/db/protocol";
+import * as platform from "@straumvakt/shared/db/platform";
 
 const DOMAINS: Record<string, Record<string, unknown>> = {
   identity,
