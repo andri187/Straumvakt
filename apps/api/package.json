@@ -8,7 +8,7 @@
     "deploy:staging": "prisma generate && wrangler deploy --env staging",
     "deploy:prod": "prisma generate && wrangler deploy",
     "prisma:generate": "prisma generate",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
     "test:parity": "vitest run --config vitest.parity.config.ts"
   },
   "dependencies": {

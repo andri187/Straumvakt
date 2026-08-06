@@ -1,0 +1,18 @@
+{
+  // The parity harness lives outside src/ (it needs a live database and runs
+  // from its own vitest config), so tsconfig.json's `include` of src/**
+  // leaves it typechecked by nothing at all. That is the same shape of bug as
+  // the two this session already found: a check that exists and silently does
+  // not run.
+  //
+  // A separate config rather than widening the main one, because the harness
+  // is Node — it needs @types/node globals and the Prisma node client — while
+  // the Worker deliberately restricts `types` to @cloudflare/workers-types.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["@cloudflare/workers-types", "node"],
+    "lib": ["ES2022"]
+  },
+  "include": ["test/**/*.ts", "src/**/*.ts", "../../packages/shared/src/**/*.ts"],
+  "exclude": ["node_modules", "src/generated"]
+}

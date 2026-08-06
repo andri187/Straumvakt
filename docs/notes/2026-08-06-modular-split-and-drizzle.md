@@ -22,10 +22,17 @@ Prisma 7. There is no such flag in 7.8 — `prisma migrate diff --help` lists
 without complaint. The script needed a path change, not a flag change. Half an
 hour of budgeted work that did not exist.
 
-**2. CI was already red, for none of the reasons anyone was watching.** Four
-consecutive pushes before this session failed, going back to 2026-08-05 22:32.
-The cause: `npm run db:generate` builds the console's two Prisma clients and
-stops. `apps/api` imports `../generated/prisma/client`, which only
+**2. CI on this branch had never been green — not once.** `gh run list` over
+the full history of `dev/p4-c-ingest-integrity`: **25 failures, 0 successes**,
+from the branch's first run on 2026-08-03 22:40 through 2026-08-06 09:23. The
+four successes it now shows are all from tonight.
+
+At least two distinct causes. The oldest run failed on
+`Dependencies lock file is not found` — `actions/setup-node` with `cache: npm`
+against a gitignored `package-lock.json`, which the workflow header says was
+addressed by dropping the cache. The four most recent pre-session failures have
+a different cause: `npm run db:generate` builds the console's two Prisma clients
+and stops. `apps/api` imports `../generated/prisma/client`, which only
 `npm --prefix apps/api run prisma:generate` produces, and CI runs `db:generate`
 alone. On a clean Linux runner the API workspace typechecked against a client
 that had never been generated — TS2307 on every import of it, then a cascade of
@@ -36,6 +43,10 @@ That is exactly the failure the workflow's own header warns about for the two
 checks it was written to wire up. Fixed in `6c08890`; verified by deleting
 `apps/api/src/generated` entirely and rebuilding from nothing. **The A1 commit
 was pushed into an already-red CI and inherited the red — it did not cause it.**
+
+The uncomfortable part is not the bug. It is that a branch carrying the OCPP
+silence watch — a feature whose entire premise is that silent failures must be
+made loud — ran red for three days without anyone reading it.
 
 **3. The database is drifted from the schema, and was before tonight.**
 `prisma migrate diff --from-config-datasource` produces a 212-line report:
@@ -393,6 +404,16 @@ runs, and is correct can still be invisible if it sits behind a broken one.**
 Fixed as a side effect — the API schema is generated now, so the drift is gone
 and parity passes for a structural reason rather than a lucky one.
 
+**11½. The parity harness typechecked nowhere, on the night it was written.**
+`apps/api/tsconfig.json` has `"include": ["src/**/*.ts", ...]`, and the harness
+lives in `test/parity/`. It ran under vitest, which transpiles without type
+checking, so `npm run check` was green while a whole directory went unverified
+— the third instance tonight of a check that exists and silently does not run.
+Fixed with `apps/api/tsconfig.test.json`, wired into the workspace's
+`typecheck`. A separate config because the harness is Node and needs
+`@types/node`, while the Worker deliberately restricts `types` to
+`@cloudflare/workers-types`; both together typecheck clean.
+
 **11. `apps/api/prisma/generated/` is gitignored and nothing generates it.**
 It holds a `node-client` directory last written 2026-06-04. The API's client
 goes to `src/generated/prisma`; this is a leftover from a layout that no longer
@@ -405,7 +426,7 @@ for what fills it.
 
 | gate | result |
 |---|---|
-| `npm run typecheck` (all workspaces + gateway) | clean |
+| `npm run typecheck` (all workspaces + gateway, now including the harness) | clean |
 | `npm run check:schemas` | both valid |
 | `npm run check:api-schema` | in sync, 8 files |
 | `npm run check:schema-parity` | No difference detected |
@@ -415,4 +436,5 @@ for what fills it.
 | `npm --prefix apps/api run test:parity` | **71 passed** (60 structural + 11 behavioural) |
 
 CI checked from the dev workstation after every push. Green from `6c08890`
-onward — the first green run on this branch since 2026-08-05 22:32.
+onward — **the first green runs this branch has ever had**, against 25 prior
+failures going back to its first run on 2026-08-03.
