@@ -37,7 +37,7 @@
 import { config as dotenv } from "dotenv";
 import { resolve as resolvePath } from "node:path";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient as NodePrismaClient } from "../prisma/generated/node-client/client";
+import { PrismaClient as NodePrismaClient } from "../../../prisma/generated/node-client/client";
 import type { PrismaClient as EdgePrismaClient } from "../src/generated/prisma/client";
 import {
   resolveTariffChainWithIdsForSession,

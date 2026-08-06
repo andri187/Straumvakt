@@ -7,7 +7,7 @@
 import { Client } from "pg";
 import { config as dotenv } from "dotenv";
 import { resolve } from "node:path";
-import { hashPassword } from "../src/lib/password.ts";
+import { hashPassword } from "../src/lib/password";
 
 dotenv({ path: resolve(process.cwd(), "../../.env.local") });
 

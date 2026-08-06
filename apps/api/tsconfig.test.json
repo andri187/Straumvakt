@@ -5,6 +5,12 @@
   // the two this session already found: a check that exists and silently does
   // not run.
   //
+  // scripts/ is included for the same reason test/ is: it was checked by
+  // NOTHING, and two of its files had been importing a Prisma client that is
+  // gitignored and that no generator produces — broken on every clean
+  // checkout, including the CO-3 shadow harness ADR 0025 says the operator
+  // runs.
+  //
   // A separate config rather than widening the main one, because the harness
   // is Node — it needs @types/node globals and the Prisma node client — while
   // the Worker deliberately restricts `types` to @cloudflare/workers-types.
@@ -13,6 +19,6 @@
     "types": ["@cloudflare/workers-types", "node"],
     "lib": ["ES2022"]
   },
-  "include": ["test/**/*.ts", "src/**/*.ts", "../../packages/shared/src/**/*.ts"],
+  "include": ["test/**/*.ts", "scripts/**/*.ts", "src/**/*.ts", "../../packages/shared/src/**/*.ts"],
   "exclude": ["node_modules", "src/generated"]
 }

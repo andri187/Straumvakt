@@ -1,4 +1,12 @@
 #!/usr/bin/env tsx
+
+// `export {}` makes this a module rather than a global script. Without it
+// TypeScript puts every top-level declaration in one shared scope, so this
+// file's `Args` and `parseArgs` collided with replay-dlq.ts's — 44 errors
+// between two files that never import each other. Invisible until
+// scripts/ was added to a tsconfig, which nothing had done.
+export {};
+
 /**
  * DLQ replay script — Sprint 5 / ADR 0017.
  *
