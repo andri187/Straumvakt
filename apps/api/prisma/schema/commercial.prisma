@@ -1013,7 +1013,15 @@ model DriverAccessRequest {
   id                       String                       @id @default(uuid()) @db.Uuid
   userId                   String                       @map("user_id") @db.Uuid
   installationId           String                       @map("installation_id") @db.Uuid
-  triggeredBy              DriverAccessRequestTrigger
+  // @map is not optional here. Without it Prisma addresses a column named
+  // "triggeredBy" and the column is "triggered_by", so EVERY query on this
+  // model — read and write — failed with:
+  //   The column `driver_access_requests.triggeredBy` does not exist
+  // The whole driver access-request flow was dead. Found 2026-08-06 by
+  // reconciling the schema against the database; the unit tests never caught
+  // it because they run against a fake with no column names to get wrong.
+  // It was the only field of 157 models missing a @map it needed.
+  triggeredBy              DriverAccessRequestTrigger   @map("triggered_by")
   orgEmailDomainId         String?                      @map("org_email_domain_id") @db.Uuid
   status                   DriverAccessRequestStatus    @default(pending)
   reviewedByUserId         String?                      @map("reviewed_by_user_id") @db.Uuid
