@@ -16,7 +16,7 @@
     "preview:staging": "prisma generate && cp prisma/cf-client-package.json node_modules/straumvakt-prisma-cf-client/package.json && bash scripts/compile-cf-prisma.sh && next build --webpack && opennextjs-cloudflare build --skipNextBuild && bash scripts/post-opennext-cf-prisma.sh && opennextjs-cloudflare preview --env staging",
     "test": "vitest run",
     "test:watch": "vitest",
-    "db:generate": "prisma generate && cp prisma/cf-client-package.json node_modules/straumvakt-prisma-cf-client/package.json && bash scripts/compile-cf-prisma.sh",
+    "db:generate": "prisma generate && cp prisma/cf-client-package.json node_modules/straumvakt-prisma-cf-client/package.json && bash scripts/compile-cf-prisma.sh && npm --prefix apps/api run prisma:generate",
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
     "db:validate": "prisma validate",
