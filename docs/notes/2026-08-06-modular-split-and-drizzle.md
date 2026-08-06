@@ -1,6 +1,6 @@
 # Modular split and the first Drizzle domain — overnight, 2026-08-05/06
 
-Five commits on `dev/p4-c-ingest-integrity`. Nothing deployed. No migration
+Seven commits on `dev/p4-c-ingest-integrity`. Nothing deployed. No migration
 against staging. No Prisma model, schema file or generated client deleted.
 
 | | commit | CI |
@@ -10,6 +10,8 @@ against staging. No Prisma model, schema file or generated client deleted.
 | A2 | `31605e1` enforce the domain boundaries instead of documenting them | ✅ |
 | B1 | `7ab5cc6` Drizzle: identity tables declared, and a harness that checks they are true | ✅ |
 | B2 + B3 | `1049e40` port users and id-tokens to Drizzle, in their domain home | ✅ |
+| report | `00047cc` this document | ✅ |
+| — | `a2858d0` typecheck the parity harness, which was checked by nothing | *(pushed last)* |
 
 ---
 
@@ -376,6 +378,14 @@ repositories are on Drizzle. `orgs.ts`, `invites.ts`, `host-invites.ts`,
 identity" and identity is not fully ported.** What is ported is proven; the
 rest is the same mechanical work with the traps now known and the harness
 already built.
+
+**P3b. The console (`src/`) was in scope and is untouched by the port.** It is
+smaller than the brief implies: `src/lib/repositories/` holds five files, 481
+lines total, and the only data-access one is `events.ts`. Nothing in it is
+identity, so there was nothing for this domain's port to do there — but it does
+still import Prisma via `src/lib/prisma.ts`, and it does not move until the
+domains it reads are ported. *No decision needed; recorded so "console: not
+done" is not read as an oversight.*
 
 **P4. `org-email-domains.ts` cannot be ported without a decision.** It joins
 `tenancy.org_email_domains` to `agreements.driver_groups` for a display name —
