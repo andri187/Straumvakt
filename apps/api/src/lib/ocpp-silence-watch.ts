@@ -35,6 +35,46 @@ const SILENCE_THRESHOLD_MS = 45 * 60 * 1000;
  *  scanned across every partition we hold. */
 const LOOKBACK_MS = 7 * 24 * 60 * 60 * 1000;
 
+/**
+ * At or below this share of the fleet still speaking, treat it as a path
+ * failure rather than a pile of individual ones.
+ *
+ * WHY THIS IS A RATIO AND NOT `speaking === 0`
+ * --------------------------------------------
+ * It was `speaking === 0`, and that was wrong. Caught live on 2026-08-06,
+ * the first time this ran against a real outage.
+ *
+ * The operator disabled OCPP cloud in the Zaptec portal. Seventeen chargers
+ * dropped inside a 53-second window at 10:27 UTC — the same signature as the
+ * May outage. By 11:14 twenty of twenty-one watched identities were past the
+ * threshold. `fleetWide` was **false**, because ONE identity
+ * (`57f9ffd0`, three frames in the preceding six hours) had emitted a
+ * heartbeat a minute earlier.
+ *
+ * So the escalation reserved for "the path is down" was suppressed by a
+ * charger that speaks roughly twice an hour, during the exact event it was
+ * written to catch. A detector built because a quarter-year outage went
+ * unreported can be silenced by one flapping unit.
+ *
+ * 10% is chosen to survive that without inventing a new failure mode: at
+ * twenty-one watched it tolerates two stragglers, and on a small fleet the
+ * ratio degrades to `speaking === 0` on its own (one of three speaking is
+ * 33%, correctly not fleet-wide) with no special case needed.
+ */
+const FLEET_WIDE_SPEAKING_RATIO = 0.1;
+
+/**
+ * Is this a path failure rather than a collection of charger failures?
+ *
+ * Pure and exported so the decision can be tested without standing up a
+ * database — the bug above lived in one expression and no test could see it.
+ */
+export function isFleetWide(watched: number, speaking: number): boolean {
+  if (watched <= 0) return false;
+  if (speaking === 0) return true;
+  return speaking / watched <= FLEET_WIDE_SPEAKING_RATIO;
+}
+
 export interface SilentCharger {
   identityId: string;
   identityString: string;
@@ -49,9 +89,10 @@ export interface OcppSilenceReport {
   watched: number;
   speaking: number;
   silent: SilentCharger[];
-  /** True when EVERY watched charger is silent. This is the shape the
-   *  May outage took — not a charger failing, but a path failing — and it
-   *  warrants a louder signal than the sum of its parts. */
+  /** True when the fleet as a whole has stopped speaking — see
+   *  `FLEET_WIDE_SPEAKING_RATIO`. This is the shape the May outage took —
+   *  not a charger failing, but a path failing — and it warrants a louder
+   *  signal than the sum of its parts. */
   fleetWide: boolean;
 }
 
@@ -132,8 +173,8 @@ export async function checkOcppSilence(
     watched: identities.length,
     speaking,
     silent,
-    // Every watched charger silent at once is a path failure, not a
-    // hardware one. That is the shape of the May outage.
-    fleetWide: identities.length > 0 && speaking === 0,
+    // The fleet going quiet at once is a path failure, not a hardware one.
+    // That is the shape of the May outage — and of 2026-08-06.
+    fleetWide: isFleetWide(identities.length, speaking),
   };
 }

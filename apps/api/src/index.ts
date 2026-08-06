@@ -440,8 +440,16 @@ const handler: ExportedHandler<Env, AnyQueueMessage> = {
         try {
           const report = await checkOcppSilence(db);
           if (report.fleetWide) {
-            console.error("[ocpp-silence] FLEET-WIDE — no charger is speaking OCPP", {
+            // "no charger is speaking" was the old wording and is no longer
+            // accurate: fleet-wide now tolerates a small number of
+            // stragglers, because requiring literal zero let one charger
+            // sending three frames in six hours suppress this line during
+            // the 2026-08-06 outage. Report the count rather than assert
+            // the absolute.
+            console.error("[ocpp-silence] FLEET-WIDE — the fleet has stopped speaking OCPP", {
               watched: report.watched,
+              speaking: report.speaking,
+              silent: report.silent.length,
               lastFrames: report.silent
                 .slice(0, 5)
                 .map((s) => `${s.identityString}@${s.lastFrameAt ?? "never"}`),
