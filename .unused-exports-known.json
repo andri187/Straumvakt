@@ -1,0 +1,22 @@
+[
+  "domains/identity/repositories/vehicles.ts#createVehicle",
+  "domains/identity/repositories/vehicles.ts#listVehiclesForUser",
+  "domains/vendor/repositories/user-vendor-refs.ts#createUserVendorRef",
+  "domains/vendor/repositories/user-vendor-refs.ts#listUserVendorRefsForUser",
+  "domains/vendor/repositories/vendor-user-groups.ts#listVendorUserGroupsByInstallation",
+  "lib/agreement/resolve.ts#halfUpDiv",
+  "lib/agreement/resolve.ts#multiplyMinorByDecimal",
+  "lib/auth/effective-permissions.ts#getActiveMembership",
+  "lib/auth/org-scope.ts#orgInScope",
+  "lib/billing/pilot-scope.ts#isPilotAgreementType",
+  "lib/billing/pilot-scope.ts#isPilotComputeRuleKind",
+  "lib/billing/pilot-scope.ts#isPilotFactorCode",
+  "lib/db/partition-cron.ts#readPartitionGroups",
+  "lib/ocpp-internal-auth.ts#constantTimeEquals",
+  "lib/tap-intent/random-uid.ts#randomUidLabel",
+  "repositories/billing-cost-factors.ts#getCostFactor",
+  "repositories/chargers.ts#listSiteCircuits",
+  "repositories/create-driver.ts#createDriver",
+  "repositories/driver-sessions.ts#getDriverProfile",
+  "repositories/tap-intents.ts#purgeStaleTapIntents"
+]

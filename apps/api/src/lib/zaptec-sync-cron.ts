@@ -73,19 +73,14 @@ export interface ChargerStatusOutcome {
   durationMs: number;
 }
 
-export interface ChargerStatusCronReport {
-  ranAt: string;
-  credentials: number;
-  outcomes: ChargerStatusOutcome[];
-  failures: CredentialSyncFailure[];
-}
-
 /**
  * Combined per-tick orchestrator. Runs both sessions writeback and
- * charger-status sync under a single OAuth grant per credential. The
- * old runZaptecChargerStatusCron is kept exported below for the
- * scheduled handler's backwards compatibility but now delegates to
- * a noop — the status work happens inside runZaptecCronSync.
+ * charger-status sync under a single OAuth grant per credential.
+ *
+ * There used to be a separate runZaptecChargerStatusCron kept exported
+ * as a no-op "so the old scheduled() block still compiles", with a note
+ * to remove it once index.ts called only this function. index.ts was
+ * updated; the stub was not. Removed 2026-08-06.
  */
 export async function runZaptecCronSync(
   db: PrismaClient,
@@ -214,26 +209,6 @@ export async function runZaptecCronSync(
       outcomes: statusOutcomes,
       failures: statusFailures,
     },
-  };
-}
-
-/**
- * Backwards-compatible no-op so the old scheduled() block still
- * compiles. The combined runZaptecCronSync now does both pieces;
- * this function reports a "skipped — folded into runZaptecCronSync"
- * outcome shape so any caller still wiring it up sees zero work
- * happening here. Remove after the index.ts cron block is updated
- * to call only runZaptecCronSync.
- */
-export async function runZaptecChargerStatusCron(
-  _db: PrismaClient,
-  _kek: string,
-): Promise<ChargerStatusCronReport> {
-  return {
-    ranAt: new Date().toISOString(),
-    credentials: 0,
-    outcomes: [],
-    failures: [],
   };
 }
 

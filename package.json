@@ -32,7 +32,9 @@
     "check:schemas": "prisma validate --schema prisma/schema && prisma validate --schema apps/api/prisma/schema",
     "check:migrations": "prisma migrate status --schema prisma/schema",
     "api:endpoints": "node scripts/gen-api-endpoints.mjs",
-    "check:api-endpoints": "node scripts/gen-api-endpoints.mjs --check"
+    "check:api-endpoints": "node scripts/gen-api-endpoints.mjs --check",
+    "check:unused-exports": "node scripts/check-unused-exports.mjs",
+    "unused-exports:baseline": "node scripts/check-unused-exports.mjs --baseline"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

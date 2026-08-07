@@ -19,6 +19,7 @@ const CHECKS = [
   ["deps", "npm run check:deps"],
   ["deps-graph", "npm run check:deps-graph"],
   ["api-endpoints", "npm run check:api-endpoints"],
+  ["unused-exports", "npm run check:unused-exports"],
 ];
 
 const results = [];
