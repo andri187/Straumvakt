@@ -19,7 +19,6 @@
 // restructured until they are.
 // ───────────────────────────────────────────────────────────────────────────
 
-
 // ─────────────────────────────────────────────────────────────────────────────
 // billing — plans, tariffs, subscriptions, invoices
 // Money is BIGINT minor units (aurar / öre / cents). No floats, no decimals.
@@ -36,41 +35,9 @@ model Tariff {
   createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
 
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  customerPlans CustomerPlan[]
 
   @@index([orgId])
   @@map("tariffs")
-  @@schema("billing")
-}
-
-model CustomerPlan {
-  id                   String        @id @default(uuid()) @db.Uuid
-  orgId                String        @map("org_id") @db.Uuid
-  code                 String
-  displayName          String        @map("display_name")
-  description          String?
-  balanceType          BalanceType   @map("balance_type")
-  category             PlanCategory
-  products             Json          @default("[]") @db.JsonB // setup/subscription/RFID/usage credit
-  defaultTariffId      String?       @map("default_tariff_id") @db.Uuid
-  terminationBehavior  TerminationBehavior @map("termination_behavior") @default(evergreen)
-  minCommitmentMonths  Int?          @map("min_commitment_months")
-  costFactor           Decimal?      @map("cost_factor") @db.Decimal(8, 4)
-  country              String?
-  currency             String?
-  locale               String?
-  validFrom            DateTime      @map("valid_from") @db.Timestamptz(6)
-  validUntil           DateTime?     @map("valid_until") @db.Timestamptz(6)
-  status               String        @default("active")
-  createdAt            DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt            DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  organization         Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  defaultTariff        Tariff?       @relation(fields: [defaultTariffId], references: [id])
-  subscriptions        Subscription[]
-
-  @@unique([orgId, code])
-  @@map("customer_plans")
   @@schema("billing")
 }
 
@@ -101,44 +68,6 @@ enum TerminationBehavior {
   @@schema("billing")
 }
 
-model Subscription {
-  id         String       @id @default(uuid()) @db.Uuid
-  orgId      String       @map("org_id") @db.Uuid
-  userId     String       @map("user_id") @db.Uuid
-  planId     String       @map("plan_id") @db.Uuid
-  startedAt  DateTime     @map("started_at") @db.Timestamptz(6)
-  endedAt    DateTime?    @map("ended_at") @db.Timestamptz(6)
-  status     String       @default("active")
-  createdAt  DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt  DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  plan       CustomerPlan @relation(fields: [planId], references: [id])
-
-  @@index([orgId, userId])
-  @@map("subscriptions")
-  @@schema("billing")
-}
-
-model BillingTransaction {
-  id             String       @id @default(uuid()) @db.Uuid
-  orgId          String       @map("org_id") @db.Uuid
-  userId         String?      @map("user_id") @db.Uuid
-  type           BillingTxType
-  amountMinor    BigInt       @map("amount_minor") // can be negative (refunds)
-  currency       String
-  description    String?
-  metadata       Json         @default("{}") @db.JsonB
-  occurredAt     DateTime     @map("occurred_at") @db.Timestamptz(6)
-  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
-
-  organization   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-
-  @@index([orgId, occurredAt(sort: Desc)])
-  @@map("billing_transactions")
-  @@schema("billing")
-}
-
 enum BillingTxType {
   payment
   refund
@@ -150,30 +79,6 @@ enum BillingTxType {
   @@schema("billing")
 }
 
-model Invoice {
-  id              String        @id @default(uuid()) @db.Uuid
-  orgId           String        @map("org_id") @db.Uuid
-  userId          String        @map("user_id") @db.Uuid
-  periodStart     DateTime      @map("period_start") @db.Date
-  periodEnd       DateTime      @map("period_end") @db.Date
-  currency        String
-  totalMinor      BigInt        @map("total_minor")
-  status          InvoiceStatus @default(draft)
-  issuedAt        DateTime?     @map("issued_at") @db.Timestamptz(6)
-  paidAt          DateTime?     @map("paid_at") @db.Timestamptz(6)
-  externalRef     String?       @map("external_ref")
-  pdfRef          String?       @map("pdf_ref")
-  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  organization    Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  lines           InvoiceLine[]
-
-  @@index([orgId, userId, periodStart])
-  @@map("invoices")
-  @@schema("billing")
-}
-
 enum InvoiceStatus {
   draft
   issued
@@ -181,78 +86,6 @@ enum InvoiceStatus {
   void
 
   @@schema("billing")
-}
-
-model InvoiceLine {
-  id             String  @id @default(uuid()) @db.Uuid
-  invoiceId      String  @map("invoice_id") @db.Uuid
-  description    String
-  quantity       Decimal @db.Decimal(12, 4)
-  unitPriceMinor BigInt  @map("unit_price_minor")
-  amountMinor    BigInt  @map("amount_minor")
-  sourceType     String  @map("source_type")
-  sourceId       String? @map("source_id") @db.Uuid
-
-  invoice        Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-
-  @@map("invoice_lines")
-  @@schema("billing")
-}
-
-model Statement {
-  id           String       @id @default(uuid()) @db.Uuid
-  orgId        String       @map("org_id") @db.Uuid
-  subjectType  String       @map("subject_type") // user / host
-  subjectId    String       @map("subject_id") @db.Uuid
-  periodStart  DateTime     @map("period_start") @db.Date
-  periodEnd    DateTime     @map("period_end") @db.Date
-  content      Json         @db.JsonB
-  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
-
-  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-
-  @@index([orgId, subjectType, subjectId])
-  @@map("statements")
-  @@schema("billing")
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// entitlements — feature flags + enterprise licenses (capability vs permission)
-// ─────────────────────────────────────────────────────────────────────────────
-
-model FeatureFlag {
-  id          String       @id @default(uuid()) @db.Uuid
-  orgId       String       @map("org_id") @db.Uuid
-  featureKey  String       @map("feature_key")
-  scopeType   String       @map("scope_type") // org/site/identity/user
-  scopeId     String?      @map("scope_id") @db.Uuid
-  enabled     Boolean      @default(true)
-  source      String       // enterprise_license/addon/trial/manual
-  sourceRef   String?      @map("source_ref") @db.Uuid
-  validFrom   DateTime     @map("valid_from") @db.Timestamptz(6)
-  validUntil  DateTime?    @map("valid_until") @db.Timestamptz(6)
-
-  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-
-  @@index([orgId, scopeType, scopeId, featureKey])
-  @@map("feature_flags")
-  @@schema("entitlements")
-}
-
-model EnterpriseLicense {
-  id          String       @id @default(uuid()) @db.Uuid
-  orgId       String       @map("org_id") @db.Uuid
-  tier        String       // standard/enterprise/enterprise_plus
-  apiFairUse  Json         @map("api_fair_use") @default("{}") @db.JsonB
-  features    String[]     // array of feature_keys this tier grants
-  validFrom   DateTime     @map("valid_from") @db.Timestamptz(6)
-  validUntil  DateTime?    @map("valid_until") @db.Timestamptz(6)
-  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
-
-  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-
-  @@map("enterprise_licenses")
-  @@schema("entitlements")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -292,9 +125,6 @@ model CostFactor {
   updatedAt           DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   tariffDefinitions   TariffDefinition[]
-  contractAssignments ContractFactorAssignment[]
-  driverOverrides     DriverContractFactorOverride[]
-  accumulators        ContractPeriodAccumulator[]
   billingLines        BillingLine[]
 
   @@map("cost_factors")
@@ -350,8 +180,6 @@ model CostCenter {
   payerOrg            Organization?       @relation("CostCenterPayer", fields: [payerOrgId], references: [id])
   payerUser           User?               @relation("CostCenterPayerUser", fields: [payerUserId], references: [id])
   beneficiaryOrg      Organization?       @relation("CostCenterBeneficiary", fields: [beneficiaryOrgId], references: [id])
-  contractAssignments ContractFactorAssignment[]
-  driverOverrides     DriverContractFactorOverride[]
   billingLines        BillingLine[]
 
   @@unique([orgId, code])
@@ -402,31 +230,10 @@ model Contract {
   counterparty        Organization?             @relation("ContractCounterpartyOrg", fields: [counterpartyOrgId], references: [id])
   parent              Contract?                 @relation("ContractInheritance", fields: [parentContractId], references: [id])
   children            Contract[]                @relation("ContractInheritance")
-  assignments         ContractFactorAssignment[]
-  accumulators        ContractPeriodAccumulator[]
 
   @@index([orgId, scopeType, scopeId])
   @@index([counterpartyOrgId])
   @@map("contracts")
-  @@schema("billing")
-}
-
-model ContractFactorAssignment {
-  id                  String         @id @default(uuid()) @db.Uuid
-  contractId          String         @map("contract_id") @db.Uuid
-  costFactorId        String         @map("cost_factor_id") @db.Uuid
-  costCenterId        String         @map("cost_center_id") @db.Uuid
-  allocationRule      Json           @map("allocation_rule") @db.JsonB
-  priority            Int            @default(0)
-  validFrom           DateTime       @map("valid_from") @db.Timestamptz(6)
-  validUntil          DateTime?      @map("valid_until") @db.Timestamptz(6)
-
-  contract            Contract       @relation(fields: [contractId], references: [id], onDelete: Cascade)
-  costFactor          CostFactor     @relation(fields: [costFactorId], references: [id])
-  costCenter          CostCenter     @relation(fields: [costCenterId], references: [id])
-
-  @@index([contractId, costFactorId, priority])
-  @@map("contract_factor_assignments")
   @@schema("billing")
 }
 
@@ -460,57 +267,9 @@ model DriverContract {
   parent              DriverContract?                 @relation("DriverContractInheritance", fields: [parentContractId], references: [id])
   children            DriverContract[]                @relation("DriverContractInheritance")
   wrkpfTariff         TariffDefinition?               @relation("DriverContractWrkpfTariff", fields: [wrkpfTariffId], references: [id])
-  overrides           DriverContractFactorOverride[]
-  accumulators        ContractPeriodAccumulator[]
 
   @@index([orgId, userId, validFrom])
   @@map("driver_contracts")
-  @@schema("billing")
-}
-
-model DriverContractFactorOverride {
-  id                  String              @id @default(uuid()) @db.Uuid
-  driverContractId    String              @map("driver_contract_id") @db.Uuid
-  costFactorId        String              @map("cost_factor_id") @db.Uuid
-  costCenterId        String              @map("cost_center_id") @db.Uuid
-  allocationRule      Json                @map("allocation_rule") @db.JsonB
-  priority            Int                 @default(0)
-  scopeType           ContractScopeType?  @map("scope_type")
-  scopeId             String?             @map("scope_id") @db.Uuid
-
-  driverContract      DriverContract      @relation(fields: [driverContractId], references: [id], onDelete: Cascade)
-  costFactor          CostFactor          @relation(fields: [costFactorId], references: [id])
-  costCenter          CostCenter          @relation(fields: [costCenterId], references: [id])
-
-  @@index([driverContractId, costFactorId, priority])
-  @@map("driver_contract_factor_overrides")
-  @@schema("billing")
-}
-
-model ContractPeriodAccumulator {
-  id                          String          @id @default(uuid()) @db.Uuid
-  orgId                       String          @map("org_id") @db.Uuid
-  driverContractId            String?         @map("driver_contract_id") @db.Uuid
-  contractId                  String?         @map("contract_id") @db.Uuid
-  costFactorId                String          @map("cost_factor_id") @db.Uuid
-  periodType                  String          @map("period_type") @default("calendar_month")
-  periodStartDate             DateTime        @map("period_start_date") @db.Date
-  periodEndDate               DateTime        @map("period_end_date") @db.Date
-  cumulativeKwh               Decimal         @map("cumulative_kwh") @db.Decimal(12, 4) @default(0)
-  cumulativeAmountExVatMinor  BigInt          @map("cumulative_amount_ex_vat_minor") @default(0)
-  cumulativeSessionCount      Int             @map("cumulative_session_count") @default(0)
-  lastSessionId               String?         @map("last_session_id") @db.Uuid
-  updatedAt                   DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  organization                Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  driverContract              DriverContract? @relation(fields: [driverContractId], references: [id])
-  contract                    Contract?       @relation(fields: [contractId], references: [id])
-  costFactor                  CostFactor      @relation(fields: [costFactorId], references: [id])
-
-  @@unique([driverContractId, costFactorId, periodStartDate])
-  @@unique([contractId, costFactorId, periodStartDate])
-  @@index([orgId, periodStartDate])
-  @@map("contract_period_accumulators")
   @@schema("billing")
 }
 
@@ -538,40 +297,6 @@ model BillingLine {
   @@index([costCenterId, createdAt(sort: Desc)])
   @@map("billing_lines")
   @@schema("billing")
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// reports — pre-computed read-ready aggregates (Sprint 7.5 / ADR 0018
-// Decision 5). Sprint 8's tariff engine writes the billing-grade rows
-// (period_summary, session_ledger). Operator console reads ONLY from these
-// tables — never directly from event_log or meter_values.
-//
-// `reports` is a Postgres schema, not a domain: it says HOW a row is
-// produced (pre-computed) rather than WHAT it is about. Per ADR 0048 each
-// projection is declared with its subject, so only the two billing-grade
-// rows are here. site_energy_daily and charger_uptime_daily moved to
-// assets.prisma; command_history moved to protocol.prisma. The Postgres
-// schema is unchanged for all five — this is a question of which file
-// declares them, and no table moved.
-// ─────────────────────────────────────────────────────────────────────────────
-
-// Per orgId × month: total kWh, total ISK, session count.
-// Updated by the period-close job (end-of-month). Operator's
-// billing dashboard reads from here.
-model BillingPeriodSummary {
-  orgId            String       @map("org_id") @db.Uuid
-  year             Int
-  month            Int          // 1..12
-  sessionCount     Int          @map("session_count") @default(0)
-  totalKwh         Decimal      @map("total_kwh") @db.Decimal(14, 3) @default(0)
-  totalIskMinor    BigInt       @map("total_isk_minor") @default(0)
-  computedAt       DateTime     @default(now()) @map("computed_at") @db.Timestamptz(6)
-  organization     Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-
-  @@id([orgId, year, month])
-  @@index([year, month])
-  @@map("billing_period_summary")
-  @@schema("reports")
 }
 
 // Per session: every billable charging session gets one row here.

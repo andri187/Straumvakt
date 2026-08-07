@@ -11,7 +11,6 @@
 // real, at which point roaming earns a domain rather than a schema.
 // ───────────────────────────────────────────────────────────────────────────
 
-
 // ─────────────────────────────────────────────────────────────────────────────
 // ocpp — OCPP identities (control endpoints), connectors, outbound commands
 // ─────────────────────────────────────────────────────────────────────────────
@@ -45,7 +44,6 @@ model OcppIdentity {
   organization         Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
   chargingStation      ChargingStation  @relation(fields: [chargingStationId], references: [siteAssetId], onDelete: Cascade)
   outboundCommands     OutboundCommand[]
-  configurationKeys    OcppConfigurationKey[]
   sessions             ChargeSession[]
   liveSession          LiveSession?
 
@@ -132,74 +130,11 @@ enum CommandStatus {
   @@schema("ocpp")
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// roaming — OCPI tokens, hub connections, CDR queue
-// ─────────────────────────────────────────────────────────────────────────────
-
-model OcpiToken {
-  id          String       @id @default(uuid()) @db.Uuid
-  orgId       String       @map("org_id") @db.Uuid
-  tokenUid    String       @map("token_uid")
-  tokenType   String       @map("token_type") // RFID/APP_USER/AD_HOC_USER/OTHER
-  partyId     String       @map("party_id")
-  countryCode String       @map("country_code")
-  valid       Boolean      @default(true)
-  userId      String?      @map("user_id") @db.Uuid
-  expiresAt   DateTime?    @map("expires_at") @db.Timestamptz(6)
-  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  user        User?        @relation(fields: [userId], references: [id])
-
-  @@unique([countryCode, partyId, tokenUid])
-  @@index([orgId])
-  @@map("ocpi_tokens")
-  @@schema("roaming")
-}
-
-model HubConnection {
-  id              String       @id @default(uuid()) @db.Uuid
-  orgId           String       @map("org_id") @db.Uuid
-  hub             HubKind
-  partyId         String       @map("party_id")
-  countryCode     String       @map("country_code")
-  endpointUrl     String       @map("endpoint_url")
-  credentialsRef  String       @map("credentials_ref") // secret store key
-  status          String       @default("active")
-  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  organization    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-
-  @@unique([orgId, hub])
-  @@map("hub_connections")
-  @@schema("roaming")
-}
-
 enum HubKind {
   hubject
   gireve
   direct
 
-  @@schema("roaming")
-}
-
-model CdrQueueEntry {
-  id          String       @id @default(uuid()) @db.Uuid
-  orgId       String       @map("org_id") @db.Uuid
-  direction   CdrDirection
-  partnerRef  String       @map("partner_ref")
-  payload     Json         @db.JsonB
-  status      String       @default("pending")
-  attempts    Int          @default(0)
-  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-
-  @@index([orgId, status])
-  @@map("cdr_queue")
   @@schema("roaming")
 }
 
@@ -234,70 +169,4 @@ model ExternalCpmsRef {
   @@index([orgId])
   @@map("external_cpms_refs")
   @@schema("roaming")
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// ocpp — OcppConfigurationKey registry (ADR 0010)
-// Populated by GetConfiguration / ChangeConfiguration round-trips.
-// Closes OCPP 1.6 spec gap — operator can see what's actually set on
-// each charger with audit trail.
-// ─────────────────────────────────────────────────────────────────────────────
-
-model OcppConfigurationKey {
-  id                  String        @id @default(uuid()) @db.Uuid
-  orgId               String        @map("org_id") @db.Uuid
-  ocppIdentityId      String        @map("ocpp_identity_id") @db.Uuid
-  keyName             String        @map("key_name")
-  keyValue            String?       @map("key_value")
-  readonly            Boolean       @default(false)
-  observedAt          DateTime      @map("observed_at") @db.Timestamptz(6)
-  setByActorUserId    String?       @map("set_by_actor_user_id") @db.Uuid
-  setAt               DateTime?     @map("set_at") @db.Timestamptz(6)
-  notes               String?
-
-  organization        Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  ocppIdentity        OcppIdentity  @relation(fields: [ocppIdentityId], references: [id], onDelete: Cascade)
-  setByActor          User?         @relation("ConfigKeySetBy", fields: [setByActorUserId], references: [id])
-
-  @@unique([ocppIdentityId, keyName])
-  @@index([orgId, ocppIdentityId])
-  @@map("configuration_keys")
-  @@schema("ocpp")
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// reports (Postgres schema) — the settled tail of ocpp.outbound_commands.
-//
-// Declared here rather than in commercial.prisma per ADR 0048. It is a
-// write-through projection of a protocol table, keyed by command, holding
-// dispatch latency and wire result. Nothing about it is commercial; it sat
-// in the billing file only because the `reports` Postgres schema did.
-// ─────────────────────────────────────────────────────────────────────────────
-
-// Per outbound command: write-through projection of
-// ocpp.outbound_commands, denormalised for the operator console's
-// command-history view. Live commands (status='pending' or
-// 'dispatched') stay in ocpp.outbound_commands; once final, the
-// row gets a CommandHistory entry. Lets us drop old outbound_commands
-// rows aggressively without losing the operator's audit trail.
-model CommandHistory {
-  commandId         String   @id @map("command_id") @db.Uuid
-  orgId             String   @map("org_id") @db.Uuid
-  identityId        String   @map("identity_id") @db.Uuid
-  controlDomain     String   @map("control_domain")
-  routedTo          String   @map("routed_to")
-  dispatchedAt      DateTime? @map("dispatched_at") @db.Timestamptz(6)
-  finalStatus       String   @map("final_status")
-  resultJson        Json?    @map("result_json") @db.JsonB
-  latencyMs         Int?     @map("latency_ms")
-  attempts          Int      @default(0)
-  requestedByUserId String?  @map("requested_by_user_id") @db.Uuid
-  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-
-  organization      Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-
-  @@index([orgId, createdAt(sort: Desc)])
-  @@index([identityId, createdAt(sort: Desc)])
-  @@map("command_history")
-  @@schema("reports")
 }

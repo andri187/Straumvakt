@@ -134,9 +134,10 @@ describe.skipIf(!hasDb)("every column the Prisma schema declares exists in the d
 
   it("parsed a plausible number of models", () => {
     // A parser that silently matched nothing would make every assertion below
-    // vacuous. 157 blocks split across the seven domain files, of which ~98
-    // are models.
-    expect(models.length).toBeGreaterThan(90);
+    // vacuous. ~66 models remain across the domain files — was ~98 until
+    // 2026-08-07, when 29 never-used, never-referenced tables were dropped
+    // (ADR 0050 decision 3).
+    expect(models.length).toBeGreaterThan(60);
     expect(models.every((m) => m.columns.length > 0)).toBe(true);
   });
 

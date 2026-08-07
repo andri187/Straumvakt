@@ -31,7 +31,6 @@ const bytea = customType<{ data: Uint8Array }>({ dataType: () => "bytea" });
 export const hardwareSchema = pgSchema("hardware");
 export const vendorsSchema = pgSchema("vendors");
 
-
 /** Prisma model `VendorCredential` — hardware.vendor_credentials */
 export const vendorCredentials = hardwareSchema.table(
   "vendor_credentials",
@@ -55,38 +54,8 @@ export const vendorCredentials = hardwareSchema.table(
 );
 
 /** Prisma model `VendorAdapterHealth` — vendors.adapter_health */
-export const adapterHealth = vendorsSchema.table(
-  "adapter_health",
-  {
-    id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-    vendor: text("vendor").notNull(),
-    windowStart: timestamp("window_start", { withTimezone: true, precision: 6, mode: "date" }).notNull(),
-    windowEnd: timestamp("window_end", { withTimezone: true, precision: 6, mode: "date" }).notNull(),
-    errorRate: numeric("error_rate", { precision: 6, scale: 4 }).notNull(),
-    p50LatencyMs: integer("p50_latency_ms").notNull(),
-    p95LatencyMs: integer("p95_latency_ms").notNull(),
-    lastSuccessAt: timestamp("last_success_at", { withTimezone: true, precision: 6, mode: "date" }),
-  },
-  (t) => [
-    index().on(t.vendor, t.windowStart),
-  ],
-);
 
 /** Prisma model `VendorContractTest` — vendors.contract_tests */
-export const contractTests = vendorsSchema.table(
-  "contract_tests",
-  {
-    id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-    vendor: text("vendor").notNull(),
-    testName: text("test_name").notNull(),
-    result: text("result").notNull(),
-    runAt: timestamp("run_at", { withTimezone: true, precision: 6, mode: "date" }).notNull(),
-    details: jsonb("details").notNull().default({}),
-  },
-  (t) => [
-    index().on(t.vendor, t.runAt),
-  ],
-);
 
 /** Prisma model `VendorAssetRef` — vendors.vendor_asset_refs */
 export const vendorAssetRefs = vendorsSchema.table(

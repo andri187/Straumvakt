@@ -112,65 +112,10 @@ export const outboundCommands = ocppSchema.table(
 );
 
 /** Prisma model `OcpiToken` — roaming.ocpi_tokens */
-export const ocpiTokens = roamingSchema.table(
-  "ocpi_tokens",
-  {
-    id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-    orgId: uuid("org_id").notNull(),
-    tokenUid: text("token_uid").notNull(),
-    tokenType: text("token_type").notNull(),
-    partyId: text("party_id").notNull(),
-    countryCode: text("country_code").notNull(),
-    valid: boolean("valid").notNull().default(true),
-    userId: uuid("user_id"),
-    expiresAt: timestamp("expires_at", { withTimezone: true, precision: 6, mode: "date" }),
-    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().$defaultFn(() => new Date()).$onUpdateFn(() => new Date()),
-  },
-  (t) => [
-    uniqueIndex().on(t.countryCode, t.partyId, t.tokenUid),
-    index().on(t.orgId),
-  ],
-);
 
 /** Prisma model `HubConnection` — roaming.hub_connections */
-export const hubConnections = roamingSchema.table(
-  "hub_connections",
-  {
-    id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-    orgId: uuid("org_id").notNull(),
-    hub: hubKindEnum("hub").notNull(),
-    partyId: text("party_id").notNull(),
-    countryCode: text("country_code").notNull(),
-    endpointUrl: text("endpoint_url").notNull(),
-    credentialsRef: text("credentials_ref").notNull(),
-    status: text("status").notNull().default("active"),
-    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().$defaultFn(() => new Date()).$onUpdateFn(() => new Date()),
-  },
-  (t) => [
-    uniqueIndex().on(t.orgId, t.hub),
-  ],
-);
 
 /** Prisma model `CdrQueueEntry` — roaming.cdr_queue */
-export const cdrQueue = roamingSchema.table(
-  "cdr_queue",
-  {
-    id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-    orgId: uuid("org_id").notNull(),
-    direction: cdrDirectionEnum("direction").notNull(),
-    partnerRef: text("partner_ref").notNull(),
-    payload: jsonb("payload").notNull(),
-    status: text("status").notNull().default("pending"),
-    attempts: integer("attempts").notNull().default(0),
-    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().$defaultFn(() => new Date()).$onUpdateFn(() => new Date()),
-  },
-  (t) => [
-    index().on(t.orgId, t.status),
-  ],
-);
 
 /** Prisma model `ExternalCpmsRef` — roaming.external_cpms_refs */
 export const externalCpmsRefs = roamingSchema.table(
@@ -195,45 +140,5 @@ export const externalCpmsRefs = roamingSchema.table(
 );
 
 /** Prisma model `OcppConfigurationKey` — ocpp.configuration_keys */
-export const configurationKeys = ocppSchema.table(
-  "configuration_keys",
-  {
-    id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-    orgId: uuid("org_id").notNull(),
-    ocppIdentityId: uuid("ocpp_identity_id").notNull(),
-    keyName: text("key_name").notNull(),
-    keyValue: text("key_value"),
-    readonly: boolean("readonly").notNull().default(false),
-    observedAt: timestamp("observed_at", { withTimezone: true, precision: 6, mode: "date" }).notNull(),
-    setByActorUserId: uuid("set_by_actor_user_id"),
-    setAt: timestamp("set_at", { withTimezone: true, precision: 6, mode: "date" }),
-    notes: text("notes"),
-  },
-  (t) => [
-    uniqueIndex().on(t.ocppIdentityId, t.keyName),
-    index().on(t.orgId, t.ocppIdentityId),
-  ],
-);
 
 /** Prisma model `CommandHistory` — reports.command_history */
-export const commandHistory = reportsSchema.table(
-  "command_history",
-  {
-    commandId: uuid("command_id").primaryKey(),
-    orgId: uuid("org_id").notNull(),
-    identityId: uuid("identity_id").notNull(),
-    controlDomain: text("control_domain").notNull(),
-    routedTo: text("routed_to").notNull(),
-    dispatchedAt: timestamp("dispatched_at", { withTimezone: true, precision: 6, mode: "date" }),
-    finalStatus: text("final_status").notNull(),
-    resultJson: jsonb("result_json"),
-    latencyMs: integer("latency_ms"),
-    attempts: integer("attempts").notNull().default(0),
-    requestedByUserId: uuid("requested_by_user_id"),
-    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
-  },
-  (t) => [
-    index().on(t.orgId, t.createdAt),
-    index().on(t.identityId, t.createdAt),
-  ],
-);

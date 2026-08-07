@@ -14,7 +14,6 @@
 // Depends on: nothing. This is the bottom of the dependency chain.
 // ───────────────────────────────────────────────────────────────────────────
 
-
 // Connection URL lives in prisma.config.ts (Prisma 7 requirement).
 // Runtime client passes a PrismaNeon adapter to PrismaClient — see src/lib/prisma.ts.
 
@@ -94,7 +93,6 @@ model User {
   sessions       ChargeSession[]
   auditActions   AuditAction[]
   commandsAsked  OutboundCommand[] @relation("OutboundCommandRequester")
-  ocpiTokens     OcpiToken[]
 
   // ── Rev-3 / Rev-4 relations (ADRs 0008 + 0010) ───────────────────
   // ── ADR 0014 / Sprint 4 — PlatformAdmin replaced by PlatformGrant.
@@ -105,7 +103,6 @@ model User {
   membershipsInvited     Membership[]    @relation("MembershipInviter")
   // ── ADR 0014 ──
   orgsAsMainContact       Organization[]   @relation("OrgMainContact")
-  configKeysSet           OcppConfigurationKey[] @relation("ConfigKeySetBy")
   costCentersAsPayer      CostCenter[]     @relation("CostCenterPayerUser")
   driverContracts         DriverContract[]
 
@@ -525,23 +522,9 @@ model Organization {
   importedCdrRefs         ImportedCdrRef[]
   liveSessions            LiveSession[]
   tariffs             Tariff[]
-  customerPlans       CustomerPlan[]
-  subscriptions       Subscription[]
-  billingTransactions BillingTransaction[]
-  invoices            Invoice[]
-  statements          Statement[]
   eventLog            EventLogEntry[]
   auditActions        AuditAction[]
-  featureFlags        FeatureFlag[]
-  enterpriseLicenses  EnterpriseLicense[]
   familyGroups        FamilyGroup[]
-  ocpiTokens          OcpiToken[]
-  hubConnections      HubConnection[]
-  cdrQueueEntries     CdrQueueEntry[]
-  siteEnergyPolicies  SiteEnergyPolicy[]
-  propertyEnergyPolicies PropertyEnergyPolicy[]
-  energyPlanningResults EnergyPlanningResult[]
-  webhookSubscriptions WebhookSubscription[]
 
   // ── Rev-3 billing relations (ADR 0008) ──────────────────────────
   tariffDefinitions   TariffDefinition[]
@@ -554,17 +537,11 @@ model Organization {
   // single row visible to BOTH sides. Operator org (Straumvakt) is
   // the counterparty for every customer-org contract.
   contractsAsCounterparty Contract[]              @relation("ContractCounterpartyOrg")
-  contractAccumulators ContractPeriodAccumulator[]
   driverContracts     DriverContract[]
   billingLines        BillingLine[]
-  configurationKeys   OcppConfigurationKey[]
 
   // ── Sprint 7.5 — reports schema back-relations ──────────────────
-  billingPeriodSummaries BillingPeriodSummary[]
   sessionLedgers      SessionLedger[]
-  siteEnergyDaily     SiteEnergyDaily[]
-  chargerUptimeDaily  ChargerUptimeDaily[]
-  commandHistory      CommandHistory[]
 
   // ── Sprint 9 / ADR 0019 — agreements schema back-relations ──────
   agreementsAsCounterparty Agreement[]   @relation("AgreementCounterparty")

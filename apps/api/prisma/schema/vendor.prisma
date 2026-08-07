@@ -24,7 +24,6 @@
 // asset refs, and adapter telemetry.
 // ───────────────────────────────────────────────────────────────────────────
 
-
 // ─────────────────────────────────────────────────────────────────────────────
 // vendor credentials — per-org portal logins for a vendor's cloud API.
 // Stored in the `hardware` Postgres schema for historical reasons; owned by
@@ -60,38 +59,6 @@ model VendorCredential {
   @@index([ownerOrgId])
   @@map("vendor_credentials")
   @@schema("hardware")
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// vendors — adapter health + contract test results
-// ─────────────────────────────────────────────────────────────────────────────
-
-model VendorAdapterHealth {
-  id            String   @id @default(uuid()) @db.Uuid
-  vendor        String
-  windowStart   DateTime @map("window_start") @db.Timestamptz(6)
-  windowEnd     DateTime @map("window_end") @db.Timestamptz(6)
-  errorRate     Decimal  @map("error_rate") @db.Decimal(6, 4)
-  p50LatencyMs  Int      @map("p50_latency_ms")
-  p95LatencyMs  Int      @map("p95_latency_ms")
-  lastSuccessAt DateTime? @map("last_success_at") @db.Timestamptz(6)
-
-  @@index([vendor, windowStart])
-  @@map("adapter_health")
-  @@schema("vendors")
-}
-
-model VendorContractTest {
-  id        String   @id @default(uuid()) @db.Uuid
-  vendor    String
-  testName  String   @map("test_name")
-  result    String   // pass/fail/skip
-  runAt     DateTime @map("run_at") @db.Timestamptz(6)
-  details   Json     @default("{}") @db.JsonB
-
-  @@index([vendor, runAt(sort: Desc)])
-  @@map("contract_tests")
-  @@schema("vendors")
 }
 
 // ── Rev-5 (ADR 0012) — vendor API control attachment.

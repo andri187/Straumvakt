@@ -14,7 +14,6 @@
 // Depends on: identity, catalog.
 // ───────────────────────────────────────────────────────────────────────────
 
-
 // ─────────────────────────────────────────────────────────────────────────────
 // hosts — schema namespace reserved for future host-domain tables
 // (e.g. ServiceAgreement when Issue Engine ships post-pilot).
@@ -43,7 +42,6 @@ model Property {
 
   organization       Organization   @relation(fields: [orgId], references: [id], onDelete: Cascade)
   sites              Site[]
-  energyPolicies     PropertyEnergyPolicy[]
 
   @@index([orgId])
   @@map("properties")
@@ -90,8 +88,6 @@ model Site {
   installations      Installation[]
   circuits           Circuit[]
   sessions           ChargeSession[]
-  energyPolicies     SiteEnergyPolicy[]
-  energyPlanningResults EnergyPlanningResult[]
 
   // ── Tariff-definition relations (rev-3) ──────────────────────────
   dsoTariff          TariffDefinition? @relation("SiteDsoTariff", fields: [dsoTariffId], references: [id])
@@ -138,9 +134,7 @@ model SiteAsset {
   organization  Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
   site          Site          @relation(fields: [siteId], references: [id], onDelete: Cascade)
   chargingStation ChargingStation?
-  meter         Meter?
   modem         Modem?
-  controller    Controller?
 
   @@index([orgId, siteId])
   @@index([kind, status])
@@ -513,20 +507,6 @@ model ControlRoutingPolicy {
   @@schema("assets")
 }
 
-model Meter {
-  siteAssetId   String      @id @map("site_asset_id") @db.Uuid
-  meterSerial   String?     @map("meter_serial")
-  meterType     String?     @map("meter_type") // grid / submeter / pv / battery
-  maxAmps       Int?        @map("max_amps")
-  createdAt     DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt     DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  siteAsset     SiteAsset   @relation(fields: [siteAssetId], references: [id], onDelete: Cascade)
-
-  @@map("meters")
-  @@schema("assets")
-}
-
 model Modem {
   siteAssetId  String     @id @map("site_asset_id") @db.Uuid
   imei         String?    @unique
@@ -540,75 +520,6 @@ model Modem {
 
   @@map("modems")
   @@schema("assets")
-}
-
-model Controller {
-  siteAssetId    String     @id @map("site_asset_id") @db.Uuid
-  vendor         String?    // e.g. "shelly"
-  deviceId       String?    @map("device_id")
-  endpointUrl    String?    @map("endpoint_url")
-  capabilities   Json       @default("{}") @db.JsonB
-  lastSeenAt     DateTime?  @map("last_seen_at") @db.Timestamptz(6)
-  createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  siteAsset      SiteAsset  @relation(fields: [siteAssetId], references: [id], onDelete: Cascade)
-
-  @@map("controllers")
-  @@schema("assets")
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// energy — site/property policies and planning results
-// ─────────────────────────────────────────────────────────────────────────────
-
-model SiteEnergyPolicy {
-  id         String       @id @default(uuid()) @db.Uuid
-  orgId      String       @map("org_id") @db.Uuid
-  siteId     String       @map("site_id") @db.Uuid
-  policy     Json         @db.JsonB
-  validFrom  DateTime     @map("valid_from") @db.Timestamptz(6)
-  validUntil DateTime?    @map("valid_until") @db.Timestamptz(6)
-  createdAt  DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
-
-  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  site       Site         @relation(fields: [siteId], references: [id], onDelete: Cascade)
-
-  @@index([orgId, siteId])
-  @@map("site_energy_policies")
-  @@schema("energy")
-}
-
-model PropertyEnergyPolicy {
-  id          String       @id @default(uuid()) @db.Uuid
-  orgId       String       @map("org_id") @db.Uuid
-  propertyId  String       @map("property_id") @db.Uuid
-  policy      Json         @db.JsonB
-  validFrom   DateTime     @map("valid_from") @db.Timestamptz(6)
-  validUntil  DateTime?    @map("valid_until") @db.Timestamptz(6)
-  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
-
-  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  property    Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-
-  @@index([orgId, propertyId])
-  @@map("property_energy_policies")
-  @@schema("energy")
-}
-
-model EnergyPlanningResult {
-  id           String       @id @default(uuid()) @db.Uuid
-  orgId        String       @map("org_id") @db.Uuid
-  siteId       String       @map("site_id") @db.Uuid
-  calculatedAt DateTime     @default(now()) @map("calculated_at") @db.Timestamptz(6)
-  result       Json         @db.JsonB
-
-  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  site         Site         @relation(fields: [siteId], references: [id], onDelete: Cascade)
-
-  @@index([orgId, siteId, calculatedAt(sort: Desc)])
-  @@map("energy_planning_results")
-  @@schema("energy")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -649,61 +560,4 @@ model Circuit {
   @@index([installationId])
   @@map("circuits")
   @@schema("properties")
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// reports (Postgres schema) — asset rollups.
-//
-// Declared here rather than in commercial.prisma per ADR 0048: these are
-// facts about sites and chargers that happen to be pre-computed, not
-// financial records. The `reports` Postgres schema they live in is a
-// storage decision and is unchanged.
-//
-// Direction, because it is not obvious: assets sits near the bottom of the
-// chain and may not import charging or protocol. It does not have to. These
-// rows are WRITTEN by the daily aggregate job, which sits above and may read
-// downward; assets only READS them. A projection that is written from above
-// and read from below is exactly how a rollup should behave — see AMPECO's
-// Latest Hardware Status Log, which is a first-class read resource under
-// Charge Point rather than a report generator.
-// ─────────────────────────────────────────────────────────────────────────────
-
-// Per site × day: daily energy report. Filled by a daily aggregate
-// job (cron triggered) that scans yesterday's meter_values + sessions.
-// Read by operator console + customer portal.
-model SiteEnergyDaily {
-  siteId            String   @map("site_id") @db.Uuid
-  orgId             String   @map("org_id") @db.Uuid
-  date              DateTime @db.Date
-  sessionCount      Int      @map("session_count") @default(0)
-  totalKwh          Decimal  @map("total_kwh") @db.Decimal(12, 3) @default(0)
-  peakPowerW        Int?     @map("peak_power_w")
-  uptimePct         Decimal? @map("uptime_pct") @db.Decimal(5, 2)
-  computedAt        DateTime @default(now()) @map("computed_at") @db.Timestamptz(6)
-
-  organization      Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-
-  @@id([siteId, date])
-  @@index([orgId, date(sort: Desc)])
-  @@map("site_energy_daily")
-  @@schema("reports")
-}
-
-// Per charger × day: uptime + transitions + offline minutes. Filled
-// by the same daily aggregate job. Backs the SLA reports.
-model ChargerUptimeDaily {
-  chargingStationId String   @map("charging_station_id") @db.Uuid
-  orgId             String   @map("org_id") @db.Uuid
-  date              DateTime @db.Date
-  heartbeatsReceived Int     @map("heartbeats_received") @default(0)
-  statusTransitions Int      @map("status_transitions") @default(0)
-  offlineMinutes    Int      @map("offline_minutes") @default(0)
-  computedAt        DateTime @default(now()) @map("computed_at") @db.Timestamptz(6)
-
-  organization      Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-
-  @@id([chargingStationId, date])
-  @@index([orgId, date(sort: Desc)])
-  @@map("charger_uptime_daily")
-  @@schema("reports")
 }

@@ -278,17 +278,6 @@ export const controlRoutingPolicies = assetsSchema.table(
 );
 
 /** Prisma model `Meter` — assets.meters */
-export const meters = assetsSchema.table(
-  "meters",
-  {
-    siteAssetId: uuid("site_asset_id").primaryKey(),
-    meterSerial: text("meter_serial"),
-    meterType: text("meter_type"),
-    maxAmps: integer("max_amps"),
-    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().$defaultFn(() => new Date()).$onUpdateFn(() => new Date()),
-  },
-);
 
 /** Prisma model `Modem` — assets.modems */
 export const modems = assetsSchema.table(
@@ -305,68 +294,12 @@ export const modems = assetsSchema.table(
 );
 
 /** Prisma model `Controller` — assets.controllers */
-export const controllers = assetsSchema.table(
-  "controllers",
-  {
-    siteAssetId: uuid("site_asset_id").primaryKey(),
-    vendor: text("vendor"),
-    deviceId: text("device_id"),
-    endpointUrl: text("endpoint_url"),
-    capabilities: jsonb("capabilities").notNull().default({}),
-    lastSeenAt: timestamp("last_seen_at", { withTimezone: true, precision: 6, mode: "date" }),
-    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().$defaultFn(() => new Date()).$onUpdateFn(() => new Date()),
-  },
-);
 
 /** Prisma model `SiteEnergyPolicy` — energy.site_energy_policies */
-export const siteEnergyPolicies = energySchema.table(
-  "site_energy_policies",
-  {
-    id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-    orgId: uuid("org_id").notNull(),
-    siteId: uuid("site_id").notNull(),
-    policy: jsonb("policy").notNull(),
-    validFrom: timestamp("valid_from", { withTimezone: true, precision: 6, mode: "date" }).notNull(),
-    validUntil: timestamp("valid_until", { withTimezone: true, precision: 6, mode: "date" }),
-    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
-  },
-  (t) => [
-    index().on(t.orgId, t.siteId),
-  ],
-);
 
 /** Prisma model `PropertyEnergyPolicy` — energy.property_energy_policies */
-export const propertyEnergyPolicies = energySchema.table(
-  "property_energy_policies",
-  {
-    id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-    orgId: uuid("org_id").notNull(),
-    propertyId: uuid("property_id").notNull(),
-    policy: jsonb("policy").notNull(),
-    validFrom: timestamp("valid_from", { withTimezone: true, precision: 6, mode: "date" }).notNull(),
-    validUntil: timestamp("valid_until", { withTimezone: true, precision: 6, mode: "date" }),
-    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
-  },
-  (t) => [
-    index().on(t.orgId, t.propertyId),
-  ],
-);
 
 /** Prisma model `EnergyPlanningResult` — energy.energy_planning_results */
-export const energyPlanningResults = energySchema.table(
-  "energy_planning_results",
-  {
-    id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-    orgId: uuid("org_id").notNull(),
-    siteId: uuid("site_id").notNull(),
-    calculatedAt: timestamp("calculated_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
-    result: jsonb("result").notNull(),
-  },
-  (t) => [
-    index().on(t.orgId, t.siteId, t.calculatedAt),
-  ],
-);
 
 /** Prisma model `Circuit` — properties.circuits */
 export const circuits = propertiesSchema.table(
@@ -391,38 +324,5 @@ export const circuits = propertiesSchema.table(
 );
 
 /** Prisma model `SiteEnergyDaily` — reports.site_energy_daily */
-export const siteEnergyDaily = reportsSchema.table(
-  "site_energy_daily",
-  {
-    siteId: uuid("site_id").notNull(),
-    orgId: uuid("org_id").notNull(),
-    date: date("date", { mode: "date" }).notNull(),
-    sessionCount: integer("session_count").notNull().default(0),
-    totalKwh: numeric("total_kwh", { precision: 12, scale: 3 }).notNull().default("0"),
-    peakPowerW: integer("peak_power_w"),
-    uptimePct: numeric("uptime_pct", { precision: 5, scale: 2 }),
-    computedAt: timestamp("computed_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
-  },
-  (t) => [
-    primaryKey({ columns: [t.siteId, t.date] }),
-    index().on(t.orgId, t.date),
-  ],
-);
 
 /** Prisma model `ChargerUptimeDaily` — reports.charger_uptime_daily */
-export const chargerUptimeDaily = reportsSchema.table(
-  "charger_uptime_daily",
-  {
-    chargingStationId: uuid("charging_station_id").notNull(),
-    orgId: uuid("org_id").notNull(),
-    date: date("date", { mode: "date" }).notNull(),
-    heartbeatsReceived: integer("heartbeats_received").notNull().default(0),
-    statusTransitions: integer("status_transitions").notNull().default(0),
-    offlineMinutes: integer("offline_minutes").notNull().default(0),
-    computedAt: timestamp("computed_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
-  },
-  (t) => [
-    primaryKey({ columns: [t.chargingStationId, t.date] }),
-    index().on(t.orgId, t.date),
-  ],
-);

@@ -127,10 +127,17 @@ describe.skipIf(!hasDb)("Drizzle domain schemas match the database", () => {
   }
 
   it("discovered every declared table across all seven domains", () => {
-    // 95 Prisma models — 98 less the three issues tables, removed 2026-08-07
-    // (empty, unreferenced, and the engine is undesigned). A discovery bug
-    // that found none would make every assertion below pass vacuously.
-    expect(tables.length).toBe(95);
+    // 66 Drizzle tables. Was 95; 29 were dropped on 2026-08-07 (ADR 0050
+    // decision 3) — tables that had never held a row AND that no code
+    // referenced. Not merely empty: 17 empty tables have live writers and
+    // were deliberately kept, as was agreements.bearer_rules, which the live
+    // billing resolver reads through a relation load.
+    //
+    // This is an exact equality on purpose. A discovery bug that found
+    // nothing would make every assertion below pass vacuously, and a table
+    // quietly appearing or vanishing should surface here as a decision to
+    // confirm rather than a number that drifts.
+    expect(tables.length).toBe(66);
     for (const d of Object.keys(DOMAINS)) {
       expect(tables.filter((t) => t.domain === d).length, `${d} contributed no tables`).toBeGreaterThan(0);
     }

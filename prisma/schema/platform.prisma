@@ -125,63 +125,6 @@ enum ActorKind {
   @@schema("audit")
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// webhooks — outbound delivery subsystem
-// ─────────────────────────────────────────────────────────────────────────────
-
-model WebhookSubscription {
-  id               String       @id @default(uuid()) @db.Uuid
-  orgId            String       @map("org_id") @db.Uuid
-  name             String
-  endpointUrl      String       @map("endpoint_url")
-  signingSecretRef String       @map("signing_secret_ref")
-  scopes           String[]     // event_type filters; empty = all
-  status           String       @default("active")
-  createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt        DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  organization     Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  deliveries       WebhookDelivery[]
-  deadLetters      WebhookDeadLetter[]
-
-  @@index([orgId])
-  @@map("subscriptions")
-  @@schema("webhooks")
-}
-
-model WebhookDelivery {
-  id             String              @id @default(uuid()) @db.Uuid
-  subscriptionId String              @map("subscription_id") @db.Uuid
-  eventId        String              @map("event_id") @db.Uuid
-  attempt        Int
-  status         String
-  responseCode   Int?                @map("response_code")
-  responseBody   String?             @map("response_body")
-  deliveredAt    DateTime?           @map("delivered_at") @db.Timestamptz(6)
-  createdAt      DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
-
-  subscription   WebhookSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
-
-  @@index([subscriptionId, createdAt(sort: Desc)])
-  @@map("deliveries")
-  @@schema("webhooks")
-}
-
-model WebhookDeadLetter {
-  id             String              @id @default(uuid()) @db.Uuid
-  subscriptionId String              @map("subscription_id") @db.Uuid
-  eventId        String              @map("event_id") @db.Uuid
-  payload        Json                @db.JsonB
-  lastError      String?             @map("last_error")
-  movedAt        DateTime            @default(now()) @map("moved_at") @db.Timestamptz(6)
-
-  subscription   WebhookSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
-
-  @@index([subscriptionId, movedAt(sort: Desc)])
-  @@map("dead_letters")
-  @@schema("webhooks")
-}
-
 // ── ADR 0039 D1 — events.protocol_log ───────────────────────────────
 //
 // Raw OCPP frames (retention_class = raw_protocol) split out of

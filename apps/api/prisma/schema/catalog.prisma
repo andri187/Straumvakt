@@ -39,7 +39,6 @@
 // only one of the two is cheap to correct.
 // ───────────────────────────────────────────────────────────────────────────
 
-
 // ─────────────────────────────────────────────────────────────────────────────
 // hardware — platform-level catalog of supported vendors and models.
 // Not tenant-scoped: all Orgs see the same catalog. Model profiles are the

@@ -104,65 +104,10 @@ export const actions = auditSchema.table(
 );
 
 /** Prisma model `WebhookSubscription` — webhooks.subscriptions */
-export const subscriptions = webhooksSchema.table(
-  "subscriptions",
-  {
-    id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-    orgId: uuid("org_id").notNull(),
-    name: text("name").notNull(),
-    endpointUrl: text("endpoint_url").notNull(),
-    signingSecretRef: text("signing_secret_ref").notNull(),
-    // HAND-EDIT, not from the scaffolder. Prisma types this as a non-null
-    // list; Postgres allows NULL, because Prisma does NOT emit NOT NULL for
-    // scalar list columns. Four columns in this database are affected and
-    // only tenancy.memberships.scope_* escape it, via a hand-written
-    // migration. Declared to match the DATABASE, which is what a query
-    // actually returns. See docs/notes/2026-08-06-schema-database-drift-
-    // reconciliation.md; restoring the constraints is a staging migration.
-    scopes: text("scopes").array(),
-    status: text("status").notNull().default("active"),
-    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().$defaultFn(() => new Date()).$onUpdateFn(() => new Date()),
-  },
-  (t) => [
-    index().on(t.orgId),
-  ],
-);
 
 /** Prisma model `WebhookDelivery` — webhooks.deliveries */
-export const deliveries = webhooksSchema.table(
-  "deliveries",
-  {
-    id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-    subscriptionId: uuid("subscription_id").notNull(),
-    eventId: uuid("event_id").notNull(),
-    attempt: integer("attempt").notNull(),
-    status: text("status").notNull(),
-    responseCode: integer("response_code"),
-    responseBody: text("response_body"),
-    deliveredAt: timestamp("delivered_at", { withTimezone: true, precision: 6, mode: "date" }),
-    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
-  },
-  (t) => [
-    index().on(t.subscriptionId, t.createdAt),
-  ],
-);
 
 /** Prisma model `WebhookDeadLetter` — webhooks.dead_letters */
-export const deadLetters = webhooksSchema.table(
-  "dead_letters",
-  {
-    id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-    subscriptionId: uuid("subscription_id").notNull(),
-    eventId: uuid("event_id").notNull(),
-    payload: jsonb("payload").notNull(),
-    lastError: text("last_error"),
-    movedAt: timestamp("moved_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
-  },
-  (t) => [
-    index().on(t.subscriptionId, t.movedAt),
-  ],
-);
 
 /** Prisma model `ProtocolLogEntry` — events.protocol_log */
 export const protocolLog = eventsSchema.table(

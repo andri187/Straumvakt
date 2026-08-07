@@ -70,172 +70,20 @@ export const tariffs = billingSchema.table(
 );
 
 /** Prisma model `CustomerPlan` — billing.customer_plans */
-export const customerPlans = billingSchema.table(
-  "customer_plans",
-  {
-    id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-    orgId: uuid("org_id").notNull(),
-    code: text("code").notNull(),
-    displayName: text("display_name").notNull(),
-    description: text("description"),
-    balanceType: balanceTypeEnum("balance_type").notNull(),
-    category: planCategoryEnum("category").notNull(),
-    products: jsonb("products").notNull().default([]),
-    defaultTariffId: uuid("default_tariff_id"),
-    terminationBehavior: terminationBehaviorEnum("termination_behavior").notNull().default("evergreen"),
-    minCommitmentMonths: integer("min_commitment_months"),
-    costFactor: numeric("cost_factor", { precision: 8, scale: 4 }),
-    country: text("country"),
-    currency: text("currency"),
-    locale: text("locale"),
-    validFrom: timestamp("valid_from", { withTimezone: true, precision: 6, mode: "date" }).notNull(),
-    validUntil: timestamp("valid_until", { withTimezone: true, precision: 6, mode: "date" }),
-    status: text("status").notNull().default("active"),
-    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().$defaultFn(() => new Date()).$onUpdateFn(() => new Date()),
-  },
-  (t) => [
-    uniqueIndex().on(t.orgId, t.code),
-  ],
-);
 
 /** Prisma model `Subscription` — billing.subscriptions */
-export const subscriptions = billingSchema.table(
-  "subscriptions",
-  {
-    id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-    orgId: uuid("org_id").notNull(),
-    userId: uuid("user_id").notNull(),
-    planId: uuid("plan_id").notNull(),
-    startedAt: timestamp("started_at", { withTimezone: true, precision: 6, mode: "date" }).notNull(),
-    endedAt: timestamp("ended_at", { withTimezone: true, precision: 6, mode: "date" }),
-    status: text("status").notNull().default("active"),
-    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().$defaultFn(() => new Date()).$onUpdateFn(() => new Date()),
-  },
-  (t) => [
-    index().on(t.orgId, t.userId),
-  ],
-);
 
 /** Prisma model `BillingTransaction` — billing.billing_transactions */
-export const billingTransactions = billingSchema.table(
-  "billing_transactions",
-  {
-    id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-    orgId: uuid("org_id").notNull(),
-    userId: uuid("user_id"),
-    type: billingTxTypeEnum("type").notNull(),
-    amountMinor: bigint("amount_minor", { mode: "bigint" }).notNull(),
-    currency: text("currency").notNull(),
-    description: text("description"),
-    metadata: jsonb("metadata").notNull().default({}),
-    occurredAt: timestamp("occurred_at", { withTimezone: true, precision: 6, mode: "date" }).notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
-  },
-  (t) => [
-    index().on(t.orgId, t.occurredAt),
-  ],
-);
 
 /** Prisma model `Invoice` — billing.invoices */
-export const invoices = billingSchema.table(
-  "invoices",
-  {
-    id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-    orgId: uuid("org_id").notNull(),
-    userId: uuid("user_id").notNull(),
-    periodStart: date("period_start", { mode: "date" }).notNull(),
-    periodEnd: date("period_end", { mode: "date" }).notNull(),
-    currency: text("currency").notNull(),
-    totalMinor: bigint("total_minor", { mode: "bigint" }).notNull(),
-    status: invoiceStatusEnum("status").notNull().default("draft"),
-    issuedAt: timestamp("issued_at", { withTimezone: true, precision: 6, mode: "date" }),
-    paidAt: timestamp("paid_at", { withTimezone: true, precision: 6, mode: "date" }),
-    externalRef: text("external_ref"),
-    pdfRef: text("pdf_ref"),
-    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().$defaultFn(() => new Date()).$onUpdateFn(() => new Date()),
-  },
-  (t) => [
-    index().on(t.orgId, t.userId, t.periodStart),
-  ],
-);
 
 /** Prisma model `InvoiceLine` — billing.invoice_lines */
-export const invoiceLines = billingSchema.table(
-  "invoice_lines",
-  {
-    id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-    invoiceId: uuid("invoice_id").notNull(),
-    description: text("description").notNull(),
-    quantity: numeric("quantity", { precision: 12, scale: 4 }).notNull(),
-    unitPriceMinor: bigint("unit_price_minor", { mode: "bigint" }).notNull(),
-    amountMinor: bigint("amount_minor", { mode: "bigint" }).notNull(),
-    sourceType: text("source_type").notNull(),
-    sourceId: uuid("source_id"),
-  },
-);
 
 /** Prisma model `Statement` — billing.statements */
-export const statements = billingSchema.table(
-  "statements",
-  {
-    id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-    orgId: uuid("org_id").notNull(),
-    subjectType: text("subject_type").notNull(),
-    subjectId: uuid("subject_id").notNull(),
-    periodStart: date("period_start", { mode: "date" }).notNull(),
-    periodEnd: date("period_end", { mode: "date" }).notNull(),
-    content: jsonb("content").notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
-  },
-  (t) => [
-    index().on(t.orgId, t.subjectType, t.subjectId),
-  ],
-);
 
 /** Prisma model `FeatureFlag` — entitlements.feature_flags */
-export const featureFlags = entitlementsSchema.table(
-  "feature_flags",
-  {
-    id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-    orgId: uuid("org_id").notNull(),
-    featureKey: text("feature_key").notNull(),
-    scopeType: text("scope_type").notNull(),
-    scopeId: uuid("scope_id"),
-    enabled: boolean("enabled").notNull().default(true),
-    source: text("source").notNull(),
-    sourceRef: uuid("source_ref"),
-    validFrom: timestamp("valid_from", { withTimezone: true, precision: 6, mode: "date" }).notNull(),
-    validUntil: timestamp("valid_until", { withTimezone: true, precision: 6, mode: "date" }),
-  },
-  (t) => [
-    index().on(t.orgId, t.scopeType, t.scopeId, t.featureKey),
-  ],
-);
 
 /** Prisma model `EnterpriseLicense` — entitlements.enterprise_licenses */
-export const enterpriseLicenses = entitlementsSchema.table(
-  "enterprise_licenses",
-  {
-    id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-    orgId: uuid("org_id").notNull(),
-    tier: text("tier").notNull(),
-    apiFairUse: jsonb("api_fair_use").notNull().default({}),
-    // HAND-EDIT, not from the scaffolder. Prisma types this as a non-null
-    // list; Postgres allows NULL, because Prisma does NOT emit NOT NULL for
-    // scalar list columns. Four columns in this database are affected and
-    // only tenancy.memberships.scope_* escape it, via a hand-written
-    // migration. Declared to match the DATABASE, which is what a query
-    // actually returns. See docs/notes/2026-08-06-schema-database-drift-
-    // reconciliation.md; restoring the constraints is a staging migration.
-    features: text("features").array(),
-    validFrom: timestamp("valid_from", { withTimezone: true, precision: 6, mode: "date" }).notNull(),
-    validUntil: timestamp("valid_until", { withTimezone: true, precision: 6, mode: "date" }),
-    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
-  },
-);
 
 /** Prisma model `CostFactor` — billing.cost_factors */
 export const billingCostFactors = billingSchema.table(
@@ -320,22 +168,6 @@ export const contracts = billingSchema.table(
 );
 
 /** Prisma model `ContractFactorAssignment` — billing.contract_factor_assignments */
-export const contractFactorAssignments = billingSchema.table(
-  "contract_factor_assignments",
-  {
-    id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-    contractId: uuid("contract_id").notNull(),
-    costFactorId: uuid("cost_factor_id").notNull(),
-    costCenterId: uuid("cost_center_id").notNull(),
-    allocationRule: jsonb("allocation_rule").notNull(),
-    priority: integer("priority").notNull().default(0),
-    validFrom: timestamp("valid_from", { withTimezone: true, precision: 6, mode: "date" }).notNull(),
-    validUntil: timestamp("valid_until", { withTimezone: true, precision: 6, mode: "date" }),
-  },
-  (t) => [
-    index().on(t.contractId, t.costFactorId, t.priority),
-  ],
-);
 
 /** Prisma model `DriverContract` — billing.driver_contracts */
 export const driverContracts = billingSchema.table(
@@ -363,47 +195,8 @@ export const driverContracts = billingSchema.table(
 );
 
 /** Prisma model `DriverContractFactorOverride` — billing.driver_contract_factor_overrides */
-export const driverContractFactorOverrides = billingSchema.table(
-  "driver_contract_factor_overrides",
-  {
-    id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-    driverContractId: uuid("driver_contract_id").notNull(),
-    costFactorId: uuid("cost_factor_id").notNull(),
-    costCenterId: uuid("cost_center_id").notNull(),
-    allocationRule: jsonb("allocation_rule").notNull(),
-    priority: integer("priority").notNull().default(0),
-    scopeType: contractScopeTypeEnum("scope_type"),
-    scopeId: uuid("scope_id"),
-  },
-  (t) => [
-    index().on(t.driverContractId, t.costFactorId, t.priority),
-  ],
-);
 
 /** Prisma model `ContractPeriodAccumulator` — billing.contract_period_accumulators */
-export const contractPeriodAccumulators = billingSchema.table(
-  "contract_period_accumulators",
-  {
-    id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-    orgId: uuid("org_id").notNull(),
-    driverContractId: uuid("driver_contract_id"),
-    contractId: uuid("contract_id"),
-    costFactorId: uuid("cost_factor_id").notNull(),
-    periodType: text("period_type").notNull().default("calendar_month"),
-    periodStartDate: date("period_start_date", { mode: "date" }).notNull(),
-    periodEndDate: date("period_end_date", { mode: "date" }).notNull(),
-    cumulativeKwh: numeric("cumulative_kwh", { precision: 12, scale: 4 }).notNull().default("0"),
-    cumulativeAmountExVatMinor: bigint("cumulative_amount_ex_vat_minor", { mode: "bigint" }).notNull().default(0n),
-    cumulativeSessionCount: integer("cumulative_session_count").notNull().default(0),
-    lastSessionId: uuid("last_session_id"),
-    updatedAt: timestamp("updated_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().$defaultFn(() => new Date()).$onUpdateFn(() => new Date()),
-  },
-  (t) => [
-    uniqueIndex().on(t.driverContractId, t.costFactorId, t.periodStartDate),
-    uniqueIndex().on(t.contractId, t.costFactorId, t.periodStartDate),
-    index().on(t.orgId, t.periodStartDate),
-  ],
-);
 
 /** Prisma model `BillingLine` — billing.billing_lines */
 export const billingBillingLines = billingSchema.table(
@@ -430,22 +223,6 @@ export const billingBillingLines = billingSchema.table(
 );
 
 /** Prisma model `BillingPeriodSummary` — reports.billing_period_summary */
-export const billingPeriodSummary = reportsSchema.table(
-  "billing_period_summary",
-  {
-    orgId: uuid("org_id").notNull(),
-    year: integer("year").notNull(),
-    month: integer("month").notNull(),
-    sessionCount: integer("session_count").notNull().default(0),
-    totalKwh: numeric("total_kwh", { precision: 14, scale: 3 }).notNull().default("0"),
-    totalIskMinor: bigint("total_isk_minor", { mode: "bigint" }).notNull().default(0n),
-    computedAt: timestamp("computed_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
-  },
-  (t) => [
-    primaryKey({ columns: [t.orgId, t.year, t.month] }),
-    index().on(t.year, t.month),
-  ],
-);
 
 /** Prisma model `SessionLedger` — reports.session_ledger */
 export const sessionLedger = reportsSchema.table(
@@ -473,9 +250,6 @@ export const sessionLedger = reportsSchema.table(
     index().on(t.chargingStationId, t.startedAt),
   ],
 );
-
-
-
 
 /** Prisma model `AgreementCostFactor` — agreements.cost_factors */
 export const agreementsCostFactors = agreementsSchema.table(
