@@ -13,6 +13,7 @@ import {
   RemoteStopBody,
 } from "@straumvakt/shared/inputs/chargers";
 import { makePrisma } from "../../lib/prisma";
+import { makeDrizzle } from "../../lib/drizzle";
 import { requireAdmin, type AuthVars } from "../../lib/auth-middleware";
 import { requirePermission } from "../../lib/auth/require-permission";
 import { resolveOrgScope } from "../../lib/auth/org-scope";
@@ -46,7 +47,7 @@ adminChargers.use("*", requireAdmin);
 // ── CRUD ─────────────────────────────────────────────────────────────────
 
 adminChargers.get("/", requirePermission("platform.tenant.read"), async (c) => {
-  const db = makePrisma(c.env);
+  const db = makeDrizzle(c.env);
   const includeDecommissioned =
     c.req.query("includeDecommissioned") === "1" ||
     c.req.query("includeDecommissioned") === "true";
@@ -63,7 +64,7 @@ adminChargers.post("/", requirePermission("charger.write"), async (c) => {
   const raw = (await c.req.json().catch(() => null)) as unknown;
   const parsed = ChargerCreateInput.safeParse(raw);
   if (!parsed.success) return c.json({ error: "validation", issues: parsed.error.issues }, 400);
-  const db = makePrisma(c.env);
+  const db = makeDrizzle(c.env);
   const r = await createCharger(db, parsed.data, null);
   return c.json(
     {
@@ -76,7 +77,7 @@ adminChargers.post("/", requirePermission("charger.write"), async (c) => {
 });
 
 adminChargers.get("/:id", requirePermission("charger.read"), async (c) => {
-  const db = makePrisma(c.env);
+  const db = makeDrizzle(c.env);
   const orgScope = await resolveOrgScope(c.env, c.get("session"));
   const charger = await getChargerById(db, c.req.param("id"), orgScope);
   if (!charger) return c.json({ error: "not_found" }, 404);
@@ -267,7 +268,7 @@ adminChargers.patch("/:id", requirePermission("charger.write"), async (c) => {
   const raw = (await c.req.json().catch(() => null)) as unknown;
   const parsed = ChargerUpdateInput.safeParse(raw);
   if (!parsed.success) return c.json({ error: "validation", issues: parsed.error.issues }, 400);
-  const db = makePrisma(c.env);
+  const db = makeDrizzle(c.env);
   const charger = await updateCharger(db, c.req.param("id"), parsed.data, null);
   return c.json({ charger });
 });
@@ -278,7 +279,7 @@ adminChargers.patch("/:id", requirePermission("charger.write"), async (c) => {
 // in /api/internal/ocpp-auth will record a fresh pending_discoveries
 // row, so it re-appears in /chargers/pending.
 adminChargers.delete("/:id", requirePermission("charger.write"), async (c) => {
-  const db = makePrisma(c.env);
+  const db = makeDrizzle(c.env);
   await deleteCharger(db, c.req.param("id"));
   return c.json({ ok: true });
 });
@@ -318,7 +319,7 @@ adminChargers.post(
       return c.json({ error: "validation", message: 'vendor must be "zaptec"' }, 400);
     }
 
-    const db = makePrisma(c.env);
+    const db = makeDrizzle(c.env);
     const session = c.get("session");
     const actorUserId = session.userId ?? null;
 
@@ -373,7 +374,7 @@ adminChargers.post(
   if (!parsed.success) {
     return c.json({ error: parsed.error.issues[0]?.message ?? "invalid body" }, 400);
   }
-  const db = makePrisma(c.env);
+  const db = makeDrizzle(c.env);
   const identity = await findOcppIdentity(db, c.req.param("ocppIdentityId"));
   if (!identity) return c.json({ error: "ocpp identity not found" }, 404);
 
@@ -402,7 +403,7 @@ adminChargers.post(
   if (!parsed.success) {
     return c.json({ error: parsed.error.issues[0]?.message ?? "invalid body" }, 400);
   }
-  const db = makePrisma(c.env);
+  const db = makeDrizzle(c.env);
   const identity = await findOcppIdentity(db, c.req.param("ocppIdentityId"));
   if (!identity) return c.json({ error: "ocpp identity not found" }, 404);
 
@@ -434,7 +435,7 @@ adminChargers.post(
   if (!parsed.success) {
     return c.json({ error: parsed.error.issues[0]?.message ?? "invalid body" }, 400);
   }
-  const db = makePrisma(c.env);
+  const db = makeDrizzle(c.env);
   const identity = await findOcppIdentity(db, c.req.param("ocppIdentityId"));
   if (!identity) return c.json({ error: "ocpp identity not found" }, 404);
 
@@ -463,7 +464,7 @@ adminChargers.post(
   if (!parsed.success) {
     return c.json({ error: parsed.error.issues[0]?.message ?? "invalid body" }, 400);
   }
-  const db = makePrisma(c.env);
+  const db = makeDrizzle(c.env);
   const identity = await findOcppIdentity(db, c.req.param("ocppIdentityId"));
   if (!identity) return c.json({ error: "ocpp identity not found" }, 404);
 

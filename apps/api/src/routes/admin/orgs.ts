@@ -154,7 +154,7 @@ adminOrgs.get(
   "/:orgId/chargers",
   requirePermission("charger.read", { orgIdParam: "orgId" }),
   async (c) => {
-    const db = makePrisma(c.env);
+    const db = makeDrizzle(c.env);
     const includeDecommissioned = c.req.query("includeDecommissioned") === "true";
     const chargers = await listAllChargers(db, {
       includeDecommissioned,

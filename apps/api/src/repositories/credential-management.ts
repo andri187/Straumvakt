@@ -20,7 +20,11 @@
 //   • All deletes happen before any adds (cleaner state in case of
 //     mid-batch failure).
 
+import { eq } from "drizzle-orm";
 import type { PrismaClient } from "../generated/prisma/client";
+import type { Db } from "../lib/drizzle";
+import { vendorCredentials } from "@straumvakt/shared/db/vendor";
+import { vendors } from "@straumvakt/shared/db/catalog";
 import type {
   CredentialManageTree,
   CredentialInstallationNode,
@@ -46,12 +50,38 @@ interface UnsealedCredential {
   accessToken: string;
 }
 
-export async function unsealAndAuth(
-  db: PrismaClient,
-  kek: string,
+/**
+ * Dual-client for the same reason `recordAuditAction` is — see lib/audit.ts.
+ * Three call sites (chargers.ts, zaptec-sync-cron.ts ×2) that port on
+ * different schedules, and one query between them. Temporary; the Prisma
+ * branch goes when the last Prisma caller does.
+ */
+async function readSealedCredential(
+  db: PrismaClient | Db,
   credentialId: string,
-): Promise<UnsealedCredential> {
-  const credential = await db.vendorCredential.findUnique({
+): Promise<{
+  ownerOrgId: string;
+  username: string;
+  passwordCipher: Uint8Array | null;
+  passwordIv: Uint8Array | null;
+  vendorSlug: string;
+} | null> {
+  if (typeof (db as Partial<Db>).select === "function") {
+    const [row] = await (db as Db)
+      .select({
+        ownerOrgId: vendorCredentials.ownerOrgId,
+        username: vendorCredentials.username,
+        passwordCipher: vendorCredentials.passwordCipher,
+        passwordIv: vendorCredentials.passwordIv,
+        vendorSlug: vendors.slug,
+      })
+      .from(vendorCredentials)
+      .innerJoin(vendors, eq(vendors.id, vendorCredentials.vendorId))
+      .where(eq(vendorCredentials.id, credentialId))
+      .limit(1);
+    return row ?? null;
+  }
+  const c = await (db as PrismaClient).vendorCredential.findUnique({
     where: { id: credentialId },
     select: {
       ownerOrgId: true,
@@ -61,8 +91,17 @@ export async function unsealAndAuth(
       vendor: { select: { slug: true } },
     },
   });
+  return c ? { ...c, vendorSlug: c.vendor.slug } : null;
+}
+
+export async function unsealAndAuth(
+  db: PrismaClient | Db,
+  kek: string,
+  credentialId: string,
+): Promise<UnsealedCredential> {
+  const credential = await readSealedCredential(db, credentialId);
   if (!credential) throw new Error("credential_not_found");
-  if (credential.vendor.slug !== "zaptec") throw new Error("credential_not_zaptec");
+  if (credential.vendorSlug !== "zaptec") throw new Error("credential_not_zaptec");
   if (!credential.passwordCipher || !credential.passwordIv) {
     throw new Error("credential_password_missing");
   }

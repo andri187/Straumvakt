@@ -3,8 +3,29 @@
 // "Charger" here is the operator-facing aggregate spanning ChargingStation
 // + EVSE + Connector + OcppIdentity. Create lands all four rows in one
 // transaction; list/detail joins them back into a single object.
+//
+// ── DRIZZLE, ported 2026-08-07 ─────────────────────────────────────────
+//
+// This backs /chargers, the page that matters most, and it was the hardest
+// file in the port: 21 queries, 3 transactions, and a six-level nested
+// `include` with `take: 1` sub-selects.
+//
+// Two shape decisions worth knowing before editing:
+//
+//  1. **The 1:1 relations are joined; the 1:N relations are separate
+//     queries.** organization / siteAsset→site / installation / circuit are
+//     each at most one row per station, so they join without fanning out.
+//     evses, connectors and ocppIdentities are 1:N, and Prisma's
+//     `take: 1, orderBy: …` means "first child per parent" — which is
+//     `DISTINCT ON` in Postgres, not a join. Joining them instead would
+//     multiply the station rows and silently change the result.
+//
+//  2. **Numerics go through normaliseDecimalString.** Postgres returns
+//     `numeric` as a string with its scale intact ("7.40"); Prisma's Decimal
+//     prints "7.4". Without normalising, every max-power value in the API
+//     response would gain a trailing zero. See lib/decimal.ts.
 
-import type { PrismaClient } from "../generated/prisma/client";
+import { and, asc, desc, eq, gte, inArray, max } from "drizzle-orm";
 import type {
   ChargerSummary,
   ChargerDetail,
@@ -14,11 +35,40 @@ import type {
   ChargerCreateInput,
   ChargerUpdateInput,
 } from "@straumvakt/shared/inputs/chargers";
+import {
+  chargingStations,
+  circuits,
+  connectors,
+  evses,
+  installations,
+  siteAssets,
+  sites,
+} from "@straumvakt/shared/db/assets";
+import { ocppIdentities, pendingDiscoveries } from "@straumvakt/shared/db/protocol";
+import { eventLog, protocolLog } from "@straumvakt/shared/db/platform";
+import { organizations } from "@straumvakt/shared/db/identity";
+import type { Db } from "../lib/drizzle";
+import { normaliseDecimalString } from "../lib/decimal";
 import type { OrgScope } from "../lib/auth/org-scope";
 import { sha256Hex } from "../lib/sha256";
 import { recordAuditAction } from "../lib/audit";
 import { listChargers as zaptecListChargers } from "../lib/zaptec";
 import { unsealAndAuth } from "./credential-management";
+
+/** Anything that can run a statement: the client or a transaction handle. */
+type DbOrTx = Db | Parameters<Parameters<Db["transaction"]>[0]>[0];
+
+/**
+ * Prisma accepted a JS `number` for a Decimal column and converted it.
+ * Drizzle's `numeric` maps to string in both directions, so writing a number
+ * is a type error going in and — where a `Record<string, unknown>` patch
+ * bypasses the checker — a silent wrong-type going out. Every write to
+ * max_power_kw goes through here.
+ */
+function toNumeric(v: number | string | null | undefined): string | null {
+  if (v === null || v === undefined) return null;
+  return typeof v === "string" ? v : String(v);
+}
 
 function generatePassword(): string {
   const bytes = new Uint8Array(32);
@@ -50,13 +100,16 @@ const OCPP_LOOKBACK_MS = 24 * 60 * 60 * 1000;
  * Zaptec outage.
  */
 async function getActiveVendorResourceIds(
-  db: PrismaClient,
+  db: Db,
   kek: string,
 ): Promise<Set<string> | null> {
-  const credentials = await db.vendorCredential.findMany({
-    where: { status: "active", vendor: { slug: "zaptec" } },
-    select: { id: true },
-  });
+  const { vendorCredentials } = await import("@straumvakt/shared/db/vendor");
+  const { vendors } = await import("@straumvakt/shared/db/catalog");
+  const credentials = await db
+    .select({ id: vendorCredentials.id })
+    .from(vendorCredentials)
+    .innerJoin(vendors, eq(vendors.id, vendorCredentials.vendorId))
+    .where(and(eq(vendorCredentials.status, "active"), eq(vendors.slug, "zaptec")));
   if (credentials.length === 0) return null;
   const seen = new Set<string>();
   let attemptedAtLeastOne = false;
@@ -77,6 +130,61 @@ async function getActiveVendorResourceIds(
   return attemptedAtLeastOne ? seen : null;
 }
 
+/**
+ * First EVSE per station, with its first connector — the Drizzle
+ * equivalent of Prisma's nested `take: 1, orderBy: { …Index: "asc" }`.
+ *
+ * DISTINCT ON requires the ORDER BY to lead with the distinct expression,
+ * which is why the sort reads station-then-index rather than just index.
+ */
+async function firstEvsePerStation(db: Db, stationIds: string[]) {
+  if (stationIds.length === 0) return new Map<string, { evseId: string; connectorId: string; connectorType: string | null }>();
+
+  const evseRows = await db
+    .selectDistinctOn([evses.chargingStationId], {
+      id: evses.id,
+      chargingStationId: evses.chargingStationId,
+    })
+    .from(evses)
+    .where(inArray(evses.chargingStationId, stationIds))
+    .orderBy(evses.chargingStationId, asc(evses.evseIndex));
+
+  const evseIds = evseRows.map((e) => e.id);
+  const connectorRows = evseIds.length
+    ? await db
+        .selectDistinctOn([connectors.evseId], {
+          id: connectors.id,
+          evseId: connectors.evseId,
+          type: connectors.type,
+        })
+        .from(connectors)
+        .where(inArray(connectors.evseId, evseIds))
+        .orderBy(connectors.evseId, asc(connectors.connectorIndex))
+    : [];
+
+  const byEvse = new Map(connectorRows.map((c) => [c.evseId, c]));
+  return new Map(
+    evseRows.map((e) => {
+      const c = byEvse.get(e.id);
+      return [
+        e.chargingStationId,
+        { evseId: e.id, connectorId: c?.id ?? "", connectorType: c?.type ?? null },
+      ];
+    }),
+  );
+}
+
+/** First OcppIdentity per station, oldest first — Prisma's `take: 1, orderBy createdAt asc`. */
+async function firstIdentityPerStation(db: Db, stationIds: string[]) {
+  if (stationIds.length === 0) return new Map<string, typeof ocppIdentities.$inferSelect>();
+  const rows = await db
+    .selectDistinctOn([ocppIdentities.chargingStationId])
+    .from(ocppIdentities)
+    .where(inArray(ocppIdentities.chargingStationId, stationIds))
+    .orderBy(ocppIdentities.chargingStationId, asc(ocppIdentities.createdAt));
+  return new Map(rows.map((r) => [r.chargingStationId, r]));
+}
+
 export interface ListChargersOptions {
   /** Include rows where vendor side reports the charger as
    *  decommissioned (Active=false / dropped from listChargers).
@@ -94,30 +202,56 @@ export interface ListChargersOptions {
 }
 
 export async function listAllChargers(
-  db: PrismaClient,
+  db: Db,
   options: ListChargersOptions = {},
 ): Promise<ChargerSummary[]> {
-  const rows = await db.chargingStation.findMany({
-    where:
-      options.orgScope && options.orgScope.all === false
-        ? { orgId: { in: options.orgScope.orgIds } }
-        : undefined,
-    orderBy: [{ updatedAt: "desc" }],
-    include: {
-      organization: { select: { displayName: true } },
-      siteAsset: { select: { site: { select: { displayName: true } } } },
-      installation: {
-        select: { id: true, displayName: true, enforceAuthorize: true },
-      },
-      circuit: { select: { id: true, displayName: true } },
-      evses: {
-        take: 1,
-        orderBy: { evseIndex: "asc" },
-        include: { connectors: { take: 1, orderBy: { connectorIndex: "asc" } } },
-      },
-      ocppIdentities: { take: 1, orderBy: { createdAt: "asc" } },
-    },
-  });
+  const scope = options.orgScope;
+  const scopeFilter =
+    scope && scope.all === false ? inArray(chargingStations.orgId, scope.orgIds) : undefined;
+
+  const rows = await db
+    .select({
+      siteAssetId: chargingStations.siteAssetId,
+      orgId: chargingStations.orgId,
+      vendor: chargingStations.vendor,
+      model: chargingStations.model,
+      serialNumber: chargingStations.serialNumber,
+      createdAt: chargingStations.createdAt,
+      firmwareVersion: chargingStations.firmwareVersion,
+      mainboardSwVersion: chargingStations.mainboardSwVersion,
+      smartBootloaderVersion: chargingStations.smartBootloaderVersion,
+      hardwareVersion: chargingStations.hardwareVersion,
+      lifetimeKwhCached: chargingStations.lifetimeKwhCached,
+      onlineSinceAt: chargingStations.onlineSinceAt,
+      vendorAuthRequired: chargingStations.vendorAuthRequired,
+      vendorAuthenticationType: chargingStations.vendorAuthenticationType,
+      vendorAuthSeenAt: chargingStations.vendorAuthSeenAt,
+      commMode: chargingStations.commMode,
+      signalDbm: chargingStations.signalDbm,
+      orgDisplayName: organizations.displayName,
+      siteDisplayName: sites.displayName,
+      installationId: installations.id,
+      installationDisplayName: installations.displayName,
+      // enforceAuthorize moves to ChargingStation per ADR 0047 D1; until
+      // that migration runs it still lives on the installation.
+      enforceAuthorize: installations.enforceAuthorize,
+      circuitId: circuits.id,
+      circuitDisplayName: circuits.displayName,
+    })
+    .from(chargingStations)
+    .innerJoin(organizations, eq(organizations.id, chargingStations.orgId))
+    .innerJoin(siteAssets, eq(siteAssets.id, chargingStations.siteAssetId))
+    .innerJoin(sites, eq(sites.id, siteAssets.siteId))
+    .leftJoin(installations, eq(installations.id, chargingStations.installationId))
+    .leftJoin(circuits, eq(circuits.id, chargingStations.circuitId))
+    .where(scopeFilter)
+    .orderBy(desc(chargingStations.updatedAt));
+
+  const stationIds = rows.map((r) => r.siteAssetId);
+  const [evseByStation, identityByStation] = await Promise.all([
+    firstEvsePerStation(db, stationIds),
+    firstIdentityPerStation(db, stationIds),
+  ]);
 
   // Newest genuine OCPP frame per identity — the other half of the
   // liveness picture. `OcppIdentity.lastSeenAt` is written by the Zaptec
@@ -128,8 +262,8 @@ export async function listAllChargers(
   // Frames are split across two tables by retention class (ADR 0039):
   // heartbeats land in events.protocol_log, everything else in
   // events.event_log. Newest wins across both.
-  const identityIds = rows
-    .map((r) => r.ocppIdentities[0]?.id)
+  const identityIds = [...identityByStation.values()]
+    .map((i) => i.id)
     .filter((id): id is string => typeof id === "string" && id.length > 0);
 
   const ocppLastSeen = new Map<string, Date>();
@@ -137,25 +271,25 @@ export async function listAllChargers(
     // Bounded lookback: anything older than this is offline by any
     // definition, and the bound keeps the scan off the older partitions.
     const since = new Date(Date.now() - OCPP_LOOKBACK_MS);
-    const noteNewest = (rowsIn: { aggregateId: string; _max: { occurredAt: Date | null } }[]) => {
+    const noteNewest = (rowsIn: { aggregateId: string; newest: Date | null }[]) => {
       for (const g of rowsIn) {
-        const at = g._max.occurredAt;
+        const at = g.newest;
         if (!at) continue;
         const prev = ocppLastSeen.get(g.aggregateId);
         if (!prev || at > prev) ocppLastSeen.set(g.aggregateId, at);
       }
     };
     const [fromEvents, fromProtocol] = await Promise.all([
-      db.eventLogEntry.groupBy({
-        by: ["aggregateId"],
-        where: { aggregateId: { in: identityIds }, occurredAt: { gte: since } },
-        _max: { occurredAt: true },
-      }),
-      db.protocolLogEntry.groupBy({
-        by: ["aggregateId"],
-        where: { aggregateId: { in: identityIds }, occurredAt: { gte: since } },
-        _max: { occurredAt: true },
-      }),
+      db
+        .select({ aggregateId: eventLog.aggregateId, newest: max(eventLog.occurredAt) })
+        .from(eventLog)
+        .where(and(inArray(eventLog.aggregateId, identityIds), gte(eventLog.occurredAt, since)))
+        .groupBy(eventLog.aggregateId),
+      db
+        .select({ aggregateId: protocolLog.aggregateId, newest: max(protocolLog.occurredAt) })
+        .from(protocolLog)
+        .where(and(inArray(protocolLog.aggregateId, identityIds), gte(protocolLog.occurredAt, since)))
+        .groupBy(protocolLog.aggregateId),
     ]);
     noteNewest(fromEvents);
     noteNewest(fromProtocol);
@@ -169,29 +303,28 @@ export async function listAllChargers(
   // round-trip per active credential per request. Skips when KEK isn't
   // available (e.g. local dev) — falls back to decommissioned=null on
   // every row, equivalent to the pre-9.7 behaviour.
-  const activeIds = options.kek
-    ? await getActiveVendorResourceIds(db, options.kek)
-    : null;
+  const activeIds = options.kek ? await getActiveVendorResourceIds(db, options.kek) : null;
 
   const now = Date.now();
   const mapped = rows.map((r) => {
-    const identity = r.ocppIdentities[0];
+    const identity = identityByStation.get(r.siteAssetId);
+    const evse = evseByStation.get(r.siteAssetId);
     const lastSeen = identity?.lastSeenAt ?? null;
     const within = lastSeen != null && now - lastSeen.getTime() < ONLINE_WINDOW_MS;
     const online = within && identity?.status !== "offline";
     const ocppSeen = identity?.id ? (ocppLastSeen.get(identity.id) ?? null) : null;
     return {
       chargingStationId: r.siteAssetId,
-      evseId: r.evses[0]?.id ?? "",
-      connectorId: r.evses[0]?.connectors[0]?.id ?? "",
+      evseId: evse?.evseId ?? "",
+      connectorId: evse?.connectorId ?? "",
       ocppIdentityId: identity?.id ?? "",
       identityString: identity?.identityString ?? "—",
-      orgDisplayName: r.organization.displayName,
-      siteDisplayName: r.siteAsset.site.displayName,
+      orgDisplayName: r.orgDisplayName,
+      siteDisplayName: r.siteDisplayName,
       vendor: r.vendor,
       model: r.model,
       serialNumber: r.serialNumber,
-      connectorType: r.evses[0]?.connectors[0]?.type ?? "—",
+      connectorType: evse?.connectorType ?? "—",
       ocppVersion: identity?.ocppVersion ?? "—",
       createdAt: r.createdAt.toISOString(),
       // Sprint 8.4.7 — list-view enrichment.
@@ -211,7 +344,7 @@ export async function listAllChargers(
       // OCPP liveness — deliberately independent of `online` above.
       ocppLastSeenAt: ocppSeen ? ocppSeen.toISOString() : null,
       ocppOnline: ocppSeen != null && now - ocppSeen.getTime() < ONLINE_WINDOW_MS,
-      enforceAuthorize: r.installation?.enforceAuthorize ?? null,
+      enforceAuthorize: r.enforceAuthorize ?? null,
       vendorAuthRequired: r.vendorAuthRequired ?? null,
       vendorAuthenticationType: r.vendorAuthenticationType ?? null,
       vendorAuthSeenAt: r.vendorAuthSeenAt ? r.vendorAuthSeenAt.toISOString() : null,
@@ -227,10 +360,10 @@ export async function listAllChargers(
       commMode: r.commMode,
       signalDbm: r.signalDbm,
       // 9.9 — installation + circuit for the /chargers grouped view.
-      installationId: r.installation?.id ?? null,
-      installationDisplayName: r.installation?.displayName ?? null,
-      circuitId: r.circuit?.id ?? null,
-      circuitDisplayName: r.circuit?.displayName ?? null,
+      installationId: r.installationId ?? null,
+      installationDisplayName: r.installationDisplayName ?? null,
+      circuitId: r.circuitId ?? null,
+      circuitDisplayName: r.circuitDisplayName ?? null,
     };
   });
 
@@ -244,51 +377,97 @@ export async function listAllChargers(
 }
 
 export async function listSiteCircuits(
-  db: PrismaClient,
+  db: Db,
   siteId: string,
 ): Promise<{ id: string; displayName: string }[]> {
-  return db.circuit.findMany({
-    where: { siteId },
-    select: { id: true, displayName: true },
-    orderBy: { displayName: "asc" },
-  });
+  return db
+    .select({ id: circuits.id, displayName: circuits.displayName })
+    .from(circuits)
+    .where(eq(circuits.siteId, siteId))
+    .orderBy(asc(circuits.displayName));
 }
 
 export async function getChargerById(
-  db: PrismaClient,
+  db: Db,
   chargingStationId: string,
   orgScope?: OrgScope,
 ): Promise<ChargerDetail | null> {
-  const r = await db.chargingStation.findUnique({
-    where: { siteAssetId: chargingStationId },
-    include: {
-      organization: { select: { displayName: true } },
-      siteAsset: { select: { siteId: true, site: { select: { displayName: true } } } },
-      installation: { select: { displayName: true } },
-      circuit: { select: { displayName: true } },
-      evses: {
-        orderBy: { evseIndex: "asc" },
-        include: { connectors: { orderBy: { connectorIndex: "asc" } } },
-      },
-      ocppIdentities: { orderBy: { createdAt: "asc" } },
-    },
-  });
+  const [r] = await db
+    .select({
+      siteAssetId: chargingStations.siteAssetId,
+      orgId: chargingStations.orgId,
+      installationId: chargingStations.installationId,
+      circuitId: chargingStations.circuitId,
+      vendor: chargingStations.vendor,
+      model: chargingStations.model,
+      serialNumber: chargingStations.serialNumber,
+      firmwareVersion: chargingStations.firmwareVersion,
+      warrantyExpires: chargingStations.warrantyExpires,
+      chargeBoxSerialNumber: chargingStations.chargeBoxSerialNumber,
+      meterType: chargingStations.meterType,
+      meterSerialNumber: chargingStations.meterSerialNumber,
+      iccid: chargingStations.iccid,
+      imsi: chargingStations.imsi,
+      locationNote: chargingStations.locationNote,
+      mountingType: chargingStations.mountingType,
+      photoUrl: chargingStations.photoUrl,
+      ipRating: chargingStations.ipRating,
+      breakerAmps: chargingStations.breakerAmps,
+      orgDisplayName: organizations.displayName,
+      siteId: siteAssets.siteId,
+      siteDisplayName: sites.displayName,
+      installationDisplayName: installations.displayName,
+      circuitDisplayName: circuits.displayName,
+    })
+    .from(chargingStations)
+    .innerJoin(organizations, eq(organizations.id, chargingStations.orgId))
+    .innerJoin(siteAssets, eq(siteAssets.id, chargingStations.siteAssetId))
+    .innerJoin(sites, eq(sites.id, siteAssets.siteId))
+    .leftJoin(installations, eq(installations.id, chargingStations.installationId))
+    .leftJoin(circuits, eq(circuits.id, chargingStations.circuitId))
+    .where(eq(chargingStations.siteAssetId, chargingStationId))
+    .limit(1);
+
   if (!r) return null;
   // Row-scope guard: a scoped caller (e.g. host_admin) only sees chargers
   // in their orgs. Treated as not-found to avoid leaking existence.
   if (orgScope && orgScope.all === false && !orgScope.orgIds.includes(r.orgId)) {
     return null;
   }
+
+  // Detail view takes ALL evses/connectors/identities, not just the first.
+  const evseRows = await db
+    .select()
+    .from(evses)
+    .where(eq(evses.chargingStationId, chargingStationId))
+    .orderBy(asc(evses.evseIndex));
+  const connectorRows = evseRows.length
+    ? await db
+        .select()
+        .from(connectors)
+        .where(inArray(connectors.evseId, evseRows.map((e) => e.id)))
+        .orderBy(asc(connectors.connectorIndex))
+    : [];
+  const identityRows = await db
+    .select({
+      id: ocppIdentities.id,
+      identityString: ocppIdentities.identityString,
+      ocppVersion: ocppIdentities.ocppVersion,
+    })
+    .from(ocppIdentities)
+    .where(eq(ocppIdentities.chargingStationId, chargingStationId))
+    .orderBy(asc(ocppIdentities.createdAt));
+
   return {
     chargingStationId: r.siteAssetId,
     orgId: r.orgId,
-    orgDisplayName: r.organization.displayName,
-    siteId: r.siteAsset.siteId,
-    siteDisplayName: r.siteAsset.site.displayName,
+    orgDisplayName: r.orgDisplayName,
+    siteId: r.siteId,
+    siteDisplayName: r.siteDisplayName,
     installationId: r.installationId,
-    installationDisplayName: r.installation?.displayName ?? null,
+    installationDisplayName: r.installationDisplayName ?? null,
     circuitId: r.circuitId,
-    circuitDisplayName: r.circuit?.displayName ?? null,
+    circuitDisplayName: r.circuitDisplayName ?? null,
     vendor: r.vendor,
     model: r.model,
     serialNumber: r.serialNumber,
@@ -304,23 +483,25 @@ export async function getChargerById(
     photoUrl: r.photoUrl,
     ipRating: r.ipRating,
     breakerAmps: r.breakerAmps,
-    evses: r.evses.map((e) => ({
+    evses: evseRows.map((e) => ({
       id: e.id,
       evseIndex: e.evseIndex,
-      maxPowerKw: e.maxPowerKw?.toString() ?? null,
+      maxPowerKw: normaliseDecimalString(e.maxPowerKw),
       phaseCount: e.phaseCount,
-      connectors: e.connectors.map((c) => ({
-        id: c.id,
-        connectorIndex: c.connectorIndex,
-        type: c.type,
-        maxPowerKw: c.maxPowerKw?.toString() ?? null,
-        status: c.status,
-        errorCode: c.errorCode,
-        vendorErrorCode: c.vendorErrorCode,
-        statusUpdatedAt: c.statusUpdatedAt?.toISOString() ?? null,
-      })),
+      connectors: connectorRows
+        .filter((c) => c.evseId === e.id)
+        .map((c) => ({
+          id: c.id,
+          connectorIndex: c.connectorIndex,
+          type: c.type,
+          maxPowerKw: normaliseDecimalString(c.maxPowerKw),
+          status: c.status,
+          errorCode: c.errorCode,
+          vendorErrorCode: c.vendorErrorCode,
+          statusUpdatedAt: c.statusUpdatedAt?.toISOString() ?? null,
+        })),
     })),
-    ocppIdentities: r.ocppIdentities.map((i) => ({
+    ocppIdentities: identityRows.map((i) => ({
       id: i.id,
       identityString: i.identityString,
       ocppVersion: i.ocppVersion,
@@ -329,7 +510,7 @@ export async function getChargerById(
 }
 
 export async function createCharger(
-  db: PrismaClient,
+  db: Db,
   input: ChargerCreateInput,
   actorUserId: string | null,
 ): Promise<ChargerCreateResult> {
@@ -337,84 +518,80 @@ export async function createCharger(
   const authSecretHash = await sha256Hex(password);
 
   // 6 round trips inside the tx (siteAsset, chargingStation, eVSE,
-  // connector, ocppIdentity, pendingDiscovery.deleteMany). 60s timeout
-  // gives generous headroom over Hyperdrive's per-query latency.
-  const result = await db.$transaction(
-    async (tx) => {
-    const siteAsset = await tx.siteAsset.create({
-      data: {
+  // connector, ocppIdentity, pendingDiscovery delete). Prisma's explicit
+  // timeout/maxWait options have no Drizzle equivalent — node-postgres
+  // holds a real connection for the duration, so the wait Prisma was
+  // guarding against does not arise.
+  const result = await db.transaction(async (tx) => {
+    const [siteAsset] = await tx
+      .insert(siteAssets)
+      .values({
         orgId: input.orgId,
         siteId: input.siteId,
         kind: "charger",
         displayName: input.identityString,
-      },
-      select: { id: true },
+      })
+      .returning({ id: siteAssets.id });
+
+    await tx.insert(chargingStations).values({
+      siteAssetId: siteAsset!.id,
+      orgId: input.orgId,
+      installationId: input.installationId,
+      circuitId: input.circuitId,
+      vendor: input.stationVendor,
+      model: input.stationModel,
+      serialNumber: input.stationSerialNumber,
+      firmwareVersion: input.stationFirmwareVersion,
     });
 
-    await tx.chargingStation.create({
-      data: {
-        siteAssetId: siteAsset.id,
+    const [evse] = await tx
+      .insert(evses)
+      .values({
         orgId: input.orgId,
-        installationId: input.installationId,
-        circuitId: input.circuitId,
-        vendor: input.stationVendor,
-        model: input.stationModel,
-        serialNumber: input.stationSerialNumber,
-        firmwareVersion: input.stationFirmwareVersion,
-      },
-    });
-
-    const evse = await tx.eVSE.create({
-      data: {
-        orgId: input.orgId,
-        chargingStationId: siteAsset.id,
+        chargingStationId: siteAsset!.id,
         evseIndex: input.evseIndex,
-        maxPowerKw: input.evseMaxPowerKw,
+        maxPowerKw: toNumeric(input.evseMaxPowerKw),
         phaseCount: input.evsePhaseCount,
-      },
-      select: { id: true },
-    });
+      })
+      .returning({ id: evses.id });
 
-    const connector = await tx.connector.create({
-      data: {
+    const [connector] = await tx
+      .insert(connectors)
+      .values({
         orgId: input.orgId,
-        evseId: evse.id,
+        evseId: evse!.id,
         connectorIndex: input.connectorIndex,
         type: input.connectorType,
-        maxPowerKw: input.connectorMaxPowerKw,
-      },
-      select: { id: true },
-    });
+        maxPowerKw: toNumeric(input.connectorMaxPowerKw),
+      })
+      .returning({ id: connectors.id });
 
-    const identity = await tx.ocppIdentity.create({
-      data: {
+    const [identity] = await tx
+      .insert(ocppIdentities)
+      .values({
         orgId: input.orgId,
-        chargingStationId: siteAsset.id,
+        chargingStationId: siteAsset!.id,
         identityString: input.identityString,
         authSecretHash,
         ocppVersion: input.ocppVersion,
         assetClass: input.assetClass,
-      },
-      select: { id: true },
-    });
+      })
+      .returning({ id: ocppIdentities.id });
 
     // Closes the pending-discoveries loop: if the gateway recorded
     // failed auth attempts for this identityString before provision,
-    // remove the row in the same transaction. deleteMany is no-op
-    // when no row matches.
-    await tx.pendingDiscovery.deleteMany({
-      where: { identityString: input.identityString },
-    });
+    // remove the row in the same transaction. No-op when nothing matches.
+    await tx
+      .delete(pendingDiscoveries)
+      .where(eq(pendingDiscoveries.identityString, input.identityString));
 
     return {
-      chargingStationId: siteAsset.id,
-      evseId: evse.id,
-      connectorId: connector.id,
-      ocppIdentityId: identity.id,
+      chargingStationId: siteAsset!.id,
+      evseId: evse!.id,
+      connectorId: connector!.id,
+      ocppIdentityId: identity!.id,
     };
-    },
-    { timeout: 60_000, maxWait: 30_000 },
-  );
+  });
 
   await recordAuditAction(db, {
     orgId: input.orgId,
@@ -423,7 +600,11 @@ export async function createCharger(
     action: "charger.create",
     targetType: "charging_station",
     targetId: result.chargingStationId,
-    metadata: { identityString: input.identityString, vendor: input.stationVendor, model: input.stationModel },
+    metadata: {
+      identityString: input.identityString,
+      vendor: input.stationVendor,
+      model: input.stationModel,
+    },
   });
 
   return {
@@ -471,12 +652,12 @@ export async function createCharger(
 }
 
 export async function updateCharger(
-  db: PrismaClient,
+  db: Db,
   chargingStationId: string,
   patch: ChargerUpdateInput,
   actorUserId: string | null,
 ): Promise<ChargerDetail> {
-  await db.$transaction(async (tx) => {
+  await db.transaction(async (tx) => {
     const stationData: Record<string, unknown> = {};
     if (patch.stationVendor !== undefined) stationData.vendor = patch.stationVendor;
     if (patch.stationModel !== undefined) stationData.model = patch.stationModel;
@@ -491,22 +672,25 @@ export async function updateCharger(
     if (patch.ipRating !== undefined) stationData.ipRating = patch.ipRating;
     if (patch.breakerAmps !== undefined) stationData.breakerAmps = patch.breakerAmps;
     if (Object.keys(stationData).length > 0) {
-      await tx.chargingStation.update({ where: { siteAssetId: chargingStationId }, data: stationData });
+      await tx
+        .update(chargingStations)
+        .set(stationData)
+        .where(eq(chargingStations.siteAssetId, chargingStationId));
     }
     if (patch.evseId) {
       const evseData: Record<string, unknown> = {};
-      if (patch.evseMaxPowerKw !== undefined) evseData.maxPowerKw = patch.evseMaxPowerKw;
+      if (patch.evseMaxPowerKw !== undefined) evseData.maxPowerKw = toNumeric(patch.evseMaxPowerKw);
       if (patch.evsePhaseCount !== undefined) evseData.phaseCount = patch.evsePhaseCount;
       if (Object.keys(evseData).length > 0) {
-        await tx.eVSE.update({ where: { id: patch.evseId }, data: evseData });
+        await tx.update(evses).set(evseData).where(eq(evses.id, patch.evseId));
       }
     }
     if (patch.connectorId) {
       const connData: Record<string, unknown> = {};
       if (patch.connectorType !== undefined) connData.type = patch.connectorType;
-      if (patch.connectorMaxPowerKw !== undefined) connData.maxPowerKw = patch.connectorMaxPowerKw;
+      if (patch.connectorMaxPowerKw !== undefined) connData.maxPowerKw = toNumeric(patch.connectorMaxPowerKw);
       if (Object.keys(connData).length > 0) {
-        await tx.connector.update({ where: { id: patch.connectorId }, data: connData });
+        await tx.update(connectors).set(connData).where(eq(connectors.id, patch.connectorId));
       }
     }
   });
@@ -525,24 +709,38 @@ export async function updateCharger(
 }
 
 export async function findOcppIdentity(
-  db: PrismaClient,
+  db: Db,
   ocppIdentityId: string,
 ): Promise<{ id: string; orgId: string; chargingStationId: string } | null> {
-  return db.ocppIdentity.findUnique({
-    where: { id: ocppIdentityId },
-    select: { id: true, orgId: true, chargingStationId: true },
-  });
+  const [row] = await db
+    .select({
+      id: ocppIdentities.id,
+      orgId: ocppIdentities.orgId,
+      chargingStationId: ocppIdentities.chargingStationId,
+    })
+    .from(ocppIdentities)
+    .where(eq(ocppIdentities.id, ocppIdentityId))
+    .limit(1);
+  return row ?? null;
 }
 
 export async function findConnectorOnStation(
-  db: PrismaClient,
+  db: Db,
   connectorId: string,
   chargingStationId: string,
 ): Promise<{ id: string } | null> {
-  return db.connector.findFirst({
-    where: { id: connectorId, evse: { chargingStationId } },
-    select: { id: true },
-  });
+  const [row] = await db
+    .select({ id: connectors.id })
+    .from(connectors)
+    .innerJoin(evses, eq(evses.id, connectors.evseId))
+    .where(
+      and(
+        eq(connectors.id, connectorId),
+        eq(evses.chargingStationId, chargingStationId),
+      ),
+    )
+    .limit(1);
+  return row ?? null;
 }
 
 /**
@@ -556,8 +754,8 @@ export async function findConnectorOnStation(
  *
  * Idempotent — deleting a non-existent id is a no-op.
  */
-export async function deleteCharger(db: PrismaClient, chargingStationId: string): Promise<void> {
-  await db.siteAsset.deleteMany({ where: { id: chargingStationId } });
+export async function deleteCharger(db: Db, chargingStationId: string): Promise<void> {
+  await db.delete(siteAssets).where(eq(siteAssets.id, chargingStationId));
 }
 
 // ── Vendor-attach result ─────────────────────────────────────────────────────
@@ -600,12 +798,12 @@ export class AttachVendorError extends Error {
  * - If both are already set to the SAME values → idempotent no-op (returns existing)
  *
  * The credential row must exist and have status='active'; its vendor slug
- * must match `vendor`. All of this runs inside a single Prisma transaction.
+ * must match `vendor`. All of this runs inside a single transaction.
  * Audit log is written AFTER the transaction commits (outside the tx so a
  * failed audit write doesn't roll back the attach).
  */
 export async function attachVendorToOcppIdentity(
-  db: PrismaClient,
+  db: Db,
   chargingStationId: string,
   input: {
     vendor: string;
@@ -614,114 +812,115 @@ export async function attachVendorToOcppIdentity(
   },
   actorUserId: string | null,
 ): Promise<AttachVendorResult> {
-  const result = await db.$transaction(
-    async (tx) => {
-      // 1. Load the ChargingStation → first OcppIdentity.
-      const station = await tx.chargingStation.findUnique({
-        where: { siteAssetId: chargingStationId },
-        select: {
-          siteAssetId: true,
-          orgId: true,
-          ocppIdentities: {
-            take: 1,
-            orderBy: { createdAt: "asc" },
-            select: {
-              id: true,
-              orgId: true,
-              vendor: true,
-              vendorResourceId: true,
-              credentialsRef: true,
-            },
-          },
-        },
-      });
+  const { vendorCredentials } = await import("@straumvakt/shared/db/vendor");
+  const { vendors } = await import("@straumvakt/shared/db/catalog");
 
-      if (!station) {
-        throw new AttachVendorError(
-          "charging_station_not_found",
-          `ChargingStation ${chargingStationId} not found`,
-        );
-      }
+  const result = await db.transaction(async (tx) => {
+    // 1. Load the ChargingStation → first OcppIdentity.
+    const [station] = await tx
+      .select({ siteAssetId: chargingStations.siteAssetId, orgId: chargingStations.orgId })
+      .from(chargingStations)
+      .where(eq(chargingStations.siteAssetId, chargingStationId))
+      .limit(1);
 
-      const identity = station.ocppIdentities[0];
-      if (!identity) {
-        throw new AttachVendorError(
-          "no_ocpp_identity",
-          `ChargingStation ${chargingStationId} has no OcppIdentity`,
-        );
-      }
+    if (!station) {
+      throw new AttachVendorError(
+        "charging_station_not_found",
+        `ChargingStation ${chargingStationId} not found`,
+      );
+    }
 
-      // 2. Validate the credential row.
-      const credential = await tx.vendorCredential.findUnique({
-        where: { id: input.credentialId },
-        select: {
-          id: true,
-          status: true,
-          vendor: { select: { slug: true } },
-        },
-      });
+    const [identity] = await tx
+      .select({
+        id: ocppIdentities.id,
+        orgId: ocppIdentities.orgId,
+        vendor: ocppIdentities.vendor,
+        vendorResourceId: ocppIdentities.vendorResourceId,
+        credentialsRef: ocppIdentities.credentialsRef,
+      })
+      .from(ocppIdentities)
+      .where(eq(ocppIdentities.chargingStationId, chargingStationId))
+      .orderBy(asc(ocppIdentities.createdAt))
+      .limit(1);
 
-      if (!credential) {
-        throw new AttachVendorError(
-          "credential_not_found",
-          `VendorCredential ${input.credentialId} not found`,
-        );
-      }
-      if (credential.status !== "active") {
-        throw new AttachVendorError(
-          "credential_inactive",
-          `VendorCredential ${input.credentialId} is not active (status=${credential.status})`,
-        );
-      }
-      if (credential.vendor.slug !== input.vendor) {
-        throw new AttachVendorError(
-          "vendor_mismatch",
-          `Credential vendor slug "${credential.vendor.slug}" does not match requested vendor "${input.vendor}"`,
-        );
-      }
+    if (!identity) {
+      throw new AttachVendorError(
+        "no_ocpp_identity",
+        `ChargingStation ${chargingStationId} has no OcppIdentity`,
+      );
+    }
 
-      // 3. Conflict checks — existing non-null values that differ.
-      if (
-        identity.vendorResourceId !== null &&
-        identity.vendorResourceId !== undefined &&
-        identity.vendorResourceId !== input.vendorResourceId
-      ) {
-        throw new AttachVendorError(
-          "conflict_vendor_resource_id",
-          `OcppIdentity ${identity.id} already has vendorResourceId="${identity.vendorResourceId}". Detach first.`,
-        );
-      }
-      if (
-        identity.credentialsRef !== null &&
-        identity.credentialsRef !== undefined &&
-        identity.credentialsRef !== input.credentialId
-      ) {
-        throw new AttachVendorError(
-          "conflict_credentials_ref",
-          `OcppIdentity ${identity.id} already has credentialsRef="${identity.credentialsRef}". Detach first.`,
-        );
-      }
+    // 2. Validate the credential row.
+    const [credential] = await tx
+      .select({
+        id: vendorCredentials.id,
+        status: vendorCredentials.status,
+        vendorSlug: vendors.slug,
+      })
+      .from(vendorCredentials)
+      .innerJoin(vendors, eq(vendors.id, vendorCredentials.vendorId))
+      .where(eq(vendorCredentials.id, input.credentialId))
+      .limit(1);
 
-      // 4. Update (idempotent — writing the same values is fine).
-      await tx.ocppIdentity.update({
-        where: { id: identity.id },
-        data: {
-          vendor: input.vendor,
-          vendorResourceId: input.vendorResourceId,
-          credentialsRef: input.credentialId,
-        },
-      });
+    if (!credential) {
+      throw new AttachVendorError(
+        "credential_not_found",
+        `VendorCredential ${input.credentialId} not found`,
+      );
+    }
+    if (credential.status !== "active") {
+      throw new AttachVendorError(
+        "credential_inactive",
+        `VendorCredential ${input.credentialId} is not active (status=${credential.status})`,
+      );
+    }
+    if (credential.vendorSlug !== input.vendor) {
+      throw new AttachVendorError(
+        "vendor_mismatch",
+        `Credential vendor slug "${credential.vendorSlug}" does not match requested vendor "${input.vendor}"`,
+      );
+    }
 
-      return {
-        ocppIdentityId: identity.id,
-        orgId: station.orgId,
+    // 3. Conflict checks — existing non-null values that differ.
+    if (
+      identity.vendorResourceId !== null &&
+      identity.vendorResourceId !== undefined &&
+      identity.vendorResourceId !== input.vendorResourceId
+    ) {
+      throw new AttachVendorError(
+        "conflict_vendor_resource_id",
+        `OcppIdentity ${identity.id} already has vendorResourceId="${identity.vendorResourceId}". Detach first.`,
+      );
+    }
+    if (
+      identity.credentialsRef !== null &&
+      identity.credentialsRef !== undefined &&
+      identity.credentialsRef !== input.credentialId
+    ) {
+      throw new AttachVendorError(
+        "conflict_credentials_ref",
+        `OcppIdentity ${identity.id} already has credentialsRef="${identity.credentialsRef}". Detach first.`,
+      );
+    }
+
+    // 4. Update (idempotent — writing the same values is fine).
+    await tx
+      .update(ocppIdentities)
+      .set({
         vendor: input.vendor,
         vendorResourceId: input.vendorResourceId,
         credentialsRef: input.credentialId,
-      };
-    },
-    { timeout: 30_000, maxWait: 15_000 },
-  );
+      })
+      .where(eq(ocppIdentities.id, identity.id));
+
+    return {
+      ocppIdentityId: identity.id,
+      orgId: station.orgId,
+      vendor: input.vendor,
+      vendorResourceId: input.vendorResourceId,
+      credentialsRef: input.credentialId,
+    };
+  });
 
   await recordAuditAction(db, {
     orgId: result.orgId,
@@ -744,3 +943,5 @@ export async function attachVendorToOcppIdentity(
     credentialsRef: result.credentialsRef,
   };
 }
+
+export type { DbOrTx };
