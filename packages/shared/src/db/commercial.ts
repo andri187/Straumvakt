@@ -474,65 +474,8 @@ export const sessionLedger = reportsSchema.table(
   ],
 );
 
-/** Prisma model `SiteEnergyDaily` — reports.site_energy_daily */
-export const siteEnergyDaily = reportsSchema.table(
-  "site_energy_daily",
-  {
-    siteId: uuid("site_id").notNull(),
-    orgId: uuid("org_id").notNull(),
-    date: date("date", { mode: "date" }).notNull(),
-    sessionCount: integer("session_count").notNull().default(0),
-    totalKwh: numeric("total_kwh", { precision: 12, scale: 3 }).notNull().default("0"),
-    peakPowerW: integer("peak_power_w"),
-    uptimePct: numeric("uptime_pct", { precision: 5, scale: 2 }),
-    computedAt: timestamp("computed_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
-  },
-  (t) => [
-    primaryKey({ columns: [t.siteId, t.date] }),
-    index().on(t.orgId, t.date),
-  ],
-);
 
-/** Prisma model `ChargerUptimeDaily` — reports.charger_uptime_daily */
-export const chargerUptimeDaily = reportsSchema.table(
-  "charger_uptime_daily",
-  {
-    chargingStationId: uuid("charging_station_id").notNull(),
-    orgId: uuid("org_id").notNull(),
-    date: date("date", { mode: "date" }).notNull(),
-    heartbeatsReceived: integer("heartbeats_received").notNull().default(0),
-    statusTransitions: integer("status_transitions").notNull().default(0),
-    offlineMinutes: integer("offline_minutes").notNull().default(0),
-    computedAt: timestamp("computed_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
-  },
-  (t) => [
-    primaryKey({ columns: [t.chargingStationId, t.date] }),
-    index().on(t.orgId, t.date),
-  ],
-);
 
-/** Prisma model `CommandHistory` — reports.command_history */
-export const commandHistory = reportsSchema.table(
-  "command_history",
-  {
-    commandId: uuid("command_id").primaryKey(),
-    orgId: uuid("org_id").notNull(),
-    identityId: uuid("identity_id").notNull(),
-    controlDomain: text("control_domain").notNull(),
-    routedTo: text("routed_to").notNull(),
-    dispatchedAt: timestamp("dispatched_at", { withTimezone: true, precision: 6, mode: "date" }),
-    finalStatus: text("final_status").notNull(),
-    resultJson: jsonb("result_json"),
-    latencyMs: integer("latency_ms"),
-    attempts: integer("attempts").notNull().default(0),
-    requestedByUserId: uuid("requested_by_user_id"),
-    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
-  },
-  (t) => [
-    index().on(t.orgId, t.createdAt),
-    index().on(t.identityId, t.createdAt),
-  ],
-);
 
 /** Prisma model `AgreementCostFactor` — agreements.cost_factors */
 export const agreementsCostFactors = agreementsSchema.table(

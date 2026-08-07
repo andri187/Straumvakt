@@ -19,6 +19,21 @@
 import { boolean, index, integer, jsonb, pgSchema, text, timestamp, uniqueIndex, uuid, varchar } from "drizzle-orm/pg-core";
 
 export const ocppSchema = pgSchema("ocpp");
+
+// The `reports` Postgres schema is shared: it holds derived rollups written by
+// a higher layer and read here. AMPECO has no reports domain at all — it
+// materialises projections per subject — so the schema splits across domain
+// files rather than living in one:
+//
+//   reports.site_energy_daily      assets     (this file)
+//   reports.charger_uptime_daily   assets     (this file)
+//   reports.command_history        protocol
+//   reports.session_ledger         commercial
+//   reports.billing_period_summary commercial
+//
+// Declaring the pgSchema in more than one file is fine — pgSchema() is a
+// namespace handle, not a resource.
+export const reportsSchema = pgSchema("reports");
 export const roamingSchema = pgSchema("roaming");
 
 export const ocppVersionEnum = ocppSchema.enum("OcppVersion", ["ocpp_1_6", "ocpp_2_0_1", "ocpp_2_1"]);
@@ -200,3 +215,25 @@ export const configurationKeys = ocppSchema.table(
   ],
 );
 
+/** Prisma model `CommandHistory` — reports.command_history */
+export const commandHistory = reportsSchema.table(
+  "command_history",
+  {
+    commandId: uuid("command_id").primaryKey(),
+    orgId: uuid("org_id").notNull(),
+    identityId: uuid("identity_id").notNull(),
+    controlDomain: text("control_domain").notNull(),
+    routedTo: text("routed_to").notNull(),
+    dispatchedAt: timestamp("dispatched_at", { withTimezone: true, precision: 6, mode: "date" }),
+    finalStatus: text("final_status").notNull(),
+    resultJson: jsonb("result_json"),
+    latencyMs: integer("latency_ms"),
+    attempts: integer("attempts").notNull().default(0),
+    requestedByUserId: uuid("requested_by_user_id"),
+    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [
+    index().on(t.orgId, t.createdAt),
+    index().on(t.identityId, t.createdAt),
+  ],
+);

@@ -18,11 +18,26 @@
 // explicit joins, and a wrong FK declaration would be a silent lie about
 // cascade behaviour.
 
-import { boolean, date, index, integer, jsonb, numeric, pgSchema, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, date, index, integer, jsonb, numeric, pgSchema, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 export const assetsSchema = pgSchema("assets");
 export const energySchema = pgSchema("energy");
 export const propertiesSchema = pgSchema("properties");
+
+// The `reports` Postgres schema is shared: it holds derived rollups written by
+// a higher layer and read here. AMPECO has no reports domain at all — it
+// materialises projections per subject — so the schema splits across domain
+// files rather than living in one:
+//
+//   reports.site_energy_daily      assets     (this file)
+//   reports.charger_uptime_daily   assets     (this file)
+//   reports.command_history        protocol
+//   reports.session_ledger         commercial
+//   reports.billing_period_summary commercial
+//
+// Declaring the pgSchema in more than one file is fine — pgSchema() is a
+// namespace handle, not a resource.
+export const reportsSchema = pgSchema("reports");
 
 export const siteAccessLevelEnum = propertiesSchema.enum("SiteAccessLevel", ["public", "private", "taxi_only"]);
 export const sitePowerClassEnum = propertiesSchema.enum("SitePowerClass", ["lt_50kw", "between_50_150kw", "between_150_500kw", "gt_500kw"]);
@@ -375,3 +390,39 @@ export const circuits = propertiesSchema.table(
   ],
 );
 
+/** Prisma model `SiteEnergyDaily` — reports.site_energy_daily */
+export const siteEnergyDaily = reportsSchema.table(
+  "site_energy_daily",
+  {
+    siteId: uuid("site_id").notNull(),
+    orgId: uuid("org_id").notNull(),
+    date: date("date", { mode: "date" }).notNull(),
+    sessionCount: integer("session_count").notNull().default(0),
+    totalKwh: numeric("total_kwh", { precision: 12, scale: 3 }).notNull().default("0"),
+    peakPowerW: integer("peak_power_w"),
+    uptimePct: numeric("uptime_pct", { precision: 5, scale: 2 }),
+    computedAt: timestamp("computed_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.siteId, t.date] }),
+    index().on(t.orgId, t.date),
+  ],
+);
+
+/** Prisma model `ChargerUptimeDaily` — reports.charger_uptime_daily */
+export const chargerUptimeDaily = reportsSchema.table(
+  "charger_uptime_daily",
+  {
+    chargingStationId: uuid("charging_station_id").notNull(),
+    orgId: uuid("org_id").notNull(),
+    date: date("date", { mode: "date" }).notNull(),
+    heartbeatsReceived: integer("heartbeats_received").notNull().default(0),
+    statusTransitions: integer("status_transitions").notNull().default(0),
+    offlineMinutes: integer("offline_minutes").notNull().default(0),
+    computedAt: timestamp("computed_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.chargingStationId, t.date] }),
+    index().on(t.orgId, t.date),
+  ],
+);
