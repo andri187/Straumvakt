@@ -70,21 +70,28 @@ access-grant path.
 
 ## Decisions needed
 
-**D1. Where does `enforceAuthorize` go?**
-It decides whether an unknown card may charge, so it is charger behaviour, and
-CLAUDE.md requires explicit sign-off to change it. Candidates: **Site** (the
-natural grouping once Installation is gone), **Property** (matches the
-"billing/ownership unit" argument), or **ChargingStation** (finest grain, most
-rows to keep consistent). *Recommend Site* — it is the level an operator
-actually configures, and Driivz attaches energy management there for the same
-reason.
+**D1. Where does `enforceAuthorize` go? — ANSWERED 2026-08-07: ChargingStation.**
+
+Operator decision, against my recommendation of Site, and on reflection the
+better answer. It decides whether an unknown card may charge, which is a
+property of the charge point itself: two chargers on one site can legitimately
+differ — a public forecourt bay enforcing while a staff bay does not — and a
+site-level flag cannot express that without a second override mechanism.
+
+Cost: 31 rows to keep consistent instead of 3, and a bulk-set surface for the
+operator. Accepted.
+
+Still requires sign-off to CHANGE any value — it is `false` everywhere today
+and turning it on is charger behaviour, separate from where the column lives.
 
 **D2. Does `agreements.installation_id` become a Site or a Property?**
 An agreement is with a party about a place. Under the 2026-08-04 "any party can
 be Straumvakt's customer" decision the counterparty is already changing, so
 this should be settled in the same pass rather than migrated twice.
-**Blocked on ADR 0025 D1–D5** — whichever billing generation survives will
-hard-code its anchor.
+
+**UNBLOCKED 2026-08-07** — [ADR 0048](./0048-billing-cutover-resolved-agreements-survives.md)
+settles that the agreements generation survives, so its anchor is now the one
+that matters. Still open, but answerable.
 
 **D3. `id_tokens.scope_installation_id` — Site, or dropped?**
 It narrows which install a token authorises at. Rule 5 territory
@@ -98,7 +105,7 @@ the one piece that could start ahead of ADR 0025.
 
 ## Sequencing
 
-1. **Answer D1 and D3.** Both are charger-behaviour / Rule 5 and gate the rest.
+1. ~~Answer D1~~ **done — ChargingStation.** D3 still open (Rule 5).
 2. **Move the vendor columns to `VendorAssetRef`** (D4). Independent of 0025.
 3. **Resolve ADR 0025 D1–D5.** Everything commercial waits here.
 4. Repoint `charging_stations` and `circuits` to Site.

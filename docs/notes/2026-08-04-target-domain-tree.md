@@ -137,3 +137,21 @@ own ADR and a migration, and it should come *after* the billing cutover
 Nothing here is urgent. The commercial tables are empty, which is what
 makes the whole rearrangement cheap — and that window closes the day a
 real customer generates an invoice.
+
+---
+
+## Resolved 2026-08-07 — org roles are set by Straumvakt admin
+
+ADR 0031 §18 derives an organisation's role from the `service_*` agreements
+it holds — a commercial fact determining an identity fact, which the layering
+forbids permanently since identity may never read commercial.
+
+**Operator decision: roles are written by Straumvakt admin.** There is no
+derivation, so there is no inversion. ADR 0031's derive-from-agreements rule
+is superseded on this point.
+
+Consequence: `tenancy.organizations.roles` is operator-maintained state, not
+a projection. And P4 (`org_email_domains` needing a driver-group display
+name) is a different problem than it looked — it is not an instance of a
+general identity-reads-commercial pattern, because that pattern no longer
+exists. It needs its own answer.
