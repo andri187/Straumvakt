@@ -58,12 +58,40 @@ export type BillingTickResult = {
 const DEFAULT_BATCH_SIZE = 25;
 const RECENT_WINDOW_DAYS = 30;
 
+/**
+ * WHY THIS HAS NEVER EMITTED A ROW — diagnosed 2026-08-07.
+ *
+ * agreements.billing_lines has 0 rows after months of firing every minute,
+ * and the reason is the recency window, not the predicate.
+ *
+ *   completed sessions                  1,619
+ *   ...with a user_id                       8   <- Zaptec enrichment
+ *   ...with energy and an end time          8
+ *   ...ended within RECENT_WINDOW_DAYS      0   <- newest is 2026-05-13
+ *
+ * Everything else in the chain is intact and was verified against staging:
+ * that one user is in a driver group, the group's agreement is active, its
+ * installation_id matches the sessions', and both clauses carry active cost
+ * factors with rate references effective 2026-05-04 — before the sessions
+ * ended.
+ *
+ * So the eight sessions this generation could have priced aged out of the
+ * window before anyone attributed them. ADR 0025's note blamed the
+ * `userId != null` predicate and reported 0 candidates; the predicate
+ * matches eight.
+ *
+ * Note the contradiction that leaves: the query orders oldest-first "so
+ * backlog drains predictably", but a fixed 30-day window means a backlog
+ * older than 30 days never drains at all. `sinceDays` exists so a backfill
+ * can be run deliberately without changing what the cron does.
+ */
 export async function runAgreementsBillingTick(
   prisma: PrismaClient,
-  opts: { batchSize?: number } = {}
+  opts: { batchSize?: number; sinceDays?: number } = {}
 ): Promise<BillingTickResult> {
   const batchSize = opts.batchSize ?? DEFAULT_BATCH_SIZE;
-  const cutoff = new Date(Date.now() - RECENT_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+  const windowDays = opts.sinceDays ?? RECENT_WINDOW_DAYS;
+  const cutoff = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000);
 
   const candidates = await prisma.chargeSession.findMany({
     where: {
@@ -74,7 +102,9 @@ export async function runAgreementsBillingTick(
       agreementBillingLines: { none: {} },
     },
     select: { id: true },
-    orderBy: { endedAt: "asc" }, // oldest-first so backlog drains predictably
+    // Oldest-first so a backlog INSIDE the window drains predictably. Anything
+    // older than the window is not a backlog this can reach — see the header.
+    orderBy: { endedAt: "asc" },
     take: batchSize,
   });
 

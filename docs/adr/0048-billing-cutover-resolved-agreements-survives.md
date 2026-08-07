@@ -42,9 +42,37 @@ Prisma client that no generator produced). Fixed; not yet run.
 
 ## Order
 
-1. **Find out why the agreements tick prices nothing.** Its eligibility
-   predicate requires `userId != null` and there is **one** driver-group
-   membership in the system. Green logs mean "scanned 0", not "works".
+1. ~~Find out why the agreements tick prices nothing.~~ **DONE 2026-08-07 —
+   it is the recency window, not the predicate.**
+
+   ```
+   completed sessions                  1,619
+   ...with a user_id                       8   <- Zaptec enrichment
+   ...with energy and an end time          8
+   ...ended within RECENT_WINDOW_DAYS      0   <- newest is 2026-05-13, 86 days ago
+   ```
+
+   Everything else was verified against staging and is intact: that one user
+   is in a driver group, the group's agreement is `active`, its
+   `installation_id` matches the sessions', and both clauses carry active
+   cost factors with rate references effective 2026-05-04 — before the
+   sessions ended.
+
+   The eight sessions this generation could have priced aged out of its
+   30-day window before anyone attributed them. ADR 0025's note blamed the
+   `userId != null` predicate and reported 0 candidates; it matches eight.
+
+   Two consequences worth separating:
+
+   - **The window cannot drain a backlog.** The query is ordered oldest-first
+     "so backlog drains predictably", but a fixed 30-day cutoff means
+     anything older never drains. `runAgreementsBillingTick` now takes
+     `sinceDays` so a backfill is possible; the default is unchanged, so the
+     cron behaves exactly as before.
+   - **The real blocker is attribution, not billing.** 8 of 1,619 completed
+     sessions carry a user — 0.5%. No pricing generation can bill what it
+     cannot attribute, so this is upstream of the whole cutover and is the
+     same gap SCOPE calls out as `createDriver` being unwired.
 2. **Run CO-3** over the 1,621 ledger rows. Operator runs it — Rule 5.
 3. **Only then** retire legacy: `tariff_definitions`, `billing.cost_factors`,
    the legacy resolver.
