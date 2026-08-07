@@ -13,8 +13,12 @@
 // This lets the operator cross-reference the DB operational config
 // against the reference catalogue (docs/reference/iceland-energy-parties.json).
 
-import type { PrismaClient } from "../generated/prisma/client";
-import type { CostFactorStatus } from "../generated/prisma/enums";
+import { asc, eq, inArray } from "drizzle-orm";
+import { billingCostFactors, tariffDefinitions } from "@straumvakt/shared/db/commercial";
+import { organizations } from "@straumvakt/shared/db/identity";
+import type { Db } from "../lib/drizzle";
+
+type CostFactorStatus = (typeof billingCostFactors.status)["_"]["data"];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // UI shapes
@@ -60,13 +64,14 @@ export interface ElectricityCatalogueSummary {
  * (REPF, etc.) — they attach to Installation.retailerTariffId.
  */
 export async function listElectricityCostFactors(
-  db: PrismaClient,
+  db: Db,
 ): Promise<ElectricityCatalogueSummary> {
   // Installation-tier cost factors = retailer / electricity supply.
-  const factors = await db.costFactor.findMany({
-    where: { anchorTier: "installation" },
-    orderBy: { code: "asc" },
-  });
+  const factors = await db
+    .select()
+    .from(billingCostFactors)
+    .where(eq(billingCostFactors.anchorTier, "installation"))
+    .orderBy(asc(billingCostFactors.code));
 
   if (factors.length === 0) {
     return { totalFactors: 0, orphanCount: 0, orgsCovered: 0, factors: [] };
@@ -75,15 +80,16 @@ export async function listElectricityCostFactors(
   const factorIds = factors.map((f) => f.id);
 
   // Fetch tariff definitions referencing these factors, with org names.
-  const tariffs = await db.tariffDefinition.findMany({
-    where: { costFactorId: { in: factorIds } },
-    select: {
-      costFactorId: true,
-      orgId: true,
-      organization: { select: { id: true, displayName: true } },
-    },
-    orderBy: [{ costFactorId: "asc" }, { orgId: "asc" }],
-  });
+  const tariffs = await db
+    .select({
+      costFactorId: tariffDefinitions.costFactorId,
+      orgId: tariffDefinitions.orgId,
+      orgDisplayName: organizations.displayName,
+    })
+    .from(tariffDefinitions)
+    .leftJoin(organizations, eq(organizations.id, tariffDefinitions.orgId))
+    .where(inArray(tariffDefinitions.costFactorId, factorIds))
+    .orderBy(asc(tariffDefinitions.costFactorId), asc(tariffDefinitions.orgId));
 
   // Aggregate: for each (factorId, orgId), count tariffs and collect org name.
   // Structure: Map<factorId, Map<orgId, { orgDisplayName, count }>>
@@ -98,7 +104,7 @@ export async function listElectricityCostFactors(
     const orgMap = usageByFactor.get(t.costFactorId)!;
     if (!orgMap.has(t.orgId)) {
       orgMap.set(t.orgId, {
-        orgDisplayName: t.organization.displayName,
+        orgDisplayName: t.orgDisplayName ?? "",
         count: 0,
       });
     }

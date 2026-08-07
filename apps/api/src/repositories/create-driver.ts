@@ -1,4 +1,9 @@
-import type { Prisma, PrismaClient } from "../generated/prisma/client";
+import { and, eq, ne } from "drizzle-orm";
+import { idTokens, users } from "@straumvakt/shared/db/identity";
+import type { Db } from "../lib/drizzle";
+
+/** The client or a transaction handle — createDriver runs inside one. */
+type DbOrTx = Db | Parameters<Parameters<Db["transaction"]>[0]>[0];
 
 /**
  * createDriver — the single source of truth for what a driver IS.
@@ -136,7 +141,7 @@ export type CreateDriverResult =
   | { ok: false; reason: "kennitala_taken" };
 
 export async function createDriver(
-  db: PrismaClient | Prisma.TransactionClient,
+  db: DbOrTx,
   input: CreateDriverInput,
   opts: CreateDriverOptions,
 ): Promise<CreateDriverResult> {
@@ -149,22 +154,25 @@ export async function createDriver(
   // constraints, so callers get a typed reason instead of having to
   // interpret a P2002. The constraints remain the real backstop against
   // the race between this probe and the insert.
-  const existingEmail = await db.user.findFirst({
-    where: { email, status: { not: "deleted" } },
-    select: { id: true },
-  });
+  const [existingEmail] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(and(eq(users.email, email), ne(users.status, "deleted")))
+    .limit(1);
   if (existingEmail) return { ok: false, reason: "email_taken" };
 
   if (input.kennitala) {
-    const existingKennitala = await db.user.findFirst({
-      where: { kennitala: input.kennitala },
-      select: { id: true },
-    });
+    const [existingKennitala] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.kennitala, input.kennitala))
+      .limit(1);
     if (existingKennitala) return { ok: false, reason: "kennitala_taken" };
   }
 
-  const user = await db.user.create({
-    data: {
+  const [user] = await db
+    .insert(users)
+    .values({
       email,
       displayName: input.displayName ?? null,
       audience: "driver",
@@ -182,36 +190,34 @@ export async function createDriver(
       consentTosAt: input.consentTosAt ?? null,
       consentPrivacyAt: input.consentPrivacyAt ?? null,
       consentMarketingAt: input.consentMarketingAt ?? null,
-    },
-    select: {
-      id: true,
-      email: true,
-      displayName: true,
-      status: true,
-      emailVerifiedAt: true,
-    },
-  });
+    })
+    .returning({
+      id: users.id,
+      email: users.email,
+      displayName: users.displayName,
+      status: users.status,
+      emailVerifiedAt: users.emailVerifiedAt,
+    });
 
   // The invariant the other four paths were missing. A driver without
   // this cannot be presented to a charge point at all.
-  const virtualRfid = virtualRfidValueFromUserId(user.id);
-  const virtualRfidCreate = {
-    userId: user.id,
+  const virtualRfid = virtualRfidValueFromUserId(user!.id);
+  await db.insert(idTokens).values({
+    userId: user!.id,
     kind: "virtual_rfid",
     value: virtualRfid,
     status: "active",
     label: "Virtual RFID",
-  } as unknown as Prisma.IdTokenCreateInput;
-  await db.idToken.create({ data: virtualRfidCreate });
+  });
 
   return {
     ok: true,
     driver: {
-      id: user.id,
-      email: user.email,
-      displayName: user.displayName,
-      status: user.status,
-      emailVerifiedAt: user.emailVerifiedAt,
+      id: user!.id,
+      email: user!.email,
+      displayName: user!.displayName,
+      status: user!.status,
+      emailVerifiedAt: user!.emailVerifiedAt,
       virtualRfid,
     },
   };

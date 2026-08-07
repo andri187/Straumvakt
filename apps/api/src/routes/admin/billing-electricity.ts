@@ -7,7 +7,7 @@
 // Sprint 9 — Track B.
 
 import { Hono } from "hono";
-import { makePrisma } from "../../lib/prisma";
+import { makeDrizzle } from "../../lib/drizzle";
 import { requirePermission } from "../../lib/auth/require-permission";
 import { listElectricityCostFactors } from "../../repositories/billing-electricity";
 import type { AuthVars } from "../../lib/auth-middleware";
@@ -19,7 +19,7 @@ export const electricityRouter = new Hono<{
 }>();
 
 electricityRouter.get("/", requirePermission("billing.read"), async (c) => {
-  const db = makePrisma(c.env);
+  const db = makeDrizzle(c.env);
   const summary = await listElectricityCostFactors(db);
   return c.json(summary);
 });
