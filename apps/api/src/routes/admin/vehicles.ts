@@ -5,7 +5,7 @@
 // view.
 
 import { Hono } from "hono";
-import { makePrisma } from "../../lib/prisma";
+import { makeDrizzle } from "../../lib/drizzle";
 import { requireAdmin, type AuthVars } from "../../lib/auth-middleware";
 import { requirePermission } from "../../lib/auth/require-permission";
 import { getVehicleRecurrence } from "../../repositories/vehicle-recurrence";
@@ -23,7 +23,7 @@ adminVehicles.get(
   "/",
   requirePermission("member.read"),
   async (c) => {
-    const db = makePrisma(c.env);
+    const db = makeDrizzle(c.env);
     const sessions = await listVehicleIdSessions(db, { limit: 200 });
     return c.json({ sessions });
   },
@@ -83,7 +83,7 @@ adminVehicles.get(
   requirePermission("member.read"),
   async (c) => {
     const mac = c.req.param("mac");
-    const db = makePrisma(c.env);
+    const db = makeDrizzle(c.env);
     const recurrence = await getVehicleRecurrence(db, mac);
     if (!recurrence) {
       return c.json({ error: "invalid_mac_format" }, 400);

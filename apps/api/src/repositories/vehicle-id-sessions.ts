@@ -8,7 +8,11 @@
 // Used by the /vehicle-ids landing page in the operator UI: a focused
 // view to verify Autocharge captures without scanning every session.
 
-import type { PrismaClient } from "../generated/prisma/client";
+import { desc, eq, inArray, isNotNull, or } from "drizzle-orm";
+import { sessions } from "@straumvakt/shared/db/charging";
+import { chargingStations, installations, siteAssets, sites } from "@straumvakt/shared/db/assets";
+import { organizations, users } from "@straumvakt/shared/db/identity";
+import type { Db } from "../lib/drizzle";
 
 export interface VehicleIdSessionRow {
   sessionId: string;
@@ -42,80 +46,83 @@ export interface VehicleIdSessionRow {
 }
 
 export async function listVehicleIdSessions(
-  db: PrismaClient,
+  db: Db,
   opts: { limit?: number } = {},
 ): Promise<VehicleIdSessionRow[]> {
   const limit = Math.min(opts.limit ?? 200, 1000);
 
-  const rows = await db.chargeSession.findMany({
-    where: {
-      OR: [
-        { evPlcMac: { not: null } },
-        { authIdValue: { not: null } },
-        { pncAttempted: { not: null } },
-      ],
-    },
-    orderBy: { startedAt: "desc" },
-    take: limit,
-    select: {
-      id: true,
-      chargingStationId: true,
-      startedAt: true,
-      endedAt: true,
-      energyWh: true,
-      idTag: true,
-      evPlcMac: true,
-      evPlcMacOuiVendor: true,
-      evPlcPibVersion: true,
-      cableType: true,
-      pncAttempted: true,
-      pncSucceeded: true,
-      pncRejectedUuid: true,
-      authIdType: true,
-      authIdValue: true,
-      organization: { select: { displayName: true } },
-      site: { select: { displayName: true } },
-      user: {
-        select: {
-          email: true,
-          displayName: true,
-          firstName: true,
-          lastName: true,
-        },
-      },
-    },
-  });
+  // organization / site / user are all at most one row per session, so they
+  // join without fanning out. LEFT on user — a session with no driver still
+  // qualifies if it carries a vehicle-identity value.
+  const rows = await db
+    .select({
+      id: sessions.id,
+      chargingStationId: sessions.chargingStationId,
+      startedAt: sessions.startedAt,
+      endedAt: sessions.endedAt,
+      energyWh: sessions.energyWh,
+      idTag: sessions.idTag,
+      evPlcMac: sessions.evPlcMac,
+      evPlcMacOuiVendor: sessions.evPlcMacOuiVendor,
+      evPlcPibVersion: sessions.evPlcPibVersion,
+      cableType: sessions.cableType,
+      pncAttempted: sessions.pncAttempted,
+      pncSucceeded: sessions.pncSucceeded,
+      pncRejectedUuid: sessions.pncRejectedUuid,
+      authIdType: sessions.authIdType,
+      authIdValue: sessions.authIdValue,
+      orgDisplayName: organizations.displayName,
+      siteDisplayName: sites.displayName,
+      userEmail: users.email,
+      userDisplayName: users.displayName,
+      userFirstName: users.firstName,
+      userLastName: users.lastName,
+    })
+    .from(sessions)
+    .leftJoin(organizations, eq(organizations.id, sessions.orgId))
+    .leftJoin(sites, eq(sites.id, sessions.siteId))
+    .leftJoin(users, eq(users.id, sessions.userId))
+    .where(
+      or(
+        isNotNull(sessions.evPlcMac),
+        isNotNull(sessions.authIdValue),
+        isNotNull(sessions.pncAttempted),
+      ),
+    )
+    .orderBy(desc(sessions.startedAt))
+    .limit(limit);
 
   // Resolve charger display names + installations in batches
   const stationIds = Array.from(
     new Set(rows.map((r) => r.chargingStationId).filter((x): x is string => !!x)),
   );
-  const [siteAssets, stations] = await Promise.all([
+  const [assets, stations] = await Promise.all([
     stationIds.length > 0
-      ? db.siteAsset.findMany({
-          where: { id: { in: stationIds } },
-          select: { id: true, displayName: true },
-        })
+      ? db
+          .select({ id: siteAssets.id, displayName: siteAssets.displayName })
+          .from(siteAssets)
+          .where(inArray(siteAssets.id, stationIds))
       : Promise.resolve([]),
     stationIds.length > 0
-      ? db.chargingStation.findMany({
-          where: { siteAssetId: { in: stationIds } },
-          select: {
-            siteAssetId: true,
-            serialNumber: true,
-            installation: { select: { displayName: true } },
-          },
-        })
+      ? db
+          .select({
+            siteAssetId: chargingStations.siteAssetId,
+            serialNumber: chargingStations.serialNumber,
+            installationDisplayName: installations.displayName,
+          })
+          .from(chargingStations)
+          .leftJoin(installations, eq(installations.id, chargingStations.installationId))
+          .where(inArray(chargingStations.siteAssetId, stationIds))
       : Promise.resolve([]),
   ]);
-  const assetMap = new Map(siteAssets.map((a) => [a.id, a.displayName]));
+  const assetMap = new Map(assets.map((a) => [a.id, a.displayName]));
   const stationMap = new Map(stations.map((s) => [s.siteAssetId, s]));
 
   return rows.map((r) => {
     const station = r.chargingStationId ? stationMap.get(r.chargingStationId) : null;
-    const driverDisplayName = r.user
-      ? [r.user.firstName, r.user.lastName].filter(Boolean).join(" ").trim() ||
-        r.user.displayName ||
+    const driverDisplayName = r.userEmail
+      ? [r.userFirstName, r.userLastName].filter(Boolean).join(" ").trim() ||
+        r.userDisplayName ||
         null
       : null;
     const layers: VehicleIdSessionRow["layers"] = [];
@@ -133,12 +140,12 @@ export async function listVehicleIdSessions(
         ? assetMap.get(r.chargingStationId) ?? null
         : null,
       chargerSerial: station?.serialNumber ?? null,
-      installationDisplayName: station?.installation?.displayName ?? null,
-      siteDisplayName: r.site?.displayName ?? null,
-      orgDisplayName: r.organization?.displayName ?? null,
+      installationDisplayName: station?.installationDisplayName ?? null,
+      siteDisplayName: r.siteDisplayName ?? null,
+      orgDisplayName: r.orgDisplayName ?? null,
       driverIdTag: r.idTag,
       driverDisplayName,
-      driverEmail: r.user?.email ?? null,
+      driverEmail: r.userEmail ?? null,
       evPlcMac: r.evPlcMac,
       evPlcMacOuiVendor: r.evPlcMacOuiVendor,
       evPlcPibVersion: r.evPlcPibVersion,
