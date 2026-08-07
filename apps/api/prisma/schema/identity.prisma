@@ -530,8 +530,6 @@ model Organization {
   billingTransactions BillingTransaction[]
   invoices            Invoice[]
   statements          Statement[]
-  tickets             IssueTicket[]
-  detectionRules      DetectionRule[]
   eventLog            EventLogEntry[]
   auditActions        AuditAction[]
   featureFlags        FeatureFlag[]

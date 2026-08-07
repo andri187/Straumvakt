@@ -127,9 +127,10 @@ describe.skipIf(!hasDb)("Drizzle domain schemas match the database", () => {
   }
 
   it("discovered every declared table across all seven domains", () => {
-    // 98 Prisma models. A discovery bug that found none would make every
-    // assertion below pass vacuously.
-    expect(tables.length).toBe(98);
+    // 95 Prisma models — 98 less the three issues tables, removed 2026-08-07
+    // (empty, unreferenced, and the engine is undesigned). A discovery bug
+    // that found none would make every assertion below pass vacuously.
+    expect(tables.length).toBe(95);
     for (const d of Object.keys(DOMAINS)) {
       expect(tables.filter((t) => t.domain === d).length, `${d} contributed no tables`).toBeGreaterThan(0);
     }

@@ -22,74 +22,10 @@ import { bigint, boolean, date, index, integer, jsonb, pgSchema, primaryKey, tex
 
 export const auditSchema = pgSchema("audit");
 export const eventsSchema = pgSchema("events");
-export const issuesSchema = pgSchema("issues");
 export const webhooksSchema = pgSchema("webhooks");
 
-export const issueSubjectEnum = issuesSchema.enum("IssueSubject", ["charger", "ocpp_identity", "connector", "session", "site", "user", "other"]);
-export const issueSeverityEnum = issuesSchema.enum("IssueSeverity", ["low", "medium", "high", "critical"]);
-export const issueStatusEnum = issuesSchema.enum("IssueStatus", ["open", "triaged", "assigned", "in_progress", "waiting", "resolved", "closed"]);
 export const retentionClassEnum = eventsSchema.enum("RetentionClass", ["financial", "operational", "raw_protocol", "aggregate", "issue_history"]);
 export const actorKindEnum = auditSchema.enum("ActorKind", ["user", "system", "vendor_webhook", "ocpp_worker"]);
-
-/** Prisma model `IssueTicket` — issues.tickets */
-export const tickets = issuesSchema.table(
-  "tickets",
-  {
-    id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-    orgId: uuid("org_id").notNull(),
-    subjectType: issueSubjectEnum("subject_type").notNull(),
-    subjectId: uuid("subject_id"),
-    category: text("category").notNull(),
-    severity: issueSeverityEnum("severity").notNull().default("medium"),
-    status: issueStatusEnum("status").notNull().default("open"),
-    detectedBy: text("detected_by").notNull(),
-    assignedToUserId: uuid("assigned_to_user_id"),
-    assignedToContractorId: uuid("assigned_to_contractor_id"),
-    slaTargetAt: timestamp("sla_target_at", { withTimezone: true, precision: 6, mode: "date" }),
-    resolvedAt: timestamp("resolved_at", { withTimezone: true, precision: 6, mode: "date" }),
-    resolutionSummary: text("resolution_summary"),
-    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().$defaultFn(() => new Date()).$onUpdateFn(() => new Date()),
-  },
-  (t) => [
-    index().on(t.orgId, t.status, t.severity),
-    index().on(t.subjectType, t.subjectId),
-  ],
-);
-
-/** Prisma model `TicketEvent` — issues.ticket_events */
-export const ticketEvents = issuesSchema.table(
-  "ticket_events",
-  {
-    id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-    ticketId: uuid("ticket_id").notNull(),
-    eventType: text("event_type").notNull(),
-    actorUserId: uuid("actor_user_id"),
-    payload: jsonb("payload").notNull().default({}),
-    occurredAt: timestamp("occurred_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
-  },
-  (t) => [
-    index().on(t.ticketId, t.occurredAt),
-  ],
-);
-
-/** Prisma model `DetectionRule` — issues.detection_rules */
-export const detectionRules = issuesSchema.table(
-  "detection_rules",
-  {
-    id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-    orgId: uuid("org_id").notNull(),
-    ruleKey: text("rule_key").notNull(),
-    config: jsonb("config").notNull().default({}),
-    enabled: boolean("enabled").notNull().default(true),
-    version: integer("version").notNull().default(1),
-    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().$defaultFn(() => new Date()).$onUpdateFn(() => new Date()),
-  },
-  (t) => [
-    uniqueIndex().on(t.orgId, t.ruleKey),
-  ],
-);
 
 /** Prisma model `EventLogEntry` — events.event_log */
 export const eventLog = eventsSchema.table(
