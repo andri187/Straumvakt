@@ -15,7 +15,14 @@ const CHECKS = [
   ["typecheck", "npm run typecheck"],
   ["schemas", "npm run check:schemas"],
   ["api-schema", "npm run check:api-schema"],
-  ["schema-parity", "npm run check:schema-parity"],
+  // Replaced check:schema-parity on 2026-08-07 (ADR 0051). That one ran
+  // `prisma migrate diff` between prisma/schema and apps/api/prisma/schema —
+  // two copies of the same files, one generated from the other, so it could
+  // only ever catch a stale copy that check:api-schema already catches.
+  // Drizzle is authoritative now, and this catches the divergence that can
+  // actually happen: Drizzle and Prisma describing different databases while
+  // ~500 un-ported calls still use the Prisma client. It goes away with them.
+  ["schema-consistency", "npm run check:schema-consistency"],
   ["deps", "npm run check:deps"],
   ["deps-graph", "npm run check:deps-graph"],
   ["api-endpoints", "npm run check:api-endpoints"],

@@ -18,6 +18,7 @@
 // explicit joins, and a wrong FK declaration would be a silent lie about
 // cascade behaviour.
 
+import { sql } from "drizzle-orm";
 import { bigint, boolean, date, index, integer, jsonb, pgSchema, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 export const auditSchema = pgSchema("audit");
@@ -57,7 +58,10 @@ export const archiveWatermark = eventsSchema.table(
   {
     retentionClass: retentionClassEnum("retention_class").notNull(),
     day: date("day", { mode: "date" }).notNull(),
-    objectCount: bigint("object_count", { mode: "bigint" }).notNull().default(0n),
+    // sql`0`, not 0n: drizzle-kit serialises the schema snapshot to JSON and
+    // JSON.stringify throws on a BigInt literal, so `.default(0n)` makes
+    // `drizzle-kit generate` fail outright. Same DEFAULT 0 in the DDL.
+    objectCount: bigint("object_count", { mode: "bigint" }).notNull().default(sql`0`),
     lastWriteAt: timestamp("last_write_at", { withTimezone: true, precision: 6, mode: "date" }).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
   },

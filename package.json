@@ -17,10 +17,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "db:generate": "prisma generate && npm --prefix apps/api run prisma:generate",
-    "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
     "db:validate": "prisma validate",
-    "check:schema-parity": "prisma migrate diff --from-schema apps/api/prisma/schema --to-schema prisma/schema --exit-code",
     "sync:api-schema": "node scripts/sync-api-prisma-schema.mjs",
     "check:api-schema": "node scripts/sync-api-prisma-schema.mjs --check",
     "sync:detour-assets": "node scripts/sync-detour-assets.mjs",
@@ -34,7 +32,11 @@
     "api:endpoints": "node scripts/gen-api-endpoints.mjs",
     "check:api-endpoints": "node scripts/gen-api-endpoints.mjs --check",
     "check:unused-exports": "node scripts/check-unused-exports.mjs",
-    "unused-exports:baseline": "node scripts/check-unused-exports.mjs --baseline"
+    "unused-exports:baseline": "node scripts/check-unused-exports.mjs --baseline",
+    "db:generate:sql": "npm --prefix apps/api exec -- drizzle-kit generate",
+    "db:baseline": "node apps/api/scripts/drizzle-baseline.mjs",
+    "db:migrate:status": "npm --prefix apps/api exec -- drizzle-kit check",
+    "check:schema-consistency": "node scripts/check-schema-consistency.mjs"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
