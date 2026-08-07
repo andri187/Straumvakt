@@ -3,7 +3,12 @@
 // /api/internal/zaptec-state-event ingest from the Fly AMQP consumer.
 
 import { Hono } from "hono";
-import { makePrisma } from "../../lib/prisma";
+import { desc, eq, inArray } from "drizzle-orm";
+import { makeDrizzle } from "../../lib/drizzle";
+import { liveSessions } from "@straumvakt/shared/db/charging";
+import { chargingStations, siteAssets, sites } from "@straumvakt/shared/db/assets";
+import { ocppIdentities } from "@straumvakt/shared/db/protocol";
+import { organizations } from "@straumvakt/shared/db/identity";
 import { requireAdmin, type AuthVars } from "../../lib/auth-middleware";
 import { requirePermission } from "../../lib/auth/require-permission";
 import { resolveOrgScope } from "../../lib/auth/org-scope";
@@ -14,39 +19,42 @@ export const adminActiveSessions = new Hono<{ Bindings: Env; Variables: AuthVars
 adminActiveSessions.use("*", requireAdmin);
 
 adminActiveSessions.get("/", requirePermission("charger.read"), async (c) => {
-  const db = makePrisma(c.env);
+  const db = makeDrizzle(c.env);
   const orgScope = await resolveOrgScope(c.env, c.get("session"));
-  const rows = await db.liveSession.findMany({
-    where:
-      orgScope.all === false ? { orgId: { in: orgScope.orgIds } } : undefined,
-    select: {
-      chargingStationId: true,
-      orgId: true,
-      ocppIdentityId: true,
-      vendorResourceId: true,
-      startedAt: true,
-      lastObservedAt: true,
-      lastOperationMode: true,
-      lastPowerW: true,
-      lastSessionEnergyWh: true,
-      organization: { select: { displayName: true } },
-      ocppIdentity: { select: { identityString: true } },
-      chargingStation: {
-        select: {
-          siteAsset: { select: { displayName: true, site: { select: { displayName: true } } } },
-        },
-      },
-    },
-    orderBy: { startedAt: "desc" },
-  });
+  // charging_stations' PK is the site_asset id, so charger name and site name
+  // are two joins from the live session, not three.
+  const rows = await db
+    .select({
+      chargingStationId: liveSessions.chargingStationId,
+      orgId: liveSessions.orgId,
+      ocppIdentityId: liveSessions.ocppIdentityId,
+      vendorResourceId: liveSessions.vendorResourceId,
+      startedAt: liveSessions.startedAt,
+      lastObservedAt: liveSessions.lastObservedAt,
+      lastOperationMode: liveSessions.lastOperationMode,
+      lastPowerW: liveSessions.lastPowerW,
+      lastSessionEnergyWh: liveSessions.lastSessionEnergyWh,
+      orgDisplayName: organizations.displayName,
+      identityString: ocppIdentities.identityString,
+      chargerDisplayName: siteAssets.displayName,
+      siteDisplayName: sites.displayName,
+    })
+    .from(liveSessions)
+    .leftJoin(organizations, eq(organizations.id, liveSessions.orgId))
+    .leftJoin(ocppIdentities, eq(ocppIdentities.id, liveSessions.ocppIdentityId))
+    .leftJoin(chargingStations, eq(chargingStations.siteAssetId, liveSessions.chargingStationId))
+    .leftJoin(siteAssets, eq(siteAssets.id, chargingStations.siteAssetId))
+    .leftJoin(sites, eq(sites.id, siteAssets.siteId))
+    .where(orgScope.all === false ? inArray(liveSessions.orgId, orgScope.orgIds) : undefined)
+    .orderBy(desc(liveSessions.startedAt));
   return c.json({
     sessions: rows.map((r) => ({
       chargingStationId: r.chargingStationId,
       orgId: r.orgId,
-      orgDisplayName: r.organization.displayName,
-      siteDisplayName: r.chargingStation.siteAsset.site.displayName,
-      chargerDisplayName: r.chargingStation.siteAsset.displayName,
-      identityString: r.ocppIdentity.identityString,
+      orgDisplayName: r.orgDisplayName,
+      siteDisplayName: r.siteDisplayName,
+      chargerDisplayName: r.chargerDisplayName,
+      identityString: r.identityString,
       vendorResourceId: r.vendorResourceId,
       startedAt: r.startedAt.toISOString(),
       lastObservedAt: r.lastObservedAt.toISOString(),

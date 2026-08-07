@@ -20,7 +20,7 @@
 //   • All deletes happen before any adds (cleaner state in case of
 //     mid-batch failure).
 
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { PrismaClient } from "../generated/prisma/client";
 import type { Db } from "../lib/drizzle";
 import { vendorCredentials } from "@straumvakt/shared/db/vendor";
@@ -92,6 +92,30 @@ async function readSealedCredential(
     },
   });
   return c ? { ...c, vendorSlug: c.vendor.slug } : null;
+}
+
+/**
+ * Ids of every active Zaptec credential.
+ *
+ * The same query — active vendor_credentials joined to vendors on
+ * slug='zaptec' — was written out five times: chargers.ts,
+ * charger-zaptec-config.ts, zaptec-sync-cron.ts (twice) and
+ * zaptec-trigger-sync.ts. Under Prisma it was a nested relation filter
+ * (`vendor: { slug: "zaptec" }`); under Drizzle it is an explicit join, and
+ * five copies of an explicit join is five chances to write the wrong one.
+ *
+ * It lives HERE rather than in a new zaptec-*.ts module because
+ * dependency-cruiser classifies `repositories/zaptec-*.ts` as vendor-edge,
+ * and a new file would have created a fresh no-import-from-vendor violation
+ * for chargers.ts. chargers.ts already imports this module.
+ */
+export async function listActiveZaptecCredentialIds(db: Db): Promise<string[]> {
+  const rows = await db
+    .select({ id: vendorCredentials.id })
+    .from(vendorCredentials)
+    .innerJoin(vendors, eq(vendors.id, vendorCredentials.vendorId))
+    .where(and(eq(vendorCredentials.status, "active"), eq(vendors.slug, "zaptec")));
+  return rows.map((r) => r.id);
 }
 
 export async function unsealAndAuth(

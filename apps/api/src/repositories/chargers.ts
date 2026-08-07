@@ -53,7 +53,8 @@ import type { OrgScope } from "../lib/auth/org-scope";
 import { sha256Hex } from "../lib/sha256";
 import { recordAuditAction } from "../lib/audit";
 import { listChargers as zaptecListChargers } from "../lib/zaptec";
-import { unsealAndAuth } from "./credential-management";
+import { listActiveZaptecCredentialIds, unsealAndAuth } from "./credential-management";
+
 
 /** Anything that can run a statement: the client or a transaction handle. */
 type DbOrTx = Db | Parameters<Parameters<Db["transaction"]>[0]>[0];
@@ -103,19 +104,13 @@ async function getActiveVendorResourceIds(
   db: Db,
   kek: string,
 ): Promise<Set<string> | null> {
-  const { vendorCredentials } = await import("@straumvakt/shared/db/vendor");
-  const { vendors } = await import("@straumvakt/shared/db/catalog");
-  const credentials = await db
-    .select({ id: vendorCredentials.id })
-    .from(vendorCredentials)
-    .innerJoin(vendors, eq(vendors.id, vendorCredentials.vendorId))
-    .where(and(eq(vendorCredentials.status, "active"), eq(vendors.slug, "zaptec")));
-  if (credentials.length === 0) return null;
+  const credentialIds = await listActiveZaptecCredentialIds(db);
+  if (credentialIds.length === 0) return null;
   const seen = new Set<string>();
   let attemptedAtLeastOne = false;
-  for (const cred of credentials) {
+  for (const credId of credentialIds) {
     try {
-      const auth = await unsealAndAuth(db, kek, cred.id);
+      const auth = await unsealAndAuth(db, kek, credId);
       const list = await zaptecListChargers(auth.accessToken);
       attemptedAtLeastOne = true;
       if (list.ok) {
