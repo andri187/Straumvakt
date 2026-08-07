@@ -18,7 +18,9 @@
 // which path we took here.
 
 import { Hono } from "hono";
-import { makePrisma } from "../../lib/prisma";
+import { makeDrizzle } from "../../lib/drizzle";
+import { sql } from "drizzle-orm";
+import { ocppIdentities } from "@straumvakt/shared/db/protocol";
 import { verifyIngest } from "../../lib/ocpp-internal-auth";
 import { upsertPendingDiscovery } from "../../repositories/pending-discoveries";
 import type { Env } from "../../bindings";
@@ -43,7 +45,7 @@ internalPendingDiscovery.post("/", async (c) => {
     return c.json({ ok: false, error: "identityString required" }, 400);
   }
 
-  const db = makePrisma(c.env);
+  const db = makeDrizzle(c.env);
   try {
     // Path 1: identity already provisioned → no-op. We deliberately
     // don't update last_seen_at here — that column is reserved for
@@ -55,12 +57,12 @@ internalPendingDiscovery.post("/", async (c) => {
     // reachability via the API emblem (creds work + charger known).
     //
     // The pending list also stays clean since we skip the upsert.
-    const matched = await db.ocppIdentity.findFirst({
-      where: {
-        identityString: { equals: identityString, mode: "insensitive" },
-      },
-      select: { id: true },
-    });
+    // Exact, case-folded — see the note in ocpp-auth.ts. Not ilike.
+    const [matched] = await db
+      .select({ id: ocppIdentities.id })
+      .from(ocppIdentities)
+      .where(sql`lower(${ocppIdentities.identityString}) = lower(${identityString})`)
+      .limit(1);
     if (matched) {
       return c.json({ ok: true, suppressed: true });
     }

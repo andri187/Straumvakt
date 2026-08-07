@@ -25,6 +25,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { z } from "zod";
 import { makePrisma } from "../../lib/prisma";
+import { makeDrizzle } from "../../lib/drizzle";
 import { verifyPassword } from "../../lib/password";
 import {
   mintDriverToken,
@@ -737,8 +738,10 @@ publicDriver.get("/sessions/history", requireDriver, async (c) => {
 
 publicDriver.get("/invoices", requireDriver, async (c) => {
   const { userId } = c.get("driverPayload");
-  const prisma = makePrisma(c.env);
-  const sessions = await listDriverActualSessions(prisma, userId);
+  // Drizzle here while the rest of this file is still on Prisma — this is
+  // the only handler whose repository has ported. Two clients in one file,
+  // never in one request.
+  const sessions = await listDriverActualSessions(makeDrizzle(c.env), userId);
   return c.json({ sessions });
 });
 

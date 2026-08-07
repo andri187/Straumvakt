@@ -4,7 +4,9 @@
 // either by an operator dismiss action or automatically when a
 // charger create lands a matching identity_string.
 
-import type { PrismaClient } from "../generated/prisma/client";
+import { desc, eq, lt, sql } from "drizzle-orm";
+import { pendingDiscoveries } from "@straumvakt/shared/db/protocol";
+import type { Db } from "../lib/drizzle";
 
 export interface PendingDiscoverySummary {
   identityString: string;
@@ -16,7 +18,7 @@ export interface PendingDiscoverySummary {
 }
 
 export async function listPendingDiscoveries(
-  db: PrismaClient,
+  db: Db,
 ): Promise<PendingDiscoverySummary[]> {
   // Returns ALL pending rows — including ones that match an existing
   // OcppIdentity. A "matches but is in pending" row is signal, not
@@ -24,17 +26,17 @@ export async function listPendingDiscoveries(
   // (typically because Zaptec has PropertyAuthenticationDisabled = true
   // and is connecting anonymously). The page UI distinguishes the two
   // cases visually so the operator can spot config drift.
-  const rows = await db.pendingDiscovery.findMany({
-    orderBy: { lastSeenAt: "desc" },
-    select: {
-      identityString: true,
-      firstSeenAt: true,
-      lastSeenAt: true,
-      attemptCount: true,
-      remoteAddr: true,
-      userAgent: true,
-    },
-  });
+  const rows = await db
+    .select({
+      identityString: pendingDiscoveries.identityString,
+      firstSeenAt: pendingDiscoveries.firstSeenAt,
+      lastSeenAt: pendingDiscoveries.lastSeenAt,
+      attemptCount: pendingDiscoveries.attemptCount,
+      remoteAddr: pendingDiscoveries.remoteAddr,
+      userAgent: pendingDiscoveries.userAgent,
+    })
+    .from(pendingDiscoveries)
+    .orderBy(desc(pendingDiscoveries.lastSeenAt));
   return rows.map((r) => ({
     identityString: r.identityString,
     firstSeenAt: r.firstSeenAt.toISOString(),
@@ -47,10 +49,10 @@ export async function listPendingDiscoveries(
 
 /** Delete by identity_string. Idempotent — no-op if row is missing. */
 export async function deletePendingDiscovery(
-  db: PrismaClient,
+  db: Db,
   identityString: string,
 ): Promise<void> {
-  await db.pendingDiscovery.deleteMany({ where: { identityString } });
+  await db.delete(pendingDiscoveries).where(eq(pendingDiscoveries.identityString, identityString));
 }
 
 /**
@@ -65,12 +67,16 @@ export async function deletePendingDiscovery(
  */
 const IDLE_THRESHOLD_MS = 5 * 60 * 1000;
 
-export async function clearIdlePendingDiscoveries(db: PrismaClient): Promise<number> {
+export async function clearIdlePendingDiscoveries(db: Db): Promise<number> {
   const cutoff = new Date(Date.now() - IDLE_THRESHOLD_MS);
-  const r = await db.pendingDiscovery.deleteMany({
-    where: { lastSeenAt: { lt: cutoff } },
-  });
-  return r.count;
+  // Prisma's deleteMany returned { count }. Drizzle has no row count on
+  // node-postgres deletes without RETURNING, so return the ids and count
+  // them — same number, one round trip either way.
+  const deleted = await db
+    .delete(pendingDiscoveries)
+    .where(lt(pendingDiscoveries.lastSeenAt, cutoff))
+    .returning({ identityString: pendingDiscoveries.identityString });
+  return deleted.length;
 }
 
 /**
@@ -82,7 +88,7 @@ export async function clearIdlePendingDiscoveries(db: PrismaClient): Promise<num
  * deprecated), and operator-typed entries vary by hand.
  */
 export async function upsertPendingDiscovery(
-  db: PrismaClient,
+  db: Db,
   args: {
     identityString: string;
     remoteAddr: string | null;
@@ -90,19 +96,20 @@ export async function upsertPendingDiscovery(
   },
 ): Promise<void> {
   const key = args.identityString.toLowerCase();
-  await db.pendingDiscovery.upsert({
-    where: { identityString: key },
-    create: {
-      identityString: key,
-      attemptCount: 1,
-      remoteAddr: args.remoteAddr ? args.remoteAddr.slice(0, 64) : null,
-      userAgent: args.userAgent ? args.userAgent.slice(0, 255) : null,
-    },
-    update: {
-      lastSeenAt: new Date(),
-      attemptCount: { increment: 1 },
-      remoteAddr: args.remoteAddr ? args.remoteAddr.slice(0, 64) : null,
-      userAgent: args.userAgent ? args.userAgent.slice(0, 255) : null,
-    },
-  });
+  const remoteAddr = args.remoteAddr ? args.remoteAddr.slice(0, 64) : null;
+  const userAgent = args.userAgent ? args.userAgent.slice(0, 255) : null;
+  await db
+    .insert(pendingDiscoveries)
+    .values({ identityString: key, attemptCount: 1, remoteAddr, userAgent })
+    .onConflictDoUpdate({
+      target: pendingDiscoveries.identityString,
+      set: {
+        lastSeenAt: new Date(),
+        // Prisma's `{ increment: 1 }` — the read-modify-write has to stay in
+        // SQL, not JS, or two gateway retries racing lose a count.
+        attemptCount: sql`${pendingDiscoveries.attemptCount} + 1`,
+        remoteAddr,
+        userAgent,
+      },
+    });
 }

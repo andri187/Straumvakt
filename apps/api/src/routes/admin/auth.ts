@@ -6,7 +6,9 @@ import {
   createAdminSession,
   timingSafeEqualText,
 } from "../../lib/admin-session";
-import { makePrisma } from "../../lib/prisma";
+import { eq } from "drizzle-orm";
+import { makeDrizzle } from "../../lib/drizzle";
+import { userCredentials, users } from "@straumvakt/shared/db/identity";
 import { bootstrapAdminUser } from "../../repositories/admin-bootstrap";
 import { verifyPassword } from "../../lib/password";
 import { rateLimit } from "../../lib/rate-limit";
@@ -68,7 +70,7 @@ adminAuth.post(
   // future sprint.
   const expectedEmail = c.env.ADMIN_EMAIL.trim();
   const expectedPassword = c.env.ADMIN_PASSWORD;
-  const db = makePrisma(c.env);
+  const db = makeDrizzle(c.env);
 
   let resolvedUserId: string | undefined;
 
@@ -92,16 +94,21 @@ adminAuth.post(
     // (both branches do a PBKDF2 derivation) so timing channels
     // don't distinguish "user exists but wrong password" from
     // "user doesn't exist."
-    const user = await db.user.findUnique({
-      where: { email: email.toLowerCase() },
-      select: {
-        id: true,
-        status: true,
-        audience: true,
-        credentials: { select: { passwordHash: true } },
-      },
-    });
-    const passwordHash = user?.credentials?.passwordHash;
+    const [user] = await db
+      .select({
+        id: users.id,
+        status: users.status,
+        audience: users.audience,
+        passwordHash: userCredentials.passwordHash,
+      })
+      .from(users)
+      // leftJoin, not innerJoin: a user with no credential row must still be
+      // found, so the PBKDF2 derivation below runs on both branches and the
+      // timing channel this whole block exists to close stays closed.
+      .leftJoin(userCredentials, eq(userCredentials.userId, users.id))
+      .where(eq(users.email, email.toLowerCase()))
+      .limit(1);
+    const passwordHash = user?.passwordHash;
     const ok =
       passwordHash !== null &&
       passwordHash !== undefined &&

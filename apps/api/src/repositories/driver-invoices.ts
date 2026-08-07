@@ -5,7 +5,12 @@
 // (canonical, computed at stop), else the session's rolled-up cost; null when
 // the session was never costed (the P1 engine fills those — see step 2).
 
-import type { PrismaClient } from "../generated/prisma/client";
+import { desc, eq, inArray } from "drizzle-orm";
+import { sessions } from "@straumvakt/shared/db/charging";
+import { sessionLedger } from "@straumvakt/shared/db/commercial";
+import { chargingStations, siteAssets, sites } from "@straumvakt/shared/db/assets";
+import { organizations } from "@straumvakt/shared/db/identity";
+import type { Db } from "../lib/drizzle";
 
 export interface DriverInvoiceSession {
   sessionId: string;
@@ -23,35 +28,42 @@ export interface DriverInvoiceSession {
 const whToKwh = (wh: bigint | null): number => (wh == null ? 0 : Math.round(Number(wh) / 100) / 10);
 
 export async function listDriverActualSessions(
-  db: PrismaClient,
+  db: Db,
   userId: string,
   limit = 500,
 ): Promise<DriverInvoiceSession[]> {
-  const sessions = await db.chargeSession.findMany({
-    where: { userId },
-    orderBy: { startedAt: "desc" },
-    take: limit,
-    select: {
-      id: true,
-      startedAt: true,
-      endedAt: true,
-      energyWh: true,
-      costIncVatMinor: true,
-      site: { select: { displayName: true } },
-      organization: { select: { displayName: true } },
-      chargingStation: { select: { siteAsset: { select: { displayName: true } } } },
-    },
-  });
-  if (sessions.length === 0) return [];
+  // The charger name is session → chargingStation → siteAsset.displayName.
+  // chargingStation's PK *is* the siteAsset id, so that is one join, not two.
+  const rows = await db
+    .select({
+      id: sessions.id,
+      startedAt: sessions.startedAt,
+      endedAt: sessions.endedAt,
+      energyWh: sessions.energyWh,
+      costIncVatMinor: sessions.costIncVatMinor,
+      siteName: sites.displayName,
+      orgName: organizations.displayName,
+      chargerName: siteAssets.displayName,
+    })
+    .from(sessions)
+    .leftJoin(sites, eq(sites.id, sessions.siteId))
+    .leftJoin(organizations, eq(organizations.id, sessions.orgId))
+    .leftJoin(chargingStations, eq(chargingStations.siteAssetId, sessions.chargingStationId))
+    .leftJoin(siteAssets, eq(siteAssets.id, chargingStations.siteAssetId))
+    .where(eq(sessions.userId, userId))
+    .orderBy(desc(sessions.startedAt))
+    .limit(limit);
+
+  if (rows.length === 0) return [];
 
   // Canonical cost lives on the ledger when the session was projected.
-  const ledger = await db.sessionLedger.findMany({
-    where: { sessionId: { in: sessions.map((s) => s.id) } },
-    select: { sessionId: true, costIskMinor: true },
-  });
+  const ledger = await db
+    .select({ sessionId: sessionLedger.sessionId, costIskMinor: sessionLedger.costIskMinor })
+    .from(sessionLedger)
+    .where(inArray(sessionLedger.sessionId, rows.map((s) => s.id)));
   const ledgerCost = new Map(ledger.map((l) => [l.sessionId, l.costIskMinor]));
 
-  return sessions.map((s) => {
+  return rows.map((s) => {
     const lc = ledgerCost.get(s.id);
     const cost =
       lc != null ? Number(lc) : s.costIncVatMinor != null ? Number(s.costIncVatMinor) : null;
@@ -66,9 +78,9 @@ export async function listDriverActualSessions(
       durationSec,
       energyKwh: whToKwh(s.energyWh),
       costIsk: cost,
-      chargerName: s.chargingStation?.siteAsset?.displayName ?? null,
-      siteName: s.site?.displayName ?? null,
-      billingHomeName: s.organization?.displayName ?? null,
+      chargerName: s.chargerName ?? null,
+      siteName: s.siteName ?? null,
+      billingHomeName: s.orgName ?? null,
     };
   });
 }

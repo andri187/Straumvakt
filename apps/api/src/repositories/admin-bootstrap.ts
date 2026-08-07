@@ -25,7 +25,9 @@
 // one becomes a read-only relic of the prior ADMIN_EMAIL, the new
 // one starts collecting audit rows.
 
-import type { PrismaClient } from "../generated/prisma/client";
+import { eq } from "drizzle-orm";
+import { platformGrants, users } from "@straumvakt/shared/db/identity";
+import type { Db } from "../lib/drizzle";
 
 export interface BootstrapResult {
   userId: string;
@@ -42,7 +44,7 @@ export interface BootstrapResult {
  * Safe to call on every login.
  */
 export async function bootstrapAdminUser(
-  db: PrismaClient,
+  db: Db,
   rawEmail: string,
 ): Promise<BootstrapResult> {
   // Citext + lowercase normalisation for stability — the User.email
@@ -52,21 +54,22 @@ export async function bootstrapAdminUser(
   const email = rawEmail.trim();
 
   // Step 1: User row.
-  let user = await db.user.findUnique({
-    where: { email },
-    select: { id: true, email: true, audience: true },
-  });
+  let [user] = await db
+    .select({ id: users.id, email: users.email })
+    .from(users)
+    .where(eq(users.email, email))
+    .limit(1);
   let createdUser = false;
   if (!user) {
-    user = await db.user.create({
-      data: {
+    [user] = await db
+      .insert(users)
+      .values({
         email,
         displayName: "Bootstrap admin",
         audience: "operator",
         status: "active",
-      },
-      select: { id: true, email: true, audience: true },
-    });
+      })
+      .returning({ id: users.id, email: users.email });
     createdUser = true;
   }
 
@@ -74,28 +77,27 @@ export async function bootstrapAdminUser(
   // We use `role: super_user` because bootstrap admin should be able
   // to mint other platform grants — the platform_admin role can't.
   let createdGrant = false;
-  const grant = await db.platformGrant.findUnique({
-    where: { userId: user.id },
-    select: { userId: true, role: true, status: true },
-  });
+  const [grant] = await db
+    .select({ userId: platformGrants.userId })
+    .from(platformGrants)
+    .where(eq(platformGrants.userId, user!.id))
+    .limit(1);
   if (!grant) {
-    await db.platformGrant.create({
-      data: {
-        userId: user.id,
-        role: "super_user",
-        status: "active",
-        // grantedById is self-referential here (no granter exists yet);
-        // store null since the FK is nullable. Audit log + this row's
-        // grantedAt timestamp are the trail.
-        grantedById: null,
-      },
+    await db.insert(platformGrants).values({
+      userId: user!.id,
+      role: "super_user",
+      status: "active",
+      // grantedById is self-referential here (no granter exists yet);
+      // store null since the FK is nullable. Audit log + this row's
+      // grantedAt timestamp are the trail.
+      grantedById: null,
     });
     createdGrant = true;
   }
 
   return {
-    userId: user.id,
-    email: user.email,
+    userId: user!.id,
+    email: user!.email,
     audience: "operator",
     createdUser,
     createdGrant,

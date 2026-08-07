@@ -4,7 +4,7 @@
 // pending_discoveries row in the same transaction.
 
 import { Hono } from "hono";
-import { makePrisma } from "../../lib/prisma";
+import { makeDrizzle } from "../../lib/drizzle";
 import { requireAdmin, type AuthVars } from "../../lib/auth-middleware";
 import { requirePermission } from "../../lib/auth/require-permission";
 import {
@@ -24,7 +24,7 @@ adminPendingDiscoveries.get(
   "/",
   requirePermission("platform.tenant.read"),
   async (c) => {
-    const db = makePrisma(c.env);
+    const db = makeDrizzle(c.env);
     const pending = await listPendingDiscoveries(db);
     return c.json({ pending });
   },
@@ -37,7 +37,7 @@ adminPendingDiscoveries.post(
   "/clear-idle",
   requirePermission("platform.tenant.write"),
   async (c) => {
-    const db = makePrisma(c.env);
+    const db = makeDrizzle(c.env);
     const count = await clearIdlePendingDiscoveries(db);
     return c.json({ ok: true, deleted: count });
   },
@@ -47,7 +47,7 @@ adminPendingDiscoveries.delete(
   "/:identityString",
   requirePermission("platform.tenant.write"),
   async (c) => {
-    const db = makePrisma(c.env);
+    const db = makeDrizzle(c.env);
     await deletePendingDiscovery(db, c.req.param("identityString"));
     return c.json({ ok: true });
   },

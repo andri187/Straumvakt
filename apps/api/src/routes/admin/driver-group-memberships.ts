@@ -14,7 +14,10 @@
 
 import { Hono } from "hono";
 import { z } from "zod";
-import { makePrisma } from "../../lib/prisma";
+import { eq } from "drizzle-orm";
+import { makeDrizzle } from "../../lib/drizzle";
+import { driverGroups } from "@straumvakt/shared/db/commercial";
+import { users } from "@straumvakt/shared/db/identity";
 import { requireAdmin, type AuthVars } from "../../lib/auth-middleware";
 import { requirePermission } from "../../lib/auth/require-permission";
 import { recordAuditAction } from "../../lib/audit";
@@ -52,13 +55,18 @@ adminDriverGroupMemberships.post(
     }
 
     const { userId, driverGroupId } = parsed.data;
-    const db = makePrisma(c.env);
+    const db = makeDrizzle(c.env);
 
     // ── Guard 1: DriverGroup must exist and belong to this org ───────────────
-    const group = await db.driverGroup.findUnique({
-      where: { id: driverGroupId },
-      select: { id: true, ownerOrgId: true, displayName: true },
-    });
+    const [group] = await db
+      .select({
+        id: driverGroups.id,
+        ownerOrgId: driverGroups.ownerOrgId,
+        displayName: driverGroups.displayName,
+      })
+      .from(driverGroups)
+      .where(eq(driverGroups.id, driverGroupId))
+      .limit(1);
 
     if (!group) {
       return c.json({ error: "not_found", message: "DriverGroup not found" }, 404);
@@ -78,10 +86,11 @@ adminDriverGroupMemberships.post(
     }
 
     // ── Guard 2: User must exist, be a driver, and be active ────────────────
-    const user = await db.user.findUnique({
-      where: { id: userId },
-      select: { id: true, audience: true, status: true, email: true },
-    });
+    const [user] = await db
+      .select({ id: users.id, audience: users.audience, status: users.status, email: users.email })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
 
     if (!user) {
       return c.json({ error: "not_found", message: "User not found" }, 404);
@@ -153,13 +162,14 @@ adminDriverGroupMemberships.get(
       return c.json({ error: "validation", message: "driverGroupId query param required" }, 400);
     }
 
-    const db = makePrisma(c.env);
+    const db = makeDrizzle(c.env);
 
     // Verify group belongs to this org before returning members.
-    const group = await db.driverGroup.findUnique({
-      where: { id: driverGroupId },
-      select: { ownerOrgId: true },
-    });
+    const [group] = await db
+      .select({ ownerOrgId: driverGroups.ownerOrgId })
+      .from(driverGroups)
+      .where(eq(driverGroups.id, driverGroupId))
+      .limit(1);
 
     if (!group) {
       return c.json({ error: "not_found", message: "DriverGroup not found" }, 404);

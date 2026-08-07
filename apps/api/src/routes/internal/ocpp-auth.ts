@@ -39,7 +39,9 @@
 //   403: identity unknown OR password mismatch OR password missing-but-required
 
 import { Hono } from "hono";
-import { makePrisma } from "../../lib/prisma";
+import { makeDrizzle } from "../../lib/drizzle";
+import { sql } from "drizzle-orm";
+import { ocppIdentities } from "@straumvakt/shared/db/protocol";
 import { sha256Hex } from "../../lib/sha256";
 import { hexEquals, verifyIngest } from "../../lib/ocpp-internal-auth";
 import { upsertPendingDiscovery } from "../../repositories/pending-discoveries";
@@ -72,12 +74,21 @@ internalOcppAuth.post("/", async (c) => {
   const providedPassword =
     typeof password === "string" && password.length > 0 ? password : null;
 
-  const db = makePrisma(c.env);
+  const db = makeDrizzle(c.env);
 
-  const identity = await db.ocppIdentity.findFirst({
-    where: { identityString: { equals: identityString, mode: "insensitive" } },
-    select: { id: true, orgId: true, authSecretHash: true, status: true },
-  });
+  // Prisma's `mode: "insensitive"` was an exact, case-folded comparison.
+  // NOT ilike — an identity string may legitimately contain `_` or `%`, and
+  // ilike would treat both as wildcards and match the wrong charger.
+  const [identity] = await db
+    .select({
+      id: ocppIdentities.id,
+      orgId: ocppIdentities.orgId,
+      authSecretHash: ocppIdentities.authSecretHash,
+      status: ocppIdentities.status,
+    })
+    .from(ocppIdentities)
+    .where(sql`lower(${ocppIdentities.identityString}) = lower(${identityString})`)
+    .limit(1);
 
   if (!identity) {
     // Equalise CPU cost — hash even on miss so "user exists" vs
