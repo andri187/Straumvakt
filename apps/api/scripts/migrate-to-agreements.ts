@@ -86,10 +86,24 @@ Flags:
 }
 
 // ── Known constants (verified via seed-vcp-sandbox.ts + probe output) ───
-// N1 ehf is the only org we currently know an `supplierOrgId` for in the
-// rate book (its own retailer tariff). Straumvakt's org-id is referenced
-// indirectly through the installation list — we never need it as a literal.
-const N1_EHF_ORG = "b9f6a897-2401-45a3-9cde-b89d32fdb326";
+// Straumvakt's org-id is referenced indirectly through the installation
+// list — we never need it as a literal.
+//
+// `supplierOrgId` on a rate reference is WHO GETS PAID, and it is the only
+// thing that puts a name on each leg of the cost ledger. Corrected
+// 2026-08-07 — both original values were wrong, in opposite directions:
+//
+//   - Veitur was recorded as "not seeded as an Organization row". It is:
+//     f5f003d9, roles {dso}. The DSO leg was being credited to nobody.
+//   - The retailer rate pointed at N1 ehf, which is the SITE HOST and CPO
+//     (roles {cpo,site_host}). The retailer is N1 Rafmagn — a separate
+//     kennitala, roles {retailer}, and the org the rate code is named for.
+//     The energy leg was being credited to the host.
+//
+// Neither surfaced because no billing line had ever been emitted.
+const N1_EHF_ORG = "b9f6a897-2401-45a3-9cde-b89d32fdb326"; // site host + CPO
+const N1_RAFMAGN_ORG = "e8c0d219-a9a1-4ccd-8964-3be312c90e22"; // retailer
+const VEITUR_ORG = "f5f003d9-76e3-42de-870e-b62170fdc91a"; // DSO
 
 // Supplier rate codes — stable identifiers, ADR 0019 §rate-reference.
 // Both rates are flat per the whole effective window (pilot scope —
@@ -105,9 +119,18 @@ const ELE_PRICE_MINOR_DEFAULT = 883n; // 8.83 kr/kWh (N1 retailer)
 const VAT_RATE_PCT_DEFAULT = "24.00";
 
 // Pilot allocation: 100% driver-paid passthrough, no markup.
-// Uppercase JSON values per ADR 0019 2026-05-09 addendum.
+//
+// LOWERCASE, corrected 2026-08-07. ADR 0019 §Allocation writes its JSON
+// examples uppercase ("USR"); this script followed them, and the resolver —
+// which validates against the lowercase `BEARER_CODES`, matching the
+// Postgres enum on the sibling `default_bearer_type` column — rejected every
+// clause seeded from it. Nothing surfaced the mismatch for three months
+// because no session carried a user_id, so the resolver was never reached.
+//
+// The reader now lowercases before validating, so rows already seeded
+// uppercase still resolve. Writes are canonical from here.
 const ALLOCATION_DRIVER_PAYS = {
-  passthrough: { splits: [{ bearer_type: "USR", share_pct: 100 }] },
+  passthrough: { splits: [{ bearer_type: "usr", share_pct: 100 }] },
   markup: null,
 };
 
@@ -454,14 +477,14 @@ function renderParam(p: unknown): string {
           code: DSO_RATE_CODE,
           costFactorKey: "DSO" as const,
           defaultPrice: DSO_PRICE_MINOR_DEFAULT,
-          supplierOrgId: null as string | null, // Veitur ohf — not seeded as an Organization row
+          supplierOrgId: VEITUR_ORG as string | null, // the DSO on this installation
           sourceTariffId: pickTariffId("dso"),
         },
         {
           code: ELE_RATE_CODE,
           costFactorKey: "ELE" as const,
           defaultPrice: ELE_PRICE_MINOR_DEFAULT,
-          supplierOrgId: N1_EHF_ORG,
+          supplierOrgId: N1_RAFMAGN_ORG, // the retailer, NOT the site host
           sourceTariffId: pickTariffId("retailer"),
         },
       ]) {

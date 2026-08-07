@@ -26,8 +26,29 @@ export type BillingLineKind = (typeof BILLING_LINE_KINDS)[number];
 
 // ── Allocation (JSONB) ───────────────────────────────────────────────
 
+/**
+ * Bearer codes inside allocation_json are case-normalised on read.
+ *
+ * ADR 0019 §Allocation writes its JSON examples in UPPERCASE ("USR"), and
+ * `migrate-to-agreements.ts` seeded every clause from those examples. The
+ * Postgres enum `agreements."BearerType"` and `BEARER_CODES` are lowercase,
+ * so `allocation_json` — being JSONB, and therefore unconstrained by the
+ * enum — is the one place the two halves of the ADR were free to disagree.
+ * They did, and nothing caught it: the resolver rejected every clause it was
+ * ever handed, but no session was attributable enough to reach the resolver
+ * until 2026-08-07.
+ *
+ * "USR" and "usr" name the same bearer, so accepting both is not a semantic
+ * change. It is also what lets already-seeded rows resolve without a data
+ * migration against staging. New writes are lowercase — see the seeder.
+ */
+const bearerCode = z.preprocess(
+  (v) => (typeof v === "string" ? v.toLowerCase() : v),
+  z.enum(BEARER_CODES)
+);
+
 export const allocationSplitSchema = z.object({
-  bearer_type: z.enum(BEARER_CODES),
+  bearer_type: bearerCode,
   share_pct: z.number().min(0).max(100),
   bearer_ref: z.string().uuid().nullish(),
 });
@@ -35,9 +56,12 @@ export const allocationSplitSchema = z.object({
 export const allocationMarkupSchema = z.object({
   basis: z.enum(["percent", "fixed_per_kwh", "fixed_per_minute", "fixed_per_session"]),
   value: z.number(),
-  payer_type: z.enum(BEARER_CODES),
+  payer_type: bearerCode,
   payer_ref: z.string().uuid().nullish(),
-  recipient_type: z.enum(["org", "wrk"]),
+  recipient_type: z.preprocess(
+    (v) => (typeof v === "string" ? v.toLowerCase() : v),
+    z.enum(["org", "wrk"])
+  ),
 });
 
 export const allocationSchema = z.object({

@@ -9,7 +9,8 @@
     "deploy:prod": "prisma generate && wrangler deploy",
     "prisma:generate": "prisma generate",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
-    "test:parity": "vitest run --config vitest.parity.config.ts"
+    "test:parity": "vitest run --config vitest.parity.config.ts",
+    "script": "node scripts/run.mjs"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.7.0",
