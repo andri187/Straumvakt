@@ -27,7 +27,9 @@
 //         re-invited under a stale Membership row).
 //     Both writes in one tx.
 
-import type { Prisma, PrismaClient } from "../generated/prisma/client";
+import { and, desc, eq, gt, isNull } from "drizzle-orm";
+import { memberships, organizations, users, userTokens } from "@straumvakt/shared/db/identity";
+import type { Db } from "../lib/drizzle";
 import { recordAuditAction } from "../lib/audit";
 import { createUserToken, revokeUserToken } from "./user-tokens";
 
@@ -73,35 +75,33 @@ export type CreateInviteOutcome =
   | { ok: false; reason: "already_active_member" | "org_not_found" };
 
 export async function createInvite(
-  db: PrismaClient,
+  db: Db,
   input: CreateInviteInput,
 ): Promise<CreateInviteOutcome> {
-  const org = await db.organization.findUnique({
-    where: { id: input.orgId },
-    select: { id: true },
-  });
+  const [org] = await db
+    .select({ id: organizations.id })
+    .from(organizations)
+    .where(eq(organizations.id, input.orgId))
+    .limit(1);
   if (!org) return { ok: false, reason: "org_not_found" };
 
   const email = input.email.trim().toLowerCase();
 
-  return db.$transaction(async (tx) => {
+  return db.transaction(async (tx) => {
     // 1. Resolve or create the User. Email is Citext + lowercase
     //    normalised at the call site so case variations don't fork
     //    User rows.
-    let user = await tx.user.findUnique({
-      where: { email },
-      select: { id: true },
-    });
+    let [user] = await tx
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1);
     let isNewUser = false;
     if (!user) {
-      user = await tx.user.create({
-        data: {
-          email,
-          audience: "operator",
-          status: "active",
-        },
-        select: { id: true },
-      });
+      [user] = await tx
+        .insert(users)
+        .values({ email, audience: "operator", status: "active" })
+        .returning({ id: users.id });
       isNewUser = true;
     }
 
@@ -112,10 +112,13 @@ export async function createInvite(
     //                     so old links die when a new invite goes out
     //      • 'active'   → refuse (already-a-member)
     //      • 'suspended', 'revoked' → flip back to 'invited'
-    const membership = await tx.membership.findUnique({
-      where: { orgId_userId: { orgId: input.orgId, userId: user.id } },
-      select: { status: true },
-    });
+    // (org_id, user_id) is the composite primary key, so this matches at
+    // most one row — the same guarantee Prisma's orgId_userId gave.
+    const [membership] = await tx
+      .select({ status: memberships.status })
+      .from(memberships)
+      .where(and(eq(memberships.orgId, input.orgId), eq(memberships.userId, user!.id)))
+      .limit(1);
 
     if (membership?.status === "active") {
       return {
@@ -126,24 +129,22 @@ export async function createInvite(
 
     const now = new Date();
     if (!membership) {
-      await tx.membership.create({
-        data: {
-          orgId: input.orgId,
-          userId: user.id,
-          role: input.role,
-          status: "invited",
-          invitedById: input.invitedByUserId,
-          invitedAt: now,
-          scopeSiteIds: input.scopeSiteIds ?? [],
-          scopePropertyIds: input.scopePropertyIds ?? [],
-        },
+      await tx.insert(memberships).values({
+        orgId: input.orgId,
+        userId: user!.id,
+        role: input.role,
+        status: "invited",
+        invitedById: input.invitedByUserId,
+        invitedAt: now,
+        scopeSiteIds: input.scopeSiteIds ?? [],
+        scopePropertyIds: input.scopePropertyIds ?? [],
       });
     } else {
       // Re-invite path: bump role / scope / inviter to the latest
       // values + flip status back to 'invited'.
-      await tx.membership.update({
-        where: { orgId_userId: { orgId: input.orgId, userId: user.id } },
-        data: {
+      await tx
+        .update(memberships)
+        .set({
           role: input.role,
           status: "invited",
           invitedById: input.invitedByUserId,
@@ -153,35 +154,34 @@ export async function createInvite(
           revokedAt: null,
           scopeSiteIds: input.scopeSiteIds ?? [],
           scopePropertyIds: input.scopePropertyIds ?? [],
-        },
-      });
+        })
+        .where(and(eq(memberships.orgId, input.orgId), eq(memberships.userId, user!.id)));
 
       // Revoke any outstanding invite tokens for this user+org so
       // an old link the recipient might still have stops working.
       // Tokens for OTHER orgs are untouched.
-      const stale = await tx.userToken.findMany({
-        where: {
-          userId: user.id,
-          kind: "invite",
-          usedAt: null,
-          expiresAt: { gt: now },
-        },
-        select: { id: true, metadata: true },
-      });
+      const stale = await tx
+        .select({ id: userTokens.id, metadata: userTokens.metadata })
+        .from(userTokens)
+        .where(
+          and(
+            eq(userTokens.userId, user!.id),
+            eq(userTokens.kind, "invite"),
+            isNull(userTokens.usedAt),
+            gt(userTokens.expiresAt, now),
+          ),
+        );
       for (const t of stale) {
         const meta = (t.metadata ?? {}) as { orgId?: unknown };
         if (meta.orgId === input.orgId) {
-          await tx.userToken.update({
-            where: { id: t.id },
-            data: { usedAt: now },
-          });
+          await tx.update(userTokens).set({ usedAt: now }).where(eq(userTokens.id, t.id));
         }
       }
     }
 
     // 3. Mint the fresh token.
     const tokenResult = await createUserToken(tx, {
-      userId: user.id,
+      userId: user!.id,
       kind: "invite",
       ttlMinutes: input.ttlHours * 60,
       createdById: input.invitedByUserId,
@@ -201,7 +201,7 @@ export async function createInvite(
       actorKind: "user",
       action: "membership.invite_created",
       targetType: "user",
-      targetId: user.id,
+      targetId: user!.id,
       metadata: {
         email,
         role: input.role,
@@ -216,7 +216,7 @@ export async function createInvite(
       tokenId: tokenResult.id,
       tokenPlaintext: tokenResult.plaintext,
       expiresAt: tokenResult.expiresAt,
-      userId: user.id,
+      userId: user!.id,
       isNewUser,
     };
   });
@@ -235,25 +235,29 @@ export interface InviteListItem {
 }
 
 export async function listInvitesForOrg(
-  db: PrismaClient,
+  db: Db,
   orgId: string,
 ): Promise<InviteListItem[]> {
-  const rows = await db.userToken.findMany({
-    where: {
-      kind: "invite",
-      usedAt: null,
-      expiresAt: { gt: new Date() },
-    },
-    orderBy: { createdAt: "desc" },
-    select: {
-      id: true,
-      userId: true,
-      expiresAt: true,
-      createdAt: true,
-      createdById: true,
-      metadata: true,
-    },
-  });
+  // The org filter is applied in JS below, not in SQL, because it lives in
+  // the token's JSONB metadata. Unchanged from the Prisma version.
+  const rows = await db
+    .select({
+      id: userTokens.id,
+      userId: userTokens.userId,
+      expiresAt: userTokens.expiresAt,
+      createdAt: userTokens.createdAt,
+      createdById: userTokens.createdById,
+      metadata: userTokens.metadata,
+    })
+    .from(userTokens)
+    .where(
+      and(
+        eq(userTokens.kind, "invite"),
+        isNull(userTokens.usedAt),
+        gt(userTokens.expiresAt, new Date()),
+      ),
+    )
+    .orderBy(desc(userTokens.createdAt));
   return rows
     .map((r) => {
       const meta = (r.metadata ?? {}) as Record<string, unknown>;
@@ -282,20 +286,21 @@ export type RevokeInviteOutcome =
   | { ok: false; reason: "not_found" | "already_consumed" };
 
 export async function revokeInvite(
-  db: PrismaClient,
+  db: Db,
   tokenId: string,
   actorUserId: string,
 ): Promise<RevokeInviteOutcome> {
-  const token = await db.userToken.findUnique({
-    where: { id: tokenId },
-    select: {
-      id: true,
-      kind: true,
-      userId: true,
-      usedAt: true,
-      metadata: true,
-    },
-  });
+  const [token] = await db
+    .select({
+      id: userTokens.id,
+      kind: userTokens.kind,
+      userId: userTokens.userId,
+      usedAt: userTokens.usedAt,
+      metadata: userTokens.metadata,
+    })
+    .from(userTokens)
+    .where(eq(userTokens.id, tokenId))
+    .limit(1);
   if (!token || token.kind !== "invite") return { ok: false, reason: "not_found" };
   if (token.usedAt !== null) {
     // Already consumed = recipient already accepted. We don't
@@ -307,16 +312,22 @@ export async function revokeInvite(
   const meta = (token.metadata ?? {}) as { orgId?: unknown };
   const orgId = typeof meta.orgId === "string" ? meta.orgId : null;
 
-  await db.$transaction(async (tx) => {
-    await revokeUserToken(tx as unknown as PrismaClient, tokenId);
+  await db.transaction(async (tx) => {
+    await revokeUserToken(tx as unknown as Db, tokenId);
     if (orgId) {
       // Flip Membership.status to revoked so the operator can
       // re-invite later under a fresh row without dragging stale
       // 'invited' state.
-      await tx.membership.updateMany({
-        where: { orgId, userId: token.userId, status: "invited" },
-        data: { status: "revoked", revokedAt: new Date() },
-      });
+      await tx
+        .update(memberships)
+        .set({ status: "revoked", revokedAt: new Date() })
+        .where(
+          and(
+            eq(memberships.orgId, orgId),
+            eq(memberships.userId, token.userId),
+            eq(memberships.status, "invited"),
+          ),
+        );
       await recordAuditAction(tx, {
         orgId,
         actorUserId,

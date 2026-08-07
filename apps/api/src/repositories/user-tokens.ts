@@ -22,8 +22,13 @@
 // from email/SMS by hand on mobile when the recipient doesn't get
 // auto-link rendering).
 
-import type { Prisma, PrismaClient } from "../generated/prisma/client";
+import { and, desc, eq, gt, isNull } from "drizzle-orm";
+import { userTokens } from "@straumvakt/shared/db/identity";
+import type { Db } from "../lib/drizzle";
 import { sha256Hex } from "../lib/sha256";
+
+/** The client or a transaction handle — createUserToken is called inside one. */
+type DbOrTx = Db | Parameters<Parameters<Db["transaction"]>[0]>[0];
 
 const TOKEN_ALPHABET = "abcdefghijkmnpqrstuvwxyz23456789";
 
@@ -57,7 +62,7 @@ export interface CreateUserTokenResult {
 }
 
 export async function createUserToken(
-  db: PrismaClient | Prisma.TransactionClient,
+  db: DbOrTx,
   input: CreateUserTokenInput,
 ): Promise<CreateUserTokenResult> {
   if (input.ttlMinutes <= 0) {
@@ -67,19 +72,19 @@ export async function createUserToken(
   const tokenHash = await sha256Hex(plaintext);
   const expiresAt = new Date(Date.now() + input.ttlMinutes * 60_000);
 
-  const row = await db.userToken.create({
-    data: {
+  const [row] = await db
+    .insert(userTokens)
+    .values({
       userId: input.userId,
       kind: input.kind,
       tokenHash,
       expiresAt,
       createdById: input.createdById ?? null,
-      metadata: (input.metadata ?? {}) as Prisma.InputJsonValue,
-    },
-    select: { id: true, expiresAt: true },
-  });
+      metadata: input.metadata ?? {},
+    })
+    .returning({ id: userTokens.id, expiresAt: userTokens.expiresAt });
 
-  return { id: row.id, plaintext, expiresAt: row.expiresAt };
+  return { id: row!.id, plaintext, expiresAt: row!.expiresAt };
 }
 
 export type ConsumeUserTokenOutcome =
@@ -102,22 +107,23 @@ export type ConsumeUserTokenOutcome =
  * its plaintext somehow lands there).
  */
 export async function consumeUserToken(
-  db: PrismaClient,
+  db: Db,
   plaintext: string,
   expectedKind: UserTokenKind,
 ): Promise<ConsumeUserTokenOutcome> {
   const tokenHash = await sha256Hex(plaintext);
-  const row = await db.userToken.findUnique({
-    where: { tokenHash },
-    select: {
-      id: true,
-      userId: true,
-      kind: true,
-      expiresAt: true,
-      usedAt: true,
-      metadata: true,
-    },
-  });
+  const [row] = await db
+    .select({
+      id: userTokens.id,
+      userId: userTokens.userId,
+      kind: userTokens.kind,
+      expiresAt: userTokens.expiresAt,
+      usedAt: userTokens.usedAt,
+      metadata: userTokens.metadata,
+    })
+    .from(userTokens)
+    .where(eq(userTokens.tokenHash, tokenHash))
+    .limit(1);
   if (!row) return { ok: false, reason: "not_found" };
   if (row.kind !== expectedKind) return { ok: false, reason: "wrong_kind" };
   if (row.usedAt !== null) return { ok: false, reason: "already_used" };
@@ -129,11 +135,16 @@ export async function consumeUserToken(
   // a concurrent consumer raced and won, our updateMany returns
   // count=0 and we report already_used. Postgres's row-level lock
   // ordering makes the race resolution deterministic.
-  const claimed = await db.userToken.updateMany({
-    where: { id: row.id, usedAt: null },
-    data: { usedAt: new Date() },
-  });
-  if (claimed.count === 0) {
+  // Prisma's updateMany returned { count }. Drizzle has none on a plain
+  // UPDATE, so RETURNING the id makes the claim observable — an empty array
+  // IS "someone else won the race". The conditional itself is unchanged and
+  // is still what makes the token one-shot.
+  const claimed = await db
+    .update(userTokens)
+    .set({ usedAt: new Date() })
+    .where(and(eq(userTokens.id, row.id), isNull(userTokens.usedAt)))
+    .returning({ id: userTokens.id });
+  if (claimed.length === 0) {
     return { ok: false, reason: "already_used" };
   }
 
@@ -152,14 +163,15 @@ export async function consumeUserToken(
  * that's already used returns silently.
  */
 export async function revokeUserToken(
-  db: PrismaClient,
+  db: Db,
   tokenId: string,
 ): Promise<{ revoked: boolean }> {
-  const result = await db.userToken.updateMany({
-    where: { id: tokenId, usedAt: null },
-    data: { usedAt: new Date() },
-  });
-  return { revoked: result.count > 0 };
+  const result = await db
+    .update(userTokens)
+    .set({ usedAt: new Date() })
+    .where(and(eq(userTokens.id, tokenId), isNull(userTokens.usedAt)))
+    .returning({ id: userTokens.id });
+  return { revoked: result.length > 0 };
 }
 
 /**
@@ -169,7 +181,7 @@ export async function revokeUserToken(
  * with their expiry + creation timestamps.
  */
 export async function listOutstandingUserTokens(
-  db: PrismaClient,
+  db: Db,
   filter: { userId?: string; kind?: UserTokenKind },
 ): Promise<
   Array<{
@@ -182,24 +194,25 @@ export async function listOutstandingUserTokens(
     metadata: Record<string, unknown>;
   }>
 > {
-  const rows = await db.userToken.findMany({
-    where: {
-      userId: filter.userId,
-      kind: filter.kind,
-      usedAt: null,
-      expiresAt: { gt: new Date() },
-    },
-    orderBy: { createdAt: "desc" },
-    select: {
-      id: true,
-      userId: true,
-      kind: true,
-      expiresAt: true,
-      createdAt: true,
-      createdById: true,
-      metadata: true,
-    },
-  });
+  // Prisma dropped `where` keys that were undefined; Drizzle needs them
+  // filtered out explicitly or `eq(col, undefined)` becomes invalid SQL.
+  const conditions = [isNull(userTokens.usedAt), gt(userTokens.expiresAt, new Date())];
+  if (filter.userId !== undefined) conditions.push(eq(userTokens.userId, filter.userId));
+  if (filter.kind !== undefined) conditions.push(eq(userTokens.kind, filter.kind));
+
+  const rows = await db
+    .select({
+      id: userTokens.id,
+      userId: userTokens.userId,
+      kind: userTokens.kind,
+      expiresAt: userTokens.expiresAt,
+      createdAt: userTokens.createdAt,
+      createdById: userTokens.createdById,
+      metadata: userTokens.metadata,
+    })
+    .from(userTokens)
+    .where(and(...conditions))
+    .orderBy(desc(userTokens.createdAt));
   return rows.map((r) => ({
     id: r.id,
     userId: r.userId,

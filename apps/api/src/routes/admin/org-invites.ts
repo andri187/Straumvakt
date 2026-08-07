@@ -15,7 +15,9 @@
 
 import { Hono } from "hono";
 import { z } from "zod";
-import { makePrisma } from "../../lib/prisma";
+import { eq } from "drizzle-orm";
+import { makeDrizzle } from "../../lib/drizzle";
+import { organizations, users } from "@straumvakt/shared/db/identity";
 import { requireAdmin, type AuthVars } from "../../lib/auth-middleware";
 import { requirePermission } from "../../lib/auth/require-permission";
 import {
@@ -75,7 +77,7 @@ adminOrgInvites.post(
       // we can record a real inviter.
       return c.json({ error: "session_missing_userid_relogin_required" }, 401);
     }
-    const db = makePrisma(c.env);
+    const db = makeDrizzle(c.env);
     const result = await createInvite(db, {
       orgId: c.req.param("orgId"),
       email: parsed.data.email,
@@ -96,15 +98,17 @@ adminOrgInvites.post(
     const inviteUrl = buildInviteUrl(c, result.tokenPlaintext);
     // Fetch the org display name + inviter name for the email body. The
     // createInvite repo doesn't return those; do a small follow-up read.
-    const [org, inviter] = await Promise.all([
-      db.organization.findUnique({
-        where: { id: c.req.param("orgId") },
-        select: { displayName: true },
-      }),
-      db.user.findUnique({
-        where: { id: session.userId },
-        select: { displayName: true, email: true },
-      }),
+    const [[org], [inviter]] = await Promise.all([
+      db
+        .select({ displayName: organizations.displayName })
+        .from(organizations)
+        .where(eq(organizations.id, c.req.param("orgId")))
+        .limit(1),
+      db
+        .select({ displayName: users.displayName, email: users.email })
+        .from(users)
+        .where(eq(users.id, session.userId))
+        .limit(1),
     ]);
     const content = renderInviteEmail({
       orgDisplayName: org?.displayName ?? "your team",
@@ -147,7 +151,7 @@ adminOrgInvites.get(
   "/:orgId/invites",
   requirePermission("platform.tenant.read"),
   async (c) => {
-    const db = makePrisma(c.env);
+    const db = makeDrizzle(c.env);
     const invites = await listInvitesForOrg(db, c.req.param("orgId"));
     return c.json({
       invites: invites.map((i) => ({
@@ -173,7 +177,7 @@ adminOrgInvites.delete(
     if (!session.userId) {
       return c.json({ error: "session_missing_userid_relogin_required" }, 401);
     }
-    const db = makePrisma(c.env);
+    const db = makeDrizzle(c.env);
     const result = await revokeInvite(
       db,
       c.req.param("tokenId"),
