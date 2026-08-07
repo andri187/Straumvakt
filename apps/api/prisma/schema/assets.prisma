@@ -10,8 +10,8 @@
 
 // ───────────────────────────────────────────────────────────────────────────
 // assets — where things are and what they are
-// Postgres schemas: properties, assets, energy
-// Depends on: identity.
+// Postgres schemas: properties, assets, energy, reports (asset rollups only)
+// Depends on: identity, catalog.
 // ───────────────────────────────────────────────────────────────────────────
 
 
@@ -649,4 +649,61 @@ model Circuit {
   @@index([installationId])
   @@map("circuits")
   @@schema("properties")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// reports (Postgres schema) — asset rollups.
+//
+// Declared here rather than in commercial.prisma per ADR 0048: these are
+// facts about sites and chargers that happen to be pre-computed, not
+// financial records. The `reports` Postgres schema they live in is a
+// storage decision and is unchanged.
+//
+// Direction, because it is not obvious: assets sits near the bottom of the
+// chain and may not import charging or protocol. It does not have to. These
+// rows are WRITTEN by the daily aggregate job, which sits above and may read
+// downward; assets only READS them. A projection that is written from above
+// and read from below is exactly how a rollup should behave — see AMPECO's
+// Latest Hardware Status Log, which is a first-class read resource under
+// Charge Point rather than a report generator.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Per site × day: daily energy report. Filled by a daily aggregate
+// job (cron triggered) that scans yesterday's meter_values + sessions.
+// Read by operator console + customer portal.
+model SiteEnergyDaily {
+  siteId            String   @map("site_id") @db.Uuid
+  orgId             String   @map("org_id") @db.Uuid
+  date              DateTime @db.Date
+  sessionCount      Int      @map("session_count") @default(0)
+  totalKwh          Decimal  @map("total_kwh") @db.Decimal(12, 3) @default(0)
+  peakPowerW        Int?     @map("peak_power_w")
+  uptimePct         Decimal? @map("uptime_pct") @db.Decimal(5, 2)
+  computedAt        DateTime @default(now()) @map("computed_at") @db.Timestamptz(6)
+
+  organization      Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@id([siteId, date])
+  @@index([orgId, date(sort: Desc)])
+  @@map("site_energy_daily")
+  @@schema("reports")
+}
+
+// Per charger × day: uptime + transitions + offline minutes. Filled
+// by the same daily aggregate job. Backs the SLA reports.
+model ChargerUptimeDaily {
+  chargingStationId String   @map("charging_station_id") @db.Uuid
+  orgId             String   @map("org_id") @db.Uuid
+  date              DateTime @db.Date
+  heartbeatsReceived Int     @map("heartbeats_received") @default(0)
+  statusTransitions Int      @map("status_transitions") @default(0)
+  offlineMinutes    Int      @map("offline_minutes") @default(0)
+  computedAt        DateTime @default(now()) @map("computed_at") @db.Timestamptz(6)
+
+  organization      Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@id([chargingStationId, date])
+  @@index([orgId, date(sort: Desc)])
+  @@map("charger_uptime_daily")
+  @@schema("reports")
 }

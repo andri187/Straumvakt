@@ -10,10 +10,21 @@
  *
  *     commercial ──► charging ──► protocol ──► assets ──► identity
  *
- * with two absolutes:
+ * with three absolutes:
  *
- *     nothing may import vendor      — an adapter must never appear in the core
+ *     nothing may import vendor      — an ADAPTER must never appear in the core
+ *     everything may import catalog  — reference data about hardware that exists
  *     platform imports nothing       — logs/audit/webhooks are a leaf
+ *
+ * The catalog/vendor distinction was added 2026-08-07 after the Driivz/AMPECO
+ * benchmark. "Nothing may import vendor" was FALSE IN THE DATA MODEL before a
+ * line of code ran: assets.prisma:193-194 and :379 point Installation.model
+ * and ChargingStation.hardwareModel at HardwareModel, so assets already
+ * depended on the domain the rule protects it from. A catalogue row ("a
+ * Zaptec Pro exists, here are its capabilities") is reference data anyone may
+ * name; an adapter row ("credentials for Zaptec's API") is the fast-changing
+ * dependency the rule is about. Neither Driivz nor AMPECO exposes vendor
+ * identity in its public surface at all — 0 of 54 tags and 0 of 21 groups.
  *
  * WHAT IT IS NOT FOR
  * ------------------
@@ -38,8 +49,11 @@
 
 const domainDir = (d) => `(^|/)src/domains/${d}/`;
 
-/** Vendor modules in the legacy layout. Zaptec is the only adapter today; Easee
- *  is when this bill comes due (target-domain-tree.md). */
+/** Vendor ADAPTER modules in the legacy layout. Zaptec is the only adapter
+ *  today; Easee is when this bill comes due (target-domain-tree.md).
+ *
+ *  The hardware CATALOGUE is deliberately absent from this list — it is
+ *  domains/catalog now, and everything may import it. */
 const LEGACY_VENDOR = [
   "(^|/)src/lib/zaptec\\.ts$",
   "(^|/)src/lib/zaptec-sync-cron\\.ts$",

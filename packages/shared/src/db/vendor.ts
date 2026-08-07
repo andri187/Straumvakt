@@ -26,29 +26,11 @@ import { customType, index, integer, jsonb, numeric, pgSchema, text, timestamp, 
 // where Buffer is a polyfill and node-postgres hands back the former.
 const bytea = customType<{ data: Uint8Array }>({ dataType: () => "bytea" });
 
+// vendor_credentials still lives in the hardware Postgres schema; the
+// catalogue tables that shared it moved to catalog.ts.
 export const hardwareSchema = pgSchema("hardware");
 export const vendorsSchema = pgSchema("vendors");
 
-export const hardwareVendorKindEnum = hardwareSchema.enum("HardwareVendorKind", ["charger_ac", "charger_dc", "meter", "modem", "controller", "multi"]);
-export const vendorApiKindEnum = hardwareSchema.enum("VendorApiKind", ["oauth", "basic_auth", "none"]);
-export const vendorCredentialScopeEnum = hardwareSchema.enum("VendorCredentialScope", ["installation", "identity", "none"]);
-
-/** Prisma model `HardwareVendor` — hardware.vendors */
-export const vendors = hardwareSchema.table(
-  "vendors",
-  {
-    id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-    slug: text("slug").notNull(),
-    displayName: text("display_name").notNull(),
-    kind: hardwareVendorKindEnum("kind").notNull(),
-    website: text("website"),
-    apiKind: vendorApiKindEnum("api_kind").notNull().default("none"),
-    supportContact: jsonb("support_contact").notNull().default({}),
-    status: text("status").notNull().default("active"),
-    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().$defaultFn(() => new Date()).$onUpdateFn(() => new Date()),
-  },
-);
 
 /** Prisma model `VendorCredential` — hardware.vendor_credentials */
 export const vendorCredentials = hardwareSchema.table(
@@ -69,36 +51,6 @@ export const vendorCredentials = hardwareSchema.table(
   (t) => [
     uniqueIndex().on(t.ownerOrgId, t.vendorId, t.username),
     index().on(t.ownerOrgId),
-  ],
-);
-
-/** Prisma model `HardwareModel` — hardware.models */
-export const models = hardwareSchema.table(
-  "models",
-  {
-    id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-    vendorId: uuid("vendor_id").notNull(),
-    slug: text("slug").notNull(),
-    displayName: text("display_name").notNull(),
-    kind: hardwareVendorKindEnum("kind").notNull(),
-    // HAND-EDIT, not from the scaffolder. This column exists in the database
-    // and `HardwareModel` does not declare it, so Prisma has never been able
-    // to read or write it. Nullable, so nothing breaks — it is simply
-    // invisible to the ORM, which is why nobody noticed.
-    //
-    // The enum lives in the `ocpp` schema, not `hardware`: one Postgres type
-    // used from two schemas. Referenced from protocol/schema.ts rather than
-    // redeclared, so there is one definition of `ocpp.AssetClass`.
-    assetClass: assetClassEnum("asset_class"),
-    credentialScope: vendorCredentialScopeEnum("credential_scope").notNull().default("none"),
-    profile: jsonb("profile").notNull().default({}),
-    status: text("status").notNull().default("active"),
-    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().$defaultFn(() => new Date()).$onUpdateFn(() => new Date()),
-  },
-  (t) => [
-    uniqueIndex().on(t.vendorId, t.slug),
-    index().on(t.kind, t.status),
   ],
 );
 

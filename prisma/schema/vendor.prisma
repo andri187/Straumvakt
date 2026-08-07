@@ -1,40 +1,26 @@
 // ───────────────────────────────────────────────────────────────────────────
 // vendor — the edge where external systems are named
-// Postgres schemas: vendors, hardware
+// Postgres schemas: vendors, hardware (vendor_credentials only)
 // NOTHING MAY IMPORT THIS. Vendor identifiers belong at the boundary.
 // Today three leaks exist and are deliberate for now:
 //   circuits.vendor_circuit_ref, Installation.credentialsRef,
 //   OcppIdentity.vendorResourceId
+//
+// The hardware CATALOGUE — HardwareVendor, HardwareModel and their enums —
+// moved to catalog.prisma on 2026-08-06 (ADR 0048). It was never an adapter:
+// assets legitimately names a charger's model, and while the catalogue sat
+// here the absolute rule was false in the data model before any code ran.
+// What remains is the part that genuinely must not be imported: credentials,
+// asset refs, and adapter telemetry.
 // ───────────────────────────────────────────────────────────────────────────
 
 
 // ─────────────────────────────────────────────────────────────────────────────
-// hardware — platform-level catalog of supported vendors and models.
-// Not tenant-scoped: all Orgs see the same catalog. Model profiles are the
-// template for charger / meter / modem / controller records. Credential
-// scope on the model drives where adapter credentials attach (installation
-// vs. OCPP identity vs. none).
+// vendor credentials — per-org portal logins for a vendor's cloud API.
+// Stored in the `hardware` Postgres schema for historical reasons; owned by
+// this domain. Moving the table is a live migration and buys nothing, so the
+// schema and the domain deliberately disagree here (ADR 0048).
 // ─────────────────────────────────────────────────────────────────────────────
-
-model HardwareVendor {
-  id             String              @id @default(uuid()) @db.Uuid
-  slug           String              @unique // e.g. "zaptec", "easee", "kempower", "shelly", "generic-ocpp"
-  displayName    String              @map("display_name")
-  kind           HardwareVendorKind
-  website        String?
-  apiKind        VendorApiKind       @map("api_kind") @default(none)
-  supportContact Json                @default("{}") @map("support_contact") @db.JsonB
-  status         String              @default("active")
-  createdAt      DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  models         HardwareModel[]
-  installations  Installation[]
-  credentials    VendorCredential[]
-
-  @@map("vendors")
-  @@schema("hardware")
-}
 
 // Per-org vendor portal credentials. The operator stores Zaptec / Easee /
 // Kempower / etc. portal username + password under one of their orgs.
@@ -63,56 +49,6 @@ model VendorCredential {
   @@unique([ownerOrgId, vendorId, username])
   @@index([ownerOrgId])
   @@map("vendor_credentials")
-  @@schema("hardware")
-}
-
-enum HardwareVendorKind {
-  charger_ac
-  charger_dc
-  meter
-  modem
-  controller
-  multi // vendors that span kinds (e.g. Shelly: modem + controller)
-
-  @@schema("hardware")
-}
-
-enum VendorApiKind {
-  oauth       // Zaptec Pro style — exchange user/pass for token, then refresh
-  basic_auth  // Easee-style user/pass sent per request, or per-identity DC
-  none        // no vendor API; OCPP-only
-
-  @@schema("hardware")
-}
-
-model HardwareModel {
-  id               String                @id @default(uuid()) @db.Uuid
-  vendorId         String                @map("vendor_id") @db.Uuid
-  slug             String                // unique per vendor, e.g. "zaptec-pro", "easee-one"
-  displayName      String                @map("display_name")
-  kind             HardwareVendorKind
-  assetClass       AssetClass?           @map("asset_class") // ac/dc for chargers; null for non-chargers
-  credentialScope  VendorCredentialScope @map("credential_scope") @default(none)
-  profile          Json                  @default("{}") @db.JsonB // technical spec template: power, phases, connectors, OCPP versions
-  status           String                @default("active")
-  createdAt        DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt        DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  vendor           HardwareVendor        @relation(fields: [vendorId], references: [id], onDelete: Cascade)
-  chargingStations ChargingStation[]
-  installations    Installation[]
-
-  @@unique([vendorId, slug])
-  @@index([kind, status])
-  @@map("models")
-  @@schema("hardware")
-}
-
-enum VendorCredentialScope {
-  installation // AC vendor-managed: creds on properties.installations
-  identity     // DC vendor-managed: creds on ocpp.ocpp_identities
-  none         // OCPP-only: no vendor API
-
   @@schema("hardware")
 }
 

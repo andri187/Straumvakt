@@ -10,7 +10,15 @@
 
 // ───────────────────────────────────────────────────────────────────────────
 // protocol — OCPP and OCPI wire-level state
-// Postgres schemas: ocpp, roaming
+// Postgres schemas: ocpp, roaming, reports (command_history only)
+//
+// `roaming` stays here deliberately (ADR 0048). It reads as commercial
+// because cdr_queue_entries is a billing record by any other name, but
+// OCPI is a protocol and the comparators do not put roaming in billing:
+// AMPECO gives Roaming Integration its own top-level group, distinct from
+// Sessions & CDRs, and deprecated its merged Roaming Operators resource in
+// favour of separate CPO and EMSP ones. Revisit when OCPI settlement is
+// real, at which point roaming earns a domain rather than a schema.
 // ───────────────────────────────────────────────────────────────────────────
 
 
@@ -265,4 +273,41 @@ model OcppConfigurationKey {
   @@index([orgId, ocppIdentityId])
   @@map("configuration_keys")
   @@schema("ocpp")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// reports (Postgres schema) — the settled tail of ocpp.outbound_commands.
+//
+// Declared here rather than in commercial.prisma per ADR 0048. It is a
+// write-through projection of a protocol table, keyed by command, holding
+// dispatch latency and wire result. Nothing about it is commercial; it sat
+// in the billing file only because the `reports` Postgres schema did.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Per outbound command: write-through projection of
+// ocpp.outbound_commands, denormalised for the operator console's
+// command-history view. Live commands (status='pending' or
+// 'dispatched') stay in ocpp.outbound_commands; once final, the
+// row gets a CommandHistory entry. Lets us drop old outbound_commands
+// rows aggressively without losing the operator's audit trail.
+model CommandHistory {
+  commandId         String   @id @map("command_id") @db.Uuid
+  orgId             String   @map("org_id") @db.Uuid
+  identityId        String   @map("identity_id") @db.Uuid
+  controlDomain     String   @map("control_domain")
+  routedTo          String   @map("routed_to")
+  dispatchedAt      DateTime? @map("dispatched_at") @db.Timestamptz(6)
+  finalStatus       String   @map("final_status")
+  resultJson        Json?    @map("result_json") @db.JsonB
+  latencyMs         Int?     @map("latency_ms")
+  attempts          Int      @default(0)
+  requestedByUserId String?  @map("requested_by_user_id") @db.Uuid
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization      Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, createdAt(sort: Desc)])
+  @@index([identityId, createdAt(sort: Desc)])
+  @@map("command_history")
+  @@schema("reports")
 }

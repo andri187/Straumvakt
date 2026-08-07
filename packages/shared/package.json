@@ -42,7 +42,8 @@
     "./db/commercial": "./src/db/commercial.ts",
     "./db/vendor": "./src/db/vendor.ts",
     "./db/protocol": "./src/db/protocol.ts",
-    "./db/platform": "./src/db/platform.ts"
+    "./db/platform": "./src/db/platform.ts",
+    "./db/catalog": "./src/db/catalog.ts"
   },
   "dependencies": {
     "zod": "^4.3.6",

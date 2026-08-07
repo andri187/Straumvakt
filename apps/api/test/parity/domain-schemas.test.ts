@@ -24,6 +24,7 @@ import * as assets from "@straumvakt/shared/db/assets";
 import * as charging from "@straumvakt/shared/db/charging";
 import * as commercial from "@straumvakt/shared/db/commercial";
 import * as vendor from "@straumvakt/shared/db/vendor";
+import * as catalog from "@straumvakt/shared/db/catalog";
 import * as protocol from "@straumvakt/shared/db/protocol";
 import * as platform from "@straumvakt/shared/db/platform";
 
@@ -33,6 +34,7 @@ const DOMAINS: Record<string, Record<string, unknown>> = {
   charging,
   commercial,
   vendor,
+  catalog,
   protocol,
   platform,
 };

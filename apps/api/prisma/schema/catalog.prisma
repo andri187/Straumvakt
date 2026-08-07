@@ -1,0 +1,127 @@
+// ╔══════════════════════════════════════════════════════════════════════╗
+// ║  GENERATED FILE — DO NOT EDIT                                        ║
+// ║                                                                      ║
+// ║  Source:    prisma/schema/catalog.prisma
+// ║  Generator: scripts/sync-api-prisma-schema.mjs                       ║
+// ║                                                                      ║
+// ║  Edit the source, then run `npm run sync:api-schema`.                ║
+// ║  `npm run check` fails if this file is stale.                        ║
+// ╚══════════════════════════════════════════════════════════════════════╝
+
+// ───────────────────────────────────────────────────────────────────────────
+// catalog — vendor-neutral reference data about hardware that exists
+// Postgres schema: hardware (tables: vendors, models)
+// EVERYTHING MAY IMPORT CATALOG. CATALOG IMPORTS NOTHING.
+//
+// Split out of vendor.prisma on 2026-08-06 (ADR 0048). The rule
+// "nothing may import vendor" was false in the data model itself:
+// Installation.model and ChargingStation.hardwareModel both point at
+// HardwareModel, so assets — the layer the rule exists to protect —
+// already depended on the domain it may not touch.
+//
+// The two things were never the same. A catalogue row says "a Zaptec Pro
+// is a three-phase AC charger with these connectors"; it is public,
+// slow-moving, identical for every tenant, and knowing it does not let
+// you talk to anything. An adapter — credentials, asset refs, health —
+// is per-tenant, secret, and changes when a vendor changes their API.
+// Only the second must stay at the edge. Driivz spends roughly twenty of
+// its fifty-four API tags on catalogue (Charger Models, Model Protocol,
+// Model Images, Model Connectors, Connector Types, Vehicle Models,
+// Vehicle Manufacturers) and exposes zero adapter surface; AMPECO's
+// Configuration Templates is the same split. Both treat the catalogue as
+// reference data and the adapter as invisible.
+//
+// The `hardware` Postgres schema is deliberately NOT split with it.
+// Moving a table between Postgres schemas is a migration against a live
+// database; moving a model between domain files is not. vendor_credentials
+// therefore still lives in `hardware` while belonging to the vendor
+// domain — the Postgres schema is storage, the file is ownership, and
+// only one of the two is cheap to correct.
+// ───────────────────────────────────────────────────────────────────────────
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// hardware — platform-level catalog of supported vendors and models.
+// Not tenant-scoped: all Orgs see the same catalog. Model profiles are the
+// template for charger / meter / modem / controller records. Credential
+// scope on the model drives where adapter credentials attach (installation
+// vs. OCPP identity vs. none).
+// ─────────────────────────────────────────────────────────────────────────────
+
+model HardwareVendor {
+  id             String              @id @default(uuid()) @db.Uuid
+  slug           String              @unique // e.g. "zaptec", "easee", "kempower", "shelly", "generic-ocpp"
+  displayName    String              @map("display_name")
+  kind           HardwareVendorKind
+  website        String?
+  apiKind        VendorApiKind       @map("api_kind") @default(none)
+  supportContact Json                @default("{}") @map("support_contact") @db.JsonB
+  status         String              @default("active")
+  createdAt      DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  models         HardwareModel[]
+  installations  Installation[]
+  // Back-relation into the vendor domain. Prisma declares relations on both
+  // sides, so the schema-level graph is necessarily symmetric and cannot
+  // express direction — which is exactly why the boundary is enforced in
+  // TypeScript by dependency-cruiser and not here.
+  credentials    VendorCredential[]
+
+  @@map("vendors")
+  @@schema("hardware")
+}
+
+enum HardwareVendorKind {
+  charger_ac
+  charger_dc
+  meter
+  modem
+  controller
+  multi // vendors that span kinds (e.g. Shelly: modem + controller)
+
+  @@schema("hardware")
+}
+
+enum VendorApiKind {
+  oauth       // Zaptec Pro style — exchange user/pass for token, then refresh
+  basic_auth  // Easee-style user/pass sent per request, or per-identity DC
+  none        // no vendor API; OCPP-only
+
+  @@schema("hardware")
+}
+
+model HardwareModel {
+  id               String                @id @default(uuid()) @db.Uuid
+  vendorId         String                @map("vendor_id") @db.Uuid
+  slug             String                // unique per vendor, e.g. "zaptec-pro", "easee-one"
+  displayName      String                @map("display_name")
+  kind             HardwareVendorKind
+  assetClass       AssetClass?           @map("asset_class") // ac/dc for chargers; null for non-chargers
+  credentialScope  VendorCredentialScope @map("credential_scope") @default(none)
+  profile          Json                  @default("{}") @db.JsonB // technical spec template: power, phases, connectors, OCPP versions
+  status           String                @default("active")
+  createdAt        DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  vendor           HardwareVendor        @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  chargingStations ChargingStation[]
+  installations    Installation[]
+
+  @@unique([vendorId, slug])
+  @@index([kind, status])
+  @@map("models")
+  @@schema("hardware")
+}
+
+// Where an adapter credential attaches for hardware of this model. The value
+// is catalogue metadata — a fact about the model, not a secret — which is why
+// it stays on this side of the split even though only the vendor domain acts
+// on it.
+enum VendorCredentialScope {
+  installation // AC vendor-managed: creds on properties.installations
+  identity     // DC vendor-managed: creds on ocpp.ocpp_identities
+  none         // OCPP-only: no vendor API
+
+  @@schema("hardware")
+}
