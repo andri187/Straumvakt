@@ -210,7 +210,7 @@ adminChargers.get(
   "/:id/zaptec-state",
   requirePermission("charger.read"),
   async (c) => {
-    const db = makePrisma(c.env);
+    const db = makeDrizzle(c.env);
     const snapshot = await getChargerZaptecConfig(
       db,
       c.env.OCPP_CRED_KEK,
@@ -237,7 +237,7 @@ adminChargers.post(
     if (Object.keys(body).length === 0) {
       return c.json({ error: "no writable fields in body" }, 400);
     }
-    const db = makePrisma(c.env);
+    const db = makeDrizzle(c.env);
     const result = await writeChargerZaptecProperty(
       db,
       c.env.OCPP_CRED_KEK,
