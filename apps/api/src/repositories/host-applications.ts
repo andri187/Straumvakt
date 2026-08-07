@@ -7,7 +7,9 @@
 // take no orgId. Operator access is gated at the route by the
 // platform.tenant.* permissions instead.
 
-import type { PrismaClient, Prisma } from "../generated/prisma/client";
+import { desc, eq } from "drizzle-orm";
+import { hostApplications } from "@straumvakt/shared/db/identity";
+import type { Db } from "../lib/drizzle";
 import type { Env } from "../bindings";
 import { sendEmail } from "../lib/email";
 import { renderHostApplicationSubmittedEmail } from "../lib/email-templates/host-application-submitted";
@@ -53,7 +55,7 @@ type HostApplicationRow = {
   contactPhone: string | null;
   kennitala: string | null;
   siteType: HostApplicationSiteType;
-  sites: Prisma.JsonValue;
+  sites: unknown;
   description: string | null;
   status: HostApplicationStatus;
   convertedOrgId: string | null;
@@ -80,23 +82,21 @@ function toSummary(row: HostApplicationRow): HostApplicationSummary {
 }
 
 export async function createHostApplication(
-  db: PrismaClient,
+  db: Db,
   env: Env,
   input: CreateHostApplicationInput,
 ): Promise<CreateHostApplicationResult> {
-  const row = (await db.hostApplication.create({
-    data: {
+  const [row] = (await db.insert(hostApplications).values({
       companyName: input.companyName,
       contactName: input.contactName,
       contactEmail: input.contactEmail,
       contactPhone: input.contactPhone ?? null,
       kennitala: input.kennitala ?? null,
       siteType: input.siteType,
-      sites: input.sites as unknown as Prisma.InputJsonValue,
+      sites: input.sites,
       description: input.description ?? null,
       // status defaults to "new" at the DB level.
-    },
-  })) as HostApplicationRow;
+  }).returning()) as HostApplicationRow[];
 
   const totalEstimatedChargers = input.sites.reduce(
     (sum, s) => sum + s.estimatedChargers,
@@ -138,36 +138,40 @@ export async function createHostApplication(
 }
 
 export async function listHostApplications(
-  db: PrismaClient,
+  db: Db,
   options: ListHostApplicationsOptions = {},
 ): Promise<HostApplicationSummary[]> {
-  const rows = (await db.hostApplication.findMany({
-    where: options.status ? { status: options.status } : undefined,
-    orderBy: { createdAt: "desc" },
-  })) as HostApplicationRow[];
+  const rows = (await db
+    .select()
+    .from(hostApplications)
+    .where(options.status ? eq(hostApplications.status, options.status) : undefined)
+    .orderBy(desc(hostApplications.createdAt))) as HostApplicationRow[];
   return rows.map(toSummary);
 }
 
 export async function getHostApplication(
-  db: PrismaClient,
+  db: Db,
   id: string,
 ): Promise<HostApplicationSummary | null> {
-  const row = (await db.hostApplication.findUnique({
-    where: { id },
-  })) as HostApplicationRow | null;
+  const [row] = (await db
+    .select()
+    .from(hostApplications)
+    .where(eq(hostApplications.id, id))
+    .limit(1)) as HostApplicationRow[];
   return row ? toSummary(row) : null;
 }
 
 export async function updateHostApplicationStatus(
-  db: PrismaClient,
+  db: Db,
   id: string,
   status: HostApplicationStatus,
 ): Promise<HostApplicationSummary | null> {
-  const existing = await db.hostApplication.findUnique({ where: { id } });
-  if (!existing) return null;
-  const row = (await db.hostApplication.update({
-    where: { id },
-    data: { status },
-  })) as HostApplicationRow;
-  return toSummary(row);
+  // Prisma read-then-wrote to distinguish "missing" from "updated". Drizzle's
+  // RETURNING does it in one statement — an empty array IS the missing case.
+  const [row] = (await db
+    .update(hostApplications)
+    .set({ status })
+    .where(eq(hostApplications.id, id))
+    .returning()) as HostApplicationRow[];
+  return row ? toSummary(row) : null;
 }

@@ -8,7 +8,7 @@
 
 import { Hono } from "hono";
 import { z } from "zod";
-import { makePrisma } from "../../lib/prisma";
+import { makeDrizzle } from "../../lib/drizzle";
 import { createHostApplication } from "../../repositories/host-applications";
 import type { Env } from "../../bindings";
 
@@ -44,7 +44,7 @@ publicHostApplications.post("/", async (c) => {
     return c.json({ error: "validation", issues: parsed.error.issues }, 400);
   }
 
-  const db = makePrisma(c.env);
+  const db = makeDrizzle(c.env);
   const result = await createHostApplication(db, c.env, parsed.data);
 
   // Return the new id + the email-delivery outcome (so the form can show

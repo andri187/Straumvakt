@@ -20,7 +20,11 @@
 
 import { Hono } from "hono";
 import { z } from "zod";
-import { makePrisma } from "../../lib/prisma";
+import { eq } from "drizzle-orm";
+import { makeDrizzle } from "../../lib/drizzle";
+import { driverGroups } from "@straumvakt/shared/db/commercial";
+import { orgEmailDomains } from "@straumvakt/shared/db/identity";
+import { pgErrorCode } from "../../domains/identity/repositories/errors";
 import { requireAdmin, type AuthVars } from "../../lib/auth-middleware";
 import { requirePermission } from "../../lib/auth/require-permission";
 import {
@@ -73,7 +77,7 @@ adminOrgEmailDomains.get(
   requirePermission("platform.tenant.read"),
   async (c) => {
     const orgId = c.req.param("orgId");
-    const db = makePrisma(c.env);
+    const db = makeDrizzle(c.env);
     const domains = await listEmailDomainsForOrg(db, orgId);
     return c.json({ domains });
   },
@@ -102,14 +106,15 @@ adminOrgEmailDomains.post(
       );
     }
 
-    const db = makePrisma(c.env);
+    const db = makeDrizzle(c.env);
 
     // If a group is provided, verify it belongs to this org.
     if (defaultDriverGroupId) {
-      const group = await db.driverGroup.findUnique({
-        where: { id: defaultDriverGroupId },
-        select: { ownerOrgId: true },
-      });
+      const [group] = await db
+        .select({ ownerOrgId: driverGroups.ownerOrgId })
+        .from(driverGroups)
+        .where(eq(driverGroups.id, defaultDriverGroupId))
+        .limit(1);
       if (!group) {
         return c.json(
           { error: "not_found", message: "DriverGroup not found" },
@@ -162,11 +167,12 @@ adminOrgEmailDomains.patch(
     const { policy, defaultDriverGroupId } = parsed.data;
 
     // Verify ownership before updating: fetch the current row.
-    const db = makePrisma(c.env);
-    const existing = await db.orgEmailDomain.findUnique({
-      where: { id },
-      select: { orgId: true },
-    });
+    const db = makeDrizzle(c.env);
+    const [existing] = await db
+      .select({ orgId: orgEmailDomains.orgId })
+      .from(orgEmailDomains)
+      .where(eq(orgEmailDomains.id, id))
+      .limit(1);
     if (!existing) {
       return c.json({ error: "not_found" }, 404);
     }
@@ -186,10 +192,11 @@ adminOrgEmailDomains.patch(
 
     // If a new group is provided, verify it belongs to this org.
     if (defaultDriverGroupId) {
-      const group = await db.driverGroup.findUnique({
-        where: { id: defaultDriverGroupId },
-        select: { ownerOrgId: true },
-      });
+      const [group] = await db
+        .select({ ownerOrgId: driverGroups.ownerOrgId })
+        .from(driverGroups)
+        .where(eq(driverGroups.id, defaultDriverGroupId))
+        .limit(1);
       if (!group) {
         return c.json(
           { error: "not_found", message: "DriverGroup not found" },
@@ -229,13 +236,14 @@ adminOrgEmailDomains.delete(
     const orgId = c.req.param("orgId");
     const id = c.req.param("id");
 
-    const db = makePrisma(c.env);
+    const db = makeDrizzle(c.env);
 
     // Ownership check before delete.
-    const existing = await db.orgEmailDomain.findUnique({
-      where: { id },
-      select: { orgId: true },
-    });
+    const [existing] = await db
+      .select({ orgId: orgEmailDomains.orgId })
+      .from(orgEmailDomains)
+      .where(eq(orgEmailDomains.id, id))
+      .limit(1);
     if (!existing) {
       return c.json({ error: "not_found" }, 404);
     }
@@ -252,7 +260,16 @@ adminOrgEmailDomains.delete(
 
 function isUniqueConstraintError(err: unknown): boolean {
   if (typeof err !== "object" || err === null) return false;
-  // Prisma error code P2002 = unique constraint violation.
+  // Postgres SQLSTATE 23505 — unique_violation. This is what node-postgres
+  // raises, and it is the one that matters now.
+  //
+  // Added 2026-08-07 after the Drizzle port turned this endpoint's duplicate
+  // -domain response from 409 into 500: the check below knew only Prisma's
+  // P2002, and the message fallback did not match either. Caught by the
+  // parity test, which exercises the real UNIQUE constraint rather than
+  // simulating the conflict — the fake it replaced never could have.
+  if (pgErrorCode(err) === "23505") return true;
+  // Prisma error code P2002. Kept until the last Prisma writer is gone.
   if ("code" in err && (err as { code: unknown }).code === "P2002") return true;
   // Some adapters surface this via message text.
   if (

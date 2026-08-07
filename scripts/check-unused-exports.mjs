@@ -32,6 +32,11 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SRC = path.join(ROOT, "apps/api/src");
+// Parity tests live OUTSIDE src/ and are real callers. Without this, every
+// repository test converted from a fake client to test/parity/ makes its
+// subject look newly unused — which happened to findEmailDomainByDomain on
+// 2026-08-07 and would have been baselined as a false positive.
+const TEST = path.join(ROOT, "apps/api/test");
 const BASELINE = path.join(ROOT, ".unused-exports-known.json");
 const rewrite = process.argv.includes("--baseline");
 
@@ -44,6 +49,8 @@ const walk = (d) => {
   }
 };
 walk(SRC);
+const srcCount = files.length;
+if (fs.existsSync(TEST)) walk(TEST);
 
 const text = new Map(files.map((f) => [f, fs.readFileSync(f, "utf8")]));
 const EXPORT_FN = /^export\s+(?:async\s+)?function\s+([A-Za-z_$][\w$]*)/gm;
@@ -51,6 +58,8 @@ const EXPORT_FN = /^export\s+(?:async\s+)?function\s+([A-Za-z_$][\w$]*)/gm;
 const found = [];
 for (const f of files) {
   if (f.endsWith(".test.ts")) continue;
+  // Only report on src/ files; test files are callers, never subjects.
+  if (files.indexOf(f) >= srcCount) continue;
   const rest = files.filter((g) => g !== f).map((g) => text.get(g)).join("\n");
   for (const m of text.get(f).matchAll(EXPORT_FN)) {
     if (!new RegExp(`\\b${m[1]}\\b`).test(rest)) {

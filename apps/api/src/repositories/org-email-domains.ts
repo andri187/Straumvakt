@@ -6,8 +6,14 @@
 //   updateEmailDomain          — partial update of policy / defaultDriverGroupId
 //   deleteEmailDomain          — hard delete (no soft-delete on config rows)
 //   findEmailDomainByDomain    — used by ENROLL-1's verify-email handler
+//
+// Prisma's `include: { defaultDriverGroup: ... }` is a left join here — the FK
+// is nullable and a rule with no default group must still be returned.
 
-import type { PrismaClient } from "../generated/prisma/client";
+import { asc, eq } from "drizzle-orm";
+import { orgEmailDomains } from "@straumvakt/shared/db/identity";
+import { driverGroups } from "@straumvakt/shared/db/commercial";
+import type { Db } from "../lib/drizzle";
 
 // ─── Output shapes ───────────────────────────────────────────────────────────
 
@@ -24,51 +30,57 @@ export interface EmailDomainRow {
   updatedAt: string; // ISO-8601
 }
 
-// ─── Internal include helper ──────────────────────────────────────────────────
+// ─── Selection + mapper ──────────────────────────────────────────────────────
 
-const include = {
-  defaultDriverGroup: {
-    select: { id: true, displayName: true },
-  },
-} as const;
+const columns = {
+  id: orgEmailDomains.id,
+  orgId: orgEmailDomains.orgId,
+  domain: orgEmailDomains.domain,
+  policy: orgEmailDomains.policy,
+  defaultDriverGroupId: orgEmailDomains.defaultDriverGroupId,
+  createdAt: orgEmailDomains.createdAt,
+  updatedAt: orgEmailDomains.updatedAt,
+  defaultDriverGroupDisplayName: driverGroups.displayName,
+};
 
-// ─── Mapper ──────────────────────────────────────────────────────────────────
-
-function toRow(
-  raw: {
-    id: string;
-    orgId: string;
-    domain: string;
-    policy: string;
-    defaultDriverGroupId: string | null;
-    createdAt: Date;
-    updatedAt: Date;
-    defaultDriverGroup: { id: string; displayName: string } | null;
-  },
-): EmailDomainRow {
+function toRow(raw: {
+  id: string;
+  orgId: string;
+  domain: string;
+  policy: string;
+  defaultDriverGroupId: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  defaultDriverGroupDisplayName: string | null;
+}): EmailDomainRow {
   return {
     id: raw.id,
     orgId: raw.orgId,
     domain: raw.domain,
     policy: raw.policy as EmailDomainPolicy,
     defaultDriverGroupId: raw.defaultDriverGroupId,
-    defaultDriverGroupDisplayName: raw.defaultDriverGroup?.displayName ?? null,
+    defaultDriverGroupDisplayName: raw.defaultDriverGroupDisplayName ?? null,
     createdAt: raw.createdAt.toISOString(),
     updatedAt: raw.updatedAt.toISOString(),
   };
 }
 
+/** The one join every read here shares. */
+const withGroup = (db: Db) =>
+  db
+    .select(columns)
+    .from(orgEmailDomains)
+    .leftJoin(driverGroups, eq(driverGroups.id, orgEmailDomains.defaultDriverGroupId));
+
 // ─── listEmailDomainsForOrg ───────────────────────────────────────────────────
 
 export async function listEmailDomainsForOrg(
-  db: PrismaClient,
+  db: Db,
   orgId: string,
 ): Promise<EmailDomainRow[]> {
-  const rows = await db.orgEmailDomain.findMany({
-    where: { orgId },
-    include,
-    orderBy: { domain: "asc" },
-  });
+  const rows = await withGroup(db)
+    .where(eq(orgEmailDomains.orgId, orgId))
+    .orderBy(asc(orgEmailDomains.domain));
   return rows.map(toRow);
 }
 
@@ -82,19 +94,23 @@ export interface CreateEmailDomainInput {
 }
 
 export async function createEmailDomain(
-  db: PrismaClient,
+  db: Db,
   input: CreateEmailDomainInput,
 ): Promise<EmailDomainRow> {
-  const row = await db.orgEmailDomain.create({
-    data: {
+  // Insert then re-read through the join, because RETURNING cannot reach the
+  // joined driver-group name. The UNIQUE conflict the caller handles still
+  // surfaces from the insert.
+  const [created] = await db
+    .insert(orgEmailDomains)
+    .values({
       orgId: input.orgId,
       domain: input.domain.toLowerCase(),
       policy: input.policy,
       defaultDriverGroupId: input.defaultDriverGroupId ?? null,
-    },
-    include,
-  });
-  return toRow(row);
+    })
+    .returning({ id: orgEmailDomains.id });
+  const [row] = await withGroup(db).where(eq(orgEmailDomains.id, created!.id)).limit(1);
+  return toRow(row!);
 }
 
 // ─── updateEmailDomain ───────────────────────────────────────────────────────
@@ -105,56 +121,41 @@ export interface UpdateEmailDomainInput {
 }
 
 export async function updateEmailDomain(
-  db: PrismaClient,
+  db: Db,
   id: string,
   input: UpdateEmailDomainInput,
 ): Promise<EmailDomainRow | null> {
-  try {
-    const row = await db.orgEmailDomain.update({
-      where: { id },
-      data: {
-        ...(input.policy !== undefined && { policy: input.policy }),
-        ...(input.defaultDriverGroupId !== undefined && {
-          defaultDriverGroupId: input.defaultDriverGroupId,
-        }),
-      },
-      include,
-    });
-    return toRow(row);
-  } catch (err: unknown) {
-    // P2025 = "Record to update does not exist."
-    if (
-      typeof err === "object" &&
-      err !== null &&
-      "code" in err &&
-      (err as { code: unknown }).code === "P2025"
-    ) {
-      return null;
-    }
-    throw err;
+  const patch = {
+    ...(input.policy !== undefined && { policy: input.policy }),
+    ...(input.defaultDriverGroupId !== undefined && {
+      defaultDriverGroupId: input.defaultDriverGroupId,
+    }),
+  };
+  // Prisma threw P2025 on a missing row and this returned null. Drizzle
+  // matches zero rows and returns an empty array, so "not found" is now the
+  // absence of a RETURNING row rather than a caught error code.
+  if (Object.keys(patch).length === 0) {
+    const [unchanged] = await withGroup(db).where(eq(orgEmailDomains.id, id)).limit(1);
+    return unchanged ? toRow(unchanged) : null;
   }
+  const updated = await db
+    .update(orgEmailDomains)
+    .set(patch)
+    .where(eq(orgEmailDomains.id, id))
+    .returning({ id: orgEmailDomains.id });
+  if (updated.length === 0) return null;
+  const [row] = await withGroup(db).where(eq(orgEmailDomains.id, id)).limit(1);
+  return row ? toRow(row) : null;
 }
 
 // ─── deleteEmailDomain ───────────────────────────────────────────────────────
 
-export async function deleteEmailDomain(
-  db: PrismaClient,
-  id: string,
-): Promise<boolean> {
-  try {
-    await db.orgEmailDomain.delete({ where: { id } });
-    return true;
-  } catch (err: unknown) {
-    if (
-      typeof err === "object" &&
-      err !== null &&
-      "code" in err &&
-      (err as { code: unknown }).code === "P2025"
-    ) {
-      return false;
-    }
-    throw err;
-  }
+export async function deleteEmailDomain(db: Db, id: string): Promise<boolean> {
+  const deleted = await db
+    .delete(orgEmailDomains)
+    .where(eq(orgEmailDomains.id, id))
+    .returning({ id: orgEmailDomains.id });
+  return deleted.length > 0;
 }
 
 // ─── findEmailDomainByDomain ─────────────────────────────────────────────────
@@ -164,13 +165,11 @@ export async function deleteEmailDomain(
 // matching rule exists (do nothing path).
 
 export async function findEmailDomainByDomain(
-  db: PrismaClient,
+  db: Db,
   domain: string,
 ): Promise<EmailDomainRow | null> {
-  const row = await db.orgEmailDomain.findUnique({
-    where: { domain: domain.toLowerCase() },
-    include,
-  });
-  if (!row) return null;
-  return toRow(row);
+  const [row] = await withGroup(db)
+    .where(eq(orgEmailDomains.domain, domain.toLowerCase()))
+    .limit(1);
+  return row ? toRow(row) : null;
 }

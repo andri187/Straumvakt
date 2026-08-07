@@ -10,7 +10,7 @@
 
 import { Hono } from "hono";
 import { z } from "zod";
-import { makePrisma } from "../../lib/prisma";
+import { makeDrizzle } from "../../lib/drizzle";
 import { requireAdmin, type AuthVars } from "../../lib/auth-middleware";
 import { requirePermission } from "../../lib/auth/require-permission";
 import {
@@ -41,7 +41,7 @@ adminHostApplications.get(
     if (!parsed.success) {
       return c.json({ error: "validation", issues: parsed.error.issues }, 400);
     }
-    const db = makePrisma(c.env);
+    const db = makeDrizzle(c.env);
     const items = await listHostApplications(db, parsed.data);
     return c.json({ items });
   },
@@ -52,7 +52,7 @@ adminHostApplications.get(
   requirePermission("platform.tenant.read"),
   async (c) => {
     const id = c.req.param("id");
-    const db = makePrisma(c.env);
+    const db = makeDrizzle(c.env);
     const application = await getHostApplication(db, id);
     if (!application) {
       return c.json({ error: "not_found" }, 404);
@@ -75,7 +75,7 @@ adminHostApplications.patch(
     if (!parsed.success) {
       return c.json({ error: "validation", issues: parsed.error.issues }, 400);
     }
-    const db = makePrisma(c.env);
+    const db = makeDrizzle(c.env);
     const application = await updateHostApplicationStatus(
       db,
       id,
