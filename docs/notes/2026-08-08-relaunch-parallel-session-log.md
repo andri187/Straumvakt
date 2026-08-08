@@ -158,7 +158,24 @@ unaccepted rename: 3 hardcoded `hlada.straumvakt.workers.dev` URLs in code (2 CO
 allowlist entries, 1 email footer) and 2 docs (`CLAUDE.md`, `README.md`) describing the old
 `master → hlada` mapping. Follow-up once the rename is accepted.
 
-**PROMPT F — pending as of this writing — append below when it reports.**
+**PROMPT F — done.** Correction worth recording: the prompt specified basing off
+`origin/staging`, but the bug doesn't exist there — `prisma.config.ts` on `staging` still
+points at a single `schema.prisma` file, so migrations resolve fine. The defect arrived
+with the schema-folder restructure inside the 140-commit gap, so the fix is correctly based
+on the frontier (`dev/drizzle-ownership-and-market-harvest`) instead. Committed as
+`fix/prisma-migrations-path` @ `6b9246e` (worktree `Straumvakt-migrations-config`), not
+pushed. Diff: `prisma.config.ts` gains `migrations.path` (field/shape confirmed against the
+installed `@prisma/config` 7.8.0 types, not guessed); the `drop_issues_scaffold` header is
+rewritten to state the true split (its 3 `DROP TABLE`s are moot — already done by the other
+migration — but its 3 `DROP TYPE`s are genuinely still outstanding, staging-only); SQL
+bodies verified byte-identical. Proof: `migrate status` flips from a false "up to date"
+(exit 0) to correctly reporting both migrations pending (exit 1) — matches the earlier
+probe exactly, and the real `check:migrations` guard command confirms the same. CI wiring
+was deliberately left undone: no `DATABASE_URL` secret exists today, and `check.yml` runs on
+every branch/PR push, so adding one is a real decision, not a default — documented as a
+ready-to-apply snippet with the order (reconcile the two drops → decide the secret → wire it
+in). Confirmed after the fact that staging's actual database is unchanged (51 rows, 0 drop
+migrations recorded, same newest migration, all 3 issues enum types still present).
 
 ---
 
@@ -174,7 +191,7 @@ allowlist entries, 1 email footer) and 2 docs (`CLAUDE.md`, `README.md`) describ
 | `diag/fix-api-endpoints-drift` | `dev/drizzle-ownership-and-market-harvest` @ 2b7ebf6 | `0a2943c` | Ready — verified, unpushed |
 | `dev/rename-prod-worker` | `origin/staging` @ f53fb55 | `4fe0a95` | Ready — hlada rename, verified, unpushed |
 | `docs/relaunch-session-log-2026-08-08` | `origin/staging` @ f53fb55 | `131e800` | This document, unpushed |
-| *(Prompt F branch)* | `origin/staging` | — | Pending |
+| `fix/prisma-migrations-path` | `dev/drizzle-ownership-and-market-harvest` | `6b9246e` | Ready — migrate-status fix, verified, unpushed |
 
 None of the above exist on `origin`.
 
