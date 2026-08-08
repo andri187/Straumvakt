@@ -1,25 +1,11 @@
-import { z } from "zod";
-
-const optionalString = (max: number) =>
-  z.string().max(max).optional().transform((v) => (v && v.length > 0 ? v : undefined));
-
-export const CircuitCreateInput = z.object({
-  orgId: z.string().uuid(),
-  siteId: z.string().uuid(),
-  installationId: z.string().uuid().optional(),
-  displayName: z.string().min(1).max(120),
-  ampereCeiling: z.number().int().min(1).max(2000).optional(),
-  phaseCount: z.number().int().min(1).max(3).default(3),
-  vendorCircuitRef: optionalString(120),
-});
-export type CircuitCreateInput = z.infer<typeof CircuitCreateInput>;
-
-export const CircuitUpdateInput = z.object({
-  displayName: z.string().min(1).max(120).optional(),
-  installationId: z.string().uuid().optional().nullable(),
-  ampereCeiling: z.number().int().min(1).max(2000).optional().nullable(),
-  phaseCount: z.number().int().min(1).max(3).optional(),
-  vendorCircuitRef: optionalString(120),
-  metadata: z.unknown().optional(),
-});
-export type CircuitUpdateInput = z.infer<typeof CircuitUpdateInput>;
+// HARVESTED to @straumvakt/contracts (2026-08-08).
+//
+// This file is a re-export shim so the input vocabulary has ONE home
+// without breaking the 127 files that import it from here. New callers
+// should import "@straumvakt/contracts/inputs/circuits" directly; old ones move
+// under touch-it-convert-it (FOCUS.md rule 1).
+//
+// Nothing was deleted. When the last caller points at contracts, this file
+// goes — and not before.
+export * from "@straumvakt/contracts/inputs/circuits";
+export type * from "@straumvakt/contracts/inputs/circuits";

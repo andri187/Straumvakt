@@ -1,39 +1,11 @@
-// ADR 0026 §6 — going-public RFQ inbox.
+// HARVESTED to @straumvakt/contracts (2026-08-08).
 //
-// Public /apply submissions land in tenancy.host_applications; the
-// operator works them in the /applications inbox and converts a "won"
-// row into a host org (ADR 0027). Runtime-free UI/domain shapes shared
-// between the operator console and the API worker.
-
-export type HostApplicationStatus =
-  | "new"
-  | "in_review"
-  | "offered"
-  | "won"
-  | "lost";
-
-// Mirrors tenancy.OrganizationKind — the two host types in scope per
-// ADR 0026 §1.
-export type HostApplicationSiteType = "multi_dwelling" | "company";
-
-export interface HostApplicationSite {
-  address: string;
-  estimatedChargers: number;
-  estimatedDrivers: number;
-}
-
-export interface HostApplicationSummary {
-  id: string;
-  companyName: string;
-  contactName: string;
-  contactEmail: string;
-  contactPhone: string | null;
-  kennitala: string | null;
-  siteType: HostApplicationSiteType;
-  sites: HostApplicationSite[];
-  description: string | null;
-  status: HostApplicationStatus;
-  convertedOrgId: string | null;
-  createdAt: string; // ISO 8601
-  updatedAt: string; // ISO 8601
-}
+// This file is a re-export shim so the DTO vocabulary has ONE home
+// without breaking the 127 files that import it from here. New callers
+// should import "@straumvakt/contracts/domain/host-applications" directly; old ones move
+// under touch-it-convert-it (FOCUS.md rule 1).
+//
+// Nothing was deleted. When the last caller points at contracts, this file
+// goes — and not before.
+export * from "@straumvakt/contracts/domain/host-applications";
+export type * from "@straumvakt/contracts/domain/host-applications";

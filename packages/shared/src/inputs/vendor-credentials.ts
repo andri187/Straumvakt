@@ -1,21 +1,11 @@
-import { z } from "zod";
-
-// POST /api/admin/orgs/:orgId/vendor-credentials — save Zaptec/Easee/etc.
-// portal credentials under one org. Password is sealed server-side
-// before insert (apps/api/src/lib/credential-crypto.ts).
-
-export const VendorCredentialCreateInput = z.object({
-  vendorSlug: z.string().min(1).max(40), // resolves server-side to vendorId
-  username: z.string().min(1).max(200),
-  password: z.string().min(1).max(200),
-  notes: z.string().max(500).optional().transform((v) => (v && v.length > 0 ? v : undefined)),
-});
-export type VendorCredentialCreateInput = z.infer<typeof VendorCredentialCreateInput>;
-
-export const VendorCredentialUpdateInput = z.object({
-  // Allow rotating the password without changing username/vendor.
-  password: z.string().min(1).max(200).optional(),
-  status: z.enum(["active", "expired", "revoked"]).optional(),
-  notes: z.string().max(500).optional(),
-});
-export type VendorCredentialUpdateInput = z.infer<typeof VendorCredentialUpdateInput>;
+// HARVESTED to @straumvakt/contracts (2026-08-08).
+//
+// This file is a re-export shim so the input vocabulary has ONE home
+// without breaking the 127 files that import it from here. New callers
+// should import "@straumvakt/contracts/inputs/vendor-credentials" directly; old ones move
+// under touch-it-convert-it (FOCUS.md rule 1).
+//
+// Nothing was deleted. When the last caller points at contracts, this file
+// goes — and not before.
+export * from "@straumvakt/contracts/inputs/vendor-credentials";
+export type * from "@straumvakt/contracts/inputs/vendor-credentials";

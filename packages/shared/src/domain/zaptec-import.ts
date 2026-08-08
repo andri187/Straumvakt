@@ -1,29 +1,11 @@
-// Wire shape returned by POST /api/admin/zaptec/import.
+// HARVESTED to @straumvakt/contracts (2026-08-08).
 //
-// Identity-string is the Zaptec DeviceId (lowercased) — that's what
-// Zaptec firmware actually sends in OCPP Basic-Auth. The OCPP
-// password is installation-level (one value across all chargers in
-// the installation) — the operator types it into the wizard, we
-// hash it once, and apply the same hash to every OcppIdentity row.
-// We don't echo the password back to the client.
-
-export interface ZaptecImportedCharger {
-  /** Internal SiteAsset id — same id used everywhere else for the charger. */
-  chargingStationId: string;
-  /** OcppIdentity row id (gateway DO key). */
-  ocppIdentityId: string;
-  /** Identity-string the charger presents (Zaptec DeviceId, lowercased). */
-  identityString: string;
-  displayName: string;
-  serialNo: string | null;
-}
-
-export interface ZaptecImportResult {
-  orgId: string;
-  propertyId: string;
-  siteId: string;
-  installationId: string;
-  /** vendorInstallationRef — the Zaptec UUID we imported from. */
-  zaptecInstallationId: string;
-  chargers: ZaptecImportedCharger[];
-}
+// This file is a re-export shim so the DTO vocabulary has ONE home
+// without breaking the 127 files that import it from here. New callers
+// should import "@straumvakt/contracts/domain/zaptec-import" directly; old ones move
+// under touch-it-convert-it (FOCUS.md rule 1).
+//
+// Nothing was deleted. When the last caller points at contracts, this file
+// goes — and not before.
+export * from "@straumvakt/contracts/domain/zaptec-import";
+export type * from "@straumvakt/contracts/domain/zaptec-import";

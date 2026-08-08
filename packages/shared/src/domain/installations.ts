@@ -1,28 +1,11 @@
-export interface InstallationSummary {
-  id: string;
-  orgId: string;
-  orgDisplayName: string;
-  siteId: string;
-  siteDisplayName: string;
-  displayName: string;
-  vendorId: string | null;
-  vendorSlug: string | null;
-  vendorDisplayName: string | null;
-  modelId: string | null;
-  vendorInstallationRef: string | null;
-  credentialsRef: string | null;
-  credentialsStatus: string | null;
-  onboardingStatus: string;
-  retailerTariffId: string | null;
-  // Sprint 4 4.6 — per-installation OCPP-Authorize enforce gate.
-  // When true, the gateway honours verdicts from the API authorize
-  // handler. When false (default), gateway logs but always replies
-  // Accepted (shadow mode).
-  enforceAuthorize: boolean;
-  // Freeform JSONB. Zaptec/etc. imports drop vendor-specific extras
-  // here (timezone, MaxCurrent, …). Read-only from the UI; operator
-  // sees what was captured at import time.
-  metadata: unknown;
-  createdAt: string;
-  updatedAt: string;
-}
+// HARVESTED to @straumvakt/contracts (2026-08-08).
+//
+// This file is a re-export shim so the DTO vocabulary has ONE home
+// without breaking the 127 files that import it from here. New callers
+// should import "@straumvakt/contracts/domain/installations" directly; old ones move
+// under touch-it-convert-it (FOCUS.md rule 1).
+//
+// Nothing was deleted. When the last caller points at contracts, this file
+// goes — and not before.
+export * from "@straumvakt/contracts/domain/installations";
+export type * from "@straumvakt/contracts/domain/installations";

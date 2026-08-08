@@ -1,81 +1,11 @@
-// Wire shape of an Organization row as the API returns it. ADR 0014:
-// Iceland-aligned (Fyrirtækjaskrá) field set, OCPI-aligned role
-// taxonomy, slug + free-form addresses/contacts JSON dropped,
-// mainContact references a User.
-
-export type OrgStatus = "active" | "suspended" | "archived";
-
-// ADR 0026 — going-public host classification. Null for non-host orgs
-// (operators, vendors, DSOs…); set for customer hosts.
-export type OrganizationKind = "multi_dwelling" | "company";
-
-export type OrganizationRole =
-  | "cpo"
-  | "emsp"
-  | "hub"
-  | "nsp"
-  | "site_host"
-  | "service_contractor"
-  | "installer"
-  | "vendor"
-  | "regulator"
-  | "dso"
-  | "tso"
-  | "retailer"
-  | "payment_processor";
-
-export interface OrgAddress {
-  street: string;
-  postalCode: string;
-  city: string;
-}
-
-export interface OrgMainContact {
-  id: string;
-  displayName: string | null;
-  email: string;
-}
-
-export type OrgContactRole =
-  | "main"
-  | "billing"
-  | "technical"
-  | "support"
-  | "emergency"
-  | "other";
-
-export interface OrgContact {
-  role: OrgContactRole;
-  name: string;
-  email: string | null;
-  phone: string | null;
-  notes: string | null;
-}
-
-export interface OrgSummary {
-  id: string;
-  displayName: string;
-  countryCode: string;
-  status: OrgStatus;
-  kind: OrganizationKind | null;
-  kennitala: string | null;
-  legalName: string | null;
-  legalForm: string | null;
-  legalFormCode: string | null;
-  vskNr: string | null;
-  leiCode: string | null;
-  defaultCurrency: string;
-  postalAddress: OrgAddress | null;
-  legalAddress: OrgAddress | null;
-  municipalityCode: string | null;
-  municipalityName: string | null;
-  regulatorLicenceNo: string | null;
-  notes: string | null;
-  roles: OrganizationRole[];
-  branding: unknown;
-  mainContactUserId: string | null;
-  mainContact: OrgMainContact | null;
-  contacts: OrgContact[];
-  createdAt: string;
-  updatedAt: string;
-}
+// HARVESTED to @straumvakt/contracts (2026-08-08).
+//
+// This file is a re-export shim so the DTO vocabulary has ONE home
+// without breaking the 127 files that import it from here. New callers
+// should import "@straumvakt/contracts/domain/orgs" directly; old ones move
+// under touch-it-convert-it (FOCUS.md rule 1).
+//
+// Nothing was deleted. When the last caller points at contracts, this file
+// goes — and not before.
+export * from "@straumvakt/contracts/domain/orgs";
+export type * from "@straumvakt/contracts/domain/orgs";

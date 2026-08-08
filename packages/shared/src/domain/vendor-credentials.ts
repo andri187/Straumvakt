@@ -1,26 +1,11 @@
-// Wire shape of a stored vendor portal credential. Password is never
-// returned to the operator UI — only metadata. Re-authenticating via
-// the credential happens server-side using the encrypted column +
-// the Worker KEK.
-
-export interface VendorCredentialSummary {
-  id: string;
-  ownerOrgId: string;
-  ownerOrgDisplayName: string;
-  vendorId: string;
-  vendorSlug: string;
-  vendorDisplayName: string;
-  username: string;
-  status: "active" | "expired" | "revoked";
-  notes: string | null;
-  lastUsedAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-  // Convenience counts populated by the list endpoints — null when not joined.
-  installationCount: number | null;
-  chargerCount: number | null;
-  // Of the chargerCount, how many have OCPP activity within the freshness
-  // window (status='online' OR lastSeenAt within last 5 minutes). Null when
-  // the join wasn't computed.
-  chargersOnline: number | null;
-}
+// HARVESTED to @straumvakt/contracts (2026-08-08).
+//
+// This file is a re-export shim so the DTO vocabulary has ONE home
+// without breaking the 127 files that import it from here. New callers
+// should import "@straumvakt/contracts/domain/vendor-credentials" directly; old ones move
+// under touch-it-convert-it (FOCUS.md rule 1).
+//
+// Nothing was deleted. When the last caller points at contracts, this file
+// goes — and not before.
+export * from "@straumvakt/contracts/domain/vendor-credentials";
+export type * from "@straumvakt/contracts/domain/vendor-credentials";

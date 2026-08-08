@@ -1,13 +1,11 @@
-export interface PropertySummary {
-  id: string;
-  orgId: string;
-  orgDisplayName: string;
-  displayName: string;
-  locationType: string | null;
-  address: unknown;
-  latitude: string | null;
-  longitude: string | null;
-  provisioningStatus: string;
-  createdAt: string;
-  updatedAt: string;
-}
+// HARVESTED to @straumvakt/contracts (2026-08-08).
+//
+// This file is a re-export shim so the DTO vocabulary has ONE home
+// without breaking the 127 files that import it from here. New callers
+// should import "@straumvakt/contracts/domain/properties" directly; old ones move
+// under touch-it-convert-it (FOCUS.md rule 1).
+//
+// Nothing was deleted. When the last caller points at contracts, this file
+// goes — and not before.
+export * from "@straumvakt/contracts/domain/properties";
+export type * from "@straumvakt/contracts/domain/properties";
