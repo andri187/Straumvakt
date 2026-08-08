@@ -20,11 +20,11 @@
 // test to inject an outer transaction around an HTTP-level route.fetch()
 // call without changing production code to accept an injected client,
 // which is out of scope for a bug fix. So this suite does the practical
-// equivalent instead: every fixture (org, agreement, driver group, user)
-// is created by the test, tracked by id, and deleted in a guaranteed
-// `afterEach` regardless of pass/fail. Real DB, no fakes, no residue —
-// just not a literal ROLLBACK. Said plainly here so it isn't mistaken for
-// the thing it was asked for and isn't.
+// equivalent instead: every fixture (org, property, site, installation,
+// agreement, driver group, user) is created by the test, tracked by id, and
+// deleted in a guaranteed `afterEach` regardless of pass/fail. Real DB, no
+// fakes, no residue — just not a literal ROLLBACK. Said plainly here so it
+// isn't mistaken for the thing it was asked for and isn't.
 //
 // WHY A REAL DB AND NOT A FAKE FOR THIS SPECIFIC FIX: the bug ADR 0053
 // fixes is about ordering (identity check BEFORE the conditional claim)
@@ -37,13 +37,26 @@
 //
 // RUN: PARITY_DATABASE_URL=<neon-test-branch-url> npm --prefix apps/api run test:parity
 //
-// NOT RUN FROM WHERE THIS FILE WAS WRITTEN: authored via Claude Code
-// working through a bridge into the developer's machine, with no network
-// path to Neon from either that bridge or the cloud sandbox it ran
-// alongside (DNS resolution to neon.tech fails from both). This file is
-// believed correct against the schema and route code it was written
-// against, but has not actually been executed. Run it for real before
-// trusting the green.
+// FIRST ACTUALLY EXECUTED 2026-08-08, against br-withered-hat-abtc5gzi.
+// It was authored without a network path to Neon and shipped unrun with a
+// warning here saying so. Running it turned up three things, all of them in
+// the test setup — driver.ts and ADR 0053's behaviour needed no change:
+//
+//   1. Every test died in setup on the `agreements_typed_anchors_consistency`
+//      CHECK: an `installation` agreement must carry an installation_id, so
+//      the fixture now builds the Property → Site → Installation chain under
+//      it. See makeOrgAndDriverGroup.
+//   2. Every route call 500'd, because apps/api's generated Prisma client
+//      loads its query compiler with `import("...wasm?module")` — a Workers
+//      convention nothing implements under Node. vitest.parity.config.ts now
+//      supplies that loader, so these tests drive the same client that ships
+//      to Cloudflare.
+//   3. The control case asserted the rejected redemption granted no
+//      membership, against a bystander its own fixture had just made a
+//      member. See makeExistingDriver.
+//
+// The route came out of it unamended: the identity check rejects, records
+// the audit row, and leaves the token unburned exactly as ADR 0053 says.
 
 import { afterAll, afterEach, describe, expect, it } from "vitest";
 import { closeAll, getApiPrisma, hasDb, PARITY_URL } from "./_harness";
@@ -126,6 +139,9 @@ const created = {
   agreementIds: new Set<string>(),
   driverGroupIds: new Set<string>(),
   userIds: new Set<string>(),
+  installationIds: new Set<string>(),
+  siteIds: new Set<string>(),
+  propertyIds: new Set<string>(),
 };
 
 function trackOrg(id: string) {
@@ -144,6 +160,18 @@ function trackUser(id: string) {
   created.userIds.add(id);
   return id;
 }
+function trackInstallation(id: string) {
+  created.installationIds.add(id);
+  return id;
+}
+function trackSite(id: string) {
+  created.siteIds.add(id);
+  return id;
+}
+function trackProperty(id: string) {
+  created.propertyIds.add(id);
+  return id;
+}
 
 async function cleanupAll() {
   if (!hasDb) return;
@@ -152,6 +180,9 @@ async function cleanupAll() {
   const userIds = [...created.userIds];
   const driverGroupIds = [...created.driverGroupIds];
   const agreementIds = [...created.agreementIds];
+  const installationIds = [...created.installationIds];
+  const siteIds = [...created.siteIds];
+  const propertyIds = [...created.propertyIds];
 
   // Children before parents. AuditAction references both org (cascade) and
   // actor user (no cascade — an FK violation would block user deletion), so
@@ -168,8 +199,21 @@ async function cleanupAll() {
   if (driverGroupIds.length) {
     await prisma.driverGroup.deleteMany({ where: { id: { in: driverGroupIds } } });
   }
+  // Agreement before Installation: agreements.installation_id is ON DELETE
+  // RESTRICT, so the installation cannot go first. Site and Property cascade
+  // from their parents, but are deleted explicitly so the order is readable
+  // rather than inferred.
   if (agreementIds.length) {
     await prisma.agreement.deleteMany({ where: { id: { in: agreementIds } } });
+  }
+  if (installationIds.length) {
+    await prisma.installation.deleteMany({ where: { id: { in: installationIds } } });
+  }
+  if (siteIds.length) {
+    await prisma.site.deleteMany({ where: { id: { in: siteIds } } });
+  }
+  if (propertyIds.length) {
+    await prisma.property.deleteMany({ where: { id: { in: propertyIds } } });
   }
   if (userIds.length) {
     await prisma.user.deleteMany({ where: { id: { in: userIds } } });
@@ -182,11 +226,30 @@ async function cleanupAll() {
   created.userIds.clear();
   created.driverGroupIds.clear();
   created.agreementIds.clear();
+  created.installationIds.clear();
+  created.siteIds.clear();
+  created.propertyIds.clear();
 }
 
 // ── fixture builders ─────────────────────────────────────────────────────
 
-/** A host org that owns one DriverGroup under one installation Agreement. */
+/**
+ * A host org that owns one DriverGroup under one installation Agreement.
+ *
+ * The Property → Site → Installation chain is not decoration. An
+ * `installation` agreement is required by the
+ * `agreements_typed_anchors_consistency` CHECK constraint to carry a non-null
+ * installation_id (and a null cpo_org_id); only the `service_*` types may
+ * anchor to nothing. Creating the agreement bare — as this suite did before
+ * it was ever run — fails at INSERT, which is why every test in the file
+ * died in setup rather than on an assertion.
+ *
+ * `installation` is the right type to keep here rather than swapping to a
+ * service_* type to dodge the constraint: it is the type real driver groups
+ * hang off (src/lib/agreement/persist.ts resolves a driver group through
+ * `installationAgreement`), so a group under anything else would not be
+ * representative of what redemption grants access to.
+ */
 async function makeOrgAndDriverGroup(label: string) {
   const prisma = getApiPrisma();
   const org = await prisma.organization.create({
@@ -195,10 +258,37 @@ async function makeOrgAndDriverGroup(label: string) {
   });
   trackOrg(org.id);
 
+  const property = await prisma.property.create({
+    data: { orgId: org.id, displayName: `TEST parity ${label} property` },
+    select: { id: true },
+  });
+  trackProperty(property.id);
+
+  const site = await prisma.site.create({
+    data: {
+      orgId: org.id,
+      propertyId: property.id,
+      displayName: `TEST parity ${label} site`,
+    },
+    select: { id: true },
+  });
+  trackSite(site.id);
+
+  const installation = await prisma.installation.create({
+    data: {
+      orgId: org.id,
+      siteId: site.id,
+      displayName: `TEST parity ${label} installation`,
+    },
+    select: { id: true },
+  });
+  trackInstallation(installation.id);
+
   const agreement = await prisma.agreement.create({
     data: {
       agreementType: "installation",
       counterpartyOrgId: org.id,
+      installationId: installation.id,
       displayName: `TEST parity ${label} agreement`,
       effectiveFrom: new Date("2026-01-01T00:00:00Z"),
       status: "active",
@@ -236,11 +326,24 @@ async function makeInviter() {
 }
 
 /**
- * A driver already holding the group membership + a real password — the
- * "authenticated driver" side of the control-case reproduction, and a
- * ready-made caller for the mismatch tests.
+ * An established driver — real credential, active, but NOT a member of the
+ * group under test. The "someone else entirely" side of the control-case
+ * reproduction, and a ready-made caller for the mismatch tests.
+ *
+ * This deliberately does not pre-grant the driver group membership. It used
+ * to, which made the control case's central assertion — "the rejected
+ * attempt granted nothing" — assert against a membership the fixture itself
+ * had just created one line earlier. The test could only ever fail there, and
+ * a passing version would have proved nothing.
+ *
+ * Nothing needs the pre-grant: /redeem-invite's identity check is
+ * `row.userId !== userId` (driver.ts) and runs before any membership is read,
+ * so the rejection does not depend on the caller's group standing. The one
+ * test that genuinely needs a pre-existing member — the already-a-member
+ * no-op case — creates it inline for the bound user, which is the user that
+ * case is actually about.
  */
-async function makeExistingDriver(driverGroupId: string, label: string) {
+async function makeExistingDriver(label: string) {
   const prisma = getApiPrisma();
   const email = `test-parity-${label}-${crypto.randomUUID()}@example.invalid`;
   const user = await prisma.user.create({
@@ -250,9 +353,6 @@ async function makeExistingDriver(driverGroupId: string, label: string) {
   trackUser(user.id);
   await prisma.userCredential.create({
     data: { userId: user.id, passwordHash: await hashPassword("Sup3rSecret!") },
-  });
-  await prisma.driverGroupMembership.create({
-    data: { driverGroupId, userId: user.id },
   });
   return { userId: user.id, email };
 }
@@ -289,7 +389,7 @@ describe.skipIf(!hasDb)("ADR 0053 — driver invite redemption is identity-bound
     const { orgId, driverGroupId } = await makeOrgAndDriverGroup("control-case");
     const inviterId = await makeInviter();
     const invite = await mintInvite(orgId, driverGroupId, inviterId, "test-invite@example.invalid");
-    const bystander = await makeExistingDriver(driverGroupId, "bystander");
+    const bystander = await makeExistingDriver("bystander");
 
     const bystanderToken = await accessTokenFor(bystander.userId, bystander.email);
     const rejectRes = await callRedeemInvite(bystanderToken, { token: invite.token });
@@ -449,7 +549,7 @@ describe.skipIf(!hasDb)("ADR 0053 — driver invite redemption is identity-bound
     const inviterId = await makeInviter();
 
     // -- unknown code: no such token exists at all.
-    const someone = await makeExistingDriver(driverGroupId, "caller");
+    const someone = await makeExistingDriver("caller");
     const someoneToken = await accessTokenFor(someone.userId, someone.email);
     const unknownRes = await callRedeemInvite(someoneToken, { token: "totally-unknown-code-1234567890" });
     expect(unknownRes.status).toBe(404);
@@ -483,7 +583,7 @@ describe.skipIf(!hasDb)("ADR 0053 — driver invite redemption is identity-bound
     // exist. This is ADR 0053's §3 in one assertion.
     const mismatchEmail = `test-parity-mismatch-bound-${crypto.randomUUID()}@example.invalid`;
     const mismatchInvite = await mintInvite(orgId, driverGroupId, inviterId, mismatchEmail);
-    const stranger = await makeExistingDriver(driverGroupId, "stranger");
+    const stranger = await makeExistingDriver("stranger");
     const strangerToken = await accessTokenFor(stranger.userId, stranger.email);
     const mismatchRes = await callRedeemInvite(strangerToken, { token: mismatchInvite.token });
     expect(mismatchRes.status).toBe(unknownRes.status);
