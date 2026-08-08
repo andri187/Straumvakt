@@ -1,5 +1,7 @@
 # ADR 0007 — Circuit Asset Tier Re-Added to V3 Schema
 
+> **LEGACY — pre-market-focus historical reference. Not active canon. See /FOCUS.md. Load-bearing constraints extracted into the focus rules.**
+
 **Status:** Accepted
 **Date:** 2026-04-25
 **Sprint:** schema migration ships in Sprint 2 milestone 2.6

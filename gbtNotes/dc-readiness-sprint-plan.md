@@ -1,5 +1,7 @@
 # DC Readiness - Sprint Plan (gbtnotes DC)
 
+> **LEGACY — superseded as active canon by /FOCUS.md (2026-08-07). Kept as historical reference; nothing here is being worked from.**
+
 **Status:** planning note.
 **Date:** 2026-05-03.
 **Context:** based on the current `E:\Claude\Straumvakt` codebase and architecture review. Sibling of `scale-to-4000-chargers-sprint-plan.md` (gbtnotes scale). Both live under `gbtNotes/`. Sequencing: GBT scale precedes DC because DC ingest volume melts the current Prisma hot path.

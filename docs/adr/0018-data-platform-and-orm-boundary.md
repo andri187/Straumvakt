@@ -1,5 +1,7 @@
 # ADR 0018 — Data Platform + ORM Boundary + Raw OCPP Archive
 
+> **LEGACY — pre-market-focus historical reference. Not active canon. See /FOCUS.md. Load-bearing constraints extracted into the focus rules.**
+
 **Status:** Accepted
 **Date:** 2026-05-03
 **Sprint:** Sprint 6 — decision sprint. Three decisions land here so Sprint 7 has a foundation to build on. No code in Sprint 6.

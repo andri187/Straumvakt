@@ -1,5 +1,7 @@
 # ADR 0017 — Pre-Pilot Rescope For 4k-Charger Target
 
+> **LEGACY — pre-market-focus historical reference. Not active canon. See /FOCUS.md. Load-bearing constraints extracted into the focus rules.**
+
 **Status:** Historical — a past sprint-scope decision, not a proposal awaiting approval. Reclassified 2026-08-04; the sprints it governs are long finished. Kept for the reasoning, not as an open question.
 **Date:** 2026-05-03
 **Sprint:** Records the rescope before any code lands. Sprints 5–11 reshape per this ADR.

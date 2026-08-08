@@ -1,5 +1,7 @@
 # ADR 0047 — Dissolving Installation
 
+> **LEGACY — pre-market-focus historical reference. Not active canon. See /FOCUS.md. Load-bearing constraints extracted into the focus rules.**
+
 **Status:** Proposed · 2026-08-06
 **Supersedes nothing. Implements** the "Installation dissolves" decision in
 [`docs/notes/2026-08-04-target-domain-tree.md`](../notes/2026-08-04-target-domain-tree.md),

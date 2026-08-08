@@ -1,5 +1,7 @@
 # ADR 0010 — Organization Profile Enrichment + Multi-Role + User Profile Enrichment + OCPP Configuration Keys
 
+> **LEGACY — pre-market-focus historical reference. Not active canon. See /FOCUS.md. Load-bearing constraints extracted into the focus rules.**
+
 **Status:** Accepted
 **Date:** 2026-04-26
 **Sprint:** schema migration ships in Sprint 2 milestone 2.6 (consolidated with ADRs 0007 + 0008 + 0009)

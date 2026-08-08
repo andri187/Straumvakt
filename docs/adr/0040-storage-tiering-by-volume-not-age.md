@@ -1,5 +1,7 @@
 # ADR 0040 — Tier storage by volume and access pattern, not by age
 
+> **LEGACY — pre-market-focus historical reference. Not active canon. See /FOCUS.md. Load-bearing constraints extracted into the focus rules.**
+
 **Status:** Accepted — operator, 2026-08-03 (proposed 2026-08-02).
 **Amends:** [ADR 0037](./0037-r2-key-scheme-retention-class-segment.md) §D2
 (retention table) and [ADR 0039](./0039-split-protocol-log-from-event-log.md)

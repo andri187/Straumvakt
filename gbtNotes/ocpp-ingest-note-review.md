@@ -1,5 +1,7 @@
 # Review - OCPP Ingest Current State And Gap Note
 
+> **LEGACY — superseded as active canon by /FOCUS.md (2026-08-07). Kept as historical reference; nothing here is being worked from.**
+
 **Reviewer date:** 2026-05-01
 **Subject:** `2026-05-01-ocpp-ingest-current-state-and-gaps.md`
 **Verdict:** Strong. Wire-level, file:line-cited, environment-aware, and traceable to S1. The points below are sharpening, not corrections.

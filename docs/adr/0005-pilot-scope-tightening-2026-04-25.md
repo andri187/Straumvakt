@@ -1,5 +1,7 @@
 # ADR 0005 — Pilot Scope Tightening (2026-04-25)
 
+> **LEGACY — pre-market-focus historical reference. Not active canon. See /FOCUS.md. Load-bearing constraints extracted into the focus rules.**
+
 **Status:** Accepted
 **Date:** 2026-04-25
 **Sprints affected:** 2, 3, 4, 5, 6, 8, 9, 10

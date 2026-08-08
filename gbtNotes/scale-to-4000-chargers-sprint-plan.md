@@ -1,5 +1,7 @@
 # Scale To 4,000 Chargers In 6 Months - Sprint Plan
 
+> **LEGACY — superseded as active canon by /FOCUS.md (2026-08-07). Kept as historical reference; nothing here is being worked from.**
+
 **Status:** planning note.
 **Date:** 2026-05-01.
 **Context:** based on the current `E:\Claude\Straumvakt` codebase review.

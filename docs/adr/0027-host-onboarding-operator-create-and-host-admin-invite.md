@@ -1,5 +1,7 @@
 # ADR 0027 — Host onboarding (operator-initiated create + host-admin invite)
 
+> **LEGACY — pre-market-focus historical reference. Not active canon. See /FOCUS.md. Load-bearing constraints extracted into the focus rules.**
+
 **Status:** Accepted (2026-06-04) — core model is canon; the open
 questions resolve during P2 implementation, reversible by supersession.
 **Date:** 2026-06-04

@@ -1,5 +1,7 @@
 # ADR 0024 — BLE-proximity authentication
 
+> **LEGACY — pre-market-focus historical reference. Not active canon. See /FOCUS.md. Load-bearing constraints extracted into the focus rules.**
+
 **Status:** Direction set — see **Addendum 2026-06-07** (tap-to-start
 architecture: NFC-tap primary, BLE discovery + anti-spoof cross-check,
 Autocharge for hands-free regulars). Full threat-model formality + build

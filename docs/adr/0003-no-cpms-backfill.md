@@ -1,5 +1,7 @@
 # ADR 0003 — No CPMS Backfill in Sprint 0
 
+> **LEGACY — pre-market-focus historical reference. Not active canon. See /FOCUS.md. Load-bearing constraints extracted into the focus rules.**
+
 **Status:** Accepted
 **Date:** 2026-04-24
 **Sprint:** 0

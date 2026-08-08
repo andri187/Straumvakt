@@ -1,5 +1,7 @@
 # ADR 0029 — Child-object model for billing attribution
 
+> **LEGACY — pre-market-focus historical reference. Not active canon. See /FOCUS.md. Load-bearing constraints extracted into the focus rules.**
+
 **Status:** Accepted (2026-06-04) — core model is canon; the 6 open
 questions below resolve during P1 implementation and any single call is
 reversible by supersession.

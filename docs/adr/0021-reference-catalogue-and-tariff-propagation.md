@@ -1,5 +1,7 @@
 # ADR 0021 — Reference catalogue + tariff propagation
 
+> **LEGACY — pre-market-focus historical reference. Not active canon. See /FOCUS.md. Load-bearing constraints extracted into the focus rules.**
+
 **Status:** Open — design conversation, not a decision yet.
 **Created:** 2026-05-10
 **Triggered by:** seed-vcp-sandbox conversation (2026-05-10) — operator

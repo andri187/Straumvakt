@@ -1,5 +1,7 @@
 # ADR 0020 — Driver access resolution via DriverGroups
 
+> **LEGACY — pre-market-focus historical reference. Not active canon. See /FOCUS.md. Load-bearing constraints extracted into the focus rules.**
+
 **Status:** Proposed
 **Date:** 2026-05-08
 **Sprint:** Sprint 10 — schema + resolver land in S10; backfill + UI follow in S10.x.

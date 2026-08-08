@@ -1,5 +1,7 @@
 # ADR 0023 — Real-time per-connector status propagation
 
+> **LEGACY — pre-market-focus historical reference. Not active canon. See /FOCUS.md. Load-bearing constraints extracted into the focus rules.**
+
 **Status:** Proposed — direction agreed, implementation pending.
 **Created:** 2026-05-11
 **Triggered by:** "morning health check" diagnostic conversation

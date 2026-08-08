@@ -1,5 +1,7 @@
 # ADR 0033 — Driver web portal (management surface; charging stays mobile)
 
+> **LEGACY — pre-market-focus historical reference. Not active canon. See /FOCUS.md. Load-bearing constraints extracted into the focus rules.**
+
 **Status:** Accepted (2026-06-05)
 **Amends:** [ADR 0026 §5](./0026-host-managed-driver-enrollment-and-billing-model.md)
 (which made the mobile app the *only* driver surface).

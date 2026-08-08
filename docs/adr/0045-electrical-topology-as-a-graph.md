@@ -1,5 +1,7 @@
 # ADR 0045 — Electrical topology is a graph, not a level
 
+> **LEGACY — pre-market-focus historical reference. Not active canon. See /FOCUS.md. Load-bearing constraints extracted into the focus rules.**
+
 **Status:** Accepted — operator, 2026-08-03 (proposed 2026-08-03).
 **Amends:** the asset-hierarchy description in
 [STRAUMVAKT_ARCHITECTURE_V3](../architecture/STRAUMVAKT_ARCHITECTURE_V3.md)

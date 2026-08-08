@@ -1,5 +1,7 @@
 # ADR 0034 — Contractor (Tengill) billing + contractor org model
 
+> **LEGACY — pre-market-focus historical reference. Not active canon. See /FOCUS.md. Load-bearing constraints extracted into the focus rules.**
+
 **Status:** Proposed (2026-06-05) — org model is canon; billing math is the
 open Rule-5 piece, specced here, implemented in P-billing.
 **Related:** [ADR 0031](./0031-cost-model-and-money-flow.md) (money flow),

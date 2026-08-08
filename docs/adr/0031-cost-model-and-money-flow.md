@@ -1,5 +1,7 @@
 # ADR 0031 — Cost model + money flow (Straumvakt as agent, host as principal)
 
+> **LEGACY — pre-market-focus historical reference. Not active canon. See /FOCUS.md. Load-bearing constraints extracted into the focus rules.**
+
 **Status:** Accepted — Q1/Q2/Q3 locked 2026-06-04 (see Decisions section);
 driver-access-fee mechanics remain open (gate P1, not P0).
 **Date:** 2026-06-04

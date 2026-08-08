@@ -1,5 +1,7 @@
 # ADR 0044 — Driver-side capabilities and the data they require
 
+> **LEGACY — pre-market-focus historical reference. Not active canon. See /FOCUS.md. Load-bearing constraints extracted into the focus rules.**
+
 **Status:** Accepted in part — operator, 2026-08-03 (proposed 2026-08-03). D6/D7/D8 accepted; **D3 struck** (auth method IS recorded — see D6); D1/D2 deferred, they depend on ADR 0038's serving tier which does not exist yet.
 **Relates to:** [ADR 0020](./0020-driver-access-via-driver-groups.md),
 [ADR 0024](./0024-ble-proximity-authentication.md),

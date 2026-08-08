@@ -1,5 +1,12 @@
 # CLAUDE.md — persistent rules for Straumvakt
 
+> **ACTIVE CANON: read [/FOCUS.md](./FOCUS.md) first.**
+>
+> The safety rules below (**Rules 1–4**) remain in force, unchanged.
+>
+> The planning, sprint-discipline, and ADR-ceremony sections are superseded
+> by FOCUS.md for the market phase.
+
 Read this first on every new session. These are not preferences — they are
 hard rules. Violating them causes real damage (data loss, accidental
 production deploys, pricing bugs). When a rule says "stop and ask,"

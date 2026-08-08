@@ -1,5 +1,7 @@
 # ADR 0026 — Host-managed driver enrollment + invoice-as-agent billing model
 
+> **LEGACY — pre-market-focus historical reference. Not active canon. See /FOCUS.md. Load-bearing constraints extracted into the focus rules.**
+
 **Status:** Proposed
 **Date:** 2026-06-03
 **Supersedes:**

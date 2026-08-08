@@ -1,5 +1,7 @@
 # ADR 0037 — R2 key scheme: add a retention-class segment
 
+> **LEGACY — pre-market-focus historical reference. Not active canon. See /FOCUS.md. Load-bearing constraints extracted into the focus rules.**
+
 **Status:** Accepted — operator, 2026-08-03 (proposed 2026-08-02).
 **Amends:** [ADR 0018](./0018-data-platform-and-orm-boundary.md)
 Decisions **3b** (key scheme) and **3c** (retention policy). Decision 3a

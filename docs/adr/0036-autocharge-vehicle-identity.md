@@ -1,5 +1,7 @@
 # ADR 0036 — Autocharge: vehicle identity capture across transport layers
 
+> **LEGACY — pre-market-focus historical reference. Not active canon. See /FOCUS.md. Load-bearing constraints extracted into the focus rules.**
+
 **Status:** Proposed
 **Date:** 2026-05-08
 **Sprint:** Pulled forward — sequenced ahead of [ADR 0020](./0020-driver-access-via-driver-groups.md) implementation. Operator declared this priority 1 over the previously-planned Sprint 10 driver-access work and the Sprint 11 Forensic Capture roadmap.

@@ -1,5 +1,7 @@
 # ADR 0019 — Agreement + BearerRule Architecture
 
+> **LEGACY — pre-market-focus historical reference. Not active canon. See /FOCUS.md. Load-bearing constraints extracted into the focus rules.**
+
 **Status:** Proposed
 **Date:** 2026-05-07
 **Sprint:** Sprint 9 — design lands now; schema in milestone A.2; resolver + debug UI across A.5–A.6.

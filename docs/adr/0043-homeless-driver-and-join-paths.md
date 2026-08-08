@@ -1,5 +1,7 @@
 # ADR 0043 — The homeless driver, and how a driver joins an installation
 
+> **LEGACY — pre-market-focus historical reference. Not active canon. See /FOCUS.md. Load-bearing constraints extracted into the focus rules.**
+
 **Status:** Accepted — operator, 2026-08-03 (proposed 2026-08-03).
 **Relates to:** [ADR 0020](./0020-driver-access-via-driver-groups.md),
 [ADR 0022](./0022-driver-self-onboarding.md),

@@ -1,5 +1,7 @@
 # ADR 0022 — Driver self-onboarding
 
+> **LEGACY — pre-market-focus historical reference. Not active canon. See /FOCUS.md. Load-bearing constraints extracted into the focus rules.**
+
 **Status:** Proposed — primary decisions locked 2026-05-31. See addendum at bottom.
 **Created:** 2026-05-10
 **Last addendum:** 2026-05-31 — locks Auðkenni + email/pass, virtual_rfid =

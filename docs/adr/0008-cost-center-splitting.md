@@ -1,5 +1,7 @@
 # ADR 0008 — Cost-Center Splitting + Inherited Contracts + Runtime Cost-Factor Catalog + Driver-Contract Routing
 
+> **LEGACY — pre-market-focus historical reference. Not active canon. See /FOCUS.md. Load-bearing constraints extracted into the focus rules.**
+
 **Status:** Accepted
 **Date:** 2026-04-26
 **Sprint:** schema lands in Sprint 2 milestone 2.6 (consolidated with Circuit migration); resolver + dashboards across Sprints 5–6

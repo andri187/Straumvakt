@@ -1,5 +1,7 @@
 # ADR 0016 — Sprint 5 Scope Call: Invite Flow over Commercial Model
 
+> **LEGACY — pre-market-focus historical reference. Not active canon. See /FOCUS.md. Load-bearing constraints extracted into the focus rules.**
+
 **Status:** Historical — a past sprint-scope decision, not a proposal awaiting approval. Reclassified 2026-08-04; the sprints it governs are long finished. Kept for the reasoning, not as an open question.
 **Date:** 2026-05-03
 **Sprint:** Records the Sprint 5 scope call before code lands.

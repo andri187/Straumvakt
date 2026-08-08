@@ -1,5 +1,7 @@
 # ADR 0038 — Read-serving tier: no UI read reaches a base table
 
+> **LEGACY — pre-market-focus historical reference. Not active canon. See /FOCUS.md. Load-bearing constraints extracted into the focus rules.**
+
 **Status:** Proposed — 2026-08-02.
 **Constrains:** [ADR 0023](./0023-realtime-connector-status-propagation.md)
 — its polling decision was taken before any serving tier existed and is

@@ -1,5 +1,7 @@
 # ADR 0032 — Neighbour-helper (nágrannahjálp) + Issue Engine pulled into go-live scope
 
+> **LEGACY — pre-market-focus historical reference. Not active canon. See /FOCUS.md. Load-bearing constraints extracted into the focus rules.**
+
 **Status:** Accepted (2026-06-04)
 **Carve-out:** §5C *escalation code* is gated on the ADR 0031 cost
 mechanics + formal definition of **Tengill** (the default service

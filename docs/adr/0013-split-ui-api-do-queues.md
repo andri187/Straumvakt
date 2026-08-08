@@ -1,5 +1,7 @@
 # ADR 0013 — Five-Tier Topology: Pages (UI) + Workers (API) + Durable Objects (OCPP) + Queues + Neon
 
+> **LEGACY — pre-market-focus historical reference. Not active canon. See /FOCUS.md. Load-bearing constraints extracted into the focus rules.**
+
 **Status:** Proposed
 **Date:** 2026-04-28
 **Sprint:** documentation lands immediately; migration is a multi-sprint effort (Sprint 3+). Sprint 2 work continues on the existing monolithic Next.js Worker until cutover.

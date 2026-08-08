@@ -1,5 +1,7 @@
 # Straumvakt — Architecture V3
 
+> **LEGACY — superseded as active canon by /FOCUS.md (2026-08-07). Kept as historical reference; nothing here is being worked from.**
+
 > Canonical architecture. Supersedes V2. Read alongside
 > `straumvakt_architecture_v3.svg` for the visual map.
 >

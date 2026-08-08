@@ -1,5 +1,7 @@
 # ADR 0041 — Complete local authorization list management (SendLocalList Half C + Native-mode parity)
 
+> **LEGACY — pre-market-focus historical reference. Not active canon. See /FOCUS.md. Load-bearing constraints extracted into the focus rules.**
+
 **Status:** Proposed — 2026-08-03. Not scheduled; captured as backlog per [CLAUDE.md](../../CLAUDE.md) Rule 11.
 **Relates to:** [ADR 0019](./0019-agreement-and-bearer-architecture.md) (contract gate reused by the push path), [ADR 0020](./0020-driver-access-via-driver-groups.md) (driver access — the roster this list mirrors), the read-only CSMS roster in `apps/api/src/repositories/charger-technical-read.ts` (Half A), and the single-token push in `apps/api/src/repositories/local-auth-list-push.ts` (Half B).
 **Rule 5 flag:** This touches OCPP handler semantics *and* access-grant propagation. Any implementation of this ADR must stop-and-summarise before writing code, per Rule 5.

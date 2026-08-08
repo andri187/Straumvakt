@@ -1,5 +1,7 @@
 # Straumvakt V3 — Delivery Plan
 
+> **LEGACY — superseded as active canon by /FOCUS.md (2026-08-07). Kept as historical reference; nothing here is being worked from.**
+
 > Execution canon. Reads the V3 architecture and turns it into a
 > 20-week, ten-sprint delivery plan with milestone-level exit criteria.
 > Assumes solo developer, near-full-time capacity (~30–40 hrs/week). At
@@ -247,7 +249,17 @@ consecutive days:
 | 10 | **Observability + Security/Tenancy** *(was scattered across "Hardening + Multi-Tenant"; per ADR 0017)* | 4k chargers cannot be operated by tail-watching — dashboards, alerts, RLS land here | Production dashboards (charger counts, queue depth, command latency, R2 archive growth); structured logs with correlation IDs; alert thresholds; runbooks for the 14 named failure modes; Postgres RLS as defense-in-depth; AuditAction append-only DB enforcement; MFA mandatory on PlatformGrant. |
 | 11 | **Production Cutover + Pilot Go-Live** *(per ADR 0017 — was Sprint 10)* | First batch on scale-validated infrastructure | Production resources provisioned (CF prod Workers, Neon prod plan, R2 buckets, Hyperdrive, Queues + DLQs); migration dry-run; final 4k-staging load test against production-like config; rollback paths for UI / API / gateway / DB; go/no-go checklist signed; pilot ramp begins (target ~50 chargers, scaled by who's contracted). |
 
+| **M1** | **`packages/db` — one schema** *(ADR 0052 step 1; ADR 0051)* | Drizzle is the only schema; Prisma mirrors gone | `check:schema-consistency` RETIRED because nothing is left to compare; `prisma/` and `apps/api/prisma/` deleted; `drizzle-kit generate` is the only migration path |
+| **M2** | **`packages/contracts` — canonical vocabulary** *(ADR 0052 step 2)* | One vocabulary, one adapter interface, versioned | Conformance suite green against the Zaptec adapter; `contracts` publishes to the private registry, consumed via workspace protocol; no package imports another's internals |
+| **M3** | **`packages/vendors/zaptec` behind the interface** *(ADR 0052 step 3)* | The vendor edge stops leaking into the core | **`no-import-from-vendor` baseline: 22 → 0**, entries REMOVED not added; no vendor identifier appears in `core` or `commercial` |
+| **M4** | **Repo shape + per-app deploys** *(ADR 0052 step 4)* | A push rebuilds one app, not six | Repo root has no `src/`; depcruise covers `packages/*`; **a push touching only `packages/web` rebuilds only `web`** — Rule 1 gate, see the hazard below |
+| **M5** | **Commercial MVP — flat fee as degenerate agreement** *(ADR 0052 step 5)* | First invoice, on the surviving engine | **Gated on CO-3 (ADR 0048 step 2) + ADR 0047 D2–D4.** One agreement, one cost factor, one rate reference, re-priceable at renewal; no second billing path exists |
+
 Total: 22 weeks / 5.5 months at full-time solo pace (post ADR 0015 + ADR 0016 + ADR 0017 cascade).
+
+**Plus the M-series (ADR 0052).** M1–M4 run IN PARALLEL with the sprint
+track and do not wait on the commercial critical path. M5 does wait — see
+§20.
 
 ---
 
@@ -1502,3 +1514,56 @@ questions one at a time. Then start Sprint 0.
 
 If you need to revise the plan: revise the plan. But don't silently
 drift.
+
+---
+
+## 20. Workspace and project split — the M-series *(ADR 0052)*
+
+Rule 11 amendment, 2026-08-07. Scope change recorded in
+[ADR 0052](../adr/0052-workspace-and-project-split.md).
+
+### Why this is a separate track
+
+The sprint track (0–11) assumes one engineer and one deployable. Neither
+holds any more: a group is building in parallel, and the product is a
+**substrate with verticals** (Operate now, Service separately, Flex later),
+not a CPMS with extras. A folder boundary is a suggestion; a package
+boundary is enforced by the resolver.
+
+M1–M4 are structural and independent of the commercial critical path. They
+proceed in parallel. **M5 alone is gated.**
+
+### The gate on M5 — corrected
+
+The brief for this amendment placed the commercial surface behind "resolving
+ADR 0025." **ADR 0025 was resolved on 2026-08-07 by ADR 0048** — the
+agreements generation survives, legacy pricing retires, and the agreements
+ledger has since priced its first sessions.
+
+What actually gates M5:
+
+1. **CO-3** — the shadow comparison over the 1,621 legacy ledger rows
+   (ADR 0048 step 2). Operator-run, Rule 5. Not started.
+2. **ADR 0047 D2–D4** — dissolving Installation. Status Proposed; D1
+   answered, D2/D3/D4 open.
+
+### Rule 1 hazard — read before starting M4
+
+Today a push to `master` rebuilds **everything** (CLAUDE.md §Deploy
+environments). Under a six-deployable split that is worse, not better: a
+`packages/web` typo could take the OCPP gateway down.
+
+**The split increases deploy blast radius until per-app build watch paths
+are configured.** M4's deploy-scoping exit criterion is a Rule 1 gate, not
+a nice-to-have. Do not treat M4 as cosmetic cleanup.
+
+### Governance
+
+CODEOWNERS per package. The **Platform team gates `db` and `contracts`** —
+the two packages where a careless edit is felt everywhere.
+
+### What the M-series does not include
+
+The ADR 0047 D2–D4 answers, CO-3's outcome, the flat fee's math or factor
+code (Rule 5 — a later, approval-gated task), Turborepo vs Nx, and the
+private registry's host.

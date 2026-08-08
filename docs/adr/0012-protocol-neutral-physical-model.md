@@ -1,5 +1,7 @@
 # ADR 0012 — Protocol-Neutral Physical Model + Control Attachments
 
+> **LEGACY — pre-market-focus historical reference. Not active canon. See /FOCUS.md. Load-bearing constraints extracted into the focus rules.**
+
 **Status:** Accepted
 **Date:** 2026-04-26
 **Operator approval:** "proceed" — all proposed answers to the

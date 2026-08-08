@@ -1,5 +1,7 @@
 # ADR 0051 — Drizzle owns the schema
 
+> **LEGACY — pre-market-focus historical reference. Not active canon. See /FOCUS.md. Load-bearing constraints extracted into the focus rules.**
+
 **Status:** Accepted · 2026-08-07 · **applied to the test branch**
 **Unblocks** [ADR 0047](./0047-dissolving-installation.md),
 [ADR 0049](./0049-the-cdr-is-the-record.md),

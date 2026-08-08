@@ -1,5 +1,7 @@
 # OCPP Ingest — Current State And Gap Check
 
+> **LEGACY — superseded as active canon by /FOCUS.md (2026-08-07). Kept as historical reference; nothing here is being worked from.**
+
 **Status:** investigation note, no scope change.
 **Date:** 2026-05-01.
 **Trigger:** operator-reported symptom — pressing Start Charge marks the

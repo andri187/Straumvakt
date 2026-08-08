@@ -1,5 +1,7 @@
 # ADR 0042 — Real per-driver identity and tap attribution
 
+> **LEGACY — pre-market-focus historical reference. Not active canon. See /FOCUS.md. Load-bearing constraints extracted into the focus rules.**
+
 **Status:** Proposed — 2026-08-03. **Held 2026-08-03:** its premise is not met — zero users currently have a kennitala, so the real-world identity anchor it rests on does not exist in practice. Implement schema-audit F1 (conditional-kennitala enforcement + group_owner_user_id) before revisiting.
 **Relates to:** [ADR 0020](./0020-driver-access-via-driver-groups.md),
 [ADR 0022](./0022-driver-self-onboarding.md),

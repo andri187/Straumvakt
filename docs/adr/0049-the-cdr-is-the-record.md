@@ -1,5 +1,7 @@
 # ADR 0049 — The CDR is the record; OCPI 2.2.1 is its shape
 
+> **LEGACY — pre-market-focus historical reference. Not active canon. See /FOCUS.md. Load-bearing constraints extracted into the focus rules.**
+
 **Status:** Proposed · 2026-08-07
 **Relates to** [ADR 0048](./0048-billing-cutover-resolved-agreements-survives.md)
 (which settled *which* pricing generation survives; this settles *where the

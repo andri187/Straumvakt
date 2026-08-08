@@ -1,5 +1,7 @@
 # ADR 0048 — Agreements survives; legacy pricing retires
 
+> **LEGACY — pre-market-focus historical reference. Not active canon. See /FOCUS.md. Load-bearing constraints extracted into the focus rules.**
+
 **Status:** Accepted · 2026-08-07 · **operator decision**
 **Supersedes** [ADR 0025](./0025-billing-cutover-from-legacy-to-agreements.md),
 whose premises were measured wrong on 2026-08-04.

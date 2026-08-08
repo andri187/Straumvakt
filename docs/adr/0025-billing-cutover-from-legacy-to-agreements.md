@@ -1,5 +1,7 @@
 # ADR 0025 — Billing Cutover: Legacy Resolver to Agreements Resolver
 
+> **LEGACY — pre-market-focus historical reference. Not active canon. See /FOCUS.md. Load-bearing constraints extracted into the focus rules.**
+
 **Status:** Proposed — **premises superseded.** Several factual claims below were
 measured against the database on 2026-08-04 and are wrong in ways that change the
 retirement plan. Read [§Verification (2026-08-04)](#verification-2026-08-04) before

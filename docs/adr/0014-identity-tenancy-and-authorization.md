@@ -1,5 +1,7 @@
 # ADR 0014 — Identity, Tenancy, and Authorization
 
+> **LEGACY — pre-market-focus historical reference. Not active canon. See /FOCUS.md. Load-bearing constraints extracted into the focus rules.**
+
 **Status:** Proposed
 **Date:** 2026-05-01
 **Sprint:** documentation lands immediately; per-tenant membership + permission work targets Sprint 4; platform-staff role split + invite flow target Sprint 5; Postgres RLS + audit-append-only enforcement target Sprint 9.

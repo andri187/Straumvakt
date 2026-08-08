@@ -1,5 +1,7 @@
 # ADR 0011 - Control-Plane Optionality + Protocol-Neutral Operations
 
+> **LEGACY — pre-market-focus historical reference. Not active canon. See /FOCUS.md. Load-bearing constraints extracted into the focus rules.**
+
 **Status:** Accepted
 **Date:** 2026-04-26
 **Sprint:** documentation lands immediately; schema/code changes are deferred to a follow-up Phase-3 ADR/migration before pilot data is created.

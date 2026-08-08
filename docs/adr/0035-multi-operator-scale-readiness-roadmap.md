@@ -1,5 +1,7 @@
 # ADR 0035 — Scale readiness and fleet acquisition: expanding Track H, adding Track F
 
+> **LEGACY — pre-market-focus historical reference. Not active canon. See /FOCUS.md. Load-bearing constraints extracted into the focus rules.**
+
 **Status:** Proposed — 2026-08-02.
 **Extends (does not supersede):**
 [GOING_PUBLIC_CRITICAL_PATH.md](../architecture/GOING_PUBLIC_CRITICAL_PATH.md)

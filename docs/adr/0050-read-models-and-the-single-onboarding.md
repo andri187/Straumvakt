@@ -1,5 +1,7 @@
 # ADR 0050 — Read models, one onboarding, and what "reference" means
 
+> **LEGACY — pre-market-focus historical reference. Not active canon. See /FOCUS.md. Load-bearing constraints extracted into the focus rules.**
+
 **Status:** Proposed · 2026-08-07 · **operator brief, partially verified**
 **Relates to** [ADR 0047](./0047-dissolving-installation.md) (Installation
 dissolves), [ADR 0048](./0048-billing-cutover-resolved-agreements-survives.md)

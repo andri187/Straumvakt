@@ -1,5 +1,7 @@
 # Review - Scale To 4,000 Chargers Sprint Plan
 
+> **LEGACY — superseded as active canon by /FOCUS.md (2026-08-07). Kept as historical reference; nothing here is being worked from.**
+
 **Reviewer date:** 2026-05-01
 **Subject:** `scale-to-4000-chargers-sprint-plan.md` and the two architecture SVGs in this folder.
 **Verdict:** Architectural direction is sound. The plan is high-quality. The issues below are about scoping, sequencing, and a few production concerns that are flagged as "gaps" but never given owners or sprints.
