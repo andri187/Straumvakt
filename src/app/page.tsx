@@ -1,29 +1,65 @@
 "use client";
 
-import { useState } from "react";
-import "./landing.css";
-import { apiFetch } from "@/lib/api-client";
-import { driverLogin } from "@/app/driver/driver-auth";
+// straumvakt.org root — 2026-08-08 relaunch.
+//
+// This replaces the old combined marketing-hero + host/driver login page
+// (saved at archive/straumvakt-org-console-2026-08-08/app/page.tsx.original)
+// with a single, minimal login. Deliberately simplified from what was here:
+//
+//   - No driver bearer-login fallback. The mobile app is the driver UI now;
+//     a web login attempt only ever tries the admin/host (cookie) path.
+//   - No links out to the old console, host portal, or anything else parked
+//     in archive/straumvakt-org-console-2026-08-08/ — there's nowhere for
+//     them to go yet.
+//   - No marketing hero / electronic-ID tab. Just email + password.
+//
+// On success this lands on /home, a placeholder until the Straumvakt-
+// employee and per-org (starting with N1) landing pages replace it with
+// real, persona-specific destinations.
 
-type Tab = "audkenni" | "password";
+import { FormEvent, useState } from "react";
+import { useLanguage } from "@/components/language-provider";
+import { apiFetch } from "@/lib/api-client";
+
+function StraumvaktMark({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 120 120" className={className} fill="none" aria-hidden="true">
+      <defs>
+        <linearGradient id="svRootBolt" x1="40" y1="20" x2="80" y2="100" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#8EF5C7" />
+          <stop offset="100%" stopColor="#6FDCEA" />
+        </linearGradient>
+      </defs>
+      <path
+        d="M 84 18 L 54 18 A 24 24 0 0 0 30 42 L 30 60"
+        stroke="#3EE9A7"
+        strokeWidth="13"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M 36 102 L 66 102 A 24 24 0 0 0 90 78 L 90 60"
+        stroke="#2BB6E8"
+        strokeWidth="13"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M 66 28 L 44 66 L 58 66 L 52 96 L 78 56 L 62 56 Z" fill="url(#svRootBolt)" />
+    </svg>
+  );
+}
 
 export default function RootPage() {
-  const [tab, setTab] = useState<Tab>("password");
-  const [registerMessage, setRegisterMessage] = useState("");
+  const { language } = useLanguage();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
 
-  // Front-page login for hosts + drivers. Try the host/admin (cookie) path
-  // first; a 401 means "not a host/operator" — fall back to the driver
-  // (bearer) path. Persona routing: operators land on /dashboard, host_admin
-  // is redirected to /host by the (app) layout, drivers go to /driver.
-  // (Straumvakt staff use the Admin button — same endpoint, env-secret creds.)
-  async function handleLogin(e: React.FormEvent) {
-    e.preventDefault();
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
     setLoading(true);
-    setError("");
     try {
       const res = await apiFetch("/api/admin/login", {
         method: "POST",
@@ -31,149 +67,86 @@ export default function RootPage() {
         body: JSON.stringify({ email, password }),
       });
       if (res.ok) {
-        window.location.href = "/dashboard";
+        window.location.href = "/home";
         return;
       }
-      if (res.status === 401) {
-        try {
-          await driverLogin(email.trim(), password);
-          window.location.href = "/driver";
-          return;
-        } catch {
-          setError("Wrong email or password.");
-          setLoading(false);
-          return;
-        }
-      }
-      setError("Login failed.");
-      setLoading(false);
+      setError(
+        language === "is" ? "Rangt netfang eða lykilorð." : "Wrong email or password.",
+      );
     } catch {
-      setError("Could not reach the login service.");
+      setError(
+        language === "is"
+          ? "Náði ekki sambandi við innskráningarþjónustu."
+          : "Could not reach the login service.",
+      );
+    } finally {
       setLoading(false);
     }
   }
 
   return (
-    <main className="straumvakt-landing" aria-label="Straumvakt">
-      {/* Admin button = Straumvakt staff (env-secret credentials). Hosts and
-          drivers log in via the form below. */}
-      <a className="admin-link" href="/login" aria-label="Admin login">
-        Admin
-      </a>
-      <section className="lockup" aria-label="Straumvakt">
-        <picture>
-          <source srcSet="/landing/straumvakt-car.avif" type="image/avif" />
-          <source srcSet="/landing/straumvakt-car.webp" type="image/webp" />
-          <img className="mark" src="/landing/straumvakt-car.png" alt="" />
-        </picture>
-        <h1>Straumvakt</h1>
-        <p className="tagline">Umsjón. Yfirsýn. Rekstur.</p>
-        <section className="auth" aria-label="Login">
-          <div className="tabs" role="tablist" aria-label="Login method">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={tab === "password"}
-              aria-controls="password-login"
-              className={`tab ${tab === "password" ? "active" : ""}`}
-              onClick={() => setTab("password")}
-            >
-              Innskráning
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={tab === "audkenni"}
-              aria-controls="audkenni-login"
-              className={`tab ${tab === "audkenni" ? "active" : ""}`}
-              onClick={() => setTab("audkenni")}
-            >
-              Auðkenni
-            </button>
+    <div className="relative min-h-screen flex items-center justify-center px-4 overflow-hidden">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 bg-brand-halo"
+      />
+      <div className="relative w-full max-w-md rounded-2xl border border-bg-border bg-bg-surface/90 p-8 shadow-card backdrop-blur">
+        <div className="flex items-center gap-3">
+          <StraumvaktMark className="h-11 w-11" />
+          <div>
+            <div className="sv-wordmark text-xl font-bold leading-tight">Straumvakt</div>
+            <div className="sv-tagline">Control · Overview · Convenience</div>
+          </div>
+        </div>
+
+        <h1 className="mt-8 text-xl font-semibold text-ink-50">
+          {language === "is" ? "Skrá inn" : "Sign in"}
+        </h1>
+
+        <form className="mt-6 space-y-4" onSubmit={onSubmit}>
+          <div>
+            <label htmlFor="email" className="mb-1 block text-xs font-medium text-ink-200">
+              {language === "is" ? "Netfang" : "Email"}
+            </label>
+            <input
+              id="email"
+              type="text"
+              autoComplete="username"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full rounded-md border border-bg-border bg-bg-inset px-3 py-2 text-sm text-ink-50 outline-none ring-0 placeholder:text-ink-400 focus:border-brand-500/50"
+              placeholder="netfang@…"
+              required
+            />
+          </div>
+          <div>
+            <label htmlFor="password" className="mb-1 block text-xs font-medium text-ink-200">
+              {language === "is" ? "Lykilorð" : "Password"}
+            </label>
+            <input
+              id="password"
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full rounded-md border border-bg-border bg-bg-inset px-3 py-2 text-sm text-ink-50 outline-none ring-0 placeholder:text-ink-400 focus:border-brand-500/50"
+              required
+            />
           </div>
 
-          <form
-            id="password-login"
-            className={`panel ${tab === "password" ? "active" : ""}`}
-            aria-label="Email and password login"
-            onSubmit={handleLogin}
-          >
-            <label>
-              <span>Netfang</span>
-              <input
-                type="text"
-                name="username"
-                autoComplete="username"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </label>
-            <label>
-              <span>Lykilorð</span>
-              <input
-                type="password"
-                name="password"
-                autoComplete="current-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </label>
-            {error ? (
-              <p
-                className="register-message"
-                role="alert"
-                style={{ color: "#ff6b6b" }}
-              >
-                {error}
-              </p>
-            ) : null}
-            <button className="button primary" type="submit" disabled={loading}>
-              {loading ? "Skrái inn…" : "Skrá inn"}
-            </button>
-          </form>
-
-          <form
-            id="audkenni-login"
-            className={`panel ${tab === "audkenni" ? "active" : ""}`}
-            aria-label="Auðkenni mobile phone login"
-            onSubmit={(e) => e.preventDefault()}
-          >
-            <label>
-              <span>Símanúmer</span>
-              <input
-                type="tel"
-                name="phone"
-                autoComplete="tel"
-                placeholder="+354"
-              />
-            </label>
-            <button className="button primary" type="submit">
-              Skrá inn með Auðkenni
-            </button>
-          </form>
+          {error && <p className="text-sm text-red-400">{error}</p>}
 
           <button
-            className="register-link"
-            type="button"
-            aria-controls="register-message"
-            onClick={() =>
-              setRegisterMessage(
-                "Hafðu samband við hýsilinn þinn eða Straumvakt til að fá aðgang.",
-              )
-            }
+            type="submit"
+            disabled={loading}
+            className="w-full rounded-md bg-brand-500 px-3 py-2 text-sm font-medium text-bg-base transition hover:bg-brand-400 disabled:opacity-60"
           >
-            Nýskráning
+            {loading
+              ? (language === "is" ? "Skrái inn…" : "Signing in…")
+              : (language === "is" ? "Skrá inn" : "Sign in")}
           </button>
-          <p
-            id="register-message"
-            className="register-message"
-            role="status"
-            aria-live="polite"
-          >
-            {registerMessage}
-          </p>
-        </section>
-      </section>
-    </main>
+        </form>
+      </div>
+    </div>
   );
 }

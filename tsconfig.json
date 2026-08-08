@@ -25,5 +25,5 @@
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],
-  "exclude": ["node_modules", "prisma/**", "gateway/**", "apps/**", "packages/**", "docs/**"]
+  "exclude": ["node_modules", "prisma/**", "gateway/**", "apps/**", "packages/**", "docs/**", "archive/**"]
 }

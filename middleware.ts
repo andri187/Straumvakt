@@ -1,40 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminSessionConfig, verifyAdminSession } from "@/lib/admin-session";
 
+// 2026-08-08 relaunch — straumvakt.org was reset to a single clean login
+// (src/app/page.tsx) plus one placeholder authenticated destination
+// (src/app/home). This middleware used to carve out public-path exceptions
+// for the invite-acceptance page, /apply, and the driver web portal; those
+// routes moved to archive/straumvakt-org-console-2026-08-08/ along with the
+// exceptions themselves. Re-add the matching exception here if one of them
+// comes back — see the archive's README for what each one was.
+
 const PUBLIC_PATHS = new Set(["/api/admin/login"]);
-
-// Sprint 5.8 — invite-flow public surfaces. The recipient page at
-// /invite/<token> renders for unauthenticated users (the token IS
-// the auth). The /api/public/invites/* endpoints are token-gated
-// and bypass the admin-session check.
-function isPublicInvitePath(pathname: string): boolean {
-  return (
-    pathname.startsWith("/invite/") ||
-    pathname.startsWith("/api/public/invites/")
-  );
-}
-
-// Sprint 9 — host application (lead capture) public surface.
-// /apply is a public form for prospective customers (multi-dwelling
-// or company) to request a charging-network offer. The matching
-// POST /api/public/applications endpoint is rate-limited and
-// anonymous; bypasses the admin-session check.
-function isPublicApplyPath(pathname: string): boolean {
-  return (
-    pathname === "/apply" ||
-    pathname === "/api/public/applications" ||
-    pathname.startsWith("/api/public/applications/")
-  );
-}
-
-// Sprint 9 — driver WEB portal (ADR 0033). The /driver/* surface uses
-// bearer-token auth (driver access token in the browser, calls /api/driver/*)
-// and gates itself client-side — it is NOT behind the admin-session cookie.
-// Pages are inert shells; all data stays behind requireDriver on the API
-// Worker, so exposing the routes here leaks nothing.
-function isDriverPortalPath(pathname: string): boolean {
-  return pathname === "/driver" || pathname.startsWith("/driver/");
-}
 
 // Trusted internal header — stripped from all incoming requests so clients
 // cannot spoof it, then re-set by middleware after successful verification.
@@ -52,15 +27,6 @@ export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   if (isPublicAsset(pathname)) {
-    return NextResponse.next();
-  }
-  if (isPublicInvitePath(pathname)) {
-    return NextResponse.next();
-  }
-  if (isPublicApplyPath(pathname)) {
-    return NextResponse.next();
-  }
-  if (isDriverPortalPath(pathname)) {
     return NextResponse.next();
   }
 
@@ -82,9 +48,11 @@ export async function middleware(req: NextRequest) {
     );
   }
 
-  if (pathname === "/login") {
+  // "/" is the login landing now (was "/login" pre-relaunch, which is
+  // parked). Already-signed-in visitors skip straight past it.
+  if (pathname === "/") {
     if (session) {
-      return NextResponse.redirect(new URL("/dashboard", req.url));
+      return NextResponse.redirect(new URL("/home", req.url));
     }
     return NextResponse.next({ request: { headers: sanitisedHeaders } });
   }
@@ -101,7 +69,7 @@ export async function middleware(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     if (protectedAppRoute) {
-      return NextResponse.redirect(new URL("/login", req.url));
+      return NextResponse.redirect(new URL("/", req.url));
     }
     return NextResponse.next({ request: { headers: sanitisedHeaders } });
   }
