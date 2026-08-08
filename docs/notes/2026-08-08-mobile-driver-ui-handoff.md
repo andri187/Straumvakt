@@ -7,7 +7,13 @@
 scope of mobile work — plus point at everything in the repo that's directly useful reference
 material, and flag the one open question that isn't resolved yet.
 
-If you only read one section, read "What this means for mobile" and "Open question" below.
+**Update (same day, later):** the two open questions this document originally flagged have since
+been investigated and resolved — see section 3 and section 5. The short version: the
+invoices/session-history doc drift was a tooling bug, not a real change (nothing to fix there);
+the driver-invite flow genuinely has no mobile caller today, and that's a real, confirmed gap
+worth a product decision, not a hunch.
+
+If you only read one section, read "What this means for mobile" and "Confirmed status" (section 5).
 
 ---
 
@@ -108,54 +114,56 @@ against it or updated the tracking docs to close the blocker. If you're touching
 don't take those three docs' "still broken" framing at face value — verify against the actual
 route (`apps/api/src/routes/public/driver.ts`) first, since that's clearly ahead of the docs.
 
-### Invite redemption may currently be web-only — likely new mobile work, not a fix
+### Invite redemption has no mobile caller today — confirmed, this is real net-new scope
 
-The generated endpoint-caller doc (`docs/reference/api-endpoints.md`, caveats on its reliability
-below) lists `POST /api/driver/redeem-invite`'s only caller as `console` — the old web driver
-portal, now parked. `POST /api/driver/claim-invite` doesn't appear in the doc at all, most likely
-because the doc predates that route's addition (it was added in the same commit as the ADR 0053
-fix) rather than because it has zero callers — the doc is known to go stale on caller lists (see
-next section), so treat its absence as "unconfirmed," not "confirmed zero."
+This has been investigated properly and the answer is definitive: **mobile has never called
+either `redeem-invite` or `claim-invite`, at any commit.** Instead, mobile's account-creation
+flow calls a completely different endpoint, `POST /api/public/invites/consume` (ADR 0026, the
+*org*-invite path used for host-side accounts) — not the driver-group invite flow ADR 0053
+secured. The web console was the only thing that ever drove `redeem-invite`, and it's now parked.
 
-Net effect: it looks like the invite-bootstrap-and-redeem flow (`claim-invite` then
-`redeem-invite`) may never have had a mobile caller — the web console was carrying it, and the
-web console is being retired. If that holds up, this isn't a regression to fix, it's a feature
-mobile hasn't implemented yet: a driver who receives an invite code today has no way to redeem it
-except through a web surface that's going away. Worth confirming directly (grep the mobile
-codebase for calls to these two paths) before assuming otherwise, and worth treating as
-likely-necessary net-new mobile scope if confirmed.
+Practically: **a driver who receives a driver-group invite code today has no way to redeem it**,
+because the only client that ever spoke that flow is being retired and mobile speaks a different,
+adjacent flow instead. This is not a regression and not a bug in the ADR 0053 fix — the fix is
+correct and does exactly what it says. It's a gap in what mobile implements. If driver-group
+invites (as opposed to org invites) are a capability the product needs, wiring `claim-invite` →
+`redeem-invite` into mobile as a first-run flow is genuinely new mobile work, not a fix.
 
-### The `docs/reference/api-endpoints.md` drift finding — directly relevant to you
+This also changes how to read the "still broken" language in `DECISIONS.md`/`TASKS.md`/
+`SOW-market-phase.md` (see below): the *security* bug those docs describe (the bearer-only hijack)
+is fixed. But the *product* acceptance criterion they're gating on — self-serve onboarding
+completing an invite end-to-end — is **still not met**, just for a different reason now: nothing
+can drive the flow, not that the flow is unsafe. Don't read "the fix landed" as "the blocker is
+gone." Both things are true at once: the vulnerability is closed, and the onboarding path is still
+incomplete.
 
-This doc is a generated map of API endpoints to the callers that use them (web, mobile, etc.).
-It went stale the moment it was introduced and was silently wrong (a CI bug, since fixed and
-verified, unpushed on `diag/fix-api-endpoints-drift`). When it was regenerated correctly, it
-showed that **the mobile app no longer appears as a caller of two endpoints**:
+### The `docs/reference/api-endpoints.md` two-endpoint question — resolved, no action needed
 
-- `GET /api/driver/invoices`
-- `GET /api/driver/sessions/history`
+This has also been investigated properly. Short answer: **it was a generator error from the
+start, not a real change, not a regression.** The doc-generation tool matches endpoint paths
+against source text with a plain regex — no static analysis, no annotations — and that method has
+real failure modes worth knowing about if you ever look at this doc again:
 
-This was surfaced as a side effect of fixing an unrelated CI bug, and was deliberately **left
-alone as an open product question** rather than acted on, because there are three very different
-explanations and nobody has checked which one is true:
+- **False negatives:** it's blind to any URL not written as one contiguous string literal.
+- **False positives:** its `:param` pattern doesn't exclude `/`, so a parameterized route can
+  swallow a *longer* concrete path. Confirmed live in this exact doc: `GET /api/driver/sessions/:id`
+  is tagged as called by mobile purely because mobile calls `sessions/current` — a different,
+  unrelated endpoint the pattern happens to also match. Mobile never calls `sessions/:id`.
+- It's also comment-blind — a path merely mentioned in a comment counts as a "caller."
 
-1. **Intentional** — mobile was already redesigned to not need these (e.g. a different endpoint
-   now serves that data, or the feature moved), and the doc is just catching up to reality.
-2. **Regression** — mobile used to call these and a change accidentally dropped them; driver
-   functionality (viewing invoices, viewing session history) may currently be broken or missing
-   in the shipped app.
-3. **Generator/detection error** — the doc-generation tooling failed to detect a call site that's
-   still actually there (e.g. due to how the mobile codebase structures its API client).
+So: read this doc as "this literal string appears somewhere in that directory," never as
+confirmed product behavior.
 
-**This is the single most concrete, actionable item in this handoff.** Before doing any new
-mobile driver work, it's worth resolving which of the three is true — grep the mobile codebase
-for calls to these two paths (or whatever client method wraps them) and check against what the
-driver-facing UI currently exposes for invoices and session history. If it's #2 (regression),
-this is a bug to fix, likely with priority, since it means real driver-facing functionality
-degraded silently. If it's #1, the doc is simply confirming intended state and no action is
-needed. As of this writing, a separate investigation into exactly this question has been
-dispatched but has **not yet reported back** — so this handoff can't tell you the answer, only
-that the question is open and where to look.
+For the two endpoints specifically (`GET /api/driver/invoices`, `GET /api/driver/sessions/history`):
+`git log -S` across mobile's entire `.dart` tree, at every commit that has ever touched this doc,
+turns up **zero occurrences of either path, ever.** The doc claimed "mobile" as a caller at every
+one of those commits and was wrong every single time — the generator's logic hasn't changed since
+the doc was introduced, so whatever produced that value wasn't reproducible from the actual tree.
+Confirming this further: both features exist in the mobile app's own menu as explicit, labeled
+stubs — "Charge history" tagged **Phase 2**, "Receipts & invoices" tagged **Phase 4** — each just
+shows a "coming soon" toast today. Nothing was removed; nothing needs fixing here. If mobile ever
+does implement these (per its own stated phases), it'll be new calls to already-live endpoints,
+not restoring dropped ones.
 
 ### Everything else backend-side
 
@@ -176,30 +184,54 @@ project's overall state.
 | `docs/notes/2026-08-08-n1-onboarding-workflow-exercise.md` | The exercise that found the hijack + deadlock bugs the ADR 0053 fix addresses — good detail on exact HTTP-level behavior |
 | `docs/reference/api-endpoints.md` | Generated endpoint-to-caller map — currently stale in more than one way (see above); the two-endpoint-drop fix lives on unpushed branch `diag/fix-api-endpoints-drift`; it also predates `claim-invite`'s existence entirely |
 | `DECISIONS.md`, `TASKS.md` (task 13), `SOW-market-phase.md` | Describe the invite flow as an unfixed blocker — written before the ADR 0053 fix landed, not updated since; treat as stale pending a maintainer re-check |
+| `apps/mobile/lib/api/client.dart` | The mobile app's entire HTTP surface — every endpoint it calls, in one file |
+| `apps/mobile/lib/screens/menu_drawer.dart` | The 11-item driver menu — 9 are "Soon" stubs; shows the app's own stated phase labels (history = Phase 2, invoices = Phase 4) |
 | `archive/straumvakt-org-console-2026-08-08/app/driver/` | The old driver web portal (ADR 0033) — parked, UX reference only. Covers login, chargers/history/cost/settings, redeem-invite page |
 | `archive/straumvakt-org-console-2026-08-08/README.md` | Full inventory and rationale for everything parked in this relaunch, including the driver portal |
 | `docs/notes/2026-08-08-relaunch-parallel-session-log.md` | Full process log of the relaunch work, for broader orientation if needed |
 
-## 5. Open questions (flagging explicitly, not resolved as of this document)
+## 5. Confirmed status: what mobile actually does today
 
-1. **Does the mobile app currently call `POST /api/driver/redeem-invite` and
-   `POST /api/driver/claim-invite`, or has the entire invite-redemption flow been web-only up to
-   now?** This is the higher-priority of the two open questions. If the flow really has no mobile
-   caller, a driver who receives an invite today has no working way to accept it once the web
-   console is retired — this reads as necessary net-new mobile scope, not a bug fix. See section 3
-   above.
-2. **Does the mobile app currently call `GET /api/driver/invoices` and
-   `GET /api/driver/sessions/history`, and if not, why not?** See section 3's three possible
-   explanations. An investigation into this was in flight at the time this document was written
-   and had not yet reported a conclusion.
+This is the ground truth, derived directly from `apps/mobile/lib/api/client.dart` (the app's
+single HTTP surface — everything it calls goes through this one file) and the drawer/menu source.
+Treat "works today" as "wired to a real endpoint in source," not as "verified on a handset" — this
+is a code-level read, not a device test.
 
-Anyone picking up mobile driver work should check both before building anything new — together
-they determine how much of this is "fix a regression" versus "build a flow that was never
-mobile's to begin with."
+**Works today, end to end:**
+
+- Sign-in
+- Invite redemption — via the *org*-invite path (`/api/public/invites/consume`, ADR 0026), not
+  the driver-group path described above
+- Charger discovery, including BLE proximity detection
+- Starting, watching (short-poll), and stopping a charge session
+- Tap-to-authorise at a charge point
+- BLE-based charger settings (PIN, advanced grant) — this and tap-to-authorise have **no web
+  equivalent**; they're genuinely new capability mobile added that the old portal never had
+- Language preference (read/write on the user's own profile)
+
+**Not implemented — explicit "Soon" placeholders in the menu, no request issued:** profile, my
+vehicle, RFID & tokens, charging access, charge history, receipts & invoices, notifications, help
+& support, about. That's 9 of 11 menu items. Compared to the parked web portal (dashboard, login,
+redeem, history, cost/invoices, access, settings), mobile has full parity on the live-charging
+path and a real gap on the account/history/billing side — that gap has existed since before this
+relaunch and isn't something the relaunch caused, but it becomes more visible now that the web
+portal (which did cover that ground) is going away.
+
+**The one confirmed, real gap worth prioritizing:** the driver-group invite flow (section 3) has
+no mobile implementation at all, and no other client covers it either now that web is parked. If
+self-serve onboarding (a driver receiving and accepting an org's invite) needs to work, this is
+where that gets built.
+
+**One loose end, not backend-related:** untracked local files matching `charge_history.dart`,
+`my_vehicle.dart`, and `profile.dart` were observed in the shared working checkout during this
+investigation — not committed on any branch anywhere. This might mean someone is actively
+prototyping exactly this gap already. Worth checking with whoever has local changes in that
+checkout before starting fresh work on the same screens, so nothing gets duplicated or clobbered.
 
 ---
 
 *This document reflects repo state as of 2026-08-08, based on work done in a parallel
 multi-session relaunch effort. Branches referenced as "unpushed" had not been pushed to
 `origin` or merged as of this writing — check current branch state before assuming any of them
-have landed.*
+have landed. Revised same day to fold in confirmed findings that resolved this document's
+original two open questions.*

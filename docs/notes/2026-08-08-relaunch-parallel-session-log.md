@@ -282,6 +282,82 @@ None of the above exist on `origin`.
   (nothing broken today). Second has no action until a real account actually has more than
   one host_admin org membership — that's the trigger for testing it live.
 
+## Round 4 — four longer, deeper prompts: CI integrity, doc corrections, mobile gap, trunk proposal
+
+**Window 1, Part 1 (hlada delete-vs-rename):** re-verified `dev/secret-hygiene-v2` and
+`dev/rename-prod-worker` untouched, then settled the question with real Cloudflare evidence
+instead of inference — last deploy 2026-04-23, `workers.dev` disabled, zero custom domains, zero
+routes, 1 request in 30 days, and CPMS's own docs say "do not modify without intent."
+**Recommendation: rename now, don't delete.** An idle Worker with no routes costs nothing;
+deletion would be irreversible and destroy `hlada`'s secrets and its Cloudflare↔`andri187/CPMS`
+Git integration. The one thing still unresolved: whether the CPMS codebase itself is genuinely
+retired — that needs a look at that repo directly, out of scope for this round.
+
+**Window 1, Part 2 (check-pipeline integrity, reissued after the crash):** enumerated all 8
+`check:*` gates and fool-tested each with injected drift in an isolated worktree (introduced,
+confirmed caught, reverted). Three caught real drift live (`api-schema`, `schema-consistency`,
+`unused-exports`); `api-endpoints` is mechanically sound but currently red on the already-known
+bug. Three new blind spots found: **(A)** `check:work-view` was written to gate CI but never
+wired into `check-all.mjs` — nothing ever ran it. Fixed, verified currently green, ready to merge
+(`fix/wire-work-view-check` @ `b2250e5`). **(B)** `typecheck` silently skips
+`@straumvakt/shared`/`commercial`/`contracts` — no per-package `typecheck` script means
+`--if-present` swallows the gap; demonstrated live. Flagged as real work (needs a tsconfig + script
+per package, may surface a backlog of errors), not fixed. **(C)** `check:schema-consistency` has a
+latent vacuous-pass if both parsers ever match zero tables at once — low likelihood, not fixed.
+
+**Window 2, Part 1 (custom-domain doc):** found the doc's premise was wrong, not just stale —
+`straumvakt.org` and `www` are **already live** on Cloudflare Custom Domains with valid certs
+(issued 07-31/08-04), predating the commit that says "does NOT yet resolve." Rewrote with a
+corrections table (old advice — `routes`+`zone_name` — would actively break the live site) and a
+rollback section. Flagged, not fixed: the staging-catchup runbook's own Step 6 inherits the same
+wrong premise.
+
+**Window 2, Part 2 (`check:migrations` credential):** recommended a two-tier plan after actively
+ruling out two tempting shortcuts — a Neon-console-created role (grants `neon_superuser`
+automatically, worse than the status quo) and `pull_request_target` (exposes secrets to fork PRs
+per GitHub's own warning). Also ruled out pointing the check at Neon's `test` branch — migrations
+land there first, so it would have gone falsely green on 08-07. Tier 0: an offline
+path-exists guard, no credential, runs today. Tier 1: a SQL-created `ci_migrate_status` role,
+`CONNECT` + read-only on migration history, via a GitHub Environment secret.
+
+**Window 2, Part 3 (re-verification):** caught its own earlier mistake — the first pass guessed
+camelCase model names and got 7 wrong. Redone with three real search methods against the schema
+that actually shipped; conclusion unchanged (35 of 38 drop statements are no-ops, 3 `DROP TYPE`s
+are the only real DDL) but now soundly evidenced.
+
+**Window 3 (driver UI / mobile investigation — the big one):** two verdicts, both definitive.
+*First:* the doc-generation tool is a plain regex substring match with real, demonstrated failure
+modes (false positives — `sessions/:id` matched purely because mobile calls `sessions/current`,
+a different endpoint the pattern also swallows; false negatives on any non-literal URL). *Second,*
+using that understanding: `git log -S` across mobile's entire history for `api/driver/invoices`
+and `api/driver/sessions/history` returns **zero hits, ever** — the doc was wrong every time it
+was generated, not regressed. Both features are explicit "Soon" stubs in the mobile menu (Phase 2 /
+Phase 4). Nothing to fix. The real finding: mobile's invite-acceptance flow calls the *org*-invite
+endpoint (ADR 0026 `consume`), never `redeem-invite`/`claim-invite` (ADR 0028/0053) — the
+driver-group invite flow ADR 0053 secured has **no caller anywhere now that web is parked**. Full
+driver-UI capability inventory produced (works today: sign-in, chargers, sessions, tap-intent, BLE
+settings, language; stubbed: 9 of 11 menu items). One loose end flagged, not acted on: untracked
+`charge_history.dart`/`my_vehicle.dart`/`profile.dart` files spotted in the shared checkout,
+uncommitted anywhere — possible in-progress work worth checking on rather than duplicating.
+
+**Window 4 (trunk & branch protection proposal):** triple-verified (ahead-count, ancestor check,
+`git cherry`) that all 15 non-frontier branches are strict ancestors of the frontier — 12 safe to
+delete outright, 3 must stay (`dev/sprint-00-foundation` is GitHub's default branch, `staging` is
+the deploy pointer, `dev/p4-c-ingest-integrity` is warm). Recommends creating `main` **additively**
+at the frontier rather than renaming — a rename would break 15 live worktrees and the runbook's own
+refspec instantly. Confirmed **zero branch protection exists anywhere** on this public repo — no
+force-push or delete guard on `staging` today. Proposed two-phase protection (no-cost guard now,
+required status check on `main` once CI is green).
+
+**tl;dr for this round:** hlada question closed (rename, not delete); one more safe CI fix ready
+(`fix/wire-work-view-check`); two doc corrections landed (custom-domain, migrations-credential
+plan); the mobile driver-UI question is now fully resolved with hard evidence — no regression
+anywhere, but a real, confirmed gap (driver-group invites have no client) that needs a product
+call; and the repo has no branch protection at all, which costs nothing to start fixing. A
+standalone handoff document for the mobile-UI gap was written and delivered separately
+(`docs/notes/2026-08-08-mobile-driver-ui-handoff.md`), then revised once Window 3's findings
+resolved its two original open questions.
+
 ## What has NOT happened, anywhere, at any point in this process
 
 No branch pushed to `origin`. No PR opened, merged, or closed. No `wrangler deploy` run for
