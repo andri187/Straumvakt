@@ -179,6 +179,32 @@ migrations recorded, same newest migration, all 3 issues enum types still presen
 
 ---
 
+**PROMPT H — done.** Checked `test` (br-withered-hat-abtc5gzi) with the config fix applied:
+same false-status symptom as staging, different real cause. On `test`, both migrations are
+fully applied with neither recorded in history — a pure history gap. On `staging`, one is
+fully applied and the other only half (its `DROP TYPE`s never ran) — a history gap *and* a
+schema gap. Recommendation: don't reconcile `test` directly (it resets periodically anyway);
+fix `staging` first, then reset `test` from it — order matters, since resetting first would
+have `test` inherit the orphaned enum types. Wrote a full 364-line runbook,
+`docs/notes/2026-08-08-staging-catchup-runbook.md`, committed as `docs/staging-catchup-runbook`
+@ `30fa407` (based on `fix/prisma-migrations-path`) — six steps (Neon backup, config fix,
+migration reconciliation, test reset, git fast-forward, deploy), each with its own
+verification and rollback. Notable findings inside it: the currently-deployed June code
+references none of the 32 dropped tables (so the DB-ahead-of-deploy gap is bookkeeping, not
+live breakage); whether Cloudflare's git integration treats the `staging` push itself as the
+deploy trigger isn't determinable from the repo, so the runbook says check the dashboard
+first rather than assume; and `docs/operator/STRAUMVAKT_ORG_CUSTOM_DOMAIN_TODO.md` is now
+stale against the actual `custom_domain: true` implementation. Nothing mutated, nothing
+pushed.
+
+**Note on session continuity:** a VSCode crash interrupted the Claude Code session doing
+Cloudflare/CI-flavored work partway through Prompt G. On restart it re-verified state but
+checked the OLDEST worktree (`Straumvakt-secret-hygiene`, branch `dev/secret-hygiene` @
+`776552f`) rather than the current one — that branch is superseded by
+`dev/secret-hygiene-v2` @ `174475f` and was already accounted for. Prompt G (the
+check-pipeline integrity audit) itself was never confirmed complete before or after the
+crash and is being reissued in full below rather than assumed resumable.
+
 ## Current branch inventory
 
 | Branch | Base | Tip | Status |
@@ -192,6 +218,7 @@ migrations recorded, same newest migration, all 3 issues enum types still presen
 | `dev/rename-prod-worker` | `origin/staging` @ f53fb55 | `4fe0a95` | Ready — hlada rename, verified, unpushed |
 | `docs/relaunch-session-log-2026-08-08` | `origin/staging` @ f53fb55 | `131e800` | This document, unpushed |
 | `fix/prisma-migrations-path` | `dev/drizzle-ownership-and-market-harvest` | `6b9246e` | Ready — migrate-status fix, verified, unpushed |
+| `docs/staging-catchup-runbook` | `fix/prisma-migrations-path` | `30fa407` | Planning doc, unpushed |
 
 None of the above exist on `origin`.
 
