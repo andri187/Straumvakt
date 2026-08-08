@@ -26,7 +26,8 @@ import { cors } from "hono/cors";
 import { z } from "zod";
 import { makePrisma } from "../../lib/prisma";
 import { makeDrizzle } from "../../lib/drizzle";
-import { verifyPassword } from "../../lib/password";
+import { hashPassword, verifyPassword } from "../../lib/password";
+import { rateLimit } from "../../lib/rate-limit";
 import {
   mintDriverToken,
   verifyDriverToken,
@@ -938,15 +939,44 @@ publicDriver.post("/access-requests", requireDriver, async (c) => {
 //
 //   1. Hash the code, look up the kind='driver' token. 404 if absent.
 //   2. Validate it's not expired and not already consumed (single-use).
-//   3. Resolve the bound DriverGroup (token.driverGroupId).
-//   4. ACCESS write: create the DriverGroupMembership for THIS authenticated
-//      driver + the bound group (idempotent — re-redeem of an already-granted
-//      group is a no-op). The membership is granted to the *redeeming* driver,
-//      not the token's placeholder invitee row — the bearer is the canonical
-//      identity (ADR 0026 §10A: the User redeeming is who gets access).
-//   5. Claim the token (usedAt = now, conditional on usedAt IS NULL) so
+//   3. IDENTITY BINDING (ADR 0053): the token's userId must equal the
+//      authenticated driver's. See the block below — this step is why the
+//      route exists in its current shape.
+//   4. Resolve the bound DriverGroup (token.driverGroupId).
+//   5. ACCESS write: create the DriverGroupMembership for the bound driver +
+//      the bound group (idempotent — re-redeem of an already-granted group is
+//      a no-op).
+//   6. Claim the token (usedAt = now, conditional on usedAt IS NULL) so
 //      concurrent redeems race deterministically — only one wins the claim.
-//   6. Audit the enrollment under the group's owner org.
+//   7. Audit the enrollment under the group's owner org.
+//
+// ── ADR 0053 — the invite is bound to its recipient ─────────────────────
+//
+// This route used to grant the membership to whoever presented a valid code,
+// on the reasoning that "the bearer is the canonical identity". That was
+// wrong, and it was exercised: on 2026-06-07 a code minted for
+// test-invite@n1.is was redeemed by driver@n1.is fourteen seconds later, and
+// the audit log recorded a clean success. The invite was consumed and its
+// actual recipient got nothing.
+//
+// Two properties follow, and both matter:
+//
+//   * The check is compared against `token.userId`, which createDriverInvite
+//     already sets at mint time (NOT NULL). No new field was needed.
+//   * The check runs BEFORE the claim. A rejected redemption must leave
+//     usedAt null, or a stranger's failed attempt still destroys the real
+//     invitee's code — which is precisely what happened in June, where the
+//     mis-redemption granted nothing yet still burned the token.
+//
+// The mismatch response is byte-identical to the unknown-code 404 on purpose.
+// A distinct "not yours" would let any authenticated driver enumerate which
+// codes exist. The real reason goes to audit.actions as
+// driver_invite.redemption_rejected, carrying both user ids — the record the
+// June incident needed and did not have.
+//
+// NOT to be confused with POST /api/public/invites/consume (kind='invite',
+// ADR 0026), which is bearer BY DESIGN because consuming it is what
+// establishes the account. That path is untouched. See ADR 0053 §5.
 //
 // All in one tx: a partial redemption must not leave a consumed token with no
 // membership. BILLING (BillObjectMember, ADR 0029) is NOT written here — the
@@ -957,6 +987,168 @@ publicDriver.post("/access-requests", requireDriver, async (c) => {
 // QR security layers (password_key / allow_term, ADR 0028 §3) are not handled
 // in this milestone; the host-portal create path only mints security='none'
 // codes today, so any token reaching here is the bare code path.
+
+// ── POST /api/driver/claim-invite ────────────────────────────────────
+//
+// ADR 0053 §4 — the bootstrap half of the identity-bound invite.
+//
+// Binding redemption to the recipient (above) is only safe if the recipient
+// can actually become that recipient. They cannot today: createDriverInvite
+// creates the invitee as a PASSWORDLESS placeholder and sends no email, so
+// the bound user has no way to log in — and cannot self-register either,
+// because their own placeholder already owns the email address. Without this
+// route, binding would move the flow from "the wrong person can redeem" to
+// "nobody can".
+//
+// So: possession of the code lets you set a password ON THE BOUND USER, and
+// nobody else. Then you log in as that user and redeem normally.
+//
+// This is the same trust model ADR 0026 uses for org invites, and it is
+// bounded by one rule that does the real work:
+//
+//   The bound user must NOT already have a credential.
+//
+// Otherwise a leaked code would be account TAKEOVER of an established driver
+// rather than the bootstrap of a fresh placeholder. Existing drivers never
+// need this route — they log in and redeem, and the binding check passes.
+//
+// The token is deliberately NOT consumed here. Claiming is not redeeming;
+// the membership is still granted by /redeem-invite, once, afterwards.
+//
+// `already_claimed` is distinguishable from `not_found`, unlike the
+// redemption path. Accepted: it discloses only that some 120-bit code exists
+// and has been claimed, it cannot be reached without that code, and the route
+// is rate-limited. The redemption oracle mattered because any authenticated
+// driver could probe it cheaply; this one has no such caller.
+
+const claimInviteSchema = z.object({
+  token: z.string().trim().min(8).max(256),
+  password: z.string().min(8).max(128),
+});
+
+publicDriver.post(
+  "/claim-invite",
+  rateLimit({
+    keyBy: "ip",
+    limit: 10,
+    windowSec: 60,
+    bindingName: "DRIVER_LOGIN_RATE_LIMITER",
+  }),
+  async (c) => {
+    const raw = await c.req.json().catch(() => null);
+    const parsed = claimInviteSchema.safeParse(raw);
+    if (!parsed.success) {
+      return c.json(
+        { error: "validation", message: "Invite code and a password of at least 8 characters are required." },
+        400,
+      );
+    }
+
+    const prisma = makePrisma(c.env);
+    const tokenHash = await sha256Hex(parsed.data.token);
+    const passwordHash = await hashPassword(parsed.data.password);
+
+    const result = await prisma.$transaction(async (tx) => {
+      const row = await tx.userToken.findUnique({
+        where: { tokenHash },
+        select: {
+          id: true,
+          userId: true,
+          kind: true,
+          usedAt: true,
+          expiresAt: true,
+          driverGroupId: true,
+          security: true,
+          driverGroup: { select: { ownerOrgId: true } },
+          user: {
+            select: {
+              id: true,
+              email: true,
+              status: true,
+              credentials: { select: { userId: true } },
+            },
+          },
+        },
+      });
+
+      if (!row || row.kind !== "driver") {
+        return { ok: false as const, reason: "not_found" as const };
+      }
+      if (row.usedAt !== null) {
+        return { ok: false as const, reason: "already_used" as const };
+      }
+      if (row.expiresAt.getTime() <= Date.now()) {
+        return { ok: false as const, reason: "expired" as const };
+      }
+      if (row.security !== "none") {
+        return { ok: false as const, reason: "security_unsupported" as const };
+      }
+      // The rule this route turns on. A bound user who already has a
+      // credential is an established account, and possession of a code must
+      // never be enough to overwrite one.
+      if (row.user.credentials !== null) {
+        return { ok: false as const, reason: "already_claimed" as const };
+      }
+      if (row.user.status !== "active") {
+        return { ok: false as const, reason: "not_found" as const };
+      }
+
+      await tx.userCredential.create({
+        data: { userId: row.userId, passwordHash },
+      });
+
+      // Accepting via a code sent to that address IS the verification — same
+      // reasoning as the org-invite consume path.
+      await tx.user.update({
+        where: { id: row.userId },
+        data: { emailVerifiedAt: new Date() },
+      });
+
+      if (row.driverGroup) {
+        await recordAuditAction(tx, {
+          orgId: row.driverGroup.ownerOrgId,
+          actorUserId: row.userId,
+          actorKind: "user",
+          action: "driver_invite.claimed",
+          targetType: "user_token",
+          targetId: row.id,
+          metadata: { driverGroupId: row.driverGroupId },
+        });
+      }
+
+      return { ok: true as const, email: row.user.email };
+    });
+
+    if (!result.ok) {
+      if (result.reason === "not_found") {
+        return c.json({ error: "not_found", message: "Boð fannst ekki." }, 404);
+      }
+      if (result.reason === "already_used") {
+        return c.json({ error: "already_used", message: "Boðið hefur þegar verið leyst inn." }, 410);
+      }
+      if (result.reason === "expired") {
+        return c.json({ error: "expired", message: "Boðið er útrunnið." }, 410);
+      }
+      if (result.reason === "security_unsupported") {
+        return c.json(
+          { error: "security_unsupported", message: "Þetta boð krefst auka öryggisþreps sem er ekki stutt enn." },
+          409,
+        );
+      }
+      return c.json(
+        {
+          error: "already_claimed",
+          message: "Þessi aðgangur er þegar með lykilorð. Skráðu þig inn og leystu boðið inn þar.",
+        },
+        409,
+      );
+    }
+
+    // The email is returned so the client can send the driver straight to
+    // login with it pre-filled, exactly as the org-invite consume does.
+    return c.json({ ok: true, email: result.email });
+  },
+);
 
 const redeemInviteSchema = z.object({
   // Accept a generously-sized opaque code; the alphabet is base32-ish.
@@ -979,6 +1171,7 @@ publicDriver.post("/redeem-invite", requireDriver, async (c) => {
       where: { tokenHash },
       select: {
         id: true,
+        userId: true,
         kind: true,
         usedAt: true,
         expiresAt: true,
@@ -1006,6 +1199,35 @@ publicDriver.post("/redeem-invite", requireDriver, async (c) => {
     if (row.expiresAt.getTime() <= Date.now()) {
       return { ok: false as const, reason: "expired" as const };
     }
+
+    // ADR 0053 — identity binding. Deliberately BEFORE the claim below, so a
+    // rejected attempt leaves usedAt null and the real recipient can still
+    // redeem. Reported to the caller as `not_found` (see the header): the
+    // distinct reason is recorded in audit, not returned.
+    if (row.userId !== userId) {
+      // audit.actions.org_id is NOT NULL with an FK, so the row can only be
+      // written when the group (and therefore its owner org) resolved. A
+      // token with no group is malformed and cannot be attributed to a
+      // tenant; the rejection still stands, it just goes unlogged.
+      if (row.driverGroup) {
+        await recordAuditAction(tx, {
+          orgId: row.driverGroup.ownerOrgId,
+          actorUserId: userId,
+          actorKind: "user",
+          action: "driver_invite.redemption_rejected",
+          targetType: "user_token",
+          targetId: row.id,
+          metadata: {
+            reason: "identity_mismatch",
+            boundUserId: row.userId,
+            attemptedByUserId: userId,
+            driverGroupId: row.driverGroupId,
+          },
+        });
+      }
+      return { ok: false as const, reason: "not_found" as const };
+    }
+
     if (!row.driverGroupId || !row.driverGroup) {
       return { ok: false as const, reason: "malformed" as const };
     }
