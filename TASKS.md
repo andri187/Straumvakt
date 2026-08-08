@@ -49,14 +49,23 @@ item — that is what FOCUS.md rule 1's exception is for.
       two new pieces present — the general money-line shape
       (`{whoseMoney, posture, counterparty}`) and the vendor-adapter interface.
 
-- [ ] **2. Housekeeping**, in order:
-      rotate the admin credential → reconcile the canon
-      (FOCUS/DECISIONS/WORKSPACE/ENVIRONMENTS) → `SERVICES.md` → gated work
-      view + straumvakt.org cleanup.
-      `[GATE: secret go-ahead]` `[GATE: deploy go-ahead]`
-      *Finding already in hand: the credential is **not** hardcoded — both
-      paths read the binding with no fallback, so rotation is an operator
-      action, not a code change.*
+- [~] **2. Housekeeping** — code and docs done; one operator action outstanding.
+  - [x] 2a. Admin credential **prepared**. Verified binding-only: no fallback in
+        either auth path, no value in any worker config, and `.env.example`
+        defaults blanked — that template was the actual source.
+        `[GATE: secret go-ahead ✅ cleared]`
+        **→ OPERATOR: set `ADMIN_PASSWORD` on hlada · hlada-staging ·
+        hlada-api · hlada-api-staging. Then I verify the path on dev.**
+  - [x] 2b. Canon reconciled — WORKSPACE.md trued to measured numbers,
+        three wrong seed lines recorded.
+  - [x] 2c. `SERVICES.md` — full register; invoice rail and Dev-tier cost
+        flagged **PENDING**, not picked.
+  - [x] 2d. Work view built at `/admin/work`, generated from WORKSPACE.md,
+        admin-gated. `[GATE: deploy go-ahead ✅ cleared — option C]`
+        No domain wired; ships by normal branch promotion.
+  - [x] 2e. straumvakt.org cleanup — **nothing moved**. 66 of 88 assets are
+        referenced; the 22 that are not are runtime-loaded Flutter output.
+        Repoint deferred to task 10.
 
 ---
 

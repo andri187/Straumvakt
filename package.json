@@ -36,7 +36,9 @@
     "db:generate:sql": "npm --prefix apps/api exec -- drizzle-kit generate",
     "db:baseline": "node apps/api/scripts/drizzle-baseline.mjs",
     "db:migrate:status": "npm --prefix apps/api exec -- drizzle-kit check",
-    "check:schema-consistency": "node scripts/check-schema-consistency.mjs"
+    "check:schema-consistency": "node scripts/check-schema-consistency.mjs",
+    "work-view": "node scripts/gen-work-view.mjs",
+    "check:work-view": "node scripts/gen-work-view.mjs --check"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
