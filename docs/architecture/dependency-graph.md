@@ -46,62 +46,50 @@ subgraph D["reference"]
 E["iceland-energy-parties.json"]
 end
 end
-F["fs"]
-subgraph G["packages"]
-H["commercial"]
-I["contracts"]
-J["shared"]
+subgraph F["packages"]
+G["commercial"]
+H["contracts"]
+I["shared"]
 end
-K["path"]
-subgraph L["public"]
-subgraph M["zaptec"]
-N["openapi.json"]
-O["zaptec-constants.json"]
-end
-end
-subgraph P["src"]
-Q["app"]
-R["components"]
-S["lib"]
+subgraph J["src"]
+K["app"]
+L["components"]
+M["lib"]
+N["middleware.ts"]
 end
 3-->8
 5-->8
-5-->J
+5-->I
 5-->3
 5-->A
 6-->8
-6-->J
+6-->I
 7-->3
 7-->5
 7-->8
 7-->9
 7-->B
 8-->3
-8-->J
-8-->H
+8-->I
+8-->G
 8-->A
 9-->3
 9-->8
 A-->8
-A-->J
+A-->I
 A-->3
 B-->3
 B-->8
 B-->A
-B-->J
+B-->I
 B-->5
 B-->6
-J-->I
-Q-->R
-Q-->S
-Q-->J
-Q-->F
-Q-->K
-Q-->N
-Q-->O
-R-->S
-R-->Q
-S-->E
+I-->H
+K-->M
+K-->L
+L-->M
+M-->E
+N-->M
 ```
 
 ## Known violations
