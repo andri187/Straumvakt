@@ -23,16 +23,18 @@ const GROUPS = [
     "title": "NOW",
     "items": [
       {
-        "done": true,
+        "state": "done",
         "n": "1",
         "title": "Commit the contracts harvest",
-        "gate": null
+        "gate": null,
+        "blocker": null
       },
       {
-        "done": false,
+        "state": "wip",
         "n": "2",
         "title": "Housekeeping",
-        "gate": null
+        "gate": "secret go-ahead ✅ cleared",
+        "blocker": null
       }
     ]
   },
@@ -40,40 +42,46 @@ const GROUPS = [
     "title": "TRACK A",
     "items": [
       {
-        "done": false,
+        "state": "todo",
         "n": "3",
         "title": "Approve the money-engine design",
-        "gate": null
+        "gate": "design approval",
+        "blocker": null
       },
       {
-        "done": false,
+        "state": "todo",
         "n": "4",
         "title": "Build the parity harness",
-        "gate": null
+        "gate": null,
+        "blocker": null
       },
       {
-        "done": false,
+        "state": "todo",
         "n": "5",
         "title": "Harvest the resolver into `packages/commercial`",
-        "gate": null
+        "gate": "parity green before retiring the old path",
+        "blocker": null
       },
       {
-        "done": false,
+        "state": "todo",
         "n": "6",
         "title": "Build the line-agnostic invoice ledger",
-        "gate": null
+        "gate": null,
+        "blocker": null
       },
       {
-        "done": false,
+        "state": "todo",
         "n": "7",
         "title": "Build the flat-fee principal line → invoice",
-        "gate": null
+        "gate": null,
+        "blocker": null
       },
       {
-        "done": false,
+        "state": "todo",
         "n": "8",
         "title": "Scope and wire the invoice delivery + collection rail",
-        "gate": null
+        "gate": null,
+        "blocker": null
       }
     ]
   },
@@ -81,22 +89,25 @@ const GROUPS = [
     "title": "TRACK B",
     "items": [
       {
-        "done": false,
+        "state": "todo",
         "n": "9",
         "title": "Stand up the shared Dev tier",
-        "gate": null
+        "gate": "deploy go-ahead",
+        "blocker": null
       },
       {
-        "done": false,
+        "state": "todo",
         "n": "10",
         "title": "Per-service path-scoped deploys",
-        "gate": null
+        "gate": "deploy go-ahead",
+        "blocker": null
       },
       {
-        "done": false,
+        "state": "todo",
         "n": "11",
         "title": "Clean Prod from migrations + clean seed + data hygiene",
-        "gate": null
+        "gate": "prod go-ahead",
+        "blocker": null
       }
     ]
   },
@@ -104,16 +115,18 @@ const GROUPS = [
     "title": "ONBOARDING",
     "items": [
       {
-        "done": false,
+        "state": "todo",
         "n": "12",
         "title": "Admin-onboard customer 1",
-        "gate": null
+        "gate": null,
+        "blocker": null
       },
       {
-        "done": false,
+        "state": "todo",
         "n": "13",
-        "title": "Self-serve onboarding",
-        "gate": null
+        "title": "Self-serve onboarding — BLOCKED",
+        "gate": null,
+        "blocker": "invite codes are bearer-only"
       }
     ]
   },
@@ -121,16 +134,18 @@ const GROUPS = [
     "title": "GO-LIVE",
     "items": [
       {
-        "done": false,
+        "state": "todo",
         "n": "14",
         "title": "Verify gate",
-        "gate": null
+        "gate": null,
+        "blocker": null
       },
       {
-        "done": false,
+        "state": "todo",
         "n": "15",
         "title": "Send customer 1's first correct invoice from clean Prod",
-        "gate": null
+        "gate": null,
+        "blocker": null
       }
     ]
   },
@@ -138,10 +153,11 @@ const GROUPS = [
     "title": "EXPAND",
     "items": [
       {
-        "done": false,
+        "state": "todo",
         "n": "16",
         "title": "Un-park attribution",
-        "gate": null
+        "gate": null,
+        "blocker": null
       }
     ]
   }
@@ -152,7 +168,8 @@ export default function WorkViewPage() {
     <main className="mx-auto max-w-4xl p-8">
       <h1 className="text-2xl font-semibold">Market phase — work status</h1>
       <p className="mt-1 text-sm opacity-70">
-        Generated from WORKSPACE.md and TASKS.md. 1 of 16 tasks complete.
+        Generated from WORKSPACE.md and TASKS.md. 1 of 16 tasks
+        complete, 1 in progress, 1 blocked.
       </p>
 
       <section className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -178,11 +195,30 @@ export default function WorkViewPage() {
           <ul className="mt-2 space-y-1">
             {g.items.map((t) => (
               <li key={t.n} className="flex gap-2 text-sm">
-                <span aria-hidden className="opacity-60">{t.done ? "✓" : "○"}</span>
-                <span className={t.done ? "opacity-50 line-through" : ""}>
-                  <span className="opacity-60">{t.n}.</span> {t.title}
+                <span aria-hidden className="opacity-60">
+                  {t.state === "done" ? "✓" : t.state === "wip" ? "◐" : "○"}
                 </span>
-                {t.gate ? (
+                <span className={t.state === "done" ? "opacity-50 line-through" : ""}>
+                  <span className="opacity-60">{t.n}.</span> {t.title}
+                  <span className="sr-only">
+                    {t.state === "done"
+                      ? " (complete)"
+                      : t.state === "wip"
+                        ? " (in progress)"
+                        : " (not started)"}
+                  </span>
+                </span>
+                {t.state === "wip" ? (
+                  <span className="shrink-0 rounded bg-sky-500/15 px-1.5 py-0.5 text-[11px] text-sky-600">
+                    in progress
+                  </span>
+                ) : null}
+                {t.blocker ? (
+                  <span className="ml-auto shrink-0 rounded bg-red-500/15 px-1.5 py-0.5 text-[11px] font-semibold text-red-600">
+                    BLOCKED — {t.blocker}
+                  </span>
+                ) : null}
+                {t.gate && !t.blocker ? (
                   <span className="ml-auto shrink-0 rounded bg-amber-500/15 px-1.5 py-0.5 text-[11px] text-amber-600">
                     {t.gate}
                   </span>
