@@ -211,14 +211,14 @@ GET 83 · POST 64 · PATCH 15 · DELETE 14 · PUT 1
 | GET | `/api/driver/chargers/:serial/ble-pin` | mobile | `routes/public/driver-charger-pin` |
 | GET | `/api/driver/health` | — | `routes/public/driver` |
 | GET | `/api/driver/installations` | console | `routes/public/driver` |
-| GET | `/api/driver/invoices` | console, mobile | `routes/public/driver` |
+| GET | `/api/driver/invoices` | console | `routes/public/driver` |
 | POST | `/api/driver/login` | console, mobile | `routes/public/driver` |
 | GET | `/api/driver/me` | console, mobile | `routes/public/driver` |
 | PATCH | `/api/driver/me` | console, mobile | `routes/public/driver` |
 | POST | `/api/driver/redeem-invite` | console | `routes/public/driver` |
 | GET | `/api/driver/sessions/:id` | console, mobile | `routes/public/driver` |
 | GET | `/api/driver/sessions/current` | mobile | `routes/public/driver` |
-| GET | `/api/driver/sessions/history` | console, mobile | `routes/public/driver` |
+| GET | `/api/driver/sessions/history` | console | `routes/public/driver` |
 | POST | `/api/driver/start-session` | mobile | `routes/public/driver` |
 | POST | `/api/driver/stop-session` | mobile | `routes/public/driver` |
 
