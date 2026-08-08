@@ -62,7 +62,20 @@ const build = spawnSync(
     "--platform=node",
     "--format=esm",
     "--target=node22",
-    "--packages=external",
+    // Externalise the heavy runtime deps, but BUNDLE the workspace packages.
+    // `--packages=external` would externalise @straumvakt/* too, and Node then
+    // has to resolve their extensionless relative imports (`./types`) as raw
+    // ESM, which it cannot. Bundling them sidesteps that without touching the
+    // harvested source, which must stay byte-identical to what it was copied
+    // from.
+    "--external:pg",
+    "--external:pg-*",
+    "--external:@prisma/*",
+    "--external:prisma",
+    "--external:dotenv",
+    "--external:zod",
+    "--external:drizzle-orm",
+    "--external:@cloudflare/*",
     `--outfile=${outfile}`,
     "--log-level=warning",
   ],

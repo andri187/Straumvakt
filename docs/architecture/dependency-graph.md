@@ -48,58 +48,60 @@ end
 end
 F["fs"]
 subgraph G["packages"]
-H["contracts"]
-I["shared"]
+H["commercial"]
+I["contracts"]
+J["shared"]
 end
-J["path"]
-subgraph K["public"]
-subgraph L["zaptec"]
-M["openapi.json"]
-N["zaptec-constants.json"]
+K["path"]
+subgraph L["public"]
+subgraph M["zaptec"]
+N["openapi.json"]
+O["zaptec-constants.json"]
 end
 end
-subgraph O["src"]
-P["app"]
-Q["components"]
-R["lib"]
+subgraph P["src"]
+Q["app"]
+R["components"]
+S["lib"]
 end
 3-->8
 5-->8
-5-->I
+5-->J
 5-->3
 5-->A
 6-->8
-6-->I
+6-->J
 7-->3
 7-->5
 7-->8
 7-->9
 7-->B
 8-->3
-8-->I
+8-->J
+8-->H
 8-->A
 9-->3
 9-->8
 A-->8
-A-->I
+A-->J
 A-->3
 B-->3
 B-->8
 B-->A
-B-->I
+B-->J
 B-->5
 B-->6
-I-->H
-P-->Q
-P-->R
-P-->I
-P-->F
-P-->J
-P-->M
-P-->N
+J-->I
 Q-->R
-Q-->P
-R-->E
+Q-->S
+Q-->J
+Q-->F
+Q-->K
+Q-->N
+Q-->O
+R-->S
+R-->Q
+S-->E
 ```
 
 ## Known violations

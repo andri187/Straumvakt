@@ -9,7 +9,11 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["src/**/*.test.ts", "apps/api/src/**/*.test.ts"],
+    // packages/** added 2026-08-08 with the commercial harvest. Without it
+    // the 566 lines of resolver tests that moved into packages/commercial
+    // would have silently stopped running — the files exist, the suite just
+    // never looks at them, and a green run means nothing.
+    include: ["src/**/*.test.ts", "apps/api/src/**/*.test.ts", "packages/**/*.test.ts"],
     globals: false,
   },
 });

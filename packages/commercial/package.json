@@ -1,0 +1,18 @@
+{
+  "name": "@straumvakt/commercial",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The money engine — agreements, clauses, cost factors, resolution. Harvested from apps/api, keeping its earned correctness.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./agreement/types": "./src/agreement/types.ts",
+    "./agreement/resolve": "./src/agreement/resolve.ts"
+  },
+  "dependencies": {
+    "@straumvakt/contracts": "*",
+    "zod": "^4.3.6"
+  }
+}

@@ -209,6 +209,23 @@ module.exports = {
       from: { path: "^src/" },
       to: { path: "^apps/api/src/" },
     },
+
+    {
+      name: "no-package-to-deployable",
+      severity: "error",
+      comment:
+        "A package may not import a deployable. packages/* are libraries — " +
+        "commercial, contracts, shared — and a library reaching into " +
+        "apps/api/src or src/ inverts the dependency it exists to provide. " +
+        "It would also make the package unusable by anything else, which is " +
+        "the whole point of harvesting code into one. " +
+        "Added 2026-08-08 with the commercial harvest: the boundary had been " +
+        "conventionally true and UNENFORCED — depcruise scanned packages/ but " +
+        "no rule covered it, so packages/commercial -> apps/api would have " +
+        "passed silently.",
+      from: { path: "^packages/", pathNot: "\\.(test|spec)\\.tsx?$" },
+      to: { path: "^(apps/[^/]+/src|src)/" },
+    },
   ],
 
   options: {
