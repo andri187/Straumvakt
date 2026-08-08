@@ -148,7 +148,17 @@ migration header as a local, unpushed commit, verified via a **read-only** `migr
 re-run (should report 47 migrations found, the two known ones pending). No `migrate deploy`,
 no `migrate resolve`, no DDL against any Neon branch.
 
-*(Results pending as of this writing — append below when they report.)*
+**PROMPT E — done.** One-line fix, committed and verified: root `wrangler.jsonc`'s
+production `name` changed from `hlada` to `straumvakt-console` on `dev/rename-prod-worker`
+@ `4fe0a95` (worktree `Straumvakt-rename-worker`), not pushed. Re-verified the new name is
+still unregistered right before committing. Repo-wide grep confirmed nothing else needs to
+change for this to be safe — no service binding, CI reference, or route targets the old
+name. Deliberately left unfixed, to keep the commit minimal and not pre-announce an
+unaccepted rename: 3 hardcoded `hlada.straumvakt.workers.dev` URLs in code (2 CORS
+allowlist entries, 1 email footer) and 2 docs (`CLAUDE.md`, `README.md`) describing the old
+`master → hlada` mapping. Follow-up once the rename is accepted.
+
+**PROMPT F — pending as of this writing — append below when it reports.**
 
 ---
 
@@ -162,7 +172,8 @@ no `migrate resolve`, no DDL against any Neon branch.
 | `dev/n1-org-landing` | `dev/straumvakt-org-relaunch` @ 10c292b | `52e3b32` | Merged into integration |
 | `dev/relaunch-integration` | `dev/straumvakt-org-relaunch` @ 10c292b | `14c1ce2` | Ready — middleware live, 6/6 runtime cases proven |
 | `diag/fix-api-endpoints-drift` | `dev/drizzle-ownership-and-market-harvest` @ 2b7ebf6 | `0a2943c` | Ready — verified, unpushed |
-| *(Prompt E branch)* | `origin/staging` | — | Pending |
+| `dev/rename-prod-worker` | `origin/staging` @ f53fb55 | `4fe0a95` | Ready — hlada rename, verified, unpushed |
+| `docs/relaunch-session-log-2026-08-08` | `origin/staging` @ f53fb55 | `131e800` | This document, unpushed |
 | *(Prompt F branch)* | `origin/staging` | — | Pending |
 
 None of the above exist on `origin`.
