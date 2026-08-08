@@ -1,0 +1,1 @@
+ALTER TYPE "agreements"."RateBasis" ADD VALUE 'per_connector';

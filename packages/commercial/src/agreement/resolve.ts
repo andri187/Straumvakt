@@ -230,6 +230,26 @@ function basisQuantityFor(basis: RateBasis, ctx: SessionContext): number {
     case "per_minute": return ctx.durationMinutes;
     case "per_day": return ctx.durationDays;
     case "per_session": return 1;
+    case "per_connector":
+      // Not session-derived, and deliberately not guessed.
+      //
+      // A per-connector quantity is a COUNT OF CONNECTORS on an org at a
+      // point in time. A SessionContext describes one charging session and
+      // carries no such count — there is no honest value to return here.
+      //
+      // The flat platform fee is a different FEEDER into the same ledger (see
+      // the harvest design, §7): a monthly job that counts connectors and
+      // emits lines directly. It never enters this function.
+      //
+      // So reaching here means a per_connector rate was attached to a clause
+      // that resolves per session. Failing loudly is the point: the silent
+      // alternatives are billing every session as if it were one connector,
+      // or billing zero. Both are wrong, and both are invisible on an invoice.
+      throw new Error(
+        "per_connector is not resolvable from a session — it is billed by the " +
+          "flat-fee feeder, not the session resolver. A per_connector rate is " +
+          "attached to a clause that should not carry one.",
+      );
   }
 }
 

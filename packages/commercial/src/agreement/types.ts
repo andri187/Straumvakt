@@ -18,7 +18,31 @@ export type RuleScope = (typeof RULE_SCOPES)[number];
 export const RULE_AUDIENCES = ["driver_group", "user"] as const;
 export type RuleAudience = (typeof RULE_AUDIENCES)[number];
 
-export const RATE_BASES = ["per_kwh", "per_minute", "per_day", "per_session"] as const;
+/**
+ * What a rate is charged per.
+ *
+ * `per_connector` added 2026-08-08 for the flat platform fee (Straumvakt→host,
+ * principal). It is deliberately NOT session-derived: its quantity is a count
+ * of connectors on an org at a point in time, which no SessionContext carries
+ * and no CDR implies. See `basisQuantityFor` in resolve.ts — resolving one
+ * through the session path throws rather than guessing.
+ *
+ * The alternative considered and rejected was reusing `per_day` with
+ * connector-days. It needs no new enum value and makes every invoice line
+ * misstate its unit, permanently, to someone who will eventually read it.
+ *
+ * NOTE — the Postgres enum `agreements."RateBasis"` does NOT yet carry this
+ * value. Until that migration runs, a rate reference cannot be STORED with
+ * this basis; the union is ahead of the column on purpose, so the resolver
+ * and its tests can be settled before the schema moves.
+ */
+export const RATE_BASES = [
+  "per_kwh",
+  "per_minute",
+  "per_day",
+  "per_session",
+  "per_connector",
+] as const;
 export type RateBasis = (typeof RATE_BASES)[number];
 
 export const BILLING_LINE_KINDS = ["passthrough", "markup"] as const;

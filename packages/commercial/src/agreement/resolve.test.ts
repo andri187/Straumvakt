@@ -12,6 +12,7 @@ import {
   resolveBillingLines,
   resolveFactor,
 } from "./resolve";
+import { RATE_BASES } from "./types";
 import type {
   Allocation,
   ClauseInput,
@@ -493,5 +494,81 @@ describe("computeBillingLines — recipient routing", () => {
     const lines = resolveBillingLines(ctx);
     const markup = lines.find((l) => l.kind === "markup")!;
     expect(markup.recipientOrgId).toBe(SJOVA_ORG_ID);
+  });
+});
+
+// ── per_connector — added 2026-08-08 with the flat platform fee ────────
+//
+// This basis exists for the Straumvakt→host principal line, whose quantity is
+// a COUNT OF CONNECTORS on an org, not anything a session knows. These tests
+// pin that it is refused by the session path rather than silently guessed,
+// and that adding it to the union changed nothing about the four bases that
+// were already there.
+
+describe("per_connector basis", () => {
+  const RATE_PLATFORM_FEE: RateRefInput = {
+    id: "00000000-0000-0000-0000-0000000000af",
+    code: "straumvakt-platform-fee",
+    costFactorId: FACTOR_DSO,
+    basis: "per_connector",
+    priceMinor: 150000n, // 1,500.00 kr per connector per month, ex-VAT
+    vatRatePct: 24,
+    currency: "ISK",
+    supplierOrgId: null,
+    effectiveFrom: new Date("2026-01-01T00:00:00Z"),
+    effectiveUntil: null,
+  };
+
+  it("is a member of RATE_BASES", () => {
+    // Guards the union against a careless edit — the DB enum does not carry
+    // this value yet, so TypeScript is the only thing holding it right now.
+    expect(RATE_BASES).toContain("per_connector");
+    expect(RATE_BASES).toHaveLength(5);
+  });
+
+  it("throws rather than guessing when resolved through the session path", () => {
+    // The two silent alternatives are billing every session as if it were one
+    // connector, or billing zero. Both are wrong and both are invisible on an
+    // invoice, so this must fail loudly.
+    const ctx = makeContext({
+      clauses: [
+        {
+          costFactorId: FACTOR_DSO,
+          costFactorCode: "DSO",
+          defaultBearerType: "org",
+          defaultBearerRef: null,
+          defaultRateRefCode: "straumvakt-platform-fee",
+          allocation: fullTo("org"),
+        },
+      ],
+      rateReferences: [RATE_PLATFORM_FEE],
+    });
+
+    expect(() => resolveBillingLines(ctx)).toThrow(/per_connector is not resolvable from a session/);
+  });
+
+  it("pickActiveRate still selects it by time window like any other basis", () => {
+    // Selection is basis-agnostic; only quantity derivation is special. A
+    // renewal rate must be selectable even though it is not session-resolvable.
+    const picked = pickActiveRate(
+      [RATE_PLATFORM_FEE],
+      "straumvakt-platform-fee",
+      new Date("2026-08-01T00:00:00Z"),
+    );
+    expect(picked?.id).toBe(RATE_PLATFORM_FEE.id);
+    expect(picked?.basis).toBe("per_connector");
+  });
+
+  it("leaves the four session bases computing exactly as before", () => {
+    // Regression guard on the enum widening. 10 kWh × 850 minor = 8500 ex-VAT;
+    // VAT 8500 × 24 / 100 = 2040; inc = 10540. Hand-computed, half-up.
+    const ctx = makeContext({ clauses: [dsoClause] });
+    const lines = resolveBillingLines(ctx);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]!.basisType).toBe("per_kwh");
+    expect(lines[0]!.basisQuantity).toBe(10);
+    expect(lines[0]!.amountExVatMinor).toBe(8500n);
+    expect(lines[0]!.vatAmountMinor).toBe(2040n);
+    expect(lines[0]!.amountIncVatMinor).toBe(10540n);
   });
 });

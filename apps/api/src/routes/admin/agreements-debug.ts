@@ -21,6 +21,7 @@ import { makePrisma } from "../../lib/prisma";
 import { requireAdmin, type AuthVars } from "../../lib/auth-middleware";
 import { requirePermission } from "../../lib/auth/require-permission";
 import { resolveBillingLines } from "../../lib/agreement/resolve";
+import type { BearerCode, BillingLineKind, RateBasis } from "../../lib/agreement/types";
 import { loadAgreementContext } from "../../lib/agreement/persist";
 import { listAgreements, getAgreementDetail } from "../../repositories/agreements";
 import type { Env } from "../../bindings";
@@ -59,10 +60,16 @@ const debugResolveSchema = z.object({
 
 // BigInt → string for JSON responses (Hono's default JSON serializer
 // chokes on BigInt; the UI parses these back as strings).
+//
+// The enum-valued fields borrow the canonical types rather than re-listing
+// their members. They used to be spelled out inline, which meant this shape
+// silently forked from BillingLineDraft the moment RATE_BASES gained
+// `per_connector` — the widened union stopped assigning to a copy that still
+// said four values. Referencing the source keeps the drift impossible.
 type BillingLineJson = {
   factorCode: string;
-  kind: "passthrough" | "markup";
-  basisType: "per_kwh" | "per_minute" | "per_day" | "per_session";
+  kind: BillingLineKind;
+  basisType: RateBasis;
   basisQuantity: number;
   unitPriceMinor: string;
   amountExVatMinor: string;
@@ -70,7 +77,7 @@ type BillingLineJson = {
   vatAmountMinor: string;
   amountIncVatMinor: string;
   currency: string;
-  bearerType: "org" | "usr" | "wrk" | "trd";
+  bearerType: BearerCode;
   bearerRef: string | null;
   recipientOrgId: string | null;
   recipientUserId: string | null;

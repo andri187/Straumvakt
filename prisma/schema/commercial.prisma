@@ -399,6 +399,11 @@ enum RateBasis {
   per_minute
   per_day
   per_session
+  // Added 2026-08-08 for the flat platform fee (Straumvakt -> host, principal).
+  // Not session-derived: its quantity is a count of connectors on an org at a
+  // point in time. The session resolver throws on it by design; the flat-fee
+  // feeder emits those lines directly. See packages/commercial/src/agreement/types.ts.
+  per_connector
 
   @@schema("agreements")
 }
