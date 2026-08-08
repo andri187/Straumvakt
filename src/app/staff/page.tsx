@@ -24,8 +24,14 @@
 // one, and someone arriving at the wrong door gets no signal from a login
 // box alone.
 //
-// Public by design. middleware.ts lets "/staff" through unauthenticated and
-// gates everything under it; see staffRouteResponse() there.
+// Public by design. middleware.ts carries a staffRouteResponse() that lets
+// "/staff" through unauthenticated and session-gates everything under it —
+// but be aware that file does not currently execute at all (Next 16 resolves
+// the convention to src/middleware.ts when a src/ directory exists, which
+// this repo has). Nothing on this route may assume it ran. See
+// docs/relaunch-middleware-reconciliation.md for the whole picture; the
+// practical consequence is that /staff/overview does its own server-side
+// session check rather than trusting a gate upstream of it.
 
 import { StaffLoginForm } from "./staff-login-form";
 
@@ -152,10 +158,19 @@ export default function StaffLandingPage() {
 
           <StaffLoginForm />
 
+          {/*
+            Only claims what the code actually does. POST /api/admin/login is
+            wrapped in rateLimit() at 10 attempts / 60s bucketed by email-or-IP
+            (apps/api/src/routes/admin/auth.ts), and the binding is configured
+            in apps/api/wrangler.jsonc. There is deliberately no "every attempt
+            is logged" line here: the route logs only [admin-bootstrap] on
+            first-time account creation, so saying otherwise would be an
+            assurance the system does not deliver.
+          */}
           <p className="mt-6 border-t border-bg-border pt-4 text-[11px] leading-relaxed text-ink-500">
-            Sign-ins are rate limited and every attempt is logged. If your
-            account has no platform grant you will be told so on the next
-            screen rather than dropped into an empty console.
+            Sign-ins are rate limited — ten attempts a minute. If your account
+            has no platform grant you will be told so on the next screen rather
+            than dropped into an empty console.
           </p>
         </div>
       </div>

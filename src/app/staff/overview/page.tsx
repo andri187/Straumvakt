@@ -101,17 +101,26 @@ type Charger = {
 
 // ── Loading ────────────────────────────────────────────────────────────────
 
-type Loaded<T> = { ok: true; data: T } | { ok: false; reason: string };
+type Loaded<T> =
+  | { ok: true; data: T }
+  | { ok: false; reason: string; status?: number };
 
 /**
  * One GET, never throwing. A 403 here is a legitimate answer ("this session
  * lacks that permission"), not an error worth taking the whole page down for,
  * so the reason is carried into the panel and rendered.
+ *
+ * `status` is kept separately from the human-readable reason because the
+ * caller has to tell 401 (not signed in — ordinary, expected) apart from
+ * everything else (genuinely broken). `status` is absent when the request
+ * never got far enough to produce one, i.e. the fetch itself threw.
  */
 async function load<T>(path: string): Promise<Loaded<T>> {
   try {
     const res = await apiFetchServer(path);
-    if (!res.ok) return { ok: false, reason: `HTTP ${res.status}` };
+    if (!res.ok) {
+      return { ok: false, reason: `HTTP ${res.status}`, status: res.status };
+    }
     return { ok: true, data: (await res.json()) as T };
   } catch (err) {
     return {
@@ -209,23 +218,48 @@ function Stat({ n, label, sub }: { n: string; label: string; sub?: string }) {
 export default async function StaffOverviewPage() {
   const me = await load<Me>("/api/admin/me");
 
-  // Deliberately not a redirect back to /staff. Middleware verifies the
-  // cookie with the UI Worker's secret and this endpoint verifies it with the
-  // API Worker's — if those two drift (the failure the /api/admin/me endpoint
-  // was introduced to fix), redirecting would bounce between the two forever.
-  // Say what happened instead.
+  // This check IS the gate on this page, not a second opinion behind one.
+  // middleware.ts has a /staff/* session rule but never executes (Next 16
+  // resolves the convention to src/middleware.ts when a src/ directory
+  // exists — see docs/relaunch-middleware-reconciliation.md), so an
+  // unauthenticated visitor reaches this line directly. That is survivable
+  // only because every panel below is a cookie-forwarded API call: without a
+  // session there is nothing to render, and we return before trying.
   if (!me.ok) {
+    // 401 is the ordinary case — no cookie, or one the API Worker rejected.
+    // With the middleware gate dead this is now the *common* arrival, not an
+    // edge case, so it gets a plain sign-in prompt rather than a diagnostic.
+    if (me.status === 401) {
+      return (
+        <Centered title="You are not signed in.">
+          <p>
+            This page is the Straumvakt platform overview. It needs a staff
+            session before it can show anything.
+          </p>
+          <p className="mt-5">
+            <a className="text-brand-300 underline underline-offset-2" href="/staff">
+              Sign in at the staff entrance
+            </a>
+          </p>
+        </Centered>
+      );
+    }
+
+    // Anything else is a real fault. Deliberately not a redirect: if this ever
+    // runs behind a live middleware gate, that gate verifies the cookie with
+    // the UI Worker's secret while /api/admin/me verifies it with the API
+    // Worker's, and bouncing on a mismatch between the two would loop forever.
     return (
       <Centered title="Your session could not be confirmed.">
         <p>
-          The cookie reached this page but{" "}
-          <code className="text-ink-200">GET /api/admin/me</code> rejected it —{" "}
-          <span className="text-ink-200">{me.reason}</span>.
+          The request reached this page but{" "}
+          <code className="text-ink-200">GET /api/admin/me</code> did not answer
+          — <span className="text-ink-200">{me.reason}</span>.
         </p>
         <p className="mt-3">
-          Signing in again usually clears it. If it does not, the UI and API
-          Workers are holding different <code className="text-ink-200">AUTH_SECRET</code>{" "}
-          values.
+          Signing in again usually clears it. If it does not, the API Worker is
+          unreachable, or it and the UI Worker are holding different{" "}
+          <code className="text-ink-200">AUTH_SECRET</code> values.
         </p>
         <p className="mt-5">
           <a className="text-brand-300 underline underline-offset-2" href="/staff">
