@@ -80,6 +80,7 @@ flat-fee **principal** line (Straumvakt→host); expand later via attribution.
 - **Customer 1:** admin-onboard via the existing admin surface (no self-serve needed for first revenue).
 - **Self-serve:** org self-enroll → invite/enroll users → attach existing chargers → set flat-fee agreement (roles admin-set).
 - **Acceptance:** an org completes self-enroll to a flat-fee agreement without hand-setup.
+- **BLOCKED (2026-08-08):** this acceptance criterion **cannot be met** while driver invite codes are bearer-only — `POST /api/driver/redeem-invite` grants membership to whoever presents a valid code, without checking it against the invited user (confirmed end to end; a different driver redeemed another's code and burned it). Access-control defect on the invite step of the self-serve path, so Rule 5 applies. Tracked as task 13's `[BLOCKER]`; see DECISIONS.md 2026-08-08 and `docs/notes/2026-08-08-n1-onboarding-workflow-exercise.md`.
 
 ---
 

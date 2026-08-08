@@ -32,6 +32,11 @@ the reverse.
 | `[GATE: secret go-ahead]` | Rule 2 — operator sets the value; never written here |
 | `[GATE: prod go-ahead]` | production is touched only on an explicit yes |
 
+**Blockers are not gates.** A gate is a decision someone has to make; a
+`[BLOCKER]` is a known defect that makes a task's acceptance criterion
+un-meetable until it is fixed. A task carrying one cannot be ticked, however
+much of its build work is finished.
+
 **By-product work is not a task.** Drizzle conversion of touched files, the
 vendor ratchet trending to 0, and per-context harvesting all happen **inside**
 the tasks below. There is no porting sprint and no "finish the migration"
@@ -125,8 +130,21 @@ item — that is what FOCUS.md rule 1's exception is for.
 - [ ] **12. Admin-onboard customer 1** on the existing surface. Deliberately
       *not* gated on self-serve — the invoice must not wait for it.
 
-- [ ] **13. Self-serve onboarding** — self-enrol → invite users → attach
-      chargers → flat-fee agreement. One path, not seven.
+- [ ] **13. Self-serve onboarding — BLOCKED** — self-enrol → invite users →
+      attach chargers → flat-fee agreement. One path, not seven.
+      `[BLOCKER: invite codes are bearer-only]`
+      **Acceptance — "an org completes self-enroll to a flat-fee agreement
+      without hand-setup" — cannot be met while this holds.** The invite step
+      of that path is not merely incomplete, it is unsafe:
+      `POST /api/driver/redeem-invite` grants the DriverGroup membership to
+      whoever presents a valid code, without checking it against the invited
+      user. Confirmed end to end 2026-08-08 — a different driver redeemed
+      another's code and burned it. Access-grant resolution, so Rule 5 applies:
+      design approval before any fix. Two further defects on the same path are
+      recorded in the note: the invitee is locked out of redeeming their own
+      invite, and the placeholder user the invite creates carries no idToken.
+      See [DECISIONS.md](./DECISIONS.md) 2026-08-08 and
+      `docs/notes/2026-08-08-n1-onboarding-workflow-exercise.md`.
 
 ---
 
