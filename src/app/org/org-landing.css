@@ -1,0 +1,526 @@
+/* Per-org landing template — shared stylesheet.
+ *
+ * Nothing in here names an organisation. Everything tenant-specific comes
+ * through three custom properties that OrgShell sets inline from the
+ * resolved OrgTenantProfile.accent:
+ *
+ *   --org-accent       solid brand colour
+ *   --org-accent-on    readable text colour on top of --org-accent
+ *   --org-accent-soft  low-alpha tint for washes, borders and halos
+ *
+ * The surrounding neutrals stay Straumvakt's (bg/ink tokens from
+ * tailwind.config.ts) so a tenant's brand tints the page without
+ * re-skinning the product.
+ */
+
+.org-root {
+  --line: #1e2a44;
+  --surface: #0b1220;
+  --raised: #111a2e;
+  --text: #f5f7fa;
+  --muted: #97a3b8;
+  --dim: #6b7791;
+  --ok: #3ee9a7;
+  --bad: #ff6b6b;
+
+  min-height: 100vh;
+  color: var(--text);
+}
+
+/* ── Header ─────────────────────────────────────────────────────────── */
+
+.org-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  border-bottom: 1px solid var(--line);
+  background: rgba(7, 11, 22, 0.82);
+  backdrop-filter: blur(10px);
+}
+
+.org-header-inner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 12px 20px;
+}
+
+.org-logo {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.org-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 4px;
+}
+
+/* Monogram fallback for a tenant whose org row carries no branding.logo_url. */
+.org-logo.monogram {
+  background: var(--org-accent);
+  color: var(--org-accent-on);
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.org-name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+.org-name .truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.org-pill {
+  flex: none;
+  padding: 3px 9px;
+  border: 1px solid var(--org-accent-soft);
+  border-radius: 999px;
+  background: var(--org-accent-soft);
+  color: var(--text);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.org-header .spacer {
+  flex: 1 1 auto;
+}
+
+.org-by {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--dim);
+  font-size: 0.7rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.org-by img {
+  width: 18px;
+  height: 18px;
+}
+
+.org-linkbtn {
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.org-linkbtn:hover {
+  color: var(--text);
+}
+
+/* ── Tenant nav ─────────────────────────────────────────────────────── */
+
+.org-nav {
+  border-bottom: 1px solid var(--line);
+  background: rgba(11, 18, 32, 0.6);
+}
+
+.org-nav-inner {
+  display: flex;
+  gap: 4px;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 0 14px;
+  overflow-x: auto;
+}
+
+.org-nav a,
+.org-nav span {
+  position: relative;
+  padding: 11px 10px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.org-nav a:hover {
+  color: var(--text);
+}
+
+.org-nav a.active {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.org-nav a.active::after {
+  content: "";
+  position: absolute;
+  right: 10px;
+  bottom: -1px;
+  left: 10px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--org-accent);
+}
+
+.org-nav span.soon {
+  color: var(--dim);
+  cursor: default;
+}
+
+/* ── Page body ──────────────────────────────────────────────────────── */
+
+.org-main {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 26px 20px 64px;
+}
+
+.org-hero {
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 22px;
+  padding: 26px 26px 24px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background:
+    radial-gradient(120% 130% at 0% 0%, var(--org-accent-soft), transparent 62%),
+    var(--surface);
+}
+
+.org-hero::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  background: var(--org-accent);
+}
+
+.org-hero h1 {
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.org-hero p {
+  margin-top: 6px;
+  max-width: 62ch;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.org-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.org-grid.g2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.org-grid.g3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.org-grid.g4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+@media (max-width: 900px) {
+  .org-grid.g3,
+  .org-grid.g4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .org-grid.g2 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  .org-grid.g3,
+  .org-grid.g4 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.org-card {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: 0 10px 30px -18px rgba(0, 0, 0, 0.6);
+}
+
+.org-card-h {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 13px 18px;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.9rem;
+  font-weight: 650;
+}
+
+.org-card-h .sub {
+  color: var(--dim);
+  font-size: 0.76rem;
+  font-weight: 400;
+}
+
+.org-card-b {
+  padding: 14px 18px;
+}
+
+/* KPI tiles */
+
+.org-kpi {
+  padding: 16px 18px;
+}
+
+.org-kpi .lbl {
+  color: var(--dim);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.org-kpi .val {
+  margin-top: 8px;
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.org-kpi .val.accent {
+  color: var(--org-accent);
+}
+
+.org-kpi .sub {
+  margin-top: 4px;
+  color: var(--dim);
+  font-size: 0.76rem;
+}
+
+/* Tables */
+
+.org-card table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.org-card th {
+  padding: 9px 18px;
+  border-bottom: 1px solid var(--line);
+  color: var(--dim);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.org-card td {
+  padding: 10px 18px;
+  border-bottom: 1px solid rgba(30, 42, 68, 0.55);
+}
+
+.org-card tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.org-card td.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+}
+
+.org-card td.empty,
+.org-empty {
+  padding: 20px 18px;
+  color: var(--dim);
+  text-align: center;
+}
+
+/* Badges */
+
+.org-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+
+.org-badge .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.org-badge.ok {
+  background: rgba(62, 233, 167, 0.12);
+  color: var(--ok);
+}
+
+.org-badge.ok .dot {
+  background: var(--ok);
+}
+
+.org-badge.bad {
+  background: rgba(255, 107, 107, 0.12);
+  color: var(--bad);
+}
+
+.org-badge.bad .dot {
+  background: var(--bad);
+}
+
+.org-badge.mut {
+  background: rgba(107, 119, 145, 0.14);
+  color: var(--muted);
+}
+
+.org-badge.mut .dot {
+  background: var(--dim);
+}
+
+/* Key/value rows — used by the profile page and the identity card */
+
+.org-kv {
+  display: grid;
+  grid-template-columns: minmax(0, 11rem) minmax(0, 1fr);
+  gap: 6px 16px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(30, 42, 68, 0.5);
+  font-size: 0.86rem;
+}
+
+.org-kv:last-child {
+  border-bottom: 0;
+}
+
+.org-kv dt {
+  color: var(--dim);
+}
+
+.org-kv dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 560px) {
+  .org-kv {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+}
+
+/* Section cards on the landing page */
+
+.org-section {
+  display: block;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  transition:
+    border-color 0.15s ease,
+    transform 0.15s ease;
+}
+
+a.org-section:hover {
+  border-color: var(--org-accent);
+  transform: translateY(-1px);
+}
+
+.org-section .t {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.95rem;
+  font-weight: 650;
+}
+
+.org-section .b {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.org-section.soon {
+  opacity: 0.62;
+}
+
+.org-tag-soon {
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(107, 119, 145, 0.18);
+  color: var(--muted);
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* Connector/station status chips */
+
+.org-stations {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 8px;
+  padding: 14px 18px;
+}
+
+.org-station {
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--raised);
+  font-size: 0.7rem;
+}
+
+.org-station .id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+  font-weight: 650;
+}
+
+.org-station.ok {
+  border-color: rgba(62, 233, 167, 0.32);
+  color: var(--ok);
+}
+
+.org-station.bad {
+  border-color: rgba(107, 119, 145, 0.3);
+  color: var(--dim);
+}
+
+.org-error {
+  margin-bottom: 16px;
+  padding: 13px 18px;
+  border: 1px solid rgba(255, 107, 107, 0.4);
+  border-radius: 12px;
+  background: rgba(255, 107, 107, 0.06);
+  color: var(--bad);
+  font-size: 0.86rem;
+}
