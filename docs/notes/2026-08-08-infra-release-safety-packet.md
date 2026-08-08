@@ -131,11 +131,12 @@ the follow-on the config comment already anticipates (`wrangler.jsonc:53-57`):
 Moving `straumvakt.org` onto the root config as it stands would point the live
 brand domain at a Worker with **no Hyperdrive binding and no secrets**.
 
-**The stated rationale is unverified.** "to avoid CPMS collision" implies a
-name clash with the CPMS project's `hlada` Worker. That cannot be checked
-without dashboard access. If `hlada` genuinely does not exist in this account
-(E3/E4), there may be no collision to avoid — or the collision may be exactly
-why it was never deployed. Unresolved.
+**The stated rationale is RESOLVED as of 2026-08-09 — see the Addendum §A2.**
+"to avoid CPMS collision" is **correct**: `E:\Claude\CPMS\CPMS\wrangler.jsonc`
+declares `name: "hlada"` and `env.staging.name: "hlada-staging"` — the same two
+names this repo uses, in the same Cloudflare account. But the collision that
+matters is on **`hlada-staging`**, the Worker serving `straumvakt.org`, and
+`4fe0a95` does not touch it.
 
 **Recommendation: `4fe0a95` stays out of the release candidate** — consistent
 with the standing rule. It is a correct *intent* expressed as a change that
@@ -389,7 +390,7 @@ not a migration plan.
 | A3 | Grant read-only Cloudflare access (scoped API token or `wrangler login`) for verification | Would convert five "blocked" rows into facts |
 | A4 | Enable Neon branch protection on `staging` (and `production`) | Mutates Neon settings |
 | A5 | Remove stale `DATABASE_URL`/`DIRECT_URL` secrets from the console Worker, if confirmed unused | Mutates a live production Worker |
-| A6 | Confirm or drop the "CPMS collision" rationale behind `4fe0a95` | Determines whether the migration is needed at all |
+| A6 | ~~Confirm or drop the "CPMS collision" rationale~~ — **resolved 2026-08-09 (§A2): the collision is real, and it is on the live Worker.** Replaced by: decide whether CPMS is retired or repointed | Two repos claim `hlada-staging`; a CPMS push could overwrite the live brand domain |
 | A7 | Whether the Worker migration (§8) happens before, after, or independently of the catch-up | Sequencing; both touch the live domain |
 | A8 | Approve the CI credential design with the three §7 additions; the SQL role creation itself is DDL | Explicitly requires approval |
 | A9 | Whether `origin/staging` should be force-push-protected before it is advanced | Changes branch protection |
@@ -412,3 +413,209 @@ No authentication attempt was made against any production endpoint — in
 particular, `POST /api/admin/login` was deliberately **not** exercised, because
 a login attempt against the live API is a state-changing action (rate limiter,
 audit trail).
+
+---
+---
+
+# Addendum — 2026-08-09
+
+Second read-only pass. **Still no state changed anywhere.** No SQL was run in
+either pass. Everything below either resolves something the first pass left
+open, or hardens it with a primary source.
+
+## A1. Go/no-go checklist
+
+One line per gate. **Go requires every row to be ✅.**
+
+| # | Gate | Status |
+|---|---|---|
+| G1 | Cloudflare Git integration on `hlada-staging` identified (connected? which repo? which branch?) | ❌ **BLOCKED** — no control-plane access |
+| G2 | Confirmed that a CPMS push cannot redeploy `hlada-staging` | ❌ **BLOCKED** — and now known to be a real risk (§A2) |
+| G3 | Custom-domain retention across a deploy understood | ❌ **BLOCKED** — undocumented by Cloudflare (§A4) |
+| G4 | Current deployment version ID captured as a rollback target | ❌ **BLOCKED** — dashboard only |
+| G5 | Hyperdrive confirmed to target Neon `br-tiny-river-abgpqq37` | ❌ **BLOCKED** — strong inference only |
+| G6 | Worker secret names on `hlada-staging` compared against requirements | ❌ **BLOCKED** — dashboard only |
+| G7 | Neon backup branch created from `staging` | ⏸ approval-required, not done |
+| G8 | CI `check` green on the RC | ⏸ Claude A owns; do not duplicate |
+| G9 | RC excludes `4fe0a95`, `30fa407`, `5311cbd` | ✅ verified — none is an ancestor of `2b7ebf6` |
+| G10 | Release range is a true fast-forward | ✅ verified — `0  140` |
+| G11 | Mobile API compatibility confirmed against the RC | ⏸ Codex owns `apps/mobile` (§A6) |
+| G12 | Andri's explicit go decision | ⏸ pending |
+
+**Current status: NO-GO.** Six gates are blocked on a single missing capability
+— read access to the Cloudflare control plane.
+
+## A2. RESOLVED: the CPMS collision is real, and it is on the live Worker
+
+The first pass left this open. Local CPMS evidence settles it.
+
+`E:\Claude\CPMS\CPMS\wrangler.jsonc` (repo `github.com/andri187/CPMS`, branch
+`rewrite/clean-slate`, last commit 2026-04-23):
+
+| Line | Declares |
+|---|---|
+| 3 | `"name": "hlada"` |
+| 32 | `"env": { "staging": { "name": "hlada-staging" } }` |
+
+**Both names are identical to this repository's**, in the same Cloudflare account
+(both reference the `straumvakt.workers.dev` subdomain; CPMS also owns the
+`straumvakt-ocpp` Worker this repo binds as `OCPP_GATEWAY`).
+
+CPMS's `CLAUDE.md` documents the topology as live: staging branch `staging` →
+`hlada-staging`; production branch `master` → `hlada`; and *"Cloudflare
+auto-deploys on push: push to `staging` → staging Worker rebuilds."* CPMS has a
+`staging` branch on its origin (`a5c5ba8`).
+
+**Consequence:** `hlada-staging` — the Worker currently serving `straumvakt.org`
+— is a Worker that a second repository also claims and documents as
+auto-deploying. If CPMS's Git integration is still connected, one push to CPMS
+`staging` replaces Straumvakt's production site with CPMS. CPMS is dormant (no
+commits since 2026-04-23), so this is latent, not imminent.
+
+**And `4fe0a95` does not address it.** It renames the root name (`hlada`, which
+is not deployed) and leaves `env.staging.name` (`hlada-staging`, which is live)
+untouched. Right instinct, wrong Worker.
+
+## A3. RESOLVED: Worker naming and rename semantics, from source
+
+Verified against the installed **wrangler 4.84.1**, not inferred.
+
+`inheritable()` in `wrangler-dist/cli.js`:
+
+```js
+(rawEnv !== topLevelEnv ? rawEnv[field] : void 0) ?? transformFn(topLevelEnv?.[field]) ?? defaultValue
+```
+
+with `transformFn = appendEnvName(envName)` = `` `${value}-${envName}` ``.
+
+- An **explicit `name` inside an env block wins**; `appendEnvName` is never
+  reached. So `--env staging` resolves to `hlada-staging` regardless of the
+  top-level name ⇒ **`4fe0a95` is provably inert for staging deploys**.
+- **Latent trap:** that protection exists *only* because `env.staging.name` is
+  present. Remove it and staging silently becomes
+  `straumvakt-console-staging` — a Worker that does not exist — while the live
+  one keeps serving stale code.
+- **There is no Worker rename operation.** The only `rename*` symbol in the
+  wrangler bundle is `renameWorkerNamespace`, which acts on Workers-for-Platforms
+  dispatch namespaces, not Worker scripts.
+
+## A4. Cloudflare-documented resource semantics
+
+| Resource | Documented behaviour | Source |
+|---|---|---|
+| Secrets | *"defined and managed on a per-Worker level"*; must not live in Wrangler config | CF docs, Secrets |
+| Custom domains | Attaching creates a DNS record **and** an Advanced Certificate; deleting the domain does **not** delete the certificate | CF docs, Custom Domains |
+| Custom domain omitted from config on deploy | **Not documented.** Must be treated as unknown | CF docs, Custom Domains |
+| Rollback | Per-Worker; deploys a prior version *across all routes and domains*; *"Resources connected to your Worker will not be changed"*; limited to the 100 most recent versions; **blocked if bindings were deleted between versions** | CF docs, Rollbacks |
+| Env inheritance | vars, bindings, secrets and routes are **non-inheritable** — they must be specified per environment | CF docs, Environments |
+
+The rollback constraint has a direct planning consequence: **do not remove the
+Hyperdrive binding in the same change as anything you might need to roll back.**
+
+## A5. Fact classification
+
+| Classification | Facts |
+|---|---|
+| **Verified fact** (direct observation or primary source) | Brand domains and `hlada-staging` return byte-identical bodies. `api.straumvakt.org` and `hlada-api-staging` return byte-identical bodies. `hlada`, `hlada-api`, `straumvakt-console` all return the identical CF error-1042 body. TLS cert valid 2026-08-04 → 2026-11-02. `4fe0a95` is a one-line root-name change. Release range is `0  140`, 635 files, 16 migrations. CPMS declares `hlada` and `hlada-staging`. Wrangler name precedence and the absence of a rename op. Neon `production` is primary/default/unprotected, 37 MB; `staging` is unprotected, 595 MB, compute continuously active. Console `src/` has no DB client. Mobile calls `hlada-api-staging.straumvakt.workers.dev` directly. |
+| **Strong inference** (consistent evidence, no primary confirmation) | `hlada` and `hlada-api` are not deployed (1042 + no `workers_dev: false` in root config). Hyperdrive targets Neon `staging` (active never-suspending compute, 336k CPU-sec vs 504). The brand domain went live ~2026-08-04 (cert `notBefore`). |
+| **Blocked fact** (requires control plane) | Git integration state on `hlada-staging` **and on CPMS's Workers**. Which repo last deployed `hlada-staging`. Current deployment version ID. Secret names actually set. Hyperdrive's configured connection string. Whether omitting `routes` detaches a custom domain. |
+
+## A6. Mobile API compatibility — a hard constraint
+
+`apps/mobile/lib/api/client.dart` targets
+**`https://hlada-api-staging.straumvakt.workers.dev`** directly — *not*
+`api.straumvakt.org`. (Read-only inspection; Codex owns that directory.)
+
+**Any change that disables workers.dev on `hlada-api-staging`, or renames that
+Worker, breaks every installed copy of the app.** The mobile app cannot be
+rolled back the way a Worker can. This constrains the API-Worker migration far
+more tightly than the console migration, and should be settled with Codex before
+either is scheduled.
+
+## A7. Neon: the default-branch trap and required discipline
+
+The `production` branch (`br-fragrant-bonus-abrc01g6`) is **primary and default**
+and carries a *different, older schema* — it is the CPMS-era database, which is
+why a query against it fails with `relation "identity.organizations" does not
+exist` rather than returning zero rows. It is 37 MB against staging's 595 MB.
+
+It is not merely theoretical: its compute's `last_active` is
+**2026-08-08T20:38:44Z**. It was reached today by a tool call that omitted a
+branch ID.
+
+**Required discipline — for humans and agents:**
+
+1. **Always pass an explicit branch ID.** Neon MCP `run_sql` documents *"If not
+   provided the default branch is used."* Default = `production` = wrong.
+2. Staging is `br-tiny-river-abgpqq37` (compute `ep-quiet-bird-abxartp8`); test
+   is `br-withered-hat-abtc5gzi` (compute `ep-holy-surf-abjvdrdo`).
+3. Treat a "missing relation" error as **a wrong-branch signal first**, not a
+   schema problem. That is the trap's actual failure mode: it looks like missing
+   data.
+4. For connection strings, verify the endpoint host matches the intended branch
+   before running anything.
+
+### Proposed Neon protection — approval-required, NOT performed
+
+| # | Proposal | Rationale |
+|---|---|---|
+| N1 | Enable branch protection on `staging` | It holds the real data and is currently `protected: false` |
+| N2 | Enable branch protection on `production` | Makes accidental writes to the abandoned default fail loudly instead of silently succeeding |
+| N3 | Decide `production`'s fate — retire, rename, or repoint the project default | While it is the default, every unqualified connection lands there |
+
+CPMS's `CLAUDE.md` asserts *"Primary branch is protected (no accidental
+`migrate reset`)"*. That is **no longer true** — `protected: false` as of
+2026-08-08. Whatever protection once existed has lapsed.
+
+## A8. CI migration-status role — design requirements
+
+Evaluating `docs/operator/CI_MIGRATION_CHECK_CREDENTIAL.md` (`d4e2e07`).
+**Nothing was created: no role, no secret, no environment, no workflow change.**
+
+The design's central finding is correct and non-obvious, and it is the reason
+this cannot be done the easy way: **Neon roles created via the console, CLI or
+API are granted `neon_superuser`**, which carries `pg_read_all_data` and
+`pg_write_all_data`. Creating the CI role that way would produce an account with
+full read *and write* access to everything — strictly worse than reusing the
+existing credential. **Only a SQL-created role is least-privilege.**
+
+Requirements before implementation:
+
+| # | Requirement |
+|---|---|
+| R1 | **Least privilege.** `CONNECT` on the database, `USAGE` on the one schema, `SELECT` on `_prisma_migrations` only. Nothing else |
+| R2 | **Negative test.** Prove `SELECT` against `identity.users` (or any business table) **fails** for this role. A positive-only test proves nothing |
+| R3 | **Environment gating.** GitHub Environment with deployment-branch rules, so only the trunk/RC branch can read the secret |
+| R4 | **No `pull_request_target`.** Correctly rejected in the source document — it is privileged and worse than the problem |
+| R5 | **Throwaway-branch validation.** Create the role on a disposable Neon branch, validate R1–R2 there, and only then create it where it will live |
+| R6 | **Branch-scope decision.** Neon roles are branch-scoped and duplicate into children — creating it on `staging` propagates it to every future `test` reset *and* every backup branch. Decide whether that is intended |
+| R7 | **Trigger scope.** `check.yml` currently runs on `push: branches: ["**"]`. An environment-gated job with required reviewers would prompt on every branch push and be ignored within a day. Restrict the migration-status job to trunk/RC, or make it `workflow_dispatch` + scheduled |
+| R8 | **Sequencing.** This touches the workflow file Claude A owns. It lands after that work, not alongside it |
+
+## A9. Consolidated decisions for Andri
+
+Supersedes §9 above where they overlap.
+
+| # | Decision | Blocking? |
+|---|---|---|
+| **A1′** | **Verify the Git integration on `hlada-staging` — including which repository owns it** | **YES — blocks everything** |
+| **A2′** | **Verify whether CPMS Workers still have live Git integrations** | **YES — a CPMS push could overwrite production** |
+| A3′ | Grant read-only Cloudflare access (scoped token or `wrangler login`) | Would unblock G1–G6 in one step |
+| A4′ | Whether the release runs at all, knowing it is a production release of 140 commits / 635 files to a live domain | yes |
+| A5′ | Neon branch protection on `staging` and `production` (N1–N3) | no |
+| A6′ | CPMS's fate — retired, or repointed off the shared Worker names | yes, for the migration |
+| A7′ | Remove stale `DATABASE_URL`/`DIRECT_URL` secrets and the Hyperdrive binding from the console Worker, if C6 confirms they are unused | no |
+| A8′ | Console Worker migration sequencing versus the release | no |
+| A9′ | Mobile API host commitment — the shipped app pins `hlada-api-staging.straumvakt.workers.dev` | yes, for any API-Worker migration |
+| A10′ | Approve the CI credential design with R1–R8 | no |
+| A11′ | Force-push protection on `origin/staging` before it is advanced | no |
+
+## A10. Second-pass state confirmation
+
+No Cloudflare, Neon, GitHub, DNS, secret, deployment, or remote Git state
+changed in this pass either. Reads only: HTTPS GETs (one consolidated round),
+`openssl s_client`, local `git` reads across two repositories, local file reads,
+Cloudflare documentation fetches, and reads of the installed wrangler bundle.
+**No SQL was executed in either pass**; Neon access in the first pass was
+metadata-only and there was none in this pass. CPMS was read, never modified or
+run.
