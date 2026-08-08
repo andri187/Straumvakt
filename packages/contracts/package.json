@@ -2,6 +2,9 @@
   "name": "@straumvakt/contracts",
   "version": "0.1.0",
   "private": true,
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
   "description": "Canonical vocabulary: DTOs, input shapes, the vendor-adapter interface, and the money-line shape. Types and contracts only — no domain logic, no schema, no vendor code.",
   "type": "module",
   "main": "./src/index.ts",

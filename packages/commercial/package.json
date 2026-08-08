@@ -2,6 +2,9 @@
   "name": "@straumvakt/commercial",
   "version": "0.1.0",
   "private": true,
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
   "description": "The money engine — agreements, clauses, cost factors, resolution. Harvested from apps/api, keeping its earned correctness.",
   "type": "module",
   "main": "./src/index.ts",
