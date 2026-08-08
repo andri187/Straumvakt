@@ -225,6 +225,36 @@ None of the above exist on `origin`.
 8. **CI failure fix** (`diag/fix-api-endpoints-drift`) and the underlying product question
    (should mobile still call the two dropped driver endpoints?).
 
+## Direction set / decisions made (2026-08-08, responding to the queue above)
+
+- **Prisma → Drizzle, confirmed direction.** Consistent with ADR 0051 ("Drizzle owns the
+  schema") and FOCUS.md's "touch it, convert it" rule — not a new departure. `fix/prisma-
+  migrations-path` still ships regardless: Prisma is what's live until the migration
+  completes, and the false-green bug it fixes would otherwise keep hiding drift for however
+  long that takes.
+- **Live AUTH_SECRET rotation — recommended.** Standard posture: any secret ever committed
+  to source control is treated as permanently compromised regardless of what current testing
+  shows. Cost is low (forces re-login, no data risk) — bundle it into the same release window
+  as the other fixes rather than as a surprise on its own.
+- **Push/PR plan — suggested, not yet actioned.** Ship now against `origin/staging`:
+  `dev/secret-hygiene-v2`, `docs/relaunch-session-log-2026-08-08`. Target the frontier
+  (`dev/drizzle-ownership-and-market-harvest`) instead of `staging` for everything based near
+  it — `diag/fix-api-endpoints-drift`, `fix/prisma-migrations-path`, `dev/housekeeping`, and
+  eventually `dev/relaunch-integration` — since a PR against stale `staging` would show the
+  entire 140-commit gap as part of the diff. Hold `dev/rename-prod-worker` pending the hlada
+  delete-vs-rename question below. No need to push `dev/employee-landing`/`dev/n1-org-landing`
+  individually — `dev/relaunch-integration` supersedes both.
+- **`hlada`: investigate delete vs. rename — queued, not yet dispatched.** Open question:
+  is CPMS's `hlada` Worker genuinely abandoned (safe to delete) or just stable-and-quiet
+  (still live, don't touch)? Deploy history alone can't distinguish those. Needs real traffic/
+  request-volume data, current route/custom-domain bindings, and ideally a signal on whether
+  the CPMS repo itself is still active. Next task for Window 1 once its current work (Prompt G)
+  is done.
+- **`middleware.ts` → `proxy.ts`** and **multi-org membership path** — both informational
+  only, no decision pending. First is a low-priority rename-and-verify once convenient
+  (nothing broken today). Second has no action until a real account actually has more than
+  one host_admin org membership — that's the trigger for testing it live.
+
 ## What has NOT happened, anywhere, at any point in this process
 
 No branch pushed to `origin`. No PR opened, merged, or closed. No `wrangler deploy` run for
