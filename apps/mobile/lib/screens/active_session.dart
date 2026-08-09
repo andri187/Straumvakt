@@ -182,6 +182,7 @@ class _ActiveSessionScreenState extends State<ActiveSessionScreen> {
 
   Widget _activeBody() {
     final session = _session;
+    final textScale = MediaQuery.textScalerOf(context).scale(1);
     final name = session?.chargerName ?? widget.chargerName ?? 'Your charger';
     final status = session == null
         ? 'Waiting for the charger to confirm the session'
@@ -229,7 +230,7 @@ class _ActiveSessionScreenState extends State<ActiveSessionScreen> {
           physics: const NeverScrollableScrollPhysics(),
           mainAxisSpacing: 10,
           crossAxisSpacing: 10,
-          childAspectRatio: 1.55,
+          childAspectRatio: textScale > 1.5 ? 1.2 : 1.55,
           children: [
             _Metric(
               label: 'Energy delivered',
@@ -352,37 +353,41 @@ class _Metric extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: BrandPalette.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: BrandPalette.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: BrandPalette.muted, fontSize: 11),
-          ),
-          const SizedBox(height: 7),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(
-              value,
-              style: TextStyle(
-                color: color,
-                fontSize: 18,
-                fontWeight: FontWeight.w900,
+    return Semantics(
+      label: '$label: $value',
+      excludeSemantics: true,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: BrandPalette.surface,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: BrandPalette.border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: BrandPalette.muted, fontSize: 11),
+            ),
+            const SizedBox(height: 7),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                value,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
