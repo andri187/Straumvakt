@@ -132,6 +132,34 @@ adminUsers.patch("/:id", requirePermission("member.write"), async (c) => {
 // No "current password" challenge — admin-side reset, not user-side.
 // The user's old session is not invalidated by this endpoint; that's a
 // separate concern.
+//
+// ⚠ REACHABILITY CHANGED — needs a product decision, deliberately not
+// taken here.
+//
+// These routes are gated on `member.write` with no `orgIdParam`, so
+// `requirePermission` resolves orgId = null, skips the membership lookup
+// entirely (lib/auth/effective-permissions.ts), and only the platform
+// expansion could ever satisfy the verb. Membership-administration verbs
+// are no longer part of that expansion — they conferred the ability to
+// set ANY user's password in ANY tenant on every holder of
+// platform.tenant.write, `sales_cs` included.
+//
+// Consequence: a real multi-user operator session (userId present,
+// platform grant, no membership) is now DENIED here. The bootstrap admin
+// still passes, through the god-mode branch, so the operator console
+// works today — but this endpoint is on borrowed time.
+//
+// Three ways out, none of them obviously right:
+//   (a) gate on an explicit platform verb that says what this is;
+//   (b) require a support context once support_contexts exists, which is
+//       the honest shape — an admin resetting a customer's password is
+//       exactly the act that should carry a recorded reason;
+//   (c) drop admin-set-password entirely in favour of the existing
+//       password-reset email flow (routes/public/password-reset.ts),
+//       which never puts a chosen password in an operator's hands.
+//
+// (c) is the smallest attack surface and (b) the most useful; the
+// decision is Andri's.
 
 const passwordSchema = z.object({ password: z.string().min(8).max(200) });
 
