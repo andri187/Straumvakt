@@ -1,0 +1,9 @@
+{
+  "_comment": "Commits that must never reach a release. Every manifest must list all of these in approval.excludedCommitsVerifiedAbsent, each verified with: git merge-base --is-ancestor <sha> <release-sha>. Listing a sha here is a claim that it was CHECKED, not that it was assumed.",
+  "shas": ["4fe0a95", "30fa407", "5311cbd"],
+  "reasons": {
+    "4fe0a95": "forbidden outright by standing rule; must not appear in any release candidate",
+    "30fa407": "must not be included unchanged",
+    "5311cbd": "must not be included unchanged"
+  }
+}

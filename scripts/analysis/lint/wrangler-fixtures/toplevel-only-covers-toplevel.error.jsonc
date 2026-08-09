@@ -1,0 +1,14 @@
+{
+  // A trap worth a fixture: workers_dev at the top level does NOT cover a named
+  // environment. Wrangler resolves each environment independently, so the staging
+  // block here is still exposed to the inference.
+  "name": "example-web",
+  "main": "src/index.ts",
+  "workers_dev": true,
+  "env": {
+    "staging": {
+      "name": "example-web-staging",
+      "routes": [{ "pattern": "beta.example.org", "custom_domain": true }]
+    }
+  }
+}

@@ -2,29 +2,97 @@
   "manifestVersion": 1,
   "releaseId": "release-2026-08-15",
   "environment": "production",
-  "commit": { "sha": "4b69d0fe44ab52fe6a4f2cdc246d742d4e29638d", "tag": "release-2026-08-15", "verifiedFastForward": true, "betaTestedSince": "2026-08-12T09:00:00Z" },
+  "commit": {
+    "sha": "4b69d0fe44ab52fe6a4f2cdc246d742d4e29638d",
+    "tag": "release-2026-08-15",
+    "verifiedFastForward": true,
+    "betaTestedSince": "2026-08-12T09:00:00Z"
+  },
   "sourceBranch": "staging",
   "workers": [
-    { "role": "web", "name": "hlada-staging", "customDomains": ["beta.straumvakt.org"],
-      "workersDevRequired": false, "workersDevDeclaredInConfig": true,
-      "serviceBindings": [{ "binding": "OCPP_GATEWAY", "target": "straumvakt-ocpp-staging" }],
-      "secretNames": ["AUTH_SECRET"] },
-    { "role": "api", "name": "hlada-api-staging", "customDomains": ["beta.api.straumvakt.org"],
-      "workersDevRequired": true, "workersDevDeclaredInConfig": true,
-      "secretNames": ["AUTH_SECRET", "OCPP_INGEST_SECRET", "OCPP_CRED_KEK"] },
-    { "role": "ocpp", "name": "straumvakt-ocpp-staging",
-      "workersDevRequired": true, "workersDevDeclaredInConfig": true,
-      "durableObjects": ["IDENTITY_DO"] }
+    {
+      "role": "web",
+      "name": "hlada-staging",
+      "customDomains": [
+        "beta.straumvakt.org"
+      ],
+      "workersDevRequired": false,
+      "workersDevDeclaredInConfig": true,
+      "serviceBindings": [
+        {
+          "binding": "OCPP_GATEWAY",
+          "target": "straumvakt-ocpp-staging"
+        }
+      ],
+      "secretNames": [
+        "AUTH_SECRET"
+      ]
+    },
+    {
+      "role": "api",
+      "name": "hlada-api-staging",
+      "customDomains": [
+        "beta.api.straumvakt.org"
+      ],
+      "workersDevRequired": true,
+      "workersDevDeclaredInConfig": true,
+      "secretNames": [
+        "AUTH_SECRET",
+        "OCPP_INGEST_SECRET",
+        "OCPP_CRED_KEK"
+      ]
+    },
+    {
+      "role": "ocpp",
+      "name": "straumvakt-ocpp-staging",
+      "workersDevRequired": true,
+      "workersDevDeclaredInConfig": true,
+      "durableObjects": [
+        "IDENTITY_DO"
+      ]
+    }
   ],
-  "data": { "neonProject": "spring-leaf-73019190", "neonBranchId": "br-prod-example-abc123",
-            "neonComputeId": "ep-quiet-bird-abxartp8", "hyperdriveId": "d2d56ab1ffe241bbb64946ba78a52be5",
-            "migrationsRecorded": 47, "backupBranchId": "br-holy-glade-abxq36he" },
-  "ocpp": { "endpointUnchanged": true, "gatewayWorker": "straumvakt-ocpp-staging" },
-  "mobile": { "minSupported": "0.1.0", "pinnedHostPreserved": true },
-  "rollback": { "unit": "worker-version",
-    "workerVersionsBefore": { "hlada-staging": "v-aaa", "hlada-api-staging": "v-bbb", "straumvakt-ocpp-staging": "v-ccc" },
-    "minimumSafeVersion": null, "restoreTimeMeasuredSec": 420 },
-  "approval": { "approver": "Andri", "checksPassed": ["check", "fast-forward", "identity"],
-                "excludedCommitsVerifiedAbsent": ["4fe0a95", "30fa407", "5311cbd"] },
-  "notes": "Beta release; betaTestedSince is null because this IS the beta promotion."
+  "data": {
+    "neonProject": "spring-leaf-73019190",
+    "neonBranchId": "br-prod-example-abc123",
+    "neonComputeId": "ep-quiet-bird-abxartp8",
+    "hyperdriveId": "d2d56ab1ffe241bbb64946ba78a52be5",
+    "migrationsRecorded": 47,
+    "backupBranchId": "br-holy-glade-abxq36he"
+  },
+  "ocpp": {
+    "endpointUnchanged": true,
+    "gatewayWorker": "straumvakt-ocpp-staging",
+    "mixedReleaseAcknowledged": true
+  },
+  "mobile": {
+    "minSupported": "0.1.0",
+    "pinnedHostPreserved": true
+  },
+  "rollback": {
+    "unit": "worker-version",
+    "workerVersionsBefore": {
+      "hlada-staging": "v-aaa",
+      "hlada-api-staging": "v-bbb",
+      "straumvakt-ocpp-staging": "v-ccc"
+    },
+    "minimumSafeVersion": null,
+    "restoreTimeMeasuredSec": 420
+  },
+  "approval": {
+    "approver": "Andri",
+    "checksPassed": [
+      "check",
+      "fast-forward",
+      "identity"
+    ],
+    "excludedCommitsVerifiedAbsent": [
+      "4fe0a95",
+      "30fa407",
+      "5311cbd"
+    ]
+  },
+  "notes": "Whole-estate production promotion. The gateway ships alongside web and api, acknowledged explicitly under R13.",
+  "releasedAt": "2026-08-15T10:00:00Z",
+  "cpmsSeparationVerified": true
 }
