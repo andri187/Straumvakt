@@ -10,7 +10,8 @@
 import type { Context, MiddlewareHandler, Next } from "hono";
 import { makeDrizzle } from "../drizzle";
 import {
-  resolveEffectivePermissions,
+  resolvePermissionsWithProvenance,
+  satisfiedOnlyByPlatformGrant,
   type expandPermissionsSync,
 } from "./effective-permissions";
 import type { Permission } from "./permissions";
@@ -71,9 +72,9 @@ export function requirePermission(
       : null;
 
     const db = makeDrizzle(c.env);
-    const perms = await resolveEffectivePermissions(db, userId, orgId);
+    const resolution = await resolvePermissionsWithProvenance(db, userId, orgId);
 
-    if (!perms.includes(verb)) {
+    if (!resolution.all.includes(verb)) {
       return c.json(
         {
           error: "forbidden",
@@ -84,8 +85,62 @@ export function requirePermission(
       );
     }
 
+    observeSupportContext(resolution, verb, userId, orgId, c.req.path);
     return next();
   };
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Support context — SHADOW MODE
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Error code the guard will return once it enforces. A distinct class
+ * from `permission_missing`: the caller is not lacking access, they are
+ * lacking a declared reason for using it. The frontend must not render
+ * it with the generic forbidden copy — "you don't have access" would be
+ * false, and staff will conclude their permissions are broken.
+ */
+export const SUPPORT_CONTEXT_REQUIRED = "support_context_required" as const;
+
+/**
+ * Records — and does not block — org-scoped actions a user could only
+ * take because of a platform grant.
+ *
+ * Shadow first, on purpose. `bootstrapAdminUser` gives the operator
+ * account a `super_user` grant and NO membership anywhere
+ * (repositories/admin-bootstrap.ts:86-95), so on the day this enforces,
+ * every routine org-scoped action by the day-to-day operator needs a
+ * support context. That is correct by the specification and unusable in
+ * practice until staff hold memberships in the orgs they administer.
+ * Shadow mode turns that unknown blast radius into a measured one.
+ *
+ * It cannot enforce yet regardless: `support_contexts` does not exist in
+ * any schema, so there is no context for a caller to open.
+ *
+ * Known gap, deliberately not papered over: this sits AFTER the bootstrap
+ * early return above, so a validly-signed session with `sub:"admin"` and
+ * no `userId` bypasses it — as it bypasses the permission check itself.
+ * The login route no longer mints such cookies, but the branch honours
+ * them.
+ */
+function observeSupportContext(
+  resolution: Awaited<ReturnType<typeof resolvePermissionsWithProvenance>>,
+  verb: Permission,
+  userId: string,
+  orgId: string | null,
+  path: string,
+): void {
+  if (!orgId) return; // platform-scoped route; no tenant to act "on behalf of"
+  if (!satisfiedOnlyByPlatformGrant(resolution, verb)) return; // acting as a member
+  console.warn("[support-context] would require context", {
+    userId,
+    orgId,
+    verb,
+    path,
+    platformRole: resolution.platformRole,
+    membershipRole: resolution.membershipRole,
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -123,13 +178,17 @@ export async function assertPermission(
     );
   }
   const db = makeDrizzle(c.env);
-  const perms = await resolveEffectivePermissions(db, userId, orgId);
-  if (!perms.includes(verb)) {
+  const resolution = await resolvePermissionsWithProvenance(db, userId, orgId);
+  if (!resolution.all.includes(verb)) {
     return c.json(
       { error: "forbidden", reason: "permission_missing", required: verb },
       403,
     );
   }
+  // Second seam. A guard added only to the requirePermission factory
+  // leaves this one open, and it is live at
+  // routes/admin/access-requests.ts:90 and :178.
+  observeSupportContext(resolution, verb, userId, orgId, c.req.path);
   return null;
 }
 
