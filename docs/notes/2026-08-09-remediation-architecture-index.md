@@ -138,7 +138,72 @@ pending-approval surface · P1-7 pricing preview · P1-8 refresh-token revocatio
 
 ---
 
-## 4. How to read this packet
+## 4. Phase 11 — end-of-session peer reconciliation (2026-08-09T00:48:44Z)
+
+| Worktree | At my start | At close | Moved |
+|---|---|---|---|
+| RC `dev/relaunch-release-candidate` | `4b69d0f`, clean | `4b69d0f`, clean | **no** |
+| Mobile `dev/mobile-product-to-market` | `ae5db26`, clean | `ae5db26`, clean | no |
+| **Mobile hardening `dev/mobile-product-hardening`** | *did not exist* | **`717331f`**, clean | **new** |
+
+### New: Codex mobile-hardening branch
+
+Four commits beyond `ae5db26`, +1,031/−48 across `apps/mobile`:
+
+```
+717331f feat(mobile): paginate driver activity safely
+5b36700 fix(mobile): preserve active session identity while polling
+76525fa test(mobile): cover driver API contracts offline
+625d61c refactor(mobile): inject API transport and session storage
+```
+
+This is good work — dependency injection, offline contract tests, session
+identity preserved across polls (which addresses the start-race concern from a
+different angle), and safe pagination.
+
+**But it changes the risk profile of P0-A / P0-E, and not in the direction it
+looks.** The new contract tests now *encode the two workarounds as intended
+behaviour*:
+
+| Test assertion | File | What it pins |
+|---|---|---|
+| `'costIsk': 2500` → `costLabel == '25 kr'` | `client_contract_test.dart:333,344` | **the ÷100 aurar convention** |
+| `'costIsk': 0` → `costIsk` is `isNull` | `client_contract_test.dart:326,343` | **zero-means-absent** |
+
+Both are correct against today's backend. Both are **workarounds for backend
+defects**, now pinned by green tests that a future reader will reasonably take
+for the intended contract.
+
+Two consequences for the work packages:
+
+1. **WP-01/WP-02 must update these tests in the same change.** When the backend
+   emits a legitimate `0` for a genuinely free session, `client_contract_test`
+   line 343 asserts the client will show it as *unavailable*. The free-vs-unpriced
+   collapse is now test-locked.
+2. **WP-06 gains a client-side counterpart.** The ÷100 is no longer just code —
+   it is asserted behaviour. Removing it is a test change plus a code change,
+   coordinated with the backend release. The test does **not** protect against the
+   100× error, because it is a unit test against a fixture: it will stay green
+   while production shows the wrong number.
+
+Neither is a criticism of the hardening work, which is better than what it
+replaced. It is a note that **tests pinning a workaround make the workaround
+harder to see and harder to remove**, and the removal is already the most
+order-sensitive item in the backlog.
+
+### Reconciliation procedure if Claude 1 resumes
+
+The RC did not move during this session. If it advances:
+
+1. `git log --oneline 4b69d0f..dev/relaunch-release-candidate`
+2. Re-check `driver-sessions.ts:89-98,135` and `driver.ts:121,593,683` — the
+   five lines every P0 in this packet depends on.
+3. If `minorToIsk` changed, **stop** and re-read P0-E before anything else ships.
+4. Re-run `node scripts/analysis/capacity-model.mjs --csv`; the `[S]` values come
+   from `wrangler.jsonc` and `drizzle.ts` and would need re-reading if either
+   changed.
+
+## 5. How to read this packet
 
 - **Fact** — verified in source at a named snapshot, cited to file:line.
 - **Inference** — consistent with evidence, not proven.
