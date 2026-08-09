@@ -38,6 +38,25 @@ const ConsumeBody = z.object({
   password: z.string().min(8).max(128),
 });
 
+/**
+ * Refusal reason → HTTP status. Exhaustive by construction: adding a
+ * reason to the transaction's return union without adding it here is a
+ * type error, which is the point.
+ *
+ * `already_claimed` is 409, matching the driver path
+ * (routes/public/driver.ts:1090) so the two invite routes stop
+ * disagreeing about the same condition. `malformed_metadata` is 400
+ * rather than 410 — the token is not gone, its stored metadata is
+ * unusable.
+ */
+const REFUSAL_STATUS = {
+  not_found: 404,
+  already_claimed: 409,
+  already_used: 410,
+  expired: 410,
+  malformed_metadata: 400,
+} as const satisfies Record<string, 400 | 404 | 409 | 410>;
+
 publicInvites.get("/peek", async (c) => {
   const token = c.req.query("token");
   if (!token || token.length === 0) {
@@ -125,6 +144,38 @@ publicInvites.post("/consume", async (c) => {
       return { ok: false as const, reason: "malformed_metadata" as const };
     }
 
+    // ── S2 guard. Runs BEFORE the claim, deliberately. ───────────────
+    //
+    // This route is authorised by possession of the token alone. Without
+    // this check, `upsert`'s update branch let a bearer of an unused
+    // invite token overwrite the password of a user who already had one.
+    // That is reachable through ordinary business: createInvite
+    // (repositories/invites.ts:94-106) resolves an EXISTING user by email
+    // and only refuses when membership in THAT org is already active, so
+    // inviting a current customer into a second organisation mints a
+    // token bound to their existing userId.
+    //
+    // Ordering matters as much as the check. Placed after the claim, a
+    // refusal would still have burned the invite and locked the real
+    // invitee out — the deadlock ADR 0053 fixed on the driver path.
+    //
+    // Test the COLUMN, not the row: password_hash is nullable
+    // (packages/shared/src/db/identity.ts:215) and
+    // clearUserPasswordHash (domains/identity/repositories/users.ts:381)
+    // nulls it while keeping the row. A row-existence guard — which is
+    // what driver.ts:1089 does — would permanently lock out any account
+    // an admin deliberately cleared.
+    const existingCredential = await tx.userCredential.findUnique({
+      where: { userId: row.userId },
+      select: { passwordHash: true },
+    });
+    if (
+      existingCredential?.passwordHash !== null &&
+      existingCredential?.passwordHash !== undefined
+    ) {
+      return { ok: false as const, reason: "already_claimed" as const };
+    }
+
     // Conditional claim — concurrent consumers race; loser sees
     // count=0 and reports already_used.
     const claimed = await tx.userToken.updateMany({
@@ -135,9 +186,11 @@ publicInvites.post("/consume", async (c) => {
       return { ok: false as const, reason: "already_used" as const };
     }
 
-    // Hash + persist password. Upsert in case the user already had
-    // a credential row from a prior reset (unusual for an invite
-    // flow, but defensive).
+    // Still an upsert, and that is not the pre-S2 behaviour returning by
+    // the back door: the guard above has already established there is no
+    // password to overwrite. `create` alone would raise a unique
+    // violation on the cleared-password row the guard deliberately lets
+    // through, turning an admin-initiated reset into a 500.
     const passwordHash = await hashPassword(password);
     await tx.userCredential.upsert({
       where: { userId: row.userId },
@@ -177,7 +230,11 @@ publicInvites.post("/consume", async (c) => {
   });
 
   if (!result.ok) {
-    const status = result.reason === "not_found" ? 404 : 410;
+    // Was `reason === "not_found" ? 404 : 410`, which collapsed every
+    // other refusal — including malformed metadata, a server-side data
+    // fault — into "gone". Doc 18D annotated this as "was 500"; the 500
+    // is in /peek at :69, not here.
+    const status = REFUSAL_STATUS[result.reason];
     return c.json({ error: result.reason }, status);
   }
   return c.json({
