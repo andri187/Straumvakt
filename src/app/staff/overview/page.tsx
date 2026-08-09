@@ -29,6 +29,7 @@
 
 import { apiFetchServer } from "@/lib/api-client-server";
 import { SignOutButton } from "./sign-out-button";
+import { StaffNav } from "./staff-nav";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Platform overview" };
@@ -167,7 +168,9 @@ function Panel({
           {title}
         </h2>
         {meta ? (
-          <span className="shrink-0 text-[11px] tabular-nums text-ink-500">{meta}</span>
+          <span className="shrink-0 text-[11px] tabular-nums text-ink-500">
+            {meta}
+          </span>
         ) : null}
       </div>
       {children}
@@ -178,7 +181,8 @@ function Panel({
 function Unavailable({ reason }: { reason: string }) {
   return (
     <p className="px-4 py-6 text-xs text-ink-500">
-      Not available to this session — <span className="text-ink-400">{reason}</span>
+      Not available to this session —{" "}
+      <span className="text-ink-400">{reason}</span>
     </p>
   );
 }
@@ -207,7 +211,9 @@ function Stat({ n, label, sub }: { n: string; label: string; sub?: string }) {
   return (
     <div className="border-b border-r border-bg-border px-4 py-3 last:border-r-0">
       <div className="text-2xl font-semibold tabular-nums text-ink-50">{n}</div>
-      <div className="mt-0.5 text-[11.5px] leading-tight text-ink-400">{label}</div>
+      <div className="mt-0.5 text-[11.5px] leading-tight text-ink-400">
+        {label}
+      </div>
       {sub ? <div className="text-[11px] text-ink-500">{sub}</div> : null}
     </div>
   );
@@ -237,7 +243,10 @@ export default async function StaffOverviewPage() {
             session before it can show anything.
           </p>
           <p className="mt-5">
-            <a className="text-brand-300 underline underline-offset-2" href="/staff">
+            <a
+              className="text-brand-300 underline underline-offset-2"
+              href="/staff"
+            >
               Sign in at the staff entrance
             </a>
           </p>
@@ -262,7 +271,10 @@ export default async function StaffOverviewPage() {
           <code className="text-ink-200">AUTH_SECRET</code> values.
         </p>
         <p className="mt-5">
-          <a className="text-brand-300 underline underline-offset-2" href="/staff">
+          <a
+            className="text-brand-300 underline underline-offset-2"
+            href="/staff"
+          >
             Back to the staff entrance
           </a>
         </p>
@@ -301,7 +313,9 @@ export default async function StaffOverviewPage() {
 
   const [applications, discoveries, sessions, orgs, installations, chargers] =
     await Promise.all([
-      load<{ items: HostApplication[] }>("/api/admin/host-applications?status=new"),
+      load<{ items: HostApplication[] }>(
+        "/api/admin/host-applications?status=new",
+      ),
       load<{ pending: PendingDiscovery[] }>("/api/admin/pending-discoveries"),
       load<{ sessions: ActiveSession[]; count: number; fetchedAt: string }>(
         "/api/admin/active-sessions",
@@ -337,271 +351,308 @@ export default async function StaffOverviewPage() {
     : 0;
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6">
-      {/* ── Who you are ───────────────────────────────────────────────── */}
-      <header className="flex flex-wrap items-end justify-between gap-4 border-b border-bg-border pb-5">
-        <div>
-          <div className="sv-tagline">Platform operations</div>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-ink-50">
-            Everything, across every tenant
-          </h1>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="text-right">
-            <div className="text-sm text-ink-100">{me.data.email}</div>
-            <div className="text-[11px] uppercase tracking-wider text-ink-500">
-              {me.data.persona}
-              {me.data.userId === null ? " · bootstrap account" : ""}
+    <>
+      <StaffNav />
+      <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6">
+        {/* ── Who you are ───────────────────────────────────────────────── */}
+        <header className="flex flex-wrap items-end justify-between gap-4 border-b border-bg-border pb-5">
+          <div>
+            <div className="sv-tagline">Platform operations</div>
+            <h1 className="mt-1 text-2xl font-semibold tracking-tight text-ink-50">
+              Everything, across every tenant
+            </h1>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="text-right">
+              <div className="text-sm text-ink-100">{me.data.email}</div>
+              <div className="text-[11px] uppercase tracking-wider text-ink-500">
+                {me.data.persona}
+                {me.data.userId === null ? " · bootstrap account" : ""}
+              </div>
             </div>
+            <SignOutButton />
           </div>
-          <SignOutButton />
+        </header>
+
+        {/* ── 1. What is waiting on a person ────────────────────────────── */}
+        <div>
+          <h2 className="mb-3 text-sm font-semibold text-ink-100">
+            Waiting on someone
+          </h2>
+          <div className="grid gap-4 lg:grid-cols-3">
+            <Panel title="Host applications" meta="status: new">
+              {!applications.ok ? (
+                <Unavailable reason={applications.reason} />
+              ) : applications.data.items.length === 0 ? (
+                <Empty>Nothing unanswered.</Empty>
+              ) : (
+                <>
+                  <QueueCount
+                    n={applications.data.items.length}
+                    unit="unanswered"
+                  />
+                  <ul className="mt-3 divide-y divide-bg-border/70 border-t border-bg-border">
+                    {applications.data.items.slice(0, 4).map((a) => (
+                      <li key={a.id} className="px-4 py-2.5">
+                        <div className="truncate text-[13px] text-ink-100">
+                          {a.companyName}
+                        </div>
+                        <div className="mt-0.5 text-[11px] text-ink-500">
+                          {a.siteType} · {a.sites.length}{" "}
+                          {a.sites.length === 1 ? "site" : "sites"} ·{" "}
+                          {ago(a.createdAt, now)}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </Panel>
+
+            <Panel title="Knocking, no credentials" meta="pre-onboarding pool">
+              {!discoveries.ok ? (
+                <Unavailable reason={discoveries.reason} />
+              ) : discoveries.data.pending.length === 0 ? (
+                <Empty>No unknown chargers on the gateway.</Empty>
+              ) : (
+                <>
+                  <QueueCount
+                    n={discoveries.data.pending.length}
+                    unit="identities"
+                  />
+                  <ul className="mt-3 divide-y divide-bg-border/70 border-t border-bg-border">
+                    {discoveries.data.pending.slice(0, 4).map((p) => (
+                      <li key={p.identityString} className="px-4 py-2.5">
+                        <div className="truncate font-mono text-[12.5px] text-ink-100">
+                          {p.identityString}
+                        </div>
+                        <div className="mt-0.5 text-[11px] text-ink-500">
+                          {p.attemptCount} attempts · last{" "}
+                          {ago(p.lastSeenAt, now)}
+                          {p.remoteAddr ? ` · ${p.remoteAddr}` : ""}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </Panel>
+
+            <Panel
+              title="Installations with no credential"
+              meta="reads as “not linked”"
+            >
+              {!installations.ok ? (
+                <Unavailable reason={installations.reason} />
+              ) : uncredentialed.length === 0 ? (
+                <Empty>Every installation has a credential reference.</Empty>
+              ) : (
+                <>
+                  <QueueCount n={uncredentialed.length} unit="installations" />
+                  <ul className="mt-3 divide-y divide-bg-border/70 border-t border-bg-border">
+                    {uncredentialed.slice(0, 4).map((i) => (
+                      <li key={i.id} className="px-4 py-2.5">
+                        <div className="truncate text-[13px] text-ink-100">
+                          {i.displayName}
+                        </div>
+                        <div className="mt-0.5 truncate text-[11px] text-ink-500">
+                          {i.orgDisplayName} · {i.vendorSlug ?? "no vendor"} ·{" "}
+                          {i.onboardingStatus}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </Panel>
+          </div>
         </div>
-      </header>
 
-      {/* ── 1. What is waiting on a person ────────────────────────────── */}
-      <div>
-        <h2 className="mb-3 text-sm font-semibold text-ink-100">Waiting on someone</h2>
-        <div className="grid gap-4 lg:grid-cols-3">
-          <Panel title="Host applications" meta="status: new">
-            {!applications.ok ? (
-              <Unavailable reason={applications.reason} />
-            ) : applications.data.items.length === 0 ? (
-              <Empty>Nothing unanswered.</Empty>
+        {/* ── 2. What is happening right now ────────────────────────────── */}
+        <div id="operations" className="scroll-mt-20">
+          <Panel
+            title="Charging right now"
+            meta={
+              sessions.ok
+                ? `${sessions.data.count} live · read ${ago(sessions.data.fetchedAt, now)}`
+                : undefined
+            }
+          >
+            {!sessions.ok ? (
+              <Unavailable reason={sessions.reason} />
+            ) : sessions.data.sessions.length === 0 ? (
+              <Empty>No active sessions anywhere on the platform.</Empty>
             ) : (
-              <>
-                <QueueCount n={applications.data.items.length} unit="unanswered" />
-                <ul className="mt-3 divide-y divide-bg-border/70 border-t border-bg-border">
-                  {applications.data.items.slice(0, 4).map((a) => (
-                    <li key={a.id} className="px-4 py-2.5">
-                      <div className="truncate text-[13px] text-ink-100">
-                        {a.companyName}
-                      </div>
-                      <div className="mt-0.5 text-[11px] text-ink-500">
-                        {a.siteType} · {a.sites.length}{" "}
-                        {a.sites.length === 1 ? "site" : "sites"} ·{" "}
-                        {ago(a.createdAt, now)}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
-          </Panel>
-
-          <Panel title="Knocking, no credentials" meta="pre-onboarding pool">
-            {!discoveries.ok ? (
-              <Unavailable reason={discoveries.reason} />
-            ) : discoveries.data.pending.length === 0 ? (
-              <Empty>No unknown chargers on the gateway.</Empty>
-            ) : (
-              <>
-                <QueueCount n={discoveries.data.pending.length} unit="identities" />
-                <ul className="mt-3 divide-y divide-bg-border/70 border-t border-bg-border">
-                  {discoveries.data.pending.slice(0, 4).map((p) => (
-                    <li key={p.identityString} className="px-4 py-2.5">
-                      <div className="truncate font-mono text-[12.5px] text-ink-100">
-                        {p.identityString}
-                      </div>
-                      <div className="mt-0.5 text-[11px] text-ink-500">
-                        {p.attemptCount} attempts · last {ago(p.lastSeenAt, now)}
-                        {p.remoteAddr ? ` · ${p.remoteAddr}` : ""}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
-          </Panel>
-
-          <Panel title="Installations with no credential" meta="reads as “not linked”">
-            {!installations.ok ? (
-              <Unavailable reason={installations.reason} />
-            ) : uncredentialed.length === 0 ? (
-              <Empty>Every installation has a credential reference.</Empty>
-            ) : (
-              <>
-                <QueueCount n={uncredentialed.length} unit="installations" />
-                <ul className="mt-3 divide-y divide-bg-border/70 border-t border-bg-border">
-                  {uncredentialed.slice(0, 4).map((i) => (
-                    <li key={i.id} className="px-4 py-2.5">
-                      <div className="truncate text-[13px] text-ink-100">
-                        {i.displayName}
-                      </div>
-                      <div className="mt-0.5 truncate text-[11px] text-ink-500">
-                        {i.orgDisplayName} · {i.vendorSlug ?? "no vendor"} ·{" "}
-                        {i.onboardingStatus}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[46rem] text-left text-[13px]">
+                  <thead>
+                    <tr className="text-[11px] uppercase tracking-wider text-ink-500">
+                      <th className="px-4 py-2 font-medium">Charger</th>
+                      <th className="px-4 py-2 font-medium">Site</th>
+                      <th className="px-4 py-2 font-medium">Organisation</th>
+                      <th className="px-4 py-2 font-medium">Mode</th>
+                      <th className="px-4 py-2 text-right font-medium">
+                        Power
+                      </th>
+                      <th className="px-4 py-2 text-right font-medium">
+                        Energy
+                      </th>
+                      <th className="px-4 py-2 text-right font-medium">
+                        Started
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-bg-border/70 border-t border-bg-border">
+                    {sessions.data.sessions.slice(0, 12).map((s) => (
+                      <tr key={s.chargingStationId}>
+                        <td className="px-4 py-2.5 text-ink-100">
+                          {s.chargerDisplayName ?? (
+                            <span className="font-mono text-[12px] text-ink-400">
+                              {s.identityString ?? s.chargingStationId}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2.5 text-ink-300">
+                          {s.siteDisplayName ?? "—"}
+                        </td>
+                        <td className="px-4 py-2.5 text-ink-300">
+                          {s.orgDisplayName ?? "—"}
+                        </td>
+                        <td className="px-4 py-2.5 text-ink-400">
+                          {s.lastOperationMode ?? "—"}
+                        </td>
+                        <td className="px-4 py-2.5 text-right tabular-nums text-ink-100">
+                          {kw(s.lastPowerW)}
+                        </td>
+                        <td className="px-4 py-2.5 text-right tabular-nums text-ink-300">
+                          {s.lastSessionEnergyWh != null
+                            ? `${(s.lastSessionEnergyWh / 1000).toFixed(1)} kWh`
+                            : "—"}
+                        </td>
+                        <td className="px-4 py-2.5 text-right tabular-nums text-ink-400">
+                          {ago(s.startedAt, now)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {sessions.data.sessions.length > 12 ? (
+                  <p className="border-t border-bg-border px-4 py-2 text-[11px] text-ink-500">
+                    Showing 12 of {sessions.data.sessions.length}.
+                  </p>
+                ) : null}
+              </div>
             )}
           </Panel>
         </div>
-      </div>
 
-      {/* ── 2. What is happening right now ────────────────────────────── */}
-      <Panel
-        title="Charging right now"
-        meta={
-          sessions.ok
-            ? `${sessions.data.count} live · read ${ago(sessions.data.fetchedAt, now)}`
-            : undefined
-        }
-      >
-        {!sessions.ok ? (
-          <Unavailable reason={sessions.reason} />
-        ) : sessions.data.sessions.length === 0 ? (
-          <Empty>No active sessions anywhere on the platform.</Empty>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[46rem] text-left text-[13px]">
-              <thead>
-                <tr className="text-[11px] uppercase tracking-wider text-ink-500">
-                  <th className="px-4 py-2 font-medium">Charger</th>
-                  <th className="px-4 py-2 font-medium">Site</th>
-                  <th className="px-4 py-2 font-medium">Organisation</th>
-                  <th className="px-4 py-2 font-medium">Mode</th>
-                  <th className="px-4 py-2 text-right font-medium">Power</th>
-                  <th className="px-4 py-2 text-right font-medium">Energy</th>
-                  <th className="px-4 py-2 text-right font-medium">Started</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-bg-border/70 border-t border-bg-border">
-                {sessions.data.sessions.slice(0, 12).map((s) => (
-                  <tr key={s.chargingStationId}>
-                    <td className="px-4 py-2.5 text-ink-100">
-                      {s.chargerDisplayName ?? (
-                        <span className="font-mono text-[12px] text-ink-400">
-                          {s.identityString ?? s.chargingStationId}
+        {/* ── 3. The estate ─────────────────────────────────────────────── */}
+        <Panel title="The estate" meta="cross-tenant">
+          <div className="grid grid-cols-2 sm:grid-cols-4">
+            <Stat
+              n={orgs.ok ? String(orgs.data.orgs.length) : "—"}
+              label="organisations"
+              sub={
+                orgs.ok
+                  ? `${orgs.data.orgs.filter((o) => o.status === "active").length} active`
+                  : orgs.reason
+              }
+            />
+            <Stat
+              n={
+                installations.ok
+                  ? String(installations.data.installations.length)
+                  : "—"
+              }
+              label="installations"
+              sub={
+                installations.ok
+                  ? `${uncredentialed.length} without a credential`
+                  : installations.reason
+              }
+            />
+            <Stat
+              n={chargers.ok ? String(chargers.data.chargers.length) : "—"}
+              label="chargers"
+              sub={chargers.ok ? `${vendors} vendor(s)` : chargers.reason}
+            />
+            <Stat
+              n={sessions.ok ? String(sessions.data.count) : "—"}
+              label="charging now"
+              sub={sessions.ok ? undefined : sessions.reason}
+            />
+          </div>
+
+          {!orgs.ok ? (
+            <Unavailable reason={orgs.reason} />
+          ) : orgs.data.orgs.length === 0 ? (
+            <Empty>No organisations yet.</Empty>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[40rem] text-left text-[13px]">
+                <thead>
+                  <tr className="text-[11px] uppercase tracking-wider text-ink-500">
+                    <th className="px-4 py-2 font-medium">Organisation</th>
+                    <th className="px-4 py-2 font-medium">Kind</th>
+                    <th className="px-4 py-2 font-medium">Country</th>
+                    <th className="px-4 py-2 text-right font-medium">
+                      Installations
+                    </th>
+                    <th className="px-4 py-2 text-right font-medium">
+                      Chargers
+                    </th>
+                    <th className="px-4 py-2 text-right font-medium">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-bg-border/70 border-t border-bg-border">
+                  {orgs.data.orgs.map((o) => (
+                    <tr key={o.id}>
+                      <td className="px-4 py-2.5 text-ink-100">
+                        {o.displayName}
+                      </td>
+                      <td className="px-4 py-2.5 text-ink-400">{o.kind}</td>
+                      <td className="px-4 py-2.5 text-ink-400">
+                        {o.countryCode ?? "—"}
+                      </td>
+                      <td className="px-4 py-2.5 text-right tabular-nums text-ink-300">
+                        {installations.ok
+                          ? (installsByOrg.get(o.id) ?? 0)
+                          : "—"}
+                      </td>
+                      <td className="px-4 py-2.5 text-right tabular-nums text-ink-300">
+                        {chargers.ok ? (chargersByOrg.get(o.id) ?? 0) : "—"}
+                      </td>
+                      <td className="px-4 py-2.5 text-right">
+                        <span
+                          className={`rounded px-1.5 py-0.5 text-[11px] ${
+                            o.status === "active"
+                              ? "bg-emerald-500/10 text-emerald-300"
+                              : "bg-ink-700/60 text-ink-400"
+                          }`}
+                        >
+                          {o.status}
                         </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5 text-ink-300">
-                      {s.siteDisplayName ?? "—"}
-                    </td>
-                    <td className="px-4 py-2.5 text-ink-300">
-                      {s.orgDisplayName ?? "—"}
-                    </td>
-                    <td className="px-4 py-2.5 text-ink-400">
-                      {s.lastOperationMode ?? "—"}
-                    </td>
-                    <td className="px-4 py-2.5 text-right tabular-nums text-ink-100">
-                      {kw(s.lastPowerW)}
-                    </td>
-                    <td className="px-4 py-2.5 text-right tabular-nums text-ink-300">
-                      {s.lastSessionEnergyWh != null
-                        ? `${(s.lastSessionEnergyWh / 1000).toFixed(1)} kWh`
-                        : "—"}
-                    </td>
-                    <td className="px-4 py-2.5 text-right tabular-nums text-ink-400">
-                      {ago(s.startedAt, now)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {sessions.data.sessions.length > 12 ? (
-              <p className="border-t border-bg-border px-4 py-2 text-[11px] text-ink-500">
-                Showing 12 of {sessions.data.sessions.length}.
-              </p>
-            ) : null}
-          </div>
-        )}
-      </Panel>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Panel>
 
-      {/* ── 3. The estate ─────────────────────────────────────────────── */}
-      <Panel title="The estate" meta="cross-tenant">
-        <div className="grid grid-cols-2 sm:grid-cols-4">
-          <Stat
-            n={orgs.ok ? String(orgs.data.orgs.length) : "—"}
-            label="organisations"
-            sub={
-              orgs.ok
-                ? `${orgs.data.orgs.filter((o) => o.status === "active").length} active`
-                : orgs.reason
-            }
-          />
-          <Stat
-            n={installations.ok ? String(installations.data.installations.length) : "—"}
-            label="installations"
-            sub={
-              installations.ok
-                ? `${uncredentialed.length} without a credential`
-                : installations.reason
-            }
-          />
-          <Stat
-            n={chargers.ok ? String(chargers.data.chargers.length) : "—"}
-            label="chargers"
-            sub={chargers.ok ? `${vendors} vendor(s)` : chargers.reason}
-          />
-          <Stat
-            n={sessions.ok ? String(sessions.data.count) : "—"}
-            label="charging now"
-            sub={sessions.ok ? undefined : sessions.reason}
-          />
-        </div>
-
-        {!orgs.ok ? (
-          <Unavailable reason={orgs.reason} />
-        ) : orgs.data.orgs.length === 0 ? (
-          <Empty>No organisations yet.</Empty>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[40rem] text-left text-[13px]">
-              <thead>
-                <tr className="text-[11px] uppercase tracking-wider text-ink-500">
-                  <th className="px-4 py-2 font-medium">Organisation</th>
-                  <th className="px-4 py-2 font-medium">Kind</th>
-                  <th className="px-4 py-2 font-medium">Country</th>
-                  <th className="px-4 py-2 text-right font-medium">Installations</th>
-                  <th className="px-4 py-2 text-right font-medium">Chargers</th>
-                  <th className="px-4 py-2 text-right font-medium">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-bg-border/70 border-t border-bg-border">
-                {orgs.data.orgs.map((o) => (
-                  <tr key={o.id}>
-                    <td className="px-4 py-2.5 text-ink-100">{o.displayName}</td>
-                    <td className="px-4 py-2.5 text-ink-400">{o.kind}</td>
-                    <td className="px-4 py-2.5 text-ink-400">{o.countryCode ?? "—"}</td>
-                    <td className="px-4 py-2.5 text-right tabular-nums text-ink-300">
-                      {installations.ok ? (installsByOrg.get(o.id) ?? 0) : "—"}
-                    </td>
-                    <td className="px-4 py-2.5 text-right tabular-nums text-ink-300">
-                      {chargers.ok ? (chargersByOrg.get(o.id) ?? 0) : "—"}
-                    </td>
-                    <td className="px-4 py-2.5 text-right">
-                      <span
-                        className={`rounded px-1.5 py-0.5 text-[11px] ${
-                          o.status === "active"
-                            ? "bg-emerald-500/10 text-emerald-300"
-                            : "bg-ink-700/60 text-ink-400"
-                        }`}
-                      >
-                        {o.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Panel>
-
-      <footer className="pb-4 text-[11px] leading-relaxed text-ink-500">
-        Platform-staff view · read live on every request, nothing cached ·
-        organisations sign in at{" "}
-        <a className="text-ink-400 underline underline-offset-2" href="/">
-          straumvakt.org
-        </a>
-        <br />
-        Panels that say “not available to this session” are permission
-        boundaries on individual endpoints, not outages.
-      </footer>
-    </div>
+        <footer className="pb-4 text-[11px] leading-relaxed text-ink-500">
+          Platform-staff view · read live on every request, nothing cached ·
+          organisations sign in at{" "}
+          <a className="text-ink-400 underline underline-offset-2" href="/">
+            straumvakt.org
+          </a>
+          <br />
+          Panels that say “not available to this session” are permission
+          boundaries on individual endpoints, not outages.
+        </footer>
+      </div>
+    </>
   );
 }
 
@@ -617,7 +668,9 @@ function Centered({
     <div className="flex min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-lg rounded-2xl border border-bg-border bg-bg-surface/90 p-8 shadow-card">
         <h1 className="text-lg font-semibold text-ink-50">{title}</h1>
-        <div className="mt-3 text-sm leading-relaxed text-ink-300">{children}</div>
+        <div className="mt-3 text-sm leading-relaxed text-ink-300">
+          {children}
+        </div>
       </div>
     </div>
   );
