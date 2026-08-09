@@ -1,3 +1,5 @@
+import { ContractGate } from "@/components/product-state";
+
 export default function OrgInvitePage() {
   return (
     <>
@@ -8,17 +10,14 @@ export default function OrgInvitePage() {
           <p>The invitation action is deliberately unavailable.</p>
         </div>
       </section>
-      <section className="org-card org-gate-card">
-        <div className="org-gate-icon" aria-hidden="true">
-          !
-        </div>
-        <div>
-          <h2>Security work must land before new invitations are issued</h2>
-          <p>
-            The current public consume path can replace an existing password and
-            does not validate the national ID supplied by the Driver app.
-            Existing identity-bound Driver redemption remains separate.
-          </p>
+      <ContractGate
+        id="organisation-invitations"
+        eyebrow="Security boundary"
+        title="Security work must land before new invitations are issued"
+        detail="The current public consume path can replace an existing password and does not validate the national ID supplied by the Driver app. Existing identity-bound Driver redemption remains separate."
+        action="Send invitation"
+        tone="unsafe"
+      >
           <dl className="org-gate-list">
             <div>
               <dt>Required</dt>
@@ -33,11 +32,7 @@ export default function OrgInvitePage() {
               <dd>Complete the compatible identity-bound join path</dd>
             </div>
           </dl>
-        </div>
-        <button type="button" disabled>
-          Send invitation
-        </button>
-      </section>
+      </ContractGate>
     </>
   );
 }

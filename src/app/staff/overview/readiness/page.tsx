@@ -1,28 +1,10 @@
 import { redirect } from "next/navigation";
 import { apiFetchServer } from "@/lib/api-client-server";
-import {
-  PRODUCT_WORKFLOWS,
-  readinessCounts,
-  type ContractState,
-} from "@/lib/product-readiness";
 import { StaffNav } from "../staff-nav";
+import { ReadinessView } from "./readiness-view";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Product readiness" };
-
-const STATE_LABEL: Record<ContractState, string> = {
-  ready: "Ready",
-  read_only: "Read only",
-  blocked: "Backend required",
-  unsafe: "Security blocked",
-};
-
-const STATE_CLASS: Record<ContractState, string> = {
-  ready: "border-emerald-400/40 bg-emerald-400/10 text-emerald-200",
-  read_only: "border-sky-400/40 bg-sky-400/10 text-sky-200",
-  blocked: "border-amber-300/40 bg-amber-300/10 text-amber-200",
-  unsafe: "border-red-400/40 bg-red-400/10 text-red-200",
-};
 
 export default async function ProductReadinessPage() {
   const meRes = await apiFetchServer("/api/admin/me");
@@ -32,7 +14,6 @@ export default async function ProductReadinessPage() {
   const me = (await meRes.json()) as { isPlatform: boolean };
   if (!me.isPlatform) redirect("/org");
 
-  const counts = readinessCounts();
   return (
     <>
       <StaffNav />
@@ -48,58 +29,55 @@ export default async function ProductReadinessPage() {
           </p>
         </header>
 
-        <dl className="mt-6 grid gap-px border border-bg-border bg-bg-border sm:grid-cols-4">
-          {[
-            ["Ready", counts.ready],
-            ["Read only", counts.read_only],
-            ["Backend required", counts.blocked],
-            ["Security blocked", counts.unsafe],
-          ].map(([label, value]) => (
-            <div key={label} className="bg-bg-base p-4">
-              <dt className="text-[11px] uppercase tracking-normal text-ink-500">
-                {label}
-              </dt>
-              <dd className="mt-1 text-2xl font-semibold tabular-nums text-ink-50">
-                {value}
-              </dd>
-            </div>
-          ))}
-        </dl>
+        <ReadinessView />
 
-        <div className="mt-6 overflow-x-auto border border-bg-border">
-          <table className="w-full min-w-[48rem] text-left text-sm">
-            <thead className="bg-bg-surface text-[11px] uppercase tracking-normal text-ink-500">
-              <tr>
-                <th className="px-4 py-3 font-medium">Surface</th>
-                <th className="px-4 py-3 font-medium">Workflow</th>
-                <th className="px-4 py-3 font-medium">State</th>
-                <th className="px-4 py-3 font-medium">Next dependency</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-bg-border">
-              {PRODUCT_WORKFLOWS.map((workflow) => (
-                <tr key={workflow.id}>
-                  <td className="px-4 py-3 uppercase text-ink-500">
-                    {workflow.surface}
-                  </td>
-                  <td className="px-4 py-3 font-medium text-ink-100">
-                    {workflow.label}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`inline-flex border px-2 py-1 text-[11px] font-semibold ${STATE_CLASS[workflow.state]}`}
-                    >
-                      {STATE_LABEL[workflow.state]}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-ink-400">
-                    {workflow.dependency}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <section className="mt-6 grid gap-4 md:grid-cols-2" aria-label="Staff contract boundaries">
+          <article className="border border-sky-400/30 bg-sky-400/5 p-4">
+            <div className="text-[11px] font-semibold uppercase tracking-normal text-sky-200">
+              Support context
+            </div>
+            <h2 className="mt-2 text-base font-semibold text-ink-50">
+              Assistance is not impersonation
+            </h2>
+            <p className="mt-2 text-sm leading-relaxed text-ink-400">
+              The acting Straumvakt employee and organisation scope must remain
+              visible. Persisted entry, expiry and exit commands are still a
+              backend dependency.
+            </p>
+            <button
+              type="button"
+              disabled
+              aria-describedby="support-context-dependency"
+              className="mt-4 min-h-10 border border-bg-border px-3 text-sm text-ink-500"
+            >
+              Enter support context
+            </button>
+            <p id="support-context-dependency" className="mt-2 text-xs text-ink-500">
+              Requires platform.support.enter and attributed audit events.
+            </p>
+          </article>
+          <article className="border border-amber-300/30 bg-amber-300/5 p-4">
+            <div className="text-[11px] font-semibold uppercase tracking-normal text-amber-200">
+              Audit and onboarding aggregate
+            </div>
+            <h2 className="mt-2 text-base font-semibold text-ink-50">
+              Writes exist; staff reads are incomplete
+            </h2>
+            <p className="mt-2 text-sm leading-relaxed text-ink-400">
+              Do not infer a complete event history or aggregate onboarding
+              state from separate routes. Both remain disabled until canonical
+              tenant-scoped read contracts exist.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button type="button" disabled className="min-h-10 border border-bg-border px-3 text-sm text-ink-500">
+                Open audit trail
+              </button>
+              <button type="button" disabled className="min-h-10 border border-bg-border px-3 text-sm text-ink-500">
+                Open onboarding aggregate
+              </button>
+            </div>
+          </article>
+        </section>
       </main>
     </>
   );

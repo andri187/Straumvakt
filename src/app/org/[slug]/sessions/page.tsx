@@ -1,7 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import {
+  MetricValue,
+  ProductEmpty,
+  ProductError,
+  ProductLoading,
+  StatusBadge,
+} from "@/components/product-state";
 import { apiFetchJson } from "@/lib/api-client";
+import {
+  formatEnergyKwh,
+  normalizeStatus,
+  statusTone,
+} from "@/lib/product-ui-guards";
 import { useOrg } from "../org-shell";
 
 type Session = {
@@ -24,21 +36,30 @@ export default function OrgSessionsPage() {
   const { org } = useOrg();
   const [summary, setSummary] = useState<Summary | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const body = await apiFetchJson<{ summary: Summary }>(
+        `/api/admin/orgs/${org.id}/sessions`,
+      );
+      setSummary(body.summary);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      setLoading(false);
+    }
+  }, [org.id]);
 
   useEffect(() => {
     let cancelled = false;
-    apiFetchJson<{ summary: Summary }>(`/api/admin/orgs/${org.id}/sessions`)
-      .then((body) => {
-        if (!cancelled) setSummary(body.summary);
-      })
-      .catch((caught) => {
-        if (!cancelled)
-          setError(caught instanceof Error ? caught.message : String(caught));
-      });
+    if (!cancelled) void load();
     return () => {
       cancelled = true;
     };
-  }, [org.id]);
+  }, [load]);
 
   return (
     <>
@@ -49,32 +70,28 @@ export default function OrgSessionsPage() {
           <p>Recent charging activity and source-reported energy.</p>
         </div>
       </section>
-      {error ? <div className="org-error">{error}</div> : null}
+      {error ? <ProductError message={error} onRetry={load} /> : null}
       <div className="org-grid g4" style={{ marginBottom: 14 }}>
-        <SessionMetric
+        <MetricValue
           label="This month"
-          value={summary ? String(summary.monthCount) : null}
+          value={summary?.monthCount ?? 0}
+          loading={loading}
         />
-        <SessionMetric
+        <MetricValue
           label="Energy this month"
-          value={
-            summary
-              ? `${summary.monthEnergyKwh.toLocaleString("en-GB")} kWh`
-              : null
-          }
-          accent
+          value={formatEnergyKwh(summary?.monthEnergyKwh ?? null)}
+          loading={loading}
+          tone="accent"
         />
-        <SessionMetric
+        <MetricValue
           label="All sessions"
-          value={summary ? String(summary.totalCount) : null}
+          value={summary?.totalCount ?? 0}
+          loading={loading}
         />
-        <SessionMetric
+        <MetricValue
           label="Lifetime energy"
-          value={
-            summary
-              ? `${summary.totalEnergyKwh.toLocaleString("en-GB")} kWh`
-              : null
-          }
+          value={formatEnergyKwh(summary?.totalEnergyKwh ?? null)}
+          loading={loading}
         />
       </div>
       <section className="org-card">
@@ -83,25 +100,40 @@ export default function OrgSessionsPage() {
         </div>
         <div className="org-table-wrap">
           <table>
+            <caption className="org-sr-only">
+              Recent charging sessions for {org.displayName}
+            </caption>
             <thead>
               <tr>
-                <th>Station</th>
-                <th>Started</th>
-                <th>Energy</th>
-                <th>Status</th>
+                <th scope="col">Station</th>
+                <th scope="col">Started</th>
+                <th scope="col">Energy</th>
+                <th scope="col">Status</th>
               </tr>
             </thead>
             <tbody>
-              {!summary ? (
+              {loading ? (
                 <tr>
                   <td className="empty" colSpan={4}>
-                    Loading...
+                    <ProductLoading label="Loading recent sessions" />
+                  </td>
+                </tr>
+              ) : !summary ? (
+                <tr>
+                  <td className="empty" colSpan={4}>
+                    <ProductEmpty
+                      title="Session summary unavailable"
+                      detail="Use Try again above to reload this read-only view."
+                    />
                   </td>
                 </tr>
               ) : summary.recent.length === 0 ? (
                 <tr>
                   <td className="empty" colSpan={4}>
-                    No sessions recorded.
+                    <ProductEmpty
+                      title="No sessions recorded"
+                      detail="Completed and active sessions will appear here."
+                    />
                   </td>
                 </tr>
               ) : (
@@ -112,15 +144,13 @@ export default function OrgSessionsPage() {
                       {new Date(session.startedAt).toLocaleString("en-GB")}
                     </td>
                     <td>
-                      {session.energyKwh == null
-                        ? "Not reported"
-                        : `${session.energyKwh.toLocaleString("en-GB")} kWh`}
+                      {formatEnergyKwh(session.energyKwh)}
                     </td>
                     <td>
-                      <span className="org-badge mut">
-                        <span className="dot" />
-                        {session.status.replaceAll("_", " ")}
-                      </span>
+                      <StatusBadge
+                        label={normalizeStatus(session.status)}
+                        tone={statusTone(session.status)}
+                      />
                     </td>
                   </tr>
                 ))
@@ -130,22 +160,5 @@ export default function OrgSessionsPage() {
         </div>
       </section>
     </>
-  );
-}
-
-function SessionMetric({
-  label,
-  value,
-  accent = false,
-}: {
-  label: string;
-  value: string | null;
-  accent?: boolean;
-}) {
-  return (
-    <div className="org-card org-kpi">
-      <div className="lbl">{label}</div>
-      <div className={`val${accent ? " accent" : ""}`}>{value ?? "-"}</div>
-    </div>
   );
 }

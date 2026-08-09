@@ -1,7 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  ContractGate,
+  MetricValue,
+  ProductEmpty,
+  ProductError,
+  ProductLoading,
+  StatusBadge,
+} from "@/components/product-state";
 import { apiFetchJson } from "@/lib/api-client";
+import { normalizeStatus, statusTone } from "@/lib/product-ui-guards";
 import { useOrg } from "../org-shell";
 
 type Membership = {
@@ -34,32 +43,30 @@ export default function OrgAgreementsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    Promise.all([
-      apiFetchJson<{ memberships: Membership[] }>(
-        `/api/admin/billing/driver-contracts?orgId=${org.id}`,
-      ),
-      apiFetchJson<{ byAnchor: CostFactorGroup[] }>(
-        "/api/admin/billing/cost-factors",
-      ),
-    ])
-      .then(([membershipBody, factorBody]) => {
-        if (cancelled) return;
-        setMemberships(membershipBody.memberships);
-        setFactorGroups(factorBody.byAnchor);
-      })
-      .catch((caught) => {
-        if (!cancelled)
-          setError(caught instanceof Error ? caught.message : String(caught));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [membershipBody, factorBody] = await Promise.all([
+        apiFetchJson<{ memberships: Membership[] }>(
+          `/api/admin/billing/driver-contracts?orgId=${org.id}`,
+        ),
+        apiFetchJson<{ byAnchor: CostFactorGroup[] }>(
+          "/api/admin/billing/cost-factors",
+        ),
+      ]);
+      setMemberships(membershipBody.memberships);
+      setFactorGroups(factorBody.byAnchor);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      setLoading(false);
+    }
   }, [org.id]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   const agreements = useMemo(() => {
     const byId = new Map<
@@ -103,28 +110,28 @@ export default function OrgAgreementsPage() {
           </p>
         </div>
       </section>
-      {error ? <div className="org-error">{error}</div> : null}
+      {error ? <ProductError message={error} onRetry={load} /> : null}
       <div className="org-grid g4" style={{ marginBottom: 14 }}>
-        <AgreementMetric
+        <MetricValue
           label="Agreements in use"
-          value={loading ? null : agreements.length}
+          value={agreements.length}
+          loading={loading}
         />
-        <AgreementMetric
+        <MetricValue
           label="Driver memberships"
-          value={loading ? null : memberships.length}
-          accent
+          value={memberships.length}
+          loading={loading}
+          tone="accent"
         />
-        <AgreementMetric
+        <MetricValue
           label="Cost factors"
-          value={loading ? null : factors.length}
+          value={factors.length}
+          loading={loading}
         />
-        <AgreementMetric
+        <MetricValue
           label="Active factors"
-          value={
-            loading
-              ? null
-              : factors.filter((factor) => factor.status === "active").length
-          }
+          value={factors.filter((factor) => factor.status === "active").length}
+          loading={loading}
         />
       </div>
       <div className="org-grid g2 org-align-start">
@@ -133,9 +140,12 @@ export default function OrgAgreementsPage() {
             Driver agreements <span className="sub">read only</span>
           </div>
           {loading ? (
-            <div className="org-empty">Loading...</div>
+            <ProductLoading label="Loading driver agreements" />
           ) : agreements.length === 0 ? (
-            <div className="org-empty">No driver agreement is assigned.</div>
+            <ProductEmpty
+              title="No driver agreement is assigned"
+              detail="Assignments will appear when an agreement is active."
+            />
           ) : (
             <div className="org-compact-list">
               {agreements.map((agreement) => (
@@ -149,6 +159,10 @@ export default function OrgAgreementsPage() {
                   <div className="org-list-metric">
                     <strong>{agreement.members}</strong>
                     <span>{agreement.groups.size} groups</span>
+                    <StatusBadge
+                      label={normalizeStatus(agreement.status)}
+                      tone={statusTone(agreement.status)}
+                    />
                   </div>
                 </article>
               ))}
@@ -160,9 +174,12 @@ export default function OrgAgreementsPage() {
             Cost-factor catalogue <span className="sub">platform-defined</span>
           </div>
           {loading ? (
-            <div className="org-empty">Loading...</div>
+            <ProductLoading label="Loading cost-factor catalogue" />
           ) : factors.length === 0 ? (
-            <div className="org-empty">No cost factors configured.</div>
+            <ProductEmpty
+              title="No cost factors configured"
+              detail="The platform catalogue is currently empty."
+            />
           ) : (
             <div className="org-compact-list">
               {factors.slice(0, 12).map((factor) => (
@@ -183,37 +200,13 @@ export default function OrgAgreementsPage() {
           )}
         </section>
       </div>
-      <section className="org-blocked-panel">
-        <div>
-          <div className="org-eyebrow">Driver cost assignment</div>
-          <h2>Editing needs a narrow assignment contract</h2>
-          <p>
-            The API can report membership and agreement state, but this UI has
-            no safe command for assigning a cost factor with an effective date,
-            preview and rollback.
-          </p>
-        </div>
-        <button type="button" disabled>
-          Edit driver pricing
-        </button>
-      </section>
+      <ContractGate
+        id="driver-cost-assignment"
+        eyebrow="Driver cost assignment"
+        title="Editing needs a narrow assignment contract"
+        detail="The API can report membership and agreement state, but this UI has no safe command for assigning a cost factor with an effective date, preview and rollback."
+        action="Edit driver pricing"
+      />
     </>
-  );
-}
-
-function AgreementMetric({
-  label,
-  value,
-  accent = false,
-}: {
-  label: string;
-  value: number | null;
-  accent?: boolean;
-}) {
-  return (
-    <div className="org-card org-kpi">
-      <div className="lbl">{label}</div>
-      <div className={`val${accent ? " accent" : ""}`}>{value ?? "-"}</div>
-    </div>
   );
 }

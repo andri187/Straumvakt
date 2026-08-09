@@ -1,6 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ContractGate,
+  MetricValue,
+  ProductEmpty,
+  ProductError,
+  ProductLoading,
+  StatusBadge,
+} from "@/components/product-state";
 import { apiFetchJson } from "@/lib/api-client";
 import { useOrg } from "../org-shell";
 
@@ -45,6 +53,9 @@ export default function OrgChargersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<CreatedCharger | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState(false);
+  const secretRef = useRef<HTMLElement>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -77,6 +88,10 @@ export default function OrgChargersPage() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    if (created) secretRef.current?.focus();
+  }, [created]);
+
   const online = chargers.filter((charger) => charger.online).length;
   const missingCredentials = installations.filter(
     (installation) => !installation.credentialsRef,
@@ -90,29 +105,48 @@ export default function OrgChargersPage() {
           <h1>Chargers</h1>
           <p>Tenant-scoped inventory and OCPP onboarding.</p>
         </div>
-        <button className="org-button secondary" type="button" onClick={load}>
-          Refresh
+        <button
+          className="org-button secondary"
+          type="button"
+          onClick={load}
+          disabled={loading}
+          aria-busy={loading}
+        >
+          {loading ? "Refreshing..." : "Refresh"}
         </button>
       </section>
 
-      {error ? <div className="org-error">{error}</div> : null}
+      {error ? <ProductError message={error} onRetry={load} /> : null}
 
       <div className="org-grid g4" style={{ marginBottom: 14 }}>
-        <Metric label="Chargers" value={loading ? null : chargers.length} />
-        <Metric label="Online" value={loading ? null : online} accent />
-        <Metric
-          label="Installations"
-          value={loading ? null : installations.length}
+        <MetricValue label="Chargers" value={chargers.length} loading={loading} />
+        <MetricValue
+          label="Online"
+          value={online}
+          loading={loading}
+          tone="accent"
         />
-        <Metric
+        <MetricValue
+          label="Installations"
+          value={installations.length}
+          loading={loading}
+        />
+        <MetricValue
           label="Credentials missing"
-          value={loading ? null : missingCredentials}
-          warning={missingCredentials > 0}
+          value={missingCredentials}
+          loading={loading}
+          tone={missingCredentials > 0 ? "warning" : "default"}
         />
       </div>
 
       {created ? (
-        <section className="org-secret" aria-live="polite">
+        <section
+          className="org-secret"
+          aria-live="polite"
+          aria-label="One-time OCPP credential"
+          ref={secretRef}
+          tabIndex={-1}
+        >
           <div>
             <strong>Copy this OCPP password now</strong>
             <p>
@@ -121,9 +155,35 @@ export default function OrgChargersPage() {
             </p>
           </div>
           <code>{created.ocppPassword}</code>
-          <button type="button" onClick={() => setCreated(null)}>
-            I have stored it
-          </button>
+          <div className="org-secret-actions">
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(created.ocppPassword);
+                  setCopied(true);
+                  setCopyError(false);
+                } catch {
+                  setCopyError(true);
+                }
+              }}
+            >
+              {copied ? "Copied" : "Copy password"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setCreated(null);
+                setCopied(false);
+                setCopyError(false);
+              }}
+            >
+              I have stored it
+            </button>
+          </div>
+          {copyError ? (
+            <span role="alert">Copy failed. Select the password manually.</span>
+          ) : null}
         </section>
       ) : null}
 
@@ -135,25 +195,31 @@ export default function OrgChargersPage() {
           </div>
           <div className="org-table-wrap">
             <table>
+              <caption className="org-sr-only">
+                Chargers registered to {org.displayName}
+              </caption>
               <thead>
                 <tr>
-                  <th>Identity</th>
-                  <th>Installation</th>
-                  <th>Hardware</th>
-                  <th>Status</th>
+                  <th scope="col">Identity</th>
+                  <th scope="col">Installation</th>
+                  <th scope="col">Hardware</th>
+                  <th scope="col">Status</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr>
                     <td className="empty" colSpan={4}>
-                      Loading...
+                      <ProductLoading label="Loading charger inventory" />
                     </td>
                   </tr>
                 ) : chargers.length === 0 ? (
                   <tr>
                     <td className="empty" colSpan={4}>
-                      No chargers registered.
+                      <ProductEmpty
+                        title="No chargers registered"
+                        detail="Add a charger after a site is available."
+                      />
                     </td>
                   </tr>
                 ) : (
@@ -174,12 +240,10 @@ export default function OrgChargersPage() {
                         ) : null}
                       </td>
                       <td>
-                        <span
-                          className={`org-badge ${charger.online ? "ok" : "mut"}`}
-                        >
-                          <span className="dot" />
-                          {charger.online ? "Online" : "Offline"}
-                        </span>
+                        <StatusBadge
+                          label={charger.online ? "Online" : "Offline"}
+                          tone={charger.online ? "ok" : "mut"}
+                        />
                       </td>
                     </tr>
                   ))
@@ -200,43 +264,14 @@ export default function OrgChargersPage() {
         />
       </div>
 
-      <section className="org-blocked-panel">
-        <div>
-          <div className="org-eyebrow">Driver visibility</div>
-          <h2>Visibility is not the same as site classification</h2>
-          <p>
-            Site access can be public, private or taxi-only, but driver charger
-            access is currently derived from agreements and group membership.
-          </p>
-        </div>
-        <button type="button" disabled>
-          Configure visibility
-        </button>
-      </section>
+      <ContractGate
+        id="driver-visibility"
+        eyebrow="Driver visibility"
+        title="Visibility is not the same as site classification"
+        detail="Site access can be public, private or taxi-only, but driver charger access is currently derived from agreements and group membership. A persisted driver visibility contract is required."
+        action="Configure visibility"
+      />
     </>
-  );
-}
-
-function Metric({
-  label,
-  value,
-  accent = false,
-  warning = false,
-}: {
-  label: string;
-  value: number | null;
-  accent?: boolean;
-  warning?: boolean;
-}) {
-  return (
-    <div className="org-card org-kpi">
-      <div className="lbl">{label}</div>
-      <div
-        className={`val${accent ? " accent" : ""}${warning ? " warning" : ""}`}
-      >
-        {value ?? "-"}
-      </div>
-    </div>
   );
 }
 
@@ -315,7 +350,7 @@ function ChargerCreateForm({
       </div>
       <form className="org-form" onSubmit={submit}>
         {sites.length === 0 ? (
-          <div className="org-inline-warning">
+          <div className="org-inline-warning" id="site-required-note" role="status">
             A site must exist before a charger can be added.
           </div>
         ) : null}
@@ -323,6 +358,7 @@ function ChargerCreateForm({
           Site
           <select
             required
+            aria-describedby={sites.length === 0 ? "site-required-note" : undefined}
             value={siteId}
             onChange={(event) => {
               setSiteId(event.target.value);
@@ -341,6 +377,7 @@ function ChargerCreateForm({
           Installation
           <select
             value={installationId}
+            disabled={!siteId}
             onChange={(event) => setInstallationId(event.target.value)}
           >
             <option value="">No installation assignment</option>
@@ -380,6 +417,8 @@ function ChargerCreateForm({
             Max power kW
             <input
               inputMode="decimal"
+              min="0.1"
+              step="0.1"
               value={power}
               onChange={(event) => setPower(event.target.value)}
             />
@@ -390,16 +429,22 @@ function ChargerCreateForm({
           <input
             required
             pattern="[A-Za-z0-9._:-]{3,64}"
+            autoComplete="off"
+            aria-describedby="ocpp-identity-hint"
             value={identity}
             onChange={(event) => setIdentity(event.target.value)}
           />
         </label>
-        <p className="org-form-note">
+        <p className="org-form-note" id="ocpp-identity-hint">
           Creating a charger writes the station, EVSE, connector and OCPP
           identity in one transaction. Do not submit twice after an uncertain
           response.
         </p>
-        {error ? <div className="org-inline-error">{error}</div> : null}
+        {error ? (
+          <div className="org-inline-error" role="alert">
+            {error} The form was not retried automatically.
+          </div>
+        ) : null}
         <button
           className="org-button"
           type="submit"
