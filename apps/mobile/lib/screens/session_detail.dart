@@ -10,19 +10,30 @@ class SessionDetailScreen extends StatefulWidget {
     super.key,
     required this.sessionId,
     this.title = 'Charge details',
+    this.api,
+    this.storage,
   });
 
   final String sessionId;
   final String title;
+  final StraumvaktApi? api;
+  final SessionStorage? storage;
 
   @override
   State<SessionDetailScreen> createState() => _SessionDetailScreenState();
 }
 
 class _SessionDetailScreenState extends State<SessionDetailScreen> {
-  final _api = StraumvaktApi();
-  final _storage = AuthStorage();
+  late final StraumvaktApi _api = widget.api ?? StraumvaktApi();
+  late final SessionStorage _storage = widget.storage ?? AuthStorage();
+  late final bool _ownsApi = widget.api == null;
   late Future<DriverSessionDetail> _future = _load();
+
+  @override
+  void dispose() {
+    if (_ownsApi) _api.close();
+    super.dispose();
+  }
 
   Future<DriverSessionDetail> _load() async {
     final token = await _storage.readAccessToken();
