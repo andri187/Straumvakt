@@ -16,6 +16,9 @@ class ActiveSessionScreen extends StatefulWidget {
     this.chargerName,
     this.onDone,
     this.pollingEnabled = true,
+    this.pollInterval = const Duration(seconds: 3),
+    this.api,
+    this.storage,
   });
 
   final ActiveSession? initialSession;
@@ -23,16 +26,18 @@ class ActiveSessionScreen extends StatefulWidget {
   final String? chargerName;
   final VoidCallback? onDone;
   final bool pollingEnabled;
+  final Duration pollInterval;
+  final StraumvaktApi? api;
+  final SessionStorage? storage;
 
   @override
   State<ActiveSessionScreen> createState() => _ActiveSessionScreenState();
 }
 
 class _ActiveSessionScreenState extends State<ActiveSessionScreen> {
-  static const _pollInterval = Duration(seconds: 3);
-
-  final _api = StraumvaktApi();
-  final _storage = AuthStorage();
+  late final StraumvaktApi _api = widget.api ?? StraumvaktApi();
+  late final SessionStorage _storage = widget.storage ?? AuthStorage();
+  late final bool _ownsApi = widget.api == null;
   Timer? _poll;
   ActiveSession? _session;
   Future<DriverSessionDetail>? _detailFuture;
@@ -53,13 +58,14 @@ class _ActiveSessionScreenState extends State<ActiveSessionScreen> {
     _hasSeenSession = _session != null;
     if (widget.pollingEnabled) {
       _tick();
-      _poll = Timer.periodic(_pollInterval, (_) => _tick());
+      _poll = Timer.periodic(widget.pollInterval, (_) => _tick());
     }
   }
 
   @override
   void dispose() {
     _poll?.cancel();
+    if (_ownsApi) _api.close();
     super.dispose();
   }
 
@@ -81,7 +87,10 @@ class _ActiveSessionScreenState extends State<ActiveSessionScreen> {
           }
         }
       }
-      current ??= sessions.isEmpty ? null : sessions.first;
+      // Once a session identity is known, never silently switch to another
+      // active row. The missing tracked row is the completion signal for
+      // that charge, even when the driver has another session in progress.
+      if (id == null && sessions.isNotEmpty) current = sessions.first;
 
       if (current == null) {
         if (_hasSeenSession) await _finish(token);
