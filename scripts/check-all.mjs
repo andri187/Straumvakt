@@ -13,6 +13,11 @@ import { spawnSync } from "node:child_process";
 
 const CHECKS = [
   ["typecheck", "npm run typecheck"],
+  // `npm run typecheck --workspaces --if-present` treats a missing typecheck
+  // script as success, so a package with TypeScript and no script is compiled
+  // by nothing while the pipeline prints PASS. That is how shared/commercial/
+  // contracts went unchecked. This asserts the invariant, not the instance.
+  ["workspace-typecheck", "npm run check:workspace-typecheck"],
   ["schemas", "npm run check:schemas"],
   ["api-schema", "npm run check:api-schema"],
   // Replaced check:schema-parity on 2026-08-07 (ADR 0051). That one ran
