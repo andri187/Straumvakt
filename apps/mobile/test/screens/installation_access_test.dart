@@ -29,6 +29,44 @@ void main() {
     );
   });
 
+  testWidgets('disabled contract explains the unavailable dependency', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.dark(),
+        home: InstallationAccessScreen(
+          enabled: false,
+          onSubmit: (_, _) async => InstallationAccessResult.granted,
+        ),
+      ),
+    );
+    expect(
+      find.bySemanticsLabel(
+        'Installation access codes are unavailable. You can still use an invitation.',
+      ),
+      findsOneWidget,
+    );
+    semantics.dispose();
+  });
+
+  testWidgets('screen title is an accessibility heading', (tester) async {
+    final semantics = tester.ensureSemantics();
+    await tester.pumpWidget(
+      app((_, _) async => InstallationAccessResult.granted),
+    );
+    expect(
+      tester
+          .getSemantics(find.text('Join an installation'))
+          .getSemanticsData()
+          .flagsCollection
+          .isHeader,
+      isTrue,
+    );
+    semantics.dispose();
+  });
+
   testWidgets('requires both access credential fields', (tester) async {
     await tester.pumpWidget(
       app((_, _) async => InstallationAccessResult.granted),
@@ -55,6 +93,38 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Waiting for approval'), findsOneWidget);
     expect(find.textContaining('organisation will review'), findsOneWidget);
+  });
+
+  testWidgets('pending result is announced as one live status', (tester) async {
+    final semantics = tester.ensureSemantics();
+    await tester.pumpWidget(
+      app((_, _) async => InstallationAccessResult.pending),
+    );
+    await tester.enterText(find.byType(TextFormField).at(0), 'DAL-201');
+    await tester.enterText(find.byType(TextFormField).at(1), 'correct horse');
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+    expect(
+      find.bySemanticsLabel(
+        'Waiting for approval. The organisation will review your request.',
+      ),
+      findsOneWidget,
+    );
+    semantics.dispose();
+  });
+
+  testWidgets('network failure is announced as an error', (tester) async {
+    final semantics = tester.ensureSemantics();
+    await tester.pumpWidget(app((_, _) => throw Exception('offline')));
+    await tester.enterText(find.byType(TextFormField).at(0), 'DAL-201');
+    await tester.enterText(find.byType(TextFormField).at(1), 'correct horse');
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+    expect(
+      find.bySemanticsLabel('Error: Access could not be checked. Try again.'),
+      findsOneWidget,
+    );
+    semantics.dispose();
   });
 
   testWidgets('renders rejection as a recoverable state', (tester) async {

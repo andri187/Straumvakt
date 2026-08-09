@@ -77,12 +77,15 @@ class _InstallationAccessScreenState extends State<InstallationAccessScreen> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
           children: [
-            const Text(
-              'Join an installation',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 24,
-                fontWeight: FontWeight.w900,
+            Semantics(
+              header: true,
+              child: const Text(
+                'Join an installation',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
             ),
             const SizedBox(height: 8),
@@ -140,7 +143,17 @@ class _InstallationAccessScreenState extends State<InstallationAccessScreen> {
             ],
             if (_error != null) ...[
               const SizedBox(height: 18),
-              Text(_error!, style: const TextStyle(color: BrandPalette.danger)),
+              Semantics(
+                liveRegion: true,
+                container: true,
+                label: 'Error: $_error',
+                child: ExcludeSemantics(
+                  child: Text(
+                    _error!,
+                    style: const TextStyle(color: BrandPalette.danger),
+                  ),
+                ),
+              ),
             ],
             const SizedBox(height: 24),
             FilledButton.icon(
@@ -166,17 +179,26 @@ class _UnavailableNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: BrandPalette.amber.withValues(alpha: 0.10),
-        border: Border.all(color: BrandPalette.amber.withValues(alpha: 0.35)),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: const Text(
-        'Installation access codes are not connected in this build. You can still use an invitation.',
-        style: TextStyle(color: BrandPalette.muted, height: 1.4),
+    return Semantics(
+      container: true,
+      label:
+          'Installation access codes are unavailable. You can still use an invitation.',
+      child: ExcludeSemantics(
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: BrandPalette.amber.withValues(alpha: 0.10),
+            border: Border.all(
+              color: BrandPalette.amber.withValues(alpha: 0.35),
+            ),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: const Text(
+            'Installation access codes are not connected in this build. You can still use an invitation.',
+            style: TextStyle(color: BrandPalette.muted, height: 1.4),
+          ),
+        ),
       ),
     );
   }
@@ -208,40 +230,47 @@ class _Result extends StatelessWidget {
         'Check the details or contact the organisation.',
       ),
     };
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.10),
-        border: Border.all(color: color.withValues(alpha: 0.35)),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: color),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  body,
-                  style: const TextStyle(
-                    color: BrandPalette.muted,
-                    fontSize: 13,
-                  ),
-                ),
-              ],
-            ),
+    return Semantics(
+      container: true,
+      liveRegion: true,
+      label: '$title. $body',
+      child: ExcludeSemantics(
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.10),
+            border: Border.all(color: color.withValues(alpha: 0.35)),
+            borderRadius: BorderRadius.circular(8),
           ),
-        ],
+          child: Row(
+            children: [
+              Icon(icon, color: color),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      body,
+                      style: const TextStyle(
+                        color: BrandPalette.muted,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

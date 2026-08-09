@@ -87,31 +87,35 @@ class EmptyAccessScreen extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Container(
-                    width: 96,
-                    height: 96,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: BrandPalette.mint.withValues(alpha: 0.10),
-                      border: Border.all(
-                        color: BrandPalette.mint.withValues(alpha: 0.35),
+                  ExcludeSemantics(
+                    child: Container(
+                      width: 96,
+                      height: 96,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: BrandPalette.mint.withValues(alpha: 0.10),
+                        border: Border.all(
+                          color: BrandPalette.mint.withValues(alpha: 0.35),
+                        ),
                       ),
-                    ),
-                    child: const Icon(
-                      Icons.qr_code_scanner_rounded,
-                      size: 44,
-                      color: BrandPalette.mint,
+                      child: const Icon(
+                        Icons.qr_code_scanner_rounded,
+                        size: 44,
+                        color: BrandPalette.mint,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 24),
-                  Text(
-                    tr('empty.title'),
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: -0.4,
+                  Semantics(
+                    header: true,
+                    child: Text(
+                      tr('empty.title'),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 10),
@@ -191,32 +195,41 @@ class _RequestStatus extends StatelessWidget {
   Widget build(BuildContext context) {
     final pending = state == DriverAccessRequestState.pending;
     final color = pending ? BrandPalette.amber : BrandPalette.danger;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.10),
-        border: Border.all(color: color.withValues(alpha: 0.35)),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            pending ? 'Waiting for approval' : 'Access not granted',
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w800,
-            ),
+    return Semantics(
+      container: true,
+      liveRegion: true,
+      label: pending
+          ? 'Access request pending. The organisation is reviewing your request.'
+          : 'Access not granted. Check the invitation or contact the organisation.',
+      child: ExcludeSemantics(
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.10),
+            border: Border.all(color: color.withValues(alpha: 0.35)),
+            borderRadius: BorderRadius.circular(8),
           ),
-          const SizedBox(height: 4),
-          Text(
-            pending
-                ? 'The organisation is reviewing your request.'
-                : 'Check the invitation or contact the organisation.',
-            style: const TextStyle(color: BrandPalette.muted, fontSize: 13),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                pending ? 'Waiting for approval' : 'Access not granted',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                pending
+                    ? 'The organisation is reviewing your request.'
+                    : 'Check the invitation or contact the organisation.',
+                style: const TextStyle(color: BrandPalette.muted, fontSize: 13),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

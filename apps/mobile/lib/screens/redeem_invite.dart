@@ -35,8 +35,9 @@ enum _Phase { form, busy, pending }
 
 class _RedeemInviteScreenState extends State<RedeemInviteScreen> {
   final _formKey = GlobalKey<FormState>();
-  late final TextEditingController _code =
-      TextEditingController(text: widget.initialCode ?? '');
+  late final TextEditingController _code = TextEditingController(
+    text: widget.initialCode ?? '',
+  );
   final _kennitala = TextEditingController();
   final _password = TextEditingController();
   final _confirm = TextEditingController();
@@ -68,9 +69,9 @@ class _RedeemInviteScreenState extends State<RedeemInviteScreen> {
   }
 
   Future<void> _openScanner() async {
-    final code = await Navigator.of(context).push<String>(
-      MaterialPageRoute(builder: (_) => const _QrScanScreen()),
-    );
+    final code = await Navigator.of(
+      context,
+    ).push<String>(MaterialPageRoute(builder: (_) => const _QrScanScreen()));
     if (code == null || !mounted) return;
     setState(() => _code.text = _extractCode(code));
   }
@@ -104,10 +105,7 @@ class _RedeemInviteScreenState extends State<RedeemInviteScreen> {
 
       // Active immediately — log in with the resolved email + the
       // password we just set, then land on home.
-      final session = await _api.login(
-        email: result.email,
-        password: password,
-      );
+      final session = await _api.login(email: result.email, password: password);
       await _storage.save(
         accessToken: session.accessToken,
         refreshToken: session.refreshToken,
@@ -170,13 +168,15 @@ class _RedeemInviteScreenState extends State<RedeemInviteScreen> {
                   const SizedBox(height: 8),
                   const Center(child: LogoMark(size: 56, borderRadius: 18)),
                   const SizedBox(height: 20),
-                  Text(
-                    tr('redeem.title'),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 24,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: -0.4,
+                  Semantics(
+                    header: true,
+                    child: Text(
+                      tr('redeem.title'),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 24,
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -196,8 +196,10 @@ class _RedeemInviteScreenState extends State<RedeemInviteScreen> {
                       labelText: tr('redeem.codeLabel'),
                       hintText: tr('redeem.codeHint'),
                       hintStyle: const TextStyle(color: BrandPalette.muted),
-                      prefixIcon: const Icon(Icons.confirmation_number_outlined,
-                          color: BrandPalette.muted),
+                      prefixIcon: const Icon(
+                        Icons.confirmation_number_outlined,
+                        color: BrandPalette.muted,
+                      ),
                     ),
                     validator: (v) => (v == null || v.trim().isEmpty)
                         ? tr('redeem.codeRequired')
@@ -213,8 +215,10 @@ class _RedeemInviteScreenState extends State<RedeemInviteScreen> {
                         borderRadius: BorderRadius.circular(14),
                       ),
                     ),
-                    icon: const Icon(Icons.qr_code_scanner_rounded,
-                        color: BrandPalette.cyan),
+                    icon: const Icon(
+                      Icons.qr_code_scanner_rounded,
+                      color: BrandPalette.cyan,
+                    ),
                     label: Text(
                       tr('redeem.scan'),
                       style: const TextStyle(
@@ -235,8 +239,10 @@ class _RedeemInviteScreenState extends State<RedeemInviteScreen> {
                       labelText: tr('redeem.kennitalaLabel'),
                       hintText: tr('redeem.kennitalaHint'),
                       hintStyle: const TextStyle(color: BrandPalette.muted),
-                      prefixIcon: const Icon(Icons.badge_outlined,
-                          color: BrandPalette.muted),
+                      prefixIcon: const Icon(
+                        Icons.badge_outlined,
+                        color: BrandPalette.muted,
+                      ),
                     ),
                     validator: (v) {
                       final d = _digits(v ?? '');
@@ -255,8 +261,10 @@ class _RedeemInviteScreenState extends State<RedeemInviteScreen> {
                     style: const TextStyle(color: Colors.white),
                     decoration: InputDecoration(
                       labelText: tr('redeem.passwordLabel'),
-                      prefixIcon: const Icon(Icons.lock_outline,
-                          color: BrandPalette.muted),
+                      prefixIcon: const Icon(
+                        Icons.lock_outline,
+                        color: BrandPalette.muted,
+                      ),
                     ),
                     validator: (v) => (v ?? '').length < 8
                         ? tr('redeem.passwordTooShort')
@@ -270,11 +278,14 @@ class _RedeemInviteScreenState extends State<RedeemInviteScreen> {
                     style: const TextStyle(color: Colors.white),
                     decoration: InputDecoration(
                       labelText: tr('redeem.passwordConfirmLabel'),
-                      prefixIcon: const Icon(Icons.lock_outline,
-                          color: BrandPalette.muted),
+                      prefixIcon: const Icon(
+                        Icons.lock_outline,
+                        color: BrandPalette.muted,
+                      ),
                     ),
-                    validator: (v) =>
-                        v != _password.text ? tr('redeem.passwordMismatch') : null,
+                    validator: (v) => v != _password.text
+                        ? tr('redeem.passwordMismatch')
+                        : null,
                     onFieldSubmitted: (_) => busy ? null : _submit(),
                   ),
 
@@ -292,19 +303,24 @@ class _RedeemInviteScreenState extends State<RedeemInviteScreen> {
                             height: 16,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              valueColor:
-                                  AlwaysStoppedAnimation(BrandPalette.midnight),
+                              valueColor: AlwaysStoppedAnimation(
+                                BrandPalette.midnight,
+                              ),
                             ),
                           )
                         : const Icon(Icons.key_rounded),
-                    label: Text(busy ? tr('redeem.submitting') : tr('redeem.submit')),
+                    label: Text(
+                      busy ? tr('redeem.submitting') : tr('redeem.submit'),
+                    ),
                   ),
                   const SizedBox(height: 14),
                   Text(
                     tr('redeem.note'),
                     textAlign: TextAlign.center,
                     style: const TextStyle(
-                        color: BrandPalette.muted, fontSize: 11),
+                      color: BrandPalette.muted,
+                      fontSize: 11,
+                    ),
                   ),
                 ],
               ),
@@ -327,8 +343,11 @@ class _PendingApproval extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.hourglass_top_rounded,
-              size: 64, color: BrandPalette.amber),
+          const Icon(
+            Icons.hourglass_top_rounded,
+            size: 64,
+            color: BrandPalette.amber,
+          ),
           const SizedBox(height: 16),
           Text(
             tr('redeem.pendingTitle'),
@@ -346,10 +365,7 @@ class _PendingApproval extends StatelessWidget {
             style: const TextStyle(color: BrandPalette.muted, fontSize: 13),
           ),
           const SizedBox(height: 24),
-          FilledButton(
-            onPressed: onDone,
-            child: Text(tr('session.done')),
-          ),
+          FilledButton(onPressed: onDone, child: Text(tr('session.done'))),
         ],
       ),
     );
@@ -362,24 +378,40 @@ class _ErrorBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: BrandPalette.danger.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: BrandPalette.danger.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.error_outline, color: BrandPalette.danger, size: 18),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              message,
-              style: const TextStyle(color: BrandPalette.danger, fontSize: 13),
+    return Semantics(
+      container: true,
+      liveRegion: true,
+      label: 'Error: $message',
+      child: ExcludeSemantics(
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: BrandPalette.danger.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: BrandPalette.danger.withValues(alpha: 0.3),
             ),
           ),
-        ],
+          child: Row(
+            children: [
+              const Icon(
+                Icons.error_outline,
+                color: BrandPalette.danger,
+                size: 18,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  message,
+                  style: const TextStyle(
+                    color: BrandPalette.danger,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

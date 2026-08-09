@@ -44,6 +44,47 @@ void main() {
     expect(find.text('Waiting for approval'), findsOneWidget);
   });
 
+  testWidgets('empty state exposes a semantic heading', (tester) async {
+    final semantics = tester.ensureSemantics();
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.dark(),
+        home: const EmptyAccessScreen(driver: driver),
+      ),
+    );
+    expect(
+      tester
+          .getSemantics(find.text('No charging access yet'))
+          .getSemanticsData()
+          .flagsCollection
+          .isHeader,
+      isTrue,
+    );
+    semantics.dispose();
+  });
+
+  testWidgets('pending request is announced as one live status', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.dark(),
+        home: const EmptyAccessScreen(
+          driver: driver,
+          requestState: DriverAccessRequestState.pending,
+        ),
+      ),
+    );
+    expect(
+      find.bySemanticsLabel(
+        'Access request pending. The organisation is reviewing your request.',
+      ),
+      findsOneWidget,
+    );
+    semantics.dispose();
+  });
+
   testWidgets('real gateway callback enables installation submission', (
     tester,
   ) async {
