@@ -85,6 +85,11 @@ export function requirePermission(
       );
     }
 
+    c.set("permissionBasis", {
+      platformDerived: satisfiedOnlyByPlatformGrant(resolution, verb),
+      platformRole: resolution.platformRole,
+      membershipRole: resolution.membershipRole,
+    });
     observeSupportContext(resolution, verb, userId, orgId, c.req.path);
     return next();
   };
@@ -188,6 +193,11 @@ export async function assertPermission(
   // Second seam. A guard added only to the requirePermission factory
   // leaves this one open, and it is live at
   // routes/admin/access-requests.ts:90 and :178.
+  c.set("permissionBasis", {
+    platformDerived: satisfiedOnlyByPlatformGrant(resolution, verb),
+    platformRole: resolution.platformRole,
+    membershipRole: resolution.membershipRole,
+  });
   observeSupportContext(resolution, verb, userId, orgId, c.req.path);
   return null;
 }
