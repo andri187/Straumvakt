@@ -1,0 +1,19 @@
+{
+  // The same shape, done correctly: every binding is redeclared in the named
+  // environment rather than assumed to carry over.
+  "name": "example-api",
+  "main": "src/index.ts",
+  "workers_dev": true,
+  "compatibility_date": "2026-01-01",
+  "vars": { "LOG_LEVEL": "info" },
+  "services": [{ "binding": "GATEWAY", "service": "example-gateway" }],
+  "env": {
+    "staging": {
+      "name": "example-api-staging",
+      "workers_dev": true,
+      "compatibility_date": "2026-01-01",
+      "vars": { "LOG_LEVEL": "debug" },
+      "services": [{ "binding": "GATEWAY", "service": "example-gateway-staging" }]
+    }
+  }
+}

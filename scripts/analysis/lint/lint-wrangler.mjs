@@ -51,28 +51,63 @@ function parseJsonc(text) {
   return JSON.parse(out.replace(/,(\s*[}\]])/g, '$1'));
 }
 
-// An "environment" for our purposes is the top-level config plus each named
-// env.* block. Wrangler resolves each independently, so each is checked on its
-// own — a `workers_dev` at the top level does NOT cover a named environment.
+// Wrangler splits configuration into INHERITABLE keys, which a named environment
+// receives from the top level unless it overrides them, and NON-INHERITABLE keys
+// — the bindings — which an environment does not receive at all and must declare
+// for itself.
+//
+//   "The majority of keys are inheritable, meaning that top-level configuration
+//    can be used in environments. Bindings, such as vars or kv_namespaces, are
+//    not inheritable and need to be defined explicitly."
+//   — developers.cloudflare.com/workers/wrangler/configuration/ (Environments)
+//
+// `workers_dev` and `routes` are both on the INHERITABLE list. An earlier version
+// of this linter modelled them as non-inheritable, which was wrong in both
+// directions: it flagged a safe config as an error, and — worse — it downgraded a
+// genuinely unsafe one (top-level `routes`, environment declaring neither key, so
+// the environment inherits the routes and the inference fires today) from an error
+// to a "latent" warning. Rules are therefore evaluated against the EFFECTIVE
+// config, not the literal block.
+const NON_INHERITABLE = [
+  'define', 'vars', 'durable_objects', 'kv_namespaces', 'r2_buckets', 'd1_databases',
+  'services', 'queues', 'workflows', 'hyperdrive', 'vectorize', 'ai', 'browser',
+  'send_email', 'mtls_certificates', 'analytics_engine_datasets', 'tail_consumers',
+  'version_metadata', 'unsafe', 'ai_search', 'ai_search_namespaces', 'pipelines',
+];
+
+function effective(cfg, node) {
+  const out = { ...node };
+  for (const [k, v] of Object.entries(cfg)) {
+    if (k === 'env') continue;
+    if (NON_INHERITABLE.includes(k)) continue;      // bindings do not carry over
+    if (!(k in out)) out[k] = v;                    // inheritable, not overridden
+  }
+  return out;
+}
+
 function environments(cfg) {
-  const list = [{ label: 'top-level', node: cfg }];
+  const list = [{ label: 'top-level', node: cfg, effective: cfg, declared: cfg }];
   for (const [name, node] of Object.entries(cfg.env ?? {})) {
-    list.push({ label: `env.${name}`, node });
+    list.push({ label: `env.${name}`, node, effective: effective(cfg, node), declared: node });
   }
   return list;
 }
+
+// `route` (singular) and `routes` (plural) are both accepted by wrangler.
+const hasRoutes = (n) =>
+  (Array.isArray(n.routes) && n.routes.length > 0) || (n.route != null);
+const declaresWorkersDev = (n) => Object.prototype.hasOwnProperty.call(n, 'workers_dev');
 
 const RULES = [
   {
     id: 'L1',
     title: 'routes without an explicit workers_dev',
     check: (env) => {
-      const hasRoutes = Array.isArray(env.node.routes) && env.node.routes.length > 0;
-      const declares = Object.prototype.hasOwnProperty.call(env.node, 'workers_dev');
-      if (hasRoutes && !declares) {
-        return `declares routes but not workers_dev — Cloudflare infers workers_dev=false, silently removing the *.workers.dev hostname`;
-      }
-      return null;
+      if (!hasRoutes(env.effective) || declaresWorkersDev(env.effective)) return null;
+      const inherited = !hasRoutes(env.declared);
+      return inherited
+        ? `INHERITS routes from the top level and declares no workers_dev anywhere in its chain — the inference fires for this environment TODAY, so its *.workers.dev hostname is already disabled or goes on the next deploy`
+        : `declares routes but not workers_dev — Cloudflare infers workers_dev=false, silently removing the *.workers.dev hostname`;
     },
     severity: 'error',
   },
@@ -80,9 +115,7 @@ const RULES = [
     id: 'L2',
     title: 'no routes and no workers_dev (latent)',
     check: (env) => {
-      const hasRoutes = Array.isArray(env.node.routes) && env.node.routes.length > 0;
-      const declares = Object.prototype.hasOwnProperty.call(env.node, 'workers_dev');
-      if (!hasRoutes && !declares && env.node.name) {
+      if (!hasRoutes(env.effective) && !declaresWorkersDev(env.effective) && env.effective.name) {
         return `declares neither routes nor workers_dev — the live hostname state is inferred, not declared, so adding routes later would disable it without appearing to`;
       }
       return null;
@@ -93,7 +126,7 @@ const RULES = [
     id: 'L3',
     title: 'service binding target recorded',
     check: (env) => {
-      const bindings = env.node.services ?? [];
+      const bindings = env.declared.services ?? [];
       const byName = bindings.filter((b) => b.service).map((b) => `${b.binding}->${b.service}`);
       if (byName.length) {
         return `binds another Worker BY NAME (${byName.join(', ')}) — a rename of the target breaks this binding and must be made in the same change`;
@@ -102,7 +135,62 @@ const RULES = [
     },
     severity: 'info',
   },
+  {
+    id: 'L4',
+    title: 'binding declared at top level but absent from a named environment',
+    // Wrangler does NOT inherit binding-shaped keys into a named environment.
+    // A binding present at the top level and missing from env.staging is simply
+    // absent in staging — and the failure is at first request, not at deploy.
+    check: (env, cfg) => {
+      if (env.label === 'top-level') return null;
+      const missing = NON_INHERITABLE.filter((k) => present(cfg[k]) && !present(env.declared[k]));
+      if (missing.length) {
+        return `top level declares [${missing.join(', ')}] but this environment does not — wrangler does NOT inherit bindings into a named environment, so they are absent here and the failure appears at first request, not at deploy`;
+      }
+      return null;
+    },
+    severity: 'error',
+  },
+  {
+    id: 'L5',
+    title: 'Durable Object binding owned by another script',
+    check: (env) => {
+      const dos = env.declared.durable_objects?.bindings ?? [];
+      const foreign = dos.filter((d) => d.script_name).map((d) => `${d.name}@${d.script_name}`);
+      if (foreign.length) {
+        return `binds Durable Objects owned by another script (${foreign.join(', ')}) — renaming or deleting that script orphans the namespace, and charger identity lives in one of these`;
+      }
+      return null;
+    },
+    severity: 'warn',
+  },
+  {
+    id: 'L6',
+    title: 'named environment without its own compatibility_date',
+    check: (env, cfg) => {
+      if (env.label === 'top-level') return null;
+      if (!env.declared.compatibility_date && cfg.compatibility_date) {
+        return `no compatibility_date of its own — it inherits "${cfg.compatibility_date}", so changing the top level silently changes this environment's runtime semantics`;
+      }
+      return null;
+    },
+    severity: 'info',
+  },
+  {
+    id: 'L7',
+    title: 'environment Worker name unrelated to the base name',
+    check: (env, cfg) => {
+      if (env.label === 'top-level' || !env.declared.name || !cfg.name) return null;
+      if (!env.declared.name.startsWith(cfg.name)) {
+        return `Worker name "${env.declared.name}" does not extend the base name "${cfg.name}" — in an account where two projects already declare the same names, an unrelated name is how a collision hides`;
+      }
+      return null;
+    },
+    severity: 'warn',
+  },
 ];
+
+const present = (v) => v != null && (Array.isArray(v) ? v.length > 0 : Object.keys(v).length > 0);
 
 function lintFile(file) {
   const findings = [];
@@ -111,15 +199,35 @@ function lintFile(file) {
   catch (e) { return [{ id: 'L0', severity: 'error', env: '-', message: `unparseable: ${e.message}` }]; }
   for (const env of environments(cfg)) {
     for (const rule of RULES) {
-      const msg = rule.check(env);
-      if (msg) findings.push({ id: rule.id, severity: rule.severity, env: env.label, name: env.node.name ?? '(unnamed)', message: msg });
+      const msg = rule.check(env, cfg);
+      if (msg) findings.push({ id: rule.id, severity: rule.severity, env: env.label, name: env.effective.name ?? '(unnamed)', message: msg });
     }
   }
   return findings;
 }
 
+// L8 is the only cross-file rule: a queue with a producer somewhere in the estate
+// and a consumer nowhere is a message path that accepts work and drops it.
+function lintEstate(files) {
+  const produced = new Map(), consumed = new Set();
+  for (const f of files) {
+    let cfg;
+    try { cfg = parseJsonc(readFileSync(f, 'utf8')); } catch { continue; }
+    for (const env of environments(cfg)) {
+      for (const p of env.declared.queues?.producers ?? []) if (p.queue) produced.set(p.queue, `${basename(dirname(f))}/${env.label}`);
+      for (const c of env.declared.queues?.consumers ?? []) if (c.queue) consumed.add(c.queue);
+    }
+  }
+  const orphans = [...produced.entries()].filter(([q]) => !consumed.has(q));
+  return orphans.map(([q, where]) => ({
+    id: 'L8', severity: 'warn', env: where, name: q,
+    message: `queue "${q}" has a producer but no consumer declared anywhere in this estate — work is accepted and then goes nowhere, silently`,
+  }));
+}
+
 function report(files) {
   let errors = 0;
+  const estate = lintEstate(files);
   for (const f of files) {
     const findings = lintFile(f);
     const label = relative(REPO, f) || basename(f);
@@ -129,6 +237,13 @@ function report(files) {
       const tag = x.severity === 'error' ? 'ERROR ' : x.severity === 'warn' ? 'WARN  ' : 'INFO  ';
       if (x.severity === 'error') errors++;
       console.log(`  ${tag}${x.id} [${x.env} ${x.name}] ${x.message}`);
+    }
+  }
+  if (estate.length) {
+    console.log(`        (estate-wide)`);
+    for (const x of estate) {
+      if (x.severity === 'error') errors++;
+      console.log(`  ${x.severity === 'error' ? 'ERROR ' : 'WARN  '}${x.id} [${x.env} ${x.name}] ${x.message}`);
     }
   }
   return errors;

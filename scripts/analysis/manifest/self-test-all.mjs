@@ -14,9 +14,11 @@ import { fileURLToPath } from 'node:url';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ANALYSIS = resolve(HERE, '..');
 const CHECKS = [
-  ['environment manifests', join(HERE, 'validate-manifest.mjs')],
-  ['release manifests',     join(HERE, 'validate-release-manifest.mjs')],
-  ['wrangler configs',      join(ANALYSIS, 'lint', 'lint-wrangler.mjs')],
+  ['environment manifests',  join(HERE, 'validate-manifest.mjs')],
+  ['release manifests',      join(HERE, 'validate-release-manifest.mjs')],
+  ['preservation manifests', join(HERE, 'validate-preservation-manifest.mjs')],
+  ['wrangler configs',       join(ANALYSIS, 'lint', 'lint-wrangler.mjs')],
+  ['branch safety',          join(ANALYSIS, 'git', 'check-branch-safety.mjs')],
 ];
 
 let failed = 0, total = 0;

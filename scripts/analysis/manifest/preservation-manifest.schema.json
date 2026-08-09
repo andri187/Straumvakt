@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "straumvakt/preservation-manifest.schema.json",
+  "title": "Straumvakt preservation manifest",
+  "description": "Record of what must survive a cleanup, how survival is proven, and what must be true before deletion is even proposed. OFFLINE ONLY - this schema and its validator never contact a network, never read the filesystem beyond the manifest itself, and never delete anything. A preservation manifest is EVIDENCE and a PRECONDITION, not an instruction: nothing executes it.",
+  "type": "object",
+  "required": ["manifestVersion", "generatedAt", "root", "archive", "records"],
+  "additionalProperties": false,
+  "properties": {
+    "manifestVersion": { "const": 1 },
+    "generatedAt": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$" },
+    "root": { "type": "string", "minLength": 2, "description": "the tree being measured" },
+    "measurement": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "totalGB": { "type": "number", "minimum": 0 },
+        "regenerableGB": { "type": "number", "minimum": 0 },
+        "contentGB": { "type": "number", "minimum": 0 },
+        "reparsePointsExcluded": { "type": "boolean", "description": "MUST be true. Following junctions double-counts shared node_modules and has already produced impossible figures on this estate." },
+        "regenerationProven": { "type": "boolean", "description": "npm ci and flutter pub get demonstrated to succeed into a temporary copy. Until true, 'regenerable' is an assumption about registries, not a fact." }
+      }
+    },
+    "archive": {
+      "type": "object",
+      "required": ["destination", "checksumAlgorithm", "verificationMethod", "verified"],
+      "additionalProperties": false,
+      "properties": {
+        "destination": { "type": "string", "minLength": 3 },
+        "checksumAlgorithm": { "type": "string", "enum": ["sha256", "sha512", "sha1", "md5"], "description": "sha1 and md5 are representable so they can be REJECTED by policy" },
+        "verificationMethod": { "type": "string", "enum": ["extract-and-compare", "listing-only", "none"], "description": "listing-only and none are representable so they can be REJECTED; an untested backup is a hypothesis" },
+        "verified": { "type": "boolean" },
+        "verifiedAt": { "type": ["string", "null"], "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$" },
+        "independentFailureDomain": { "type": ["boolean", "null"], "description": "true when the archive survives the failure it protects against; an archive on the same disk protects against git clean, not against disk loss" }
+      }
+    },
+    "records": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/record" } },
+    "junctions": { "type": "array", "items": { "$ref": "#/$defs/junction" } },
+    "worktrees": { "type": "array", "items": { "$ref": "#/$defs/worktree" } },
+    "notes": { "type": "string" }
+  },
+  "$defs": {
+    "record": {
+      "type": "object",
+      "required": ["id", "path", "kind", "status", "recoveryPath"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^P-[0-9]{2,3}$" },
+        "path": { "type": "string", "minLength": 2 },
+        "kind": { "type": "string", "enum": ["specification", "research", "prompts", "evidence", "screenshots", "source", "fixtures", "provenance", "credential-absence", "personal-data", "build-output", "unknown"] },
+        "expectedFileCount": { "type": ["integer", "null"], "minimum": 0 },
+        "verifiedFileCount": { "type": ["integer", "null"], "minimum": 0 },
+        "status": { "type": "string", "enum": ["verified", "present-unverified", "missing", "not-applicable"] },
+        "verifiedAt": { "type": ["string", "null"], "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$" },
+        "recoveryPath": { "type": "string", "enum": ["archive", "git-remote", "reinstall", "re-download", "re-capture", "none"] },
+        "recoveryNote": { "type": ["string", "null"] },
+        "vcs": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "hasGitDir": { "type": "boolean" },
+            "commitCount": { "type": "integer", "minimum": 0 },
+            "trackedFileCount": { "type": "integer", "minimum": 0 },
+            "untrackedTopLevel": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "containsPersonalData": { "type": "boolean" },
+        "dataProtectionApproved": { "type": ["boolean", "null"] },
+        "thirdPartyLicensed": { "type": "boolean", "description": "third-party material whose redistribution is a decision, not a default" },
+        "deletable": { "type": "boolean", "description": "may be PROPOSED for deletion in a later, separately approved session" },
+        "archiveVerified": { "type": "boolean" },
+        "approval": { "type": "string", "enum": ["andri", "coordinator", "owning-agent", "not-ours", "none-required"] },
+        "safeDeletePrerequisite": { "type": ["string", "null"] }
+      }
+    },
+    "junction": {
+      "type": "object",
+      "required": ["junction", "target", "unlinkCommand"],
+      "additionalProperties": false,
+      "properties": {
+        "junction": { "type": "string" },
+        "target": { "type": "string" },
+        "crossWorktree": { "type": "boolean" },
+        "unlinkCommand": { "type": "string", "description": "must be the non-following form; a recursive delete can traverse a junction and remove the TARGET" },
+        "targetFileCountBefore": { "type": ["integer", "null"], "minimum": 0 },
+        "targetFileCountAfter": { "type": ["integer", "null"], "minimum": 0 }
+      }
+    },
+    "worktree": {
+      "type": "object",
+      "required": ["path", "branch", "tip", "uniqueCommits", "dirtyFiles"],
+      "additionalProperties": false,
+      "properties": {
+        "path": { "type": "string" },
+        "branch": { "type": "string" },
+        "tip": { "type": "string", "pattern": "^[0-9a-f]{7,40}$" },
+        "uniqueCommits": { "type": "integer", "minimum": 0 },
+        "dirtyFiles": { "type": "integer", "minimum": 0 },
+        "retirable": { "type": "boolean" },
+        "branchPreserved": { "type": "boolean", "description": "the branch survives retirement; a worktree is a working copy, not an artifact" },
+        "owner": { "type": "string", "enum": ["release-ops", "claude-a", "codex", "shared", "unknown"] }
+      }
+    }
+  }
+}

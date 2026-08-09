@@ -1,0 +1,15 @@
+{
+  // Wrangler accepts `route` (singular) as well as `routes`. The old model only
+  // looked at the plural, so this shape slipped through entirely.
+  "name": "example-single",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-01-01",
+  "route": { "pattern": "single.example.org/*", "zone_name": "example.org" },
+  "env": {
+    "staging": {
+      "name": "example-single-staging",
+      "compatibility_date": "2026-01-01",
+      "workers_dev": true
+    }
+  }
+}

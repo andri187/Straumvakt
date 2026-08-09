@@ -1,0 +1,16 @@
+{
+  // The staging Worker name bears no relation to the base name. In an account
+  // where two projects already declare identical Worker names, an unrelated name
+  // is exactly how a collision hides in plain sight.
+  "name": "straumvakt-api",
+  "main": "src/index.ts",
+  "workers_dev": true,
+  "compatibility_date": "2026-01-01",
+  "env": {
+    "staging": {
+      "name": "hlada-api-staging",
+      "workers_dev": true,
+      "compatibility_date": "2026-01-01"
+    }
+  }
+}

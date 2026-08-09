@@ -1,0 +1,19 @@
+{
+  // Previously this fixture asserted that a top-level workers_dev does NOT cover a
+  // named environment. Cloudflare's documentation says the opposite: workers_dev
+  // and routes are INHERITABLE, and only bindings are not.
+  //   "The majority of keys are inheritable... Bindings, such as vars or
+  //    kv_namespaces, are not inheritable and need to be defined explicitly."
+  // So this shape is safe: env.staging inherits workers_dev: true.
+  "name": "example-web",
+  "main": "src/index.ts",
+  "workers_dev": true,
+  "compatibility_date": "2026-01-01",
+  "env": {
+    "staging": {
+      "name": "example-web-staging",
+      "compatibility_date": "2026-01-01",
+      "routes": [{ "pattern": "beta.example.org", "custom_domain": true }]
+    }
+  }
+}

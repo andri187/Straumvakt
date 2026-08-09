@@ -1,0 +1,54 @@
+{
+  "manifestVersion": 1,
+  "generatedAt": "2026-08-09T15:00:00Z",
+  "root": "E:\\Claude",
+  "measurement": {
+    "totalGB": 43.76,
+    "regenerableGB": 41.57,
+    "contentGB": 2.25,
+    "reparsePointsExcluded": true,
+    "regenerationProven": true
+  },
+  "archive": {
+    "destination": "C:\\Users\\Andri\\Archive\\straumvakt-preservation-2026-08-09",
+    "checksumAlgorithm": "sha256",
+    "verificationMethod": "extract-and-compare",
+    "verified": true,
+    "verifiedAt": "2026-08-09T15:00:00Z",
+    "independentFailureDomain": true
+  },
+  "records": [],
+  "junctions": [
+    {
+      "junction": "E:\\Claude\\Straumvakt-n1\\node_modules",
+      "target": "E:\\Claude\\Straumvakt\\node_modules",
+      "crossWorktree": true,
+      "unlinkCommand": "cmd /c rmdir \"E:\\Claude\\Straumvakt-n1\\node_modules\"",
+      "targetFileCountBefore": 41207,
+      "targetFileCountAfter": 41207
+    }
+  ],
+  "worktrees": [
+    {
+      "path": "E:\\Claude\\Straumvakt-n1",
+      "branch": "dev/n1-org-landing",
+      "tip": "52e3b32",
+      "uniqueCommits": 0,
+      "dirtyFiles": 0,
+      "retirable": true,
+      "branchPreserved": true,
+      "owner": "release-ops"
+    },
+    {
+      "path": "E:\\Claude\\Straumvakt-onboarding-web",
+      "branch": "codex/onboarding-web-experience",
+      "tip": "0f4dbc8",
+      "uniqueCommits": 12,
+      "dirtyFiles": 0,
+      "retirable": false,
+      "branchPreserved": true,
+      "owner": "codex"
+    }
+  ],
+  "notes": "Schema minItems. A preservation manifest that preserves nothing."
+}

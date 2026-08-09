@@ -1,0 +1,26 @@
+{
+  "_comment": "Baselines for the branch-safety checker. The expected* values are a recorded observation, not a wish: if the live numbers differ, something was pushed or deleted, and rule G9 says so rather than letting it pass unnoticed. Update these deliberately, in a commit, when a change is intentional.",
+  "deployPointerBranches": [
+    "staging",
+    "main"
+  ],
+  "forbiddenCommits": [
+    "4fe0a95",
+    "30fa407",
+    "5311cbd"
+  ],
+  "refsToCheck": [
+    "4b69d0f",
+    "origin/staging"
+  ],
+  "fastForwardPair": [
+    "origin/staging",
+    "4b69d0f"
+  ],
+  "expectedRemoteRefCount": 16,
+  "expectedDeployPointerSha": "f53fb55e1229",
+  "_baselineRecordedAt": "2026-08-09T14:29:55Z",
+  "_baselineNote": "origin/staging f53fb55e1229 and 16 remote branches, observed read-only. origin/staging is treated as a live production deploy pointer until the Cloudflare Git-integration owner (blocked fact F2) is established. Worktree baseline: 29 registered, 28 on disk, 1 stale registration, 43 local branches against 16 remote.",
+  "releaseCandidate": "4b69d0f",
+  "expectedWorktreeCount": 29
+}
