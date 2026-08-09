@@ -160,14 +160,14 @@ describe("mintRfidValue", () => {
   it("re-rolls the first byte when the RNG lands on the reserved 08 prefix", () => {
     let call = 0;
     const spy = vi
-      .spyOn(globalThis.crypto, "getRandomValues")
+      .spyOn(crypto, "getRandomValues")
       .mockImplementation(((a: ArrayBufferView) => {
         call += 1;
         new Uint8Array(a.buffer, a.byteOffset, a.byteLength).fill(
           call === 1 ? 0x08 : 0x42,
         );
         return a;
-      }) as typeof globalThis.crypto.getRandomValues);
+      }) as typeof crypto.getRandomValues);
 
     // try/finally, not a trailing mockRestore: a failing expect throws, and
     // an unrestored crypto stub makes every later mint collide. Proven the
