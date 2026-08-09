@@ -23,16 +23,20 @@ ActiveSession _session(String id, String charger) => ActiveSession(
   energyKwh: 4,
 );
 
-Widget _app({required StraumvaktApi api, required ActiveSession initial}) =>
-    MaterialApp(
-      theme: AppTheme.dark(),
-      home: ActiveSessionScreen(
-        api: api,
-        storage: FakeSessionStorage(accessToken: 'token'),
-        initialSession: initial,
-        pollInterval: const Duration(hours: 1),
-      ),
-    );
+Widget _app({
+  required StraumvaktApi api,
+  required ActiveSession initial,
+  ValueChanged<List<ActiveSession>>? onDoneWithSessions,
+}) => MaterialApp(
+  theme: AppTheme.dark(),
+  home: ActiveSessionScreen(
+    api: api,
+    storage: FakeSessionStorage(accessToken: 'token'),
+    initialSession: initial,
+    onDoneWithSessions: onDoneWithSessions,
+    pollInterval: const Duration(hours: 1),
+  ),
+);
 
 void main() {
   testWidgets('tracked session stays selected when response order changes', (
@@ -105,6 +109,49 @@ void main() {
     expect(find.text('Charge complete'), findsOneWidget);
     expect(find.text('425 kr'), findsOneWidget);
     expect(find.text('Other charger'), findsNothing);
+  });
+
+  testWidgets('settlement returns the remaining active session identities', (
+    tester,
+  ) async {
+    List<ActiveSession>? remaining;
+    final api = StraumvaktApi(
+      baseUrl: 'https://example.test',
+      client: MockClient((request) async {
+        if (request.url.path.endsWith('/current')) {
+          return _json({
+            'sessions': [
+              {
+                'sessionId': 'remaining',
+                'chargerName': 'Remaining charger',
+                'status': 'Charging',
+              },
+            ],
+          });
+        }
+        return _json({
+          'session': {
+            'sessionId': 'tracked',
+            'startedAt': '2026-08-09T00:00:00Z',
+            'endedAt': '2026-08-09T01:00:00Z',
+            'energyKwh': 8.5,
+          },
+        });
+      }),
+    );
+
+    await tester.pumpWidget(
+      _app(
+        api: api,
+        initial: _session('tracked', 'Old'),
+        onDoneWithSessions: (sessions) => remaining = sessions,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Done'));
+
+    expect(remaining, hasLength(1));
+    expect(remaining!.single.sessionId, 'remaining');
   });
 
   testWidgets('transient poll error preserves the last known snapshot', (

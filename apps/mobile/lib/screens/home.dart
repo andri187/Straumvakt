@@ -11,6 +11,7 @@ import '../theme/logo.dart';
 import '../theme/palette.dart';
 import 'charger_detail_sheet.dart';
 import 'active_session.dart';
+import 'session_picker.dart';
 import 'hero_image.dart';
 import 'installation_picker.dart';
 import 'menu_drawer.dart';
@@ -44,7 +45,7 @@ class _HomeScreenState extends State<HomeScreen> {
   StreamSubscription<TapIntentState>? _tapSub;
 
   late Future<List<DriverCharger>> _futureChargers;
-  late Future<ActiveSession?> _futureActiveSession;
+  late Future<List<ActiveSession>> _futureActiveSessions;
 
   // Sprint 9 / 2026-05-10 — installation picker state.
   // null = "All locations" (no filter active). When set, the home
@@ -63,7 +64,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _futureActiveSession = _loadActiveSession();
+    _futureActiveSessions = _loadActiveSessions();
     _futureChargers = _loadChargers();
     _futureChargers.then(_startScanning).catchError((_) {});
   }
@@ -193,22 +194,68 @@ class _HomeScreenState extends State<HomeScreen> {
     return _api.getChargers(token);
   }
 
-  Future<ActiveSession?> _loadActiveSession() async {
+  Future<List<ActiveSession>> _loadActiveSessions() async {
     final token = await _storage.readAccessToken();
-    if (token == null) return null;
+    if (token == null) return const [];
     try {
-      return _api.getCurrentSession(token);
+      return _api.getCurrentSessions(token);
     } catch (_) {
-      return null;
+      return const [];
     }
   }
 
   Future<void> _refresh() async {
     setState(() {
-      _futureActiveSession = _loadActiveSession();
+      _futureActiveSessions = _loadActiveSessions();
       _futureChargers = _loadChargers();
     });
     await _futureChargers.catchError((_) => <DriverCharger>[]);
+  }
+
+  void _openActiveSession(
+    BuildContext routeContext,
+    ActiveSession session, {
+    bool replace = false,
+  }) {
+    final route = MaterialPageRoute(
+      builder: (activeContext) => ActiveSessionScreen(
+        initialSession: session,
+        onDoneWithSessions: (remaining) =>
+            _routeAfterSession(activeContext, remaining),
+      ),
+    );
+    if (replace) {
+      Navigator.of(routeContext).pushReplacement(route);
+    } else {
+      Navigator.of(routeContext).push(route);
+    }
+  }
+
+  void _routeAfterSession(
+    BuildContext routeContext,
+    List<ActiveSession> sessions,
+  ) {
+    if (!mounted) return;
+    setState(() {
+      _futureActiveSessions = Future.value(sessions);
+    });
+    if (sessions.length == 1) {
+      _openActiveSession(routeContext, sessions.single, replace: true);
+      return;
+    }
+    if (sessions.length > 1) {
+      Navigator.of(routeContext).pushReplacement(
+        MaterialPageRoute(
+          builder: (pickerContext) => SessionPickerScreen(
+            sessions: sessions,
+            onSelected: (session) =>
+                _openActiveSession(pickerContext, session, replace: true),
+          ),
+        ),
+      );
+      return;
+    }
+    Navigator.of(routeContext).pop();
   }
 
   // Status filter dropped 2026-05-10 — the filter-chip row was removed
@@ -236,21 +283,32 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const SliverToBoxAdapter(child: HeroImageBanner()),
               SliverToBoxAdapter(
-                child: FutureBuilder<ActiveSession?>(
-                  future: _futureActiveSession,
+                child: FutureBuilder<List<ActiveSession>>(
+                  future: _futureActiveSessions,
                   builder: (context, snapshot) {
-                    final session = snapshot.data;
-                    if (session == null) return const SizedBox.shrink();
-                    return _ActiveSessionBanner(
-                      session: session,
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => ActiveSessionScreen(
-                            initialSession: session,
-                            onDone: () => Navigator.of(context).pop(),
+                    final sessions = snapshot.data ?? const <ActiveSession>[];
+                    if (sessions.isEmpty) return const SizedBox.shrink();
+                    if (sessions.length > 1) {
+                      return _MultipleSessionsBanner(
+                        count: sessions.length,
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (pickerContext) => SessionPickerScreen(
+                              sessions: sessions,
+                              onSelected: (session) => _openActiveSession(
+                                pickerContext,
+                                session,
+                                replace: true,
+                              ),
+                            ),
                           ),
                         ),
-                      ),
+                      );
+                    }
+                    final session = sessions.single;
+                    return _ActiveSessionBanner(
+                      session: session,
+                      onTap: () => _openActiveSession(context, session),
                     );
                   },
                 ),
@@ -958,6 +1016,49 @@ class _TapBanner extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MultipleSessionsBanner extends StatelessWidget {
+  const _MultipleSessionsBanner({required this.count, required this.onTap});
+
+  final int count;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+      child: Material(
+        color: BrandPalette.cyan.withValues(alpha: 0.10),
+        shape: RoundedRectangleBorder(
+          side: BorderSide(color: BrandPalette.cyan.withValues(alpha: 0.35)),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: ListTile(
+          leading: const Icon(
+            Icons.ev_station_rounded,
+            color: BrandPalette.cyan,
+          ),
+          title: Text(
+            '$count active charges',
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          subtitle: const Text(
+            'Choose which charge to view',
+            style: TextStyle(color: BrandPalette.muted),
+          ),
+          trailing: const Icon(
+            Icons.chevron_right_rounded,
+            color: BrandPalette.cyan,
+          ),
+          onTap: onTap,
         ),
       ),
     );

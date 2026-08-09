@@ -12,7 +12,9 @@ import 'i18n/strings.dart';
 import 'screens/empty_access.dart';
 import 'screens/active_session.dart';
 import 'screens/home.dart';
+import 'screens/guest_welcome.dart';
 import 'screens/login.dart';
+import 'screens/session_picker.dart';
 import 'theme/logo.dart';
 import 'theme/palette.dart';
 
@@ -71,7 +73,7 @@ class _BootstrapState extends State<_Bootstrap> {
     final token = await _storage.readAccessToken();
     final email = await _storage.readEmail();
     if (token == null) {
-      _toLogin(email);
+      _toGuest(email);
       return;
     }
 
@@ -88,8 +90,12 @@ class _BootstrapState extends State<_Bootstrap> {
       // thing that is currently costing time and energy.
       try {
         final sessions = await _api.getCurrentSessions(token);
-        if (sessions.isNotEmpty) {
-          _toActiveSession(me, sessions.first);
+        if (sessions.length == 1) {
+          _toActiveSession(me, sessions.single);
+          return;
+        }
+        if (sessions.length > 1) {
+          _toSessionPicker(me, sessions);
           return;
         }
       } catch (_) {
@@ -117,10 +123,10 @@ class _BootstrapState extends State<_Bootstrap> {
     } on ApiException {
       // 401 → token expired or revoked. Wipe and re-auth.
       await _storage.clear();
-      _toLogin(email);
+      _toGuest(email);
     } catch (_) {
       // Network error on cold start — let user retry from login.
-      _toLogin(email);
+      _toGuest(email);
     }
   }
 
@@ -137,8 +143,27 @@ class _BootstrapState extends State<_Bootstrap> {
       MaterialPageRoute(
         builder: (routeContext) => ActiveSessionScreen(
           initialSession: session,
-          onDone: () => Navigator.of(routeContext).pushReplacement(
-            MaterialPageRoute(builder: (_) => HomeScreen(driver: me)),
+          onDoneWithSessions: (sessions) =>
+              _routeAfterSession(routeContext, me, sessions),
+        ),
+      ),
+    );
+  }
+
+  void _toSessionPicker(DriverProfile me, List<ActiveSession> sessions) {
+    if (!mounted) return;
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (pickerContext) => SessionPickerScreen(
+          sessions: sessions,
+          onSelected: (session) => Navigator.of(pickerContext).pushReplacement(
+            MaterialPageRoute(
+              builder: (activeContext) => ActiveSessionScreen(
+                initialSession: session,
+                onDoneWithSessions: (remaining) =>
+                    _routeAfterSession(activeContext, me, remaining),
+              ),
+            ),
           ),
         ),
       ),
@@ -152,6 +177,48 @@ class _BootstrapState extends State<_Bootstrap> {
         builder: (_) =>
             EmptyAccessScreen(driver: me, onRefresh: () => _recheckAccess(me)),
       ),
+    );
+  }
+
+  void _routeAfterSession(
+    BuildContext routeContext,
+    DriverProfile me,
+    List<ActiveSession> sessions,
+  ) {
+    if (sessions.length == 1) {
+      Navigator.of(routeContext).pushReplacement(
+        MaterialPageRoute(
+          builder: (nextContext) => ActiveSessionScreen(
+            initialSession: sessions.single,
+            onDoneWithSessions: (remaining) =>
+                _routeAfterSession(nextContext, me, remaining),
+          ),
+        ),
+      );
+      return;
+    }
+    if (sessions.length > 1) {
+      Navigator.of(routeContext).pushReplacement(
+        MaterialPageRoute(
+          builder: (pickerContext) => SessionPickerScreen(
+            sessions: sessions,
+            onSelected: (session) =>
+                Navigator.of(pickerContext).pushReplacement(
+                  MaterialPageRoute(
+                    builder: (nextContext) => ActiveSessionScreen(
+                      initialSession: session,
+                      onDoneWithSessions: (remaining) =>
+                          _routeAfterSession(nextContext, me, remaining),
+                    ),
+                  ),
+                ),
+          ),
+        ),
+      );
+      return;
+    }
+    Navigator.of(routeContext).pushReplacement(
+      MaterialPageRoute(builder: (_) => HomeScreen(driver: me)),
     );
   }
 
@@ -169,11 +236,17 @@ class _BootstrapState extends State<_Bootstrap> {
     }
   }
 
-  void _toLogin(String? prefilledEmail) {
+  void _toGuest(String? prefilledEmail) {
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
-        builder: (_) => LoginScreen(prefilledEmail: prefilledEmail),
+        builder: (guestContext) => GuestWelcomeScreen(
+          onSignIn: () => Navigator.of(guestContext).push(
+            MaterialPageRoute(
+              builder: (_) => LoginScreen(prefilledEmail: prefilledEmail),
+            ),
+          ),
+        ),
       ),
     );
   }

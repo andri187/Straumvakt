@@ -15,6 +15,7 @@ class ActiveSessionScreen extends StatefulWidget {
     this.sessionId,
     this.chargerName,
     this.onDone,
+    this.onDoneWithSessions,
     this.pollingEnabled = true,
     this.pollInterval = const Duration(seconds: 3),
     this.api,
@@ -25,6 +26,7 @@ class ActiveSessionScreen extends StatefulWidget {
   final String? sessionId;
   final String? chargerName;
   final VoidCallback? onDone;
+  final ValueChanged<List<ActiveSession>>? onDoneWithSessions;
   final bool pollingEnabled;
   final Duration pollInterval;
   final StraumvaktApi? api;
@@ -44,6 +46,7 @@ class _ActiveSessionScreenState extends State<ActiveSessionScreen> {
   bool _hasSeenSession = false;
   bool _stopping = false;
   bool _ended = false;
+  List<ActiveSession> _remainingSessions = const [];
   String? _error;
 
   String? get _trackedId =>
@@ -93,7 +96,7 @@ class _ActiveSessionScreenState extends State<ActiveSessionScreen> {
       if (id == null && sessions.isNotEmpty) current = sessions.first;
 
       if (current == null) {
-        if (_hasSeenSession) await _finish(token);
+        if (_hasSeenSession) await _finish(token, sessions);
         return;
       }
       setState(() {
@@ -111,13 +114,17 @@ class _ActiveSessionScreenState extends State<ActiveSessionScreen> {
     }
   }
 
-  Future<void> _finish(String token) async {
+  Future<void> _finish(
+    String token,
+    List<ActiveSession> remainingSessions,
+  ) async {
     _poll?.cancel();
     final id = _trackedId;
     setState(() {
       _ended = true;
       _stopping = false;
       _error = null;
+      _remainingSessions = List.unmodifiable(remainingSessions);
       if (id != null) {
         _detailFuture = _api.getSessionDetail(
           accessToken: token,
@@ -154,7 +161,9 @@ class _ActiveSessionScreenState extends State<ActiveSessionScreen> {
   }
 
   void _done() {
-    if (widget.onDone != null) {
+    if (widget.onDoneWithSessions != null) {
+      widget.onDoneWithSessions!(_remainingSessions);
+    } else if (widget.onDone != null) {
       widget.onDone!();
     } else {
       Navigator.of(context).maybePop();
