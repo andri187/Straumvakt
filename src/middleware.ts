@@ -83,13 +83,22 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
+  if (
+    pathname === "/local/product-preview" &&
+    process.env.STRAUMVAKT_LOCAL_PRODUCT_PREVIEW === "1"
+  ) {
+    return NextResponse.next();
+  }
+
   // Strip any client-supplied spoofed header before we do anything.
   const sanitisedHeaders = new Headers(req.headers);
   sanitisedHeaders.delete(ADMIN_HEADER);
 
   let session: Awaited<ReturnType<typeof verifyAdminSession>> = null;
   try {
-    const token = req.cookies.get(adminSessionConfig.SESSION_COOKIE_NAME)?.value;
+    const token = req.cookies.get(
+      adminSessionConfig.SESSION_COOKIE_NAME,
+    )?.value;
     session = await verifyAdminSession(token);
   } catch (err) {
     console.error(

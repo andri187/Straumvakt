@@ -8,6 +8,7 @@ const ITEMS: ReadonlyArray<{ href: string; label: string; exact?: boolean }> = [
   { href: "/staff/overview", label: "Overview", exact: true },
   { href: "/staff/overview/onboarding", label: "Onboarding" },
   { href: "/staff/overview/organisations", label: "Organisations" },
+  { href: "/staff/overview/readiness", label: "Readiness" },
   {
     href: "/staff/overview/organisations#support-context",
     label: "Support context",

@@ -35,21 +35,21 @@ GET 83 · POST 65 · PATCH 15 · DELETE 14 · PUT 1
 
 | Domain | Endpoints | No in-repo caller |
 |---|---:|---:|
-| identity | 66 | 54 |
-| assets | 45 | 41 |
+| identity | 66 | 49 |
+| assets | 45 | 39 |
 | protocol | 8 | 3 |
 | charging | 4 | 0 |
-| commercial | 33 | 24 |
+| commercial | 33 | 22 |
 | vendor | 22 | 20 |
 
-## identity — 66 endpoints, 54 with no in-repo caller
+## identity — 66 endpoints, 49 with no in-repo caller
 
 | Method | Path | Called by | Source |
 |---|---|---|---|
 | GET | `/api/admin/groups` | — | `routes/admin/groups` |
 | GET | `/api/admin/host-applications` | console | `routes/admin/host-applications` |
-| GET | `/api/admin/host-applications/:id` | — | `routes/admin/host-applications` |
-| PATCH | `/api/admin/host-applications/:id` | — | `routes/admin/host-applications` |
+| GET | `/api/admin/host-applications/:id` | console | `routes/admin/host-applications` |
+| PATCH | `/api/admin/host-applications/:id` | console | `routes/admin/host-applications` |
 | POST | `/api/admin/login` | console | `routes/admin/auth` |
 | POST | `/api/admin/logout` | console | `routes/admin/auth` |
 | GET | `/api/admin/me` | console | `routes/admin/me` |
@@ -59,7 +59,7 @@ GET 83 · POST 65 · PATCH 15 · DELETE 14 · PUT 1
 | POST | `/api/admin/orgs` | console | `routes/admin/orgs` |
 | GET | `/api/admin/orgs/:orgId` | console | `routes/admin/orgs` |
 | PATCH | `/api/admin/orgs/:orgId` | console | `routes/admin/orgs` |
-| GET | `/api/admin/orgs/:orgId/agreements` | — | `routes/admin/orgs` |
+| GET | `/api/admin/orgs/:orgId/agreements` | console | `routes/admin/orgs` |
 | POST | `/api/admin/orgs/:orgId/archive` | — | `routes/admin/orgs` |
 | GET | `/api/admin/orgs/:orgId/bill-objects` | — | `routes/admin/bill-objects` |
 | POST | `/api/admin/orgs/:orgId/bill-objects` | — | `routes/admin/bill-objects` |
@@ -70,10 +70,10 @@ GET 83 · POST 65 · PATCH 15 · DELETE 14 · PUT 1
 | GET | `/api/admin/orgs/:orgId/contracts` | — | `routes/admin/orgs` |
 | GET | `/api/admin/orgs/:orgId/driver-group-memberships` | — | `routes/admin/driver-group-memberships` |
 | POST | `/api/admin/orgs/:orgId/driver-group-memberships` | — | `routes/admin/driver-group-memberships` |
-| GET | `/api/admin/orgs/:orgId/driver-groups` | — | `routes/admin/orgs` |
+| GET | `/api/admin/orgs/:orgId/driver-groups` | console | `routes/admin/orgs` |
 | GET | `/api/admin/orgs/:orgId/driver-invites` | — | `routes/admin/orgs` |
 | POST | `/api/admin/orgs/:orgId/driver-invites` | — | `routes/admin/orgs` |
-| GET | `/api/admin/orgs/:orgId/drivers` | — | `routes/admin/orgs` |
+| GET | `/api/admin/orgs/:orgId/drivers` | console | `routes/admin/orgs` |
 | GET | `/api/admin/orgs/:orgId/family-groups` | — | `routes/admin/orgs` |
 | GET | `/api/admin/orgs/:orgId/installations` | console | `routes/admin/orgs` |
 | GET | `/api/admin/orgs/:orgId/invites` | — | `routes/admin/org-invites` |
@@ -113,7 +113,7 @@ GET 83 · POST 65 · PATCH 15 · DELETE 14 · PUT 1
 | GET | `/api/public/verify-email/:token` | — | `routes/public/email-verification` |
 | POST | `/api/public/verify-email/:token` | — | `routes/public/email-verification` |
 
-## assets — 45 endpoints, 41 with no in-repo caller
+## assets — 45 endpoints, 39 with no in-repo caller
 
 | Method | Path | Called by | Source |
 |---|---|---|---|
@@ -153,8 +153,8 @@ GET 83 · POST 65 · PATCH 15 · DELETE 14 · PUT 1
 | DELETE | `/api/admin/properties/:id` | — | `routes/admin/properties` |
 | GET | `/api/admin/properties/:id` | — | `routes/admin/properties` |
 | PATCH | `/api/admin/properties/:id` | — | `routes/admin/properties` |
-| GET | `/api/admin/sites` | — | `routes/admin/sites` |
-| POST | `/api/admin/sites` | — | `routes/admin/sites` |
+| GET | `/api/admin/sites` | console | `routes/admin/sites` |
+| POST | `/api/admin/sites` | console | `routes/admin/sites` |
 | DELETE | `/api/admin/sites/:siteId` | — | `routes/admin/sites` |
 | GET | `/api/admin/sites/:siteId` | — | `routes/admin/sites` |
 | PATCH | `/api/admin/sites/:siteId` | — | `routes/admin/sites` |
@@ -185,12 +185,12 @@ GET 83 · POST 65 · PATCH 15 · DELETE 14 · PUT 1
 | POST | `/api/driver/tap-intent` | mobile | `routes/public/driver-tap-intent` |
 | DELETE | `/api/driver/tap-intent/:id` | mobile | `routes/public/driver-tap-intent` |
 
-## commercial — 33 endpoints, 24 with no in-repo caller
+## commercial — 33 endpoints, 22 with no in-repo caller
 
 | Method | Path | Called by | Source |
 |---|---|---|---|
-| GET | `/api/admin/access-requests` | — | `routes/admin/access-requests` |
-| PATCH | `/api/admin/access-requests/:id` | — | `routes/admin/access-requests` |
+| GET | `/api/admin/access-requests` | console | `routes/admin/access-requests` |
+| PATCH | `/api/admin/access-requests/:id` | console | `routes/admin/access-requests` |
 | GET | `/api/admin/agreements` | — | `routes/admin/agreements-debug` |
 | GET | `/api/admin/agreements/:id` | — | `routes/admin/agreements-debug` |
 | GET | `/api/admin/agreements/debug-options` | — | `routes/admin/agreements-debug` |

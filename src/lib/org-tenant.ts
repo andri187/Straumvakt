@@ -207,6 +207,11 @@ const BUILT_SECTIONS: ReadonlySet<OrgSectionKey> = new Set<OrgSectionKey>([
   "overview",
   "onboarding",
   "profile",
+  "chargers",
+  "drivers",
+  "invite",
+  "sessions",
+  "agreements",
 ]);
 
 const SECTION_PATHS: Record<OrgSectionKey, string> = {
