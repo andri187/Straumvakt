@@ -168,6 +168,31 @@ screen that carries the F1–F4 truthfulness problem. **Acceptance criteria for 
 are in the [acceptance plan](2026-08-09-launch-acceptance-plan.md) §M.** I did not
 review it as a finished diff because it is mid-flight.
 
+### End-of-session reconciliation (2026-08-09T00:07:07Z)
+
+Both peer worktrees re-checked at close. Neither had committed:
+
+| Worktree | Startup | Close | Moved? |
+|---|---|---|---|
+| Release candidate | `4265364`, 0 dirty | `4265364`, **1 dirty** | no commit; Claude A active |
+| Mobile product | `29c3317`, 12 dirty | `29c3317`, 11 dirty | no commit; Codex active |
+
+**Consequence for this audit:** every finding is against committed RC code and is
+stable. Codex's fixes to F1–F4 are *not yet in any commit*, so the P0 items stand
+as written. They should be re-checked against Codex's diff once it lands rather
+than assumed closed.
+
+**Suggested integration order** (nothing was integrated):
+
+1. **P0-1** (emit `null` not `0`) — backend, unblocks Codex's rendering work
+2. Codex's mobile diff — validated against acceptance §M
+3. **P0-3** (login rate limit) — independent, small
+4. Claude A's RC finalisation and CI result
+5. **P0-5 / D-2 / D-3** dashboard facts — gate the release, not the app
+
+P0-1 sequences first because it is backend-side and removes the constraint
+Codex is currently designing around.
+
 ## 8. Scale readiness (Phase 9, summary)
 
 Assessed from architecture, not load tests. **Design capacity ≠ tested capacity;

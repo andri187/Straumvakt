@@ -53,7 +53,7 @@ Type: **C**ode · **I**nfrastructure · **D**ata · **P**roduct · **H**ardware
 
 | | |
 |---|---|
-| Evidence | [infra packet](2026-08-08-infra-release-safety-packet.md) §A1 — six gates blocked |
+| Evidence | `docs/notes/2026-08-08-infra-release-safety-packet.md` §A1 — six gates blocked. **Not linked:** that file lives on branch `docs/infra-release-safety-packet` (`856ebe2`) and is not in this branch's tree |
 | Acceptance | Git-integration state, owning repo, deployed version ID, custom-domain retention, Hyperdrive target and secret names all recorded |
 | Note | Unchanged by this audit; carried forward because it still gates the release |
 
