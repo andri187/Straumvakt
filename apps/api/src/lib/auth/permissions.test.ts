@@ -22,29 +22,23 @@ import {
   PLATFORM_ROLE_PERMISSIONS,
   type Permission,
 } from "./permissions";
+import type {
+  MembershipRole,
+  PlatformRole,
+} from "@straumvakt/shared/domain/users";
 
-const ALL_MEMBERSHIP_ROLES = [
-  "owner",
-  "admin",
-  "manager",
-  "technician",
-  "finance",
-  "support",
-  "viewer",
-  "operator",
-  "helper",
-  "contractor",
-  "driver",
-] as const;
+// Derived from the maps, not hand-listed. The literal these replace had
+// eleven entries and omitted host_admin (the ADR 0027 bundle added later
+// at permissions.ts:186-192), so every "exhaustive coverage" assertion
+// below silently skipped the newest and least-reviewed role. A list whose
+// job is to be exhaustive must not be maintained by hand.
+const ALL_MEMBERSHIP_ROLES = Object.keys(
+  MEMBERSHIP_ROLE_PERMISSIONS,
+) as MembershipRole[];
 
-const ALL_PLATFORM_ROLES = [
-  "super_user",
-  "platform_admin",
-  "support_agent",
-  "sales_cs",
-  "finance_internal",
-  "auditor",
-] as const;
+const ALL_PLATFORM_ROLES = Object.keys(
+  PLATFORM_ROLE_PERMISSIONS,
+) as PlatformRole[];
 
 describe("permission catalogue", () => {
   it("declares ~25 per-tenant verbs and ~15 platform verbs", () => {
