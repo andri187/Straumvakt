@@ -9,6 +9,26 @@ Widget app(InstallationAccessSubmit submit) => MaterialApp(
 );
 
 void main() {
+  testWidgets('disabled contract disables fields and submit action', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.dark(),
+        home: InstallationAccessScreen(
+          enabled: false,
+          onSubmit: (_, _) async => InstallationAccessResult.granted,
+        ),
+      ),
+    );
+    final fields = tester.widgetList<TextFormField>(find.byType(TextFormField));
+    expect(fields.every((field) => field.enabled == false), isTrue);
+    expect(
+      tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+      isNull,
+    );
+  });
+
   testWidgets('requires both access credential fields', (tester) async {
     await tester.pumpWidget(
       app((_, _) async => InstallationAccessResult.granted),

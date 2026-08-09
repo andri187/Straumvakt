@@ -140,6 +140,36 @@ class StraumvaktApi {
     }
   }
 
+  /// Redeem a driver invite for the already-authenticated, bound identity.
+  ///
+  /// This deliberately does not use /api/public/invites/consume. That bearer
+  /// path can create credentials and is not the safe path for an existing
+  /// signed-in driver.
+  Future<DriverInviteRedemption> redeemDriverInvite({
+    required String accessToken,
+    required String token,
+  }) async {
+    final res = await _client.post(
+      Uri.parse('$baseUrl/api/driver/redeem-invite'),
+      headers: _authHeaders(accessToken),
+      body: jsonEncode({'token': token}),
+    );
+    final body = _decode(res);
+    if (res.statusCode != 200) {
+      throw ApiException(
+        res.statusCode,
+        (body is Map && body['message'] is String)
+            ? body['message'] as String
+            : (body is Map && body['error'] is String)
+            ? _inviteErrorMessage(body['error'] as String)
+            : 'Could not redeem invite',
+      );
+    }
+    return DriverInviteRedemption.fromJson(
+      Map<String, dynamic>.from(body as Map),
+    );
+  }
+
   // ── Live session (aligns with the web live screen) ────────────────
   //
   // The endpoint returns an envelope because a driver can have more than

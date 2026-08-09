@@ -17,7 +17,7 @@ import 'charge_history.dart';
 import 'account_privacy.dart';
 import 'my_vehicle.dart';
 import 'profile.dart';
-import 'redeem_invite.dart';
+import 'redeem_driver_invite.dart';
 
 class MenuDrawer extends StatelessWidget {
   const MenuDrawer({super.key, required this.driver});
@@ -143,7 +143,7 @@ class MenuDrawer extends StatelessWidget {
                       Navigator.of(context).pop();
                       Navigator.of(context).push(
                         MaterialPageRoute(
-                          builder: (_) => const RedeemInviteScreen(),
+                          builder: (_) => const RedeemDriverInviteScreen(),
                         ),
                       );
                     },

@@ -7,13 +7,16 @@
 // driver, and the steady-state for a driver whose access was revoked.
 
 import 'package:flutter/material.dart';
+import '../api/auth_storage.dart';
+import '../api/client.dart';
 import '../api/types.dart';
 import '../i18n/strings.dart';
 import '../theme/logo.dart';
 import '../theme/palette.dart';
 import 'menu_drawer.dart';
-import 'redeem_invite.dart';
+import 'redeem_driver_invite.dart';
 import 'installation_access.dart';
+import 'home.dart';
 
 enum DriverAccessRequestState { none, pending, rejected }
 
@@ -33,14 +36,37 @@ class EmptyAccessScreen extends StatelessWidget {
   final InstallationAccessSubmit? onInstallationAccess;
   final DriverAccessRequestState requestState;
 
+  Future<void> _refreshAccess(BuildContext context) async {
+    if (onRefresh != null) {
+      await onRefresh!();
+      return;
+    }
+    final storage = AuthStorage();
+    final api = StraumvaktApi();
+    try {
+      final token = await storage.readAccessToken();
+      if (token == null) return;
+      final chargers = await api.getChargers(token);
+      if (!context.mounted || chargers.isEmpty) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => HomeScreen(driver: driver)),
+      );
+    } catch (_) {
+      // Empty access remains the truthful state until a refresh succeeds.
+    } finally {
+      api.close();
+    }
+  }
+
   Future<void> _toRedeem(BuildContext context) async {
     await Navigator.of(
       context,
-    ).push(MaterialPageRoute(builder: (_) => const RedeemInviteScreen()));
+    ).push(MaterialPageRoute(builder: (_) => const RedeemDriverInviteScreen()));
     // On return, re-check access — the driver may have redeemed an
     // invite that activated immediately (which would have navigated past
     // this screen) or one pending approval (still empty).
-    if (onRefresh != null) await onRefresh!();
+    if (!context.mounted) return;
+    await _refreshAccess(context);
   }
 
   @override
@@ -128,27 +154,25 @@ class EmptyAccessScreen extends StatelessWidget {
                             ),
                           ),
                         );
-                        if (onRefresh != null) await onRefresh!();
+                        if (context.mounted) await _refreshAccess(context);
                       },
                       icon: const Icon(Icons.key_rounded),
                       label: const Text('Use installation code'),
                     ),
                   ),
-                  if (onRefresh != null) ...[
-                    const SizedBox(height: 12),
-                    TextButton.icon(
-                      onPressed: onRefresh,
-                      icon: const Icon(
-                        Icons.refresh_rounded,
-                        color: BrandPalette.muted,
-                        size: 18,
-                      ),
-                      label: Text(
-                        tr('empty.refresh'),
-                        style: const TextStyle(color: BrandPalette.muted),
-                      ),
+                  const SizedBox(height: 12),
+                  TextButton.icon(
+                    onPressed: () => _refreshAccess(context),
+                    icon: const Icon(
+                      Icons.refresh_rounded,
+                      color: BrandPalette.muted,
+                      size: 18,
                     ),
-                  ],
+                    label: Text(
+                      tr('empty.refresh'),
+                      style: const TextStyle(color: BrandPalette.muted),
+                    ),
+                  ),
                 ],
               ),
             ),

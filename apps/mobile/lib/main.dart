@@ -173,10 +173,7 @@ class _BootstrapState extends State<_Bootstrap> {
   void _toEmptyAccess(DriverProfile me) {
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (_) =>
-            EmptyAccessScreen(driver: me, onRefresh: () => _recheckAccess(me)),
-      ),
+      MaterialPageRoute(builder: (_) => EmptyAccessScreen(driver: me)),
     );
   }
 
@@ -220,20 +217,6 @@ class _BootstrapState extends State<_Bootstrap> {
     Navigator.of(routeContext).pushReplacement(
       MaterialPageRoute(builder: (_) => HomeScreen(driver: me)),
     );
-  }
-
-  // Re-fetch access from the empty-access screen; promote to home once
-  // the host has granted access (e.g. after a pending-approval invite).
-  Future<void> _recheckAccess(DriverProfile me) async {
-    final token = await _storage.readAccessToken();
-    if (token == null) return;
-    try {
-      final chargers = await _api.getChargers(token);
-      if (!mounted || chargers.isEmpty) return;
-      _toHome(me);
-    } catch (_) {
-      // Stay on the empty-access screen on failure.
-    }
   }
 
   void _toGuest(String? prefilledEmail) {

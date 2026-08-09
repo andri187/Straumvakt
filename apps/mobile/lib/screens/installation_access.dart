@@ -101,11 +101,12 @@ class _InstallationAccessScreenState extends State<InstallationAccessScreen> {
                 children: [
                   TextFormField(
                     controller: _code,
+                    enabled: widget.enabled,
                     textCapitalization: TextCapitalization.characters,
                     decoration: InputDecoration(
                       labelText: 'Installation code',
                       prefixIcon: const Icon(Icons.key_rounded),
-                      suffixIcon: widget.onScan == null
+                      suffixIcon: widget.onScan == null || !widget.enabled
                           ? null
                           : IconButton(
                               onPressed: _scan,
@@ -120,6 +121,7 @@ class _InstallationAccessScreenState extends State<InstallationAccessScreen> {
                   const SizedBox(height: 14),
                   TextFormField(
                     controller: _passphrase,
+                    enabled: widget.enabled,
                     obscureText: true,
                     decoration: const InputDecoration(
                       labelText: 'Passphrase',

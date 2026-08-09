@@ -50,6 +50,26 @@ class AuthSession {
   }
 }
 
+class DriverInviteRedemption {
+  const DriverInviteRedemption({
+    required this.driverGroupId,
+    required this.driverGroupDisplayName,
+    this.installationDisplayName,
+  });
+
+  final String driverGroupId;
+  final String driverGroupDisplayName;
+  final String? installationDisplayName;
+
+  factory DriverInviteRedemption.fromJson(Map<String, dynamic> json) {
+    return DriverInviteRedemption(
+      driverGroupId: json['driverGroupId'] as String,
+      driverGroupDisplayName: json['driverGroupDisplayName'] as String,
+      installationDisplayName: json['installationDisplayName'] as String?,
+    );
+  }
+}
+
 enum ConnectorStatus {
   available,
   preparing,
