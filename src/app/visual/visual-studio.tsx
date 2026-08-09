@@ -3,8 +3,9 @@
 import {
   Activity, AlertTriangle, ArrowRight, Building2, CheckCircle2,
   ChevronRight, CircleHelp, ClipboardCheck, FileClock, Gauge, History,
-  KeyRound, LayoutDashboard, Menu, RadioTower, Search, Settings, Zap,
-  ShieldCheck, UserRound, UsersRound, Wrench, X,
+  KeyRound, LayoutDashboard, ListChecks, Map, Menu, RadioTower, Search,
+  Settings, SlidersHorizontal, Zap, ShieldCheck, UserRound, UsersRound,
+  Wrench, X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { visualFamilies, type Tone, type VisualFamily } from "./visual-data";
@@ -22,6 +23,7 @@ export function VisualStudio() {
   const [screenId, setScreenId] = useState("overview");
   const [navOpen, setNavOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [reviewOpen, setReviewOpen] = useState(true);
 
   useEffect(() => {
     const family = requestedValue("family");
@@ -85,13 +87,39 @@ export function VisualStudio() {
         <div id="visual-content" className="vx-content" tabIndex={-1}>
           <header className="vx-pagehead">
             <div><p>{screen.eyebrow}</p><h1>{screen.title}</h1><span>{screen.summary}</span></div>
-            <div className="vx-page-actions"><Status tone={screen.stateTone}>{screen.state}</Status>{screen.action ? <button type="button" disabled={screen.actionDisabled}>{screen.action}<ArrowRight size={16} /></button> : null}</div>
+            <div className="vx-page-actions">
+              <Status tone={screen.stateTone}>{screen.state}</Status>
+              <button className="vx-ghost-action" type="button" aria-pressed={reviewOpen} onClick={() => setReviewOpen((value) => !value)}><SlidersHorizontal size={16} />Review</button>
+              {screen.action ? <button type="button" disabled={screen.actionDisabled}>{screen.action}<ArrowRight size={16} /></button> : null}
+            </div>
           </header>
           {screen.notice ? <div className="vx-notice" role="note"><AlertTriangle size={18} /><span>{screen.notice}</span></div> : null}
+
+          <section className="vx-journey" aria-label={`${family.label} screen journey`}>
+            <header><Map size={16} /><div><p>Persona journey</p><strong>{family.reviewFocus}</strong></div></header>
+            <div>
+              {family.screens.map((item, index) => (
+                <button key={item.id} type="button" className={item.id === screen.id ? "active" : ""} onClick={() => chooseScreen(item.id)}>
+                  <span>{String(index + 1).padStart(2, "0")}</span>
+                  <strong>{item.journeyStep}</strong>
+                  <small className={`tone-${toneForMaturity(item.maturity)}`}>{item.maturity}</small>
+                </button>
+              ))}
+            </div>
+          </section>
 
           <section className="vx-metrics" aria-label="Key measures">
             {screen.metrics.map((item) => <article key={item.label}><span>{item.label}</span><strong className={`tone-${item.tone}`}>{item.value}</strong><small>{item.detail}</small></article>)}
           </section>
+
+          {reviewOpen ? (
+            <section className="vx-review" aria-label="Visual review notes">
+              <ReviewCard icon={ListChecks} title="Design intent" body={screen.review.intent} />
+              <ReviewCard icon={CheckCircle2} title="Reviewable now" body={screen.review.real} />
+              <ReviewCard icon={AlertTriangle} title="Boundary" body={screen.review.blocked} />
+              <ReviewCard icon={CircleHelp} title="Decision prompt" body={screen.review.decision} />
+            </section>
+          ) : null}
 
           <div className="vx-grid">
             <section className="vx-table-panel" aria-labelledby="visual-table-title">
@@ -118,6 +146,18 @@ export function VisualStudio() {
               <Workflow icon={ShieldCheck} title="Scoped" body="Each persona sees only the information required for its job." />
             </div>
           </section>
+
+          <section className="vx-system" aria-label="Design system notes">
+            <article><span className="vx-swatch is-accent" /><div><strong>Accent</strong><p>Persona color marks location and active state only.</p></div></article>
+            <article><span className="vx-swatch is-surface" /><div><strong>Surfaces</strong><p>Flat operational panels, no marketing cards or hero treatment.</p></div></article>
+            <article><span className="vx-swatch is-warn" /><div><strong>Disabled means planned</strong><p>Unavailable actions must explain the missing contract.</p></div></article>
+            <article><span className="vx-swatch is-bad" /><div><strong>Hidden means rejected</strong><p>Do not render controls that imply unwanted roadmap commitments.</p></div></article>
+          </section>
+
+          <section className="vx-decisions" aria-label={`${family.label} next design decisions`}>
+            <header><p>Review queue</p><h2>Next decisions for {family.shortLabel}</h2></header>
+            <div>{family.nextDecisions.map((decision) => <article key={decision}><ChevronRight size={15} /><span>{decision}</span></article>)}</div>
+          </section>
         </div>
       </section>
     </main>
@@ -126,3 +166,10 @@ export function VisualStudio() {
 
 function Status({ tone, children }: { tone: Tone; children: React.ReactNode }) { return <span className={`vx-status tone-${tone}`}><span aria-hidden="true" />{children}</span>; }
 function Workflow({ icon: Icon, title, body }: { icon: typeof CheckCircle2; title: string; body: string }) { return <article><Icon size={18} /><div><strong>{title}</strong><p>{body}</p></div></article>; }
+function ReviewCard({ icon: Icon, title, body }: { icon: typeof CheckCircle2; title: string; body: string }) { return <article><Icon size={18} /><div><strong>{title}</strong><p>{body}</p></div></article>; }
+function toneForMaturity(maturity: "ready" | "preview" | "blocked" | "future"): Tone {
+  if (maturity === "ready") return "good";
+  if (maturity === "blocked") return "bad";
+  if (maturity === "future") return "warn";
+  return "info";
+}

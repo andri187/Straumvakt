@@ -42,6 +42,14 @@ describe("visual-only route boundary", () => {
     expect(client).toContain("Visual preview / demo data");
   });
 
+  it("renders the second-pass review layer without live wiring", () => {
+    expect(client).toContain("Persona journey");
+    expect(client).toContain("Design intent");
+    expect(client).toContain("Reviewable now");
+    expect(client).toContain("Design system notes");
+    expect(client).toContain("Next decisions");
+  });
+
   it("provides a keyboard skip link", () => {
     expect(client).toContain('href="#visual-content"');
     expect(client).toContain('id="visual-content"');

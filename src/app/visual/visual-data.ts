@@ -1,16 +1,22 @@
 export type Tone = "good" | "warn" | "bad" | "info" | "neutral";
 export type Metric = { label: string; value: string; detail: string; tone?: Tone };
+export type ScreenReview = {
+  intent: string; real: string; demo: string; blocked: string; decision: string;
+};
 export type VisualScreen = {
   id: string; label: string; eyebrow: string; title: string; summary: string;
   state: string; stateTone: Tone; metrics: Metric[]; tableTitle: string;
   columns: string[]; rows: string[][]; queueTitle: string;
   queue: { title: string; detail: string; tone: Tone }[];
+  journeyStep: string; maturity: "ready" | "preview" | "blocked" | "future";
+  review: ScreenReview;
   notice?: string; action?: string; actionDisabled?: boolean;
 };
 export type VisualFamily = {
   id: "admin" | "organisation" | "driver" | "service"; label: string;
   shortLabel: string; role: string; account: string; future?: boolean;
-  accent: string; navigationAbsent: string; screens: VisualScreen[];
+  accent: string; navigationAbsent: string; reviewFocus: string;
+  nextDecisions: string[]; screens: VisualScreen[];
 };
 
 const m = (label: string, value: string, detail: string, tone: Tone = "neutral"): Metric => ({ label, value, detail, tone });
@@ -55,13 +61,44 @@ const serviceBase = {
 
 const screen = (
   base: typeof adminBase,
-  value: Omit<VisualScreen, "columns" | "rows" | "queue"> & Partial<Pick<VisualScreen, "columns" | "rows" | "queue">>,
-): VisualScreen => ({ ...base, ...value });
+  value: Omit<VisualScreen, "columns" | "rows" | "queue" | "journeyStep" | "maturity" | "review"> & Partial<Pick<VisualScreen, "columns" | "rows" | "queue" | "journeyStep" | "maturity" | "review">>,
+): VisualScreen => ({
+  ...base,
+  journeyStep: value.journeyStep ?? value.label,
+  maturity: value.maturity ?? maturityFor(value),
+  review: value.review ?? reviewFor(value),
+  ...value,
+});
+
+const maturityFor = (value: Pick<VisualScreen, "stateTone"> & Partial<Pick<VisualScreen, "actionDisabled">>): VisualScreen["maturity"] => {
+  if (value.stateTone === "bad") return "blocked";
+  if (value.actionDisabled) return value.stateTone === "warn" ? "future" : "preview";
+  if (value.stateTone === "good") return "ready";
+  return "preview";
+};
+
+const reviewFor = (
+  value: Omit<VisualScreen, "columns" | "rows" | "queue" | "journeyStep" | "maturity" | "review">,
+): ScreenReview => ({
+  intent: value.summary,
+  real: value.actionDisabled
+    ? "Layout, hierarchy, terminology and disabled-state behavior are reviewable."
+    : "Layout, hierarchy, navigation and read-model shape are reviewable.",
+  demo: "All counts, people, organisations, chargers and timestamps are local demo fixtures.",
+  blocked: value.notice ?? (value.actionDisabled
+    ? "Primary action is intentionally disabled until a real contract exists."
+    : "Live data, authentication and persistence are intentionally absent from this workspace."),
+  decision: value.actionDisabled
+    ? "Decide whether this disabled capability belongs on the future roadmap."
+    : "Decide whether this visual hierarchy feels right before backend wiring exists.",
+});
 
 export const visualFamilies: VisualFamily[] = [
   {
     id: "admin", label: "Straumvakt Admin", shortLabel: "Admin", role: "Platform operations", account: "demo-staff@straumvakt.test", accent: "mint",
     navigationAbsent: "No billing mutation, impersonation, cloud controls or repository-health UI.",
+    reviewFocus: "Validate the platform operator cockpit: tenant context, risk ownership, support boundaries and readiness evidence.",
+    nextDecisions: ["Support context visual language", "Risk ownership density", "Release gate placement"],
     screens: [
       screen(adminBase, { id: "overview", label: "Operations overview", eyebrow: "Today · 09 August", title: "Morning control room", summary: "Organisations, fleet health and work that needs a human decision.", state: "Beta view", stateTone: "info", metrics: [m("Organisations", "18", "16 active", "good"), m("Connectors", "4,086", "97.8% reporting", "good"), m("Active sessions", "126", "38.4 MW observed", "info"), m("Needs attention", "14", "3 urgent", "warn")], tableTitle: "Fleet exceptions", queueTitle: "Staff queue", action: "Open task queue" }),
       screen(adminBase, { id: "organisations", label: "Organisations", eyebrow: "Portfolio", title: "Organisations and onboarding", summary: "Follow each organisation from application to operating tenant.", state: "3 onboarding", stateTone: "warn", metrics: [m("Operating", "16", "Across 42 sites", "good"), m("Onboarding", "3", "2 waiting on customer", "warn"), m("Suspended", "1", "Commercial review", "bad"), m("Median setup", "4.2 d", "Down 1.1 days", "good")], tableTitle: "Organisation register", queueTitle: "Onboarding handoffs", action: "Review application" }),
@@ -76,6 +113,8 @@ export const visualFamilies: VisualFamily[] = [
   {
     id: "organisation", label: "Organisation / CPO", shortLabel: "CPO", role: "Demo North Energy", account: "ops@north.test", accent: "cyan",
     navigationAbsent: "No platform risks, cross-tenant data, Worker controls or staff support entry.",
+    reviewFocus: "Validate the operator workspace: chargers, sites, drivers, access decisions, sessions and commercial read-only boundaries.",
+    nextDecisions: ["Charger list density", "Access request wording", "Agreement read-only placement"],
     screens: [
       screen(cpoBase, { id: "overview", label: "Overview", eyebrow: "Demo North Energy", title: "Charging operations", summary: "The weekly picture for sites, chargers, drivers and live charging.", state: "Operating", stateTone: "good", metrics: [m("Chargers", "24", "22 online", "good"), m("Active sessions", "8", "164 kW", "info"), m("Drivers", "146", "3 requests", "warn"), m("Energy today", "1.84 MWh", "+18% weekday", "good")], tableTitle: "Site performance", queueTitle: "Needs attention", action: "View chargers" }),
       screen(cpoBase, { id: "chargers", label: "Chargers", eyebrow: "24 chargers", title: "Charger inventory", summary: "Scan state quickly, then enter one asset without losing site context.", state: "2 exceptions", stateTone: "warn", metrics: [m("Online", "22", "91.7%", "good"), m("Charging", "8", "164 kW", "info"), m("Offline", "2", "Both assigned", "warn"), m("Available", "14", "Across 3 sites")], tableTitle: "Inventory", queueTitle: "Inventory actions", action: "Add charger" }),
@@ -91,6 +130,8 @@ export const visualFamilies: VisualFamily[] = [
   {
     id: "driver", label: "Driver", shortLabel: "Driver", role: "Personal charging", account: "demo-driver@straumvakt.test", accent: "blue",
     navigationAbsent: "No organisation management, charger configuration, raw meter payloads or diagnostics.",
+    reviewFocus: "Validate the personal charging experience: clear access state, safe invitations, active charging and privacy boundaries.",
+    nextDecisions: ["Guest-to-access tone", "Charging cost copy", "Privacy control placement"],
     screens: [
       screen(driverBase, { id: "guest", label: "Guest", eyebrow: "No account", title: "Charging starts with access", summary: "Explain what an account does without claiming a relationship exists.", state: "Local state", stateTone: "info", metrics: [m("Account", "None", "Nothing stored"), m("Access", "None", "Organisation needed"), m("Sessions", "None", "No history"), m("Privacy", "Local", "No driver data", "good")], tableTitle: "What happens next", queueTitle: "Guest promises", action: "Sign in" }),
       screen(driverBase, { id: "no-access", label: "No access yet", eyebrow: "Registered driver", title: "You are ready; access is next", summary: "Refresh, use an identity-bound invitation or request access.", state: "Unaffiliated", stateTone: "warn", metrics: [m("Identity", "Ready", "demo-driver", "good"), m("Organisations", "0", "No membership"), m("Requests", "1", "Draft", "warn"), m("Sessions", "0", "No access")], tableTitle: "Ways to join", queueTitle: "Your current state", action: "Use invitation" }),
@@ -106,6 +147,8 @@ export const visualFamilies: VisualFamily[] = [
   {
     id: "service", label: "Service UI", shortLabel: "Service", role: "Future contractor workspace", account: "demo-tech@service.test", future: true, accent: "amber",
     navigationAbsent: "No billing, driver identity, platform administration or unassigned fleet browsing.",
+    reviewFocus: "Validate the future contractor concept: assigned work only, safety gates, diagnostics, evidence and handoff.",
+    nextDecisions: ["Whether Service deserves a later product lane", "Safety stop-condition hierarchy", "Evidence capture scope"],
     screens: [
       screen(serviceBase, { id: "queue", label: "Work queue", eyebrow: "Future service UI", title: "Assigned service work", summary: "Only accepted work, ordered by safety and service commitment.", state: "Concept", stateTone: "warn", metrics: [m("Assigned", "7", "2 urgent", "warn"), m("Today", "4", "Route 38 km"), m("Waiting parts", "2", "Customer informed"), m("SLA risk", "1", "Due in 42 min", "bad")], tableTitle: "My queue", queueTitle: "Before accepting", notice: "Future service UI; not part of market launch.", action: "Accept next job", actionDisabled: true }),
       screen(serviceBase, { id: "chargers", label: "Assigned chargers", eyebrow: "7 assigned assets", title: "Chargers in my scope", summary: "Technical identity and signal for assigned assets only.", state: "2 exceptions", stateTone: "warn", metrics: [m("Assigned", "7", "3 sites"), m("Online", "5", "Reporting", "good"), m("Offline", "1", "Case open", "bad"), m("Faulted", "1", "Visit set", "warn")], tableTitle: "Assigned assets", queueTitle: "Scope controls", action: "Open first case" }),
