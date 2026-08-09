@@ -43,12 +43,33 @@ Applied throughout. If a statement carries no marker, treat it as **[R]**.
 | 05 | [Staff assistance without impersonation](05-staff-assistance.md) | 4 | complete |
 | 06 | [Technical idTag versus driver attribution](06-idtag-attribution.md) | 5 | complete |
 | 07 | [Work packages and dependency order](07-work-packages.md) | 9 | complete |
-| — | API contracts (Phase 6), persistence/migration (Phase 7), full test specs (Phase 8) | 6–8 | **outlined inside 03/04/06/07, not yet standalone** |
+| 08 | [Evidence ledger](08-evidence-ledger.md) | — | complete — see CS-10, one citation is unreachable from this branch |
+| 09 | [Adversarial analysis](09-adversarial-analysis.md) | — | complete |
+| 10 | [API contracts](10-api-contracts.md) | 6 | complete — see CS-20, names a permission and an error code that do not exist |
+| 11 | [Persistence and rollout](11-persistence-and-rollout.md) | 7 | complete |
+| 12 | [Verification and hardware](12-verification-and-hardware.md) | 8 | complete |
+| 13 | [Decision packet](13-decision-packet.md) | — | complete |
+| 14 | [Backend readiness ledger](14-backend-readiness-ledger.md) | — | complete |
+| 15 | [Product-to-market backend runway](15-product-to-market-backend-runway.md) | — | superseded in part by 18E |
+| 16 | [Permission matrix](16-permission-matrix.md) | — | complete |
+| 17 | [Ultra backend / market runway](17-ultra-backend-market-runway.md) | — | superseded in part by 19 §3 |
+| 18A–18F | [Work packages](18A-work-packages.md) · [issue bodies](18B-issue-bodies.md) · [scenarios](18C-scenarios.md) · [endpoints and tests](18D-endpoints-and-tests.md) · [Codex contract v3](18E-codex-contract-v3.md) · [implementation packs](18F-implementation-packs.md) | — | complete — 204 packages, 156 scenarios |
+| **19** | **[Source-linked implementation readiness](19-source-linked-implementation-readiness.md)** + [19A](19A-source-inventory.md) [19B](19B-implementation-task-map.md) [19C](19C-test-specifications.md) [19D](19D-patch-proposals.md) [19E](19E-migration-preflight-rollback.md) [19F](19F-api-contract-examples.md) [19G](19G-review-checklists.md) [19H](19H-codex-wiring-notes.md) | — | **current** — 140 inventory entries, 303 tasks, 58 patch proposals |
 
-Phases 6–8 are represented as contract sketches, invariants and acceptance
-criteria embedded in the documents above rather than as three standalone
-documents. That is an honest statement of how far this session got, not a claim
-that they are done. See the handoff for what remains.
+**Phases 6–8 now have standalone documents.** They were originally embedded as
+sketches inside 03/04/06/07; document 10 covers API contracts, 11 covers
+persistence and rollout, 12 covers verification, and the 19-series supersedes
+all three with source-linked versions —
+[19F](19F-api-contract-examples.md) (contracts),
+[19E](19E-migration-preflight-rollback.md) (migration) and
+[19C](19C-test-specifications.md) (test specs).
+
+**Start with document 19** if you are implementing. It is the only document
+whose every claim was checked against source on this branch, and its
+[§4](19-source-linked-implementation-readiness.md) lists 28 places where an
+earlier document in this table is now wrong. Nothing above was silently
+rewritten — the superseded text is still where it was, so the reasoning trail
+survives.
 
 ## The three findings that shape everything else
 
