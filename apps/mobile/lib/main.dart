@@ -10,6 +10,7 @@ import 'api/client.dart';
 import 'api/types.dart';
 import 'i18n/strings.dart';
 import 'screens/empty_access.dart';
+import 'screens/active_session.dart';
 import 'screens/home.dart';
 import 'screens/login.dart';
 import 'theme/logo.dart';
@@ -82,6 +83,20 @@ class _BootstrapState extends State<_Bootstrap> {
         await _storage.saveLocale(me.locale);
       }
 
+      // A charging session outranks the charger list. Recover it before
+      // access routing so a driver who reopens the app lands back on the
+      // thing that is currently costing time and energy.
+      try {
+        final sessions = await _api.getCurrentSessions(token);
+        if (sessions.isNotEmpty) {
+          _toActiveSession(me, sessions.first);
+          return;
+        }
+      } catch (_) {
+        // Recovery is best-effort. Home repeats the check and exposes a
+        // retry path without blocking sign-in on a transient read failure.
+      }
+
       // Branch on access: a logged-in driver with zero chargers sees the
       // invite-redeem funnel, not a dead-end "no chargers" list.
       List<DriverCharger> chargers = const [];
@@ -116,14 +131,26 @@ class _BootstrapState extends State<_Bootstrap> {
     );
   }
 
+  void _toActiveSession(DriverProfile me, ActiveSession session) {
+    if (!mounted) return;
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (routeContext) => ActiveSessionScreen(
+          initialSession: session,
+          onDone: () => Navigator.of(routeContext).pushReplacement(
+            MaterialPageRoute(builder: (_) => HomeScreen(driver: me)),
+          ),
+        ),
+      ),
+    );
+  }
+
   void _toEmptyAccess(DriverProfile me) {
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
-        builder: (_) => EmptyAccessScreen(
-          driver: me,
-          onRefresh: () => _recheckAccess(me),
-        ),
+        builder: (_) =>
+            EmptyAccessScreen(driver: me, onRefresh: () => _recheckAccess(me)),
       ),
     );
   }

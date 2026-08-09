@@ -187,7 +187,7 @@ class ConsumeInviteResult {
 class ActiveSession {
   const ActiveSession({
     required this.sessionId,
-    required this.connectorId,
+    this.connectorId,
     required this.chargerName,
     required this.status,
     this.startedAt,
@@ -197,7 +197,7 @@ class ActiveSession {
   });
 
   final String sessionId;
-  final String connectorId;
+  final String? connectorId;
   final String chargerName;
   // Raw OCPP-ish session status string, e.g. 'Charging', 'Preparing'.
   final String status;
@@ -207,17 +207,22 @@ class ActiveSession {
   final double? costIsk;
 
   factory ActiveSession.fromJson(Map<String, dynamic> json) {
+    // The current backend uses zero as a placeholder for power and
+    // in-flight cost because neither value is available on this read model.
+    // Preserve that uncertainty instead of showing measured 0 kW / 0 kr.
+    final rawPower = (json['powerKw'] as num?)?.toDouble();
+    final rawCost = (json['costIsk'] as num?)?.toDouble();
     return ActiveSession(
       sessionId: json['sessionId'] as String,
-      connectorId: json['connectorId'] as String,
+      connectorId: json['connectorId'] as String?,
       chargerName: json['chargerName'] as String? ?? 'Charger',
       status: json['status'] as String? ?? 'Unknown',
       startedAt: json['startedAt'] != null
           ? DateTime.tryParse(json['startedAt'] as String)
           : null,
-      powerKw: (json['powerKw'] as num?)?.toDouble(),
+      powerKw: rawPower == null || rawPower == 0 ? null : rawPower,
       energyKwh: (json['energyKwh'] as num?)?.toDouble(),
-      costIsk: (json['costIsk'] as num?)?.toDouble(),
+      costIsk: rawCost == null || rawCost == 0 ? null : rawCost,
     );
   }
 
@@ -315,9 +320,150 @@ class TapIntentResult {
       intentId: json['intentId'] as String,
       expiresAt:
           DateTime.tryParse((json['expiresAt'] ?? '') as String)?.toLocal() ??
-              DateTime.now().add(const Duration(seconds: 120)),
+          DateTime.now().add(const Duration(seconds: 120)),
       chargerName: json['chargerName'] as String?,
       ttlSeconds: (json['ttlSeconds'] as num?)?.toInt(),
     );
+  }
+}
+
+class ActiveSessionsResponse {
+  const ActiveSessionsResponse(this.sessions);
+
+  final List<ActiveSession> sessions;
+
+  factory ActiveSessionsResponse.fromJson(Map<String, dynamic> json) {
+    final rows = json['sessions'];
+    if (rows is! List) return const ActiveSessionsResponse([]);
+    return ActiveSessionsResponse(
+      rows
+          .whereType<Map>()
+          .map((row) => ActiveSession.fromJson(Map<String, dynamic>.from(row)))
+          .toList(growable: false),
+    );
+  }
+}
+
+class DriverSessionDetail {
+  const DriverSessionDetail({
+    required this.sessionId,
+    required this.startedAt,
+    required this.energyKwh,
+    this.endedAt,
+    this.durationSec,
+    this.chargeTimeSec,
+    this.idleTimeSec,
+    this.status,
+    this.siteName,
+    this.chargerName,
+    this.costFormatted,
+    this.stopReason,
+  });
+
+  final String sessionId;
+  final DateTime startedAt;
+  final DateTime? endedAt;
+  final int? durationSec;
+  final int? chargeTimeSec;
+  final int? idleTimeSec;
+  final String? status;
+  final String? siteName;
+  final String? chargerName;
+  final double energyKwh;
+  final String? costFormatted;
+  final String? stopReason;
+
+  factory DriverSessionDetail.fromJson(Map<String, dynamic> json) {
+    return DriverSessionDetail(
+      sessionId: json['sessionId'] as String,
+      startedAt: DateTime.parse(json['startedAt'] as String).toLocal(),
+      endedAt: json['endedAt'] == null
+          ? null
+          : DateTime.tryParse(json['endedAt'] as String)?.toLocal(),
+      durationSec: (json['durationSec'] as num?)?.toInt(),
+      chargeTimeSec: (json['chargeTimeSec'] as num?)?.toInt(),
+      idleTimeSec: (json['idleTimeSec'] as num?)?.toInt(),
+      status: json['status'] as String?,
+      siteName: json['siteDisplayName'] as String?,
+      chargerName: json['chargerDisplayName'] as String?,
+      energyKwh: double.tryParse('${json['energyKwh'] ?? 0}') ?? 0,
+      costFormatted: json['costFormatted'] as String?,
+      stopReason: json['stopReason'] as String?,
+    );
+  }
+
+  String get durationLabel => _durationLabel(durationSec);
+  String get chargeTimeLabel => _durationLabel(chargeTimeSec);
+  String get idleTimeLabel => _durationLabel(idleTimeSec);
+
+  static String _durationLabel(int? seconds) {
+    if (seconds == null) return 'Unavailable';
+    final hours = seconds ~/ 3600;
+    final minutes = (seconds % 3600) ~/ 60;
+    return hours > 0 ? '${hours}h ${minutes}m' : '${minutes}m';
+  }
+}
+
+/// One completed charge, as the driver sees it.
+///
+/// Mirrors the API's `DriverHistorySession`. `costIsk` is VAT-inclusive
+/// **aurar** (1/100 króna) and is NULL when the session was never costed
+/// — a real state, not a zero. Rendering an uncosted session as "0 kr"
+/// would be a lie about money, so callers must handle null explicitly.
+class DriverHistorySession {
+  const DriverHistorySession({
+    required this.sessionId,
+    required this.startedAt,
+    required this.energyKwh,
+    this.stoppedAt,
+    this.durationSec,
+    this.costIsk,
+    this.chargerName,
+    this.siteName,
+    this.billingHomeName,
+  });
+
+  final String sessionId;
+  final DateTime startedAt;
+  final DateTime? stoppedAt;
+  final int? durationSec;
+  final double energyKwh;
+  final int? costIsk;
+  final String? chargerName;
+  final String? siteName;
+
+  /// Which operator or host the session was billed under.
+  final String? billingHomeName;
+
+  factory DriverHistorySession.fromJson(Map<String, dynamic> j) {
+    return DriverHistorySession(
+      sessionId: j['sessionId'] as String,
+      startedAt: DateTime.parse(j['startedAt'] as String).toLocal(),
+      stoppedAt: j['stoppedAt'] == null
+          ? null
+          : DateTime.parse(j['stoppedAt'] as String).toLocal(),
+      durationSec: (j['durationSec'] as num?)?.toInt(),
+      energyKwh: (j['energyKwh'] as num?)?.toDouble() ?? 0,
+      costIsk: (j['costIsk'] as num?)?.toInt(),
+      chargerName: j['chargerName'] as String?,
+      siteName: j['siteName'] as String?,
+      billingHomeName: j['billingHomeName'] as String?,
+    );
+  }
+
+  /// Króna, formatted. Null cost stays null — see the class comment.
+  String? get costLabel {
+    final c = costIsk;
+    if (c == null) return null;
+    final kr = (c / 100).round();
+    return '$kr kr';
+  }
+
+  String get durationLabel {
+    final s = durationSec;
+    if (s == null) return '—';
+    final h = s ~/ 3600;
+    final m = (s % 3600) ~/ 60;
+    return h > 0 ? '${h}h ${m}m' : '${m}m';
   }
 }
