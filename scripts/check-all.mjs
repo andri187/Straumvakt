@@ -33,6 +33,12 @@ const CHECKS = [
   // as api-endpoints and schema-parity. It regenerates from WORKSPACE.md +
   // TASKS.md and byte-compares the committed page; needs no DB or network.
   ["work-view", "npm run check:work-view"],
+  // Tier 0 of docs/operator/CI_MIGRATION_CHECK_CREDENTIAL.md. The regression
+  // that hid two unapplied migrations was pure config — prisma.config.ts had
+  // no migrations.path, so `migrate status` reported "up to date" having seen
+  // nothing. That is detectable with no database and no credential, so unlike
+  // check:migrations it can run on every branch and PR.
+  ["migrations-visible", "npm run check:migrations-visible"],
 ];
 
 const results = [];

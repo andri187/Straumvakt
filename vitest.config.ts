@@ -22,6 +22,7 @@ export default defineConfig({
       "apps/api/src/**/*.test.ts",
       "packages/**/*.test.ts",
       "scripts/**/*.test.mjs",
+      "scripts/**/*.test.mts",
     ],
     globals: false,
   },
