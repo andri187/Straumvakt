@@ -90,7 +90,7 @@ membership.
 
 **Prevention.** WP **A1**/**S-consume-bind**: require an authenticated session
 and compare to the bound user, as `redeem-invite` does. Sequencing is critical —
-see [11](11-rollout-programme.md); hardening before clients move recreates the
+see [11](11-persistence-and-rollout.md); hardening before clients move recreates the
 deadlock.
 
 **Tests.** T-SEC-1a (bearer without session → 401), T-SEC-1b (wrong identity →
@@ -238,7 +238,7 @@ the old path for months. `claim-invite` has never had a client
 uses it. Harden `consume` first and every un-updated install loses onboarding —
 the N1 deadlock, recreated deliberately.
 
-**Prevention.** The staged programme in [11](11-rollout-programme.md): measure,
+**Prevention.** The staged programme in [11](11-persistence-and-rollout.md): measure,
 detect capability, add the new path, dual-contract window, adoption gate, only
 then harden, only then retire.
 

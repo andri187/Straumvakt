@@ -221,7 +221,7 @@ today.
 
 | | New server | Old server |
 | --- | --- | --- |
-| **New client** | full | `join` 404s → fall back to `invites/consume`; capability probe in [11](11-rollout-programme.md) |
+| **New client** | full | `join` 404s → fall back to `invites/consume`; capability probe in [11](11-persistence-and-rollout.md) |
 | **Old client** | `invites/consume` still accepted for the whole window | today |
 
 No endpoint is removed within the compatibility window, and none is removed at
