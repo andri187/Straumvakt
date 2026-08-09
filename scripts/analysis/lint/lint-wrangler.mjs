@@ -73,6 +73,7 @@ const NON_INHERITABLE = [
   'services', 'queues', 'workflows', 'hyperdrive', 'vectorize', 'ai', 'browser',
   'send_email', 'mtls_certificates', 'analytics_engine_datasets', 'tail_consumers',
   'version_metadata', 'unsafe', 'ai_search', 'ai_search_namespaces', 'pipelines',
+  'secrets', 'secrets_store_secrets',
 ];
 
 function effective(cfg, node) {

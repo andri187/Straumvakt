@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "straumvakt/freeze-manifest.schema.json",
+  "title": "Straumvakt worktree freeze manifest",
+  "description": "A point-in-time inventory of every registered git worktree and every piece of content under the estate root that is NOT inside one. It exists so a cleanup can be reasoned about before anything is touched. OFFLINE ONLY - the validator reads this manifest and nothing else, and deletes nothing. A freeze manifest is EVIDENCE and a PRECONDITION, never an instruction: nothing executes the suggested actions recorded here.",
+  "type": "object",
+  "required": ["manifestVersion", "generatedAt", "root", "releaseCandidate", "forbiddenCommits", "totals", "worktrees", "unregistered"],
+  "additionalProperties": false,
+  "properties": {
+    "manifestVersion": { "const": 1 },
+    "generatedAt": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$" },
+    "root": { "type": "string", "minLength": 2 },
+    "canonicalRepo": { "type": "string" },
+    "releaseCandidate": { "type": "string", "pattern": "^[0-9a-f]{7,40}$" },
+    "forbiddenCommits": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "pattern": "^[0-9a-f]{7,40}$" },
+      "description": "commits that must never reach a release, recorded here so the manifest is self-describing"
+    },
+    "totals": {
+      "type": "object",
+      "required": ["registered", "onDisk", "staleRegistrations", "localBranches", "remoteBranches"],
+      "additionalProperties": false,
+      "properties": {
+        "registered": { "type": "integer", "minimum": 0 },
+        "onDisk": { "type": "integer", "minimum": 0 },
+        "staleRegistrations": { "type": "integer", "minimum": 0 },
+        "localBranches": { "type": "integer", "minimum": 0 },
+        "remoteBranches": { "type": "integer", "minimum": 0 },
+        "localBranchesWithoutRemote": { "type": ["integer", "null"], "minimum": 0 }
+      }
+    },
+    "worktrees": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/worktree" } },
+    "unregistered": { "type": "array", "items": { "$ref": "#/$defs/unregistered" } },
+    "archiveDestination": { "type": ["string", "null"] },
+    "notes": { "type": "string" }
+  },
+  "$defs": {
+    "worktree": {
+      "type": "object",
+      "required": ["path", "existsOnDisk", "branch", "head", "dirtyFiles", "untrackedFiles", "uniqueVsCandidate", "headIsForbidden", "suggestedAction"],
+      "additionalProperties": false,
+      "properties": {
+        "path": { "type": "string", "minLength": 2 },
+        "existsOnDisk": { "type": "boolean" },
+        "branch": { "type": ["string", "null"], "description": "null when detached" },
+        "detached": { "type": "boolean" },
+        "head": { "type": "string", "pattern": "^[0-9a-f]{7,40}$" },
+        "dirtyFiles": { "type": "integer", "minimum": 0 },
+        "untrackedFiles": { "type": "integer", "minimum": 0 },
+        "untrackedPreservationMaterial": { "type": "boolean", "description": "untracked files that look like documents or specifications rather than build output" },
+        "upstream": { "type": ["string", "null"] },
+        "upstreamExistsOnRemote": { "type": ["boolean", "null"] },
+        "branchExistsOnRemote": { "type": ["boolean", "null"] },
+        "uniqueVsCandidate": { "type": "integer", "minimum": 0 },
+        "headIsForbidden": { "type": ["string", "null"], "description": "the forbidden sha when HEAD IS one, else null" },
+        "forbiddenAncestors": { "type": "array", "items": { "type": "string" } },
+        "owner": { "type": "string", "enum": ["release-ops", "claude-a", "codex", "shared", "unknown"] },
+        "suggestedAction": {
+          "type": "string",
+          "enum": ["keep", "archive", "retire", "stale-registration-cleanup", "needs-human-review"],
+          "description": "a SUGGESTION recorded for a human. Nothing executes it."
+        },
+        "actionRationale": { "type": ["string", "null"] },
+        "branchPreserved": { "type": "boolean", "description": "retiring a working copy must never delete its branch" },
+        "archiveDestination": { "type": ["string", "null"] }
+      }
+    },
+    "unregistered": {
+      "type": "object",
+      "required": ["path", "kind", "totalFiles", "contentFiles", "straumvaktContent", "coveredByPreservationRecord"],
+      "additionalProperties": false,
+      "properties": {
+        "path": { "type": "string", "minLength": 2 },
+        "kind": { "type": "string", "enum": ["non-git-directory", "separate-git-repo", "loose-files", "unknown"] },
+        "totalFiles": { "type": "integer", "minimum": 0 },
+        "contentFiles": { "type": "integer", "minimum": 0, "description": "excluding node_modules, .next, .open-next, .dart_tool, build" },
+        "straumvaktContent": { "type": "boolean", "description": "contains Straumvakt / Zaptec / OCPP material" },
+        "coveredByPreservationRecord": { "type": ["string", "null"], "description": "the P-xx record covering it, or null" },
+        "credentialShapedFiles": { "type": "array", "items": { "type": "string" }, "description": "PATHS only, never contents. A .env here is a finding, not a thing to open." },
+        "suggestedAction": { "type": "string", "enum": ["keep", "archive", "retire", "needs-human-review"] },
+        "actionRationale": { "type": ["string", "null"] }
+      }
+    }
+  }
+}

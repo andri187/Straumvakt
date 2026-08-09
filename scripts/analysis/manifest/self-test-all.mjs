@@ -17,6 +17,7 @@ const CHECKS = [
   ['environment manifests',  join(HERE, 'validate-manifest.mjs')],
   ['release manifests',      join(HERE, 'validate-release-manifest.mjs')],
   ['preservation manifests', join(HERE, 'validate-preservation-manifest.mjs')],
+  ['freeze manifests',       join(HERE, 'validate-freeze-manifest.mjs')],
   ['wrangler configs',       join(ANALYSIS, 'lint', 'lint-wrangler.mjs')],
   ['branch safety',          join(ANALYSIS, 'git', 'check-branch-safety.mjs')],
 ];

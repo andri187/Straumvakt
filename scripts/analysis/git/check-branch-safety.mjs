@@ -180,7 +180,7 @@ function evaluate(s) {
     if (!b.upstream) continue;
     const short = b.upstream.replace(/^origin\//, '');
     if (deploy.has(short) && !deploy.has(b.name)) {
-      add('G1', 'error', `branch "${b.name}" tracks deploy pointer "${b.upstream}" — a bare git push from it publishes to the branch that may trigger a deploy`);
+      add('G1', 'error', `branch "${b.name}" tracks deploy pointer "${b.upstream}" — a plausible push (push -u, push origin HEAD:staging, or push.default=upstream) publishes to the branch that may trigger a deploy; note a BARE push is refused under push.default=simple when the names differ`);
     }
   }
   // G2. An upstream whose name differs from the local branch means the mistake is
