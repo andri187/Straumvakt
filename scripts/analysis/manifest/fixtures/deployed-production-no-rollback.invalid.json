@@ -1,0 +1,6 @@
+{
+  "manifestVersion": 1, "environment": "production", "status": "deployed",
+  "git": { "branch": "production", "updatePolicy": "fast-forward-only" },
+  "workers": [ { "role": "web", "name": "straumvakt-web", "deployed": true, "versionId": null } ],
+  "data": { "classification": "real-customer", "allowedTestIdentities": false }
+}

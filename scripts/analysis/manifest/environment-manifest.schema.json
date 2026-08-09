@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "straumvakt/environment-manifest.schema.json",
+  "title": "Straumvakt environment manifest",
+  "description": "Declarative description of one deployment environment. OFFLINE ONLY - this schema and its validator never contact a network and never mutate state. A manifest is documentation of intent; it is not applied by any tool.",
+  "type": "object",
+  "required": ["manifestVersion", "environment", "git", "workers", "data", "status"],
+  "additionalProperties": false,
+  "properties": {
+    "manifestVersion": { "const": 1 },
+    "environment": {
+      "type": "string",
+      "enum": ["development", "beta", "production", "load-test"]
+    },
+    "status": {
+      "type": "string",
+      "enum": ["proposed", "verified", "deployed"],
+      "description": "proposed = not yet real. verified = confirmed against the control plane. deployed = observed serving."
+    },
+    "git": {
+      "type": "object",
+      "required": ["branch", "updatePolicy"],
+      "additionalProperties": false,
+      "properties": {
+        "branch": { "type": "string", "minLength": 1 },
+        "updatePolicy": { "type": "string", "enum": ["pr-merge", "fast-forward-only"] },
+        "protected": { "type": ["boolean", "null"] },
+        "requiredApprovals": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "workers": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/worker" }
+    },
+    "data": {
+      "type": "object",
+      "required": ["classification"],
+      "additionalProperties": false,
+      "properties": {
+        "classification": {
+          "type": "string",
+          "enum": ["synthetic", "beta-test", "real-customer"]
+        },
+        "neonProject": { "type": ["string", "null"] },
+        "neonBranch": { "type": ["string", "null"] },
+        "neonBranchId": { "type": ["string", "null"] },
+        "hyperdriveId": { "type": ["string", "null"] },
+        "allowedTestIdentities": { "type": "boolean" },
+        "retentionPolicyRef": { "type": ["string", "null"] }
+      }
+    },
+    "observability": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "alertRoute": { "type": "string", "enum": ["none", "engineering", "page"] },
+        "dashboards": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "rollback": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "unit": { "type": "string", "enum": ["worker-version", "domain-reattach", "database-restore", "none"] },
+        "targetRecorded": { "type": ["boolean", "null"] }
+      }
+    },
+    "notes": { "type": "string" }
+  },
+  "$defs": {
+    "worker": {
+      "type": "object",
+      "required": ["role", "name", "deployed"],
+      "additionalProperties": false,
+      "properties": {
+        "role": { "type": "string", "enum": ["web", "api", "ocpp"] },
+        "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+        "deployed": { "type": ["boolean", "null"], "description": "null = unknown, requires control-plane evidence" },
+        "versionId": { "type": ["string", "null"], "description": "rollback target; null = UNKNOWN, not 'none'" },
+        "customDomains": { "type": "array", "items": { "type": "string" } },
+        "workersDev": { "type": ["boolean", "null"] },
+        "serviceBindings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["binding", "target"],
+            "additionalProperties": false,
+            "properties": {
+              "binding": { "type": "string" },
+              "target": { "type": "string" }
+            }
+          }
+        },
+        "secretNames": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]*$" },
+          "description": "NAMES ONLY. A value here is a schema violation by policy, and the validator rejects anything value-shaped."
+        },
+        "queues": { "type": "array", "items": { "type": "string" } },
+        "r2Buckets": { "type": "array", "items": { "type": "string" } },
+        "durableObjects": { "type": "array", "items": { "type": "string" } },
+        "compatibilityDate": { "type": ["string", "null"], "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+        "compatibilityFlags": { "type": "array", "items": { "type": "string" } },
+        "cpuMs": { "type": ["integer", "null"], "minimum": 1 },
+        "pinnedByExternalClient": { "type": "boolean", "description": "true = a shipped client hardcodes a hostname of this Worker; renaming breaks it" }
+      }
+    }
+  }
+}

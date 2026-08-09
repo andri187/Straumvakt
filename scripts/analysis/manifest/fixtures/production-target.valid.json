@@ -1,0 +1,26 @@
+{
+  "manifestVersion": 1,
+  "environment": "production",
+  "status": "proposed",
+  "git": { "branch": "production", "updatePolicy": "fast-forward-only", "protected": null, "requiredApprovals": 1 },
+  "workers": [
+    { "role": "web", "name": "straumvakt-web", "deployed": false, "versionId": null,
+      "customDomains": ["straumvakt.org", "www.straumvakt.org"], "workersDev": false,
+      "serviceBindings": [{ "binding": "OCPP_GATEWAY", "target": "straumvakt-ocpp" }],
+      "secretNames": ["AUTH_SECRET", "ADMIN_EMAIL", "ADMIN_PASSWORD"],
+      "compatibilityDate": "2026-04-18", "cpuMs": 50, "pinnedByExternalClient": false },
+    { "role": "api", "name": "straumvakt-api", "deployed": false, "versionId": null,
+      "customDomains": ["api.straumvakt.org"], "workersDev": false,
+      "serviceBindings": [{ "binding": "OCPP_GATEWAY", "target": "straumvakt-ocpp" }],
+      "secretNames": ["AUTH_SECRET", "ADMIN_EMAIL", "ADMIN_PASSWORD", "OCPP_INGEST_SECRET", "OCPP_CRED_KEK"],
+      "pinnedByExternalClient": false },
+    { "role": "ocpp", "name": "straumvakt-ocpp", "deployed": false, "versionId": null,
+      "durableObjects": ["IDENTITY_DO"], "pinnedByExternalClient": false }
+  ],
+  "data": { "classification": "real-customer", "neonProject": null, "neonBranch": null,
+            "neonBranchId": null, "hyperdriveId": null, "allowedTestIdentities": false,
+            "retentionPolicyRef": "ADR-0018-decision-3" },
+  "observability": { "alertRoute": "page", "dashboards": [] },
+  "rollback": { "unit": "worker-version", "targetRecorded": false },
+  "notes": "Separate Neon project — ids deliberately null until created. Never invent an id."
+}
