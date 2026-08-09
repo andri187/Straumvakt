@@ -39,6 +39,7 @@ void main() {
     expect(response.sessions.first.powerKw, isNull);
     expect(response.sessions.first.costIsk, isNull);
     expect(response.sessions.last.powerKw, 7.2);
+    expect(response.sessions.last.costLabel, '25 kr');
   });
 
   test('session detail keeps an unavailable price truthful', () {

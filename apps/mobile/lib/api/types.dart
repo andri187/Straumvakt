@@ -227,6 +227,12 @@ class ActiveSession {
   }
 
   ConnectorStatus get connectorStatus => ConnectorStatus.fromString(status);
+
+  String? get costLabel {
+    final minor = costIsk;
+    if (minor == null) return null;
+    return '${(minor / 100).round()} kr';
+  }
 }
 
 // Result of POST /api/driver/stop-session — 202 accepted with the

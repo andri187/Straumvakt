@@ -243,9 +243,7 @@ class _ActiveSessionScreenState extends State<ActiveSessionScreen> {
             ),
             _Metric(
               label: 'Current cost',
-              value: session?.costIsk == null
-                  ? 'Pending'
-                  : '${session!.costIsk!.toStringAsFixed(0)} kr',
+              value: session?.costLabel ?? 'Pending',
               color: BrandPalette.amber,
             ),
           ],
