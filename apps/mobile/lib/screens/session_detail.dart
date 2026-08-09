@@ -58,7 +58,9 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
           }
           if (snapshot.hasError) {
             return _DetailError(
-              onRetry: () => setState(() => _future = _load()),
+              onRetry: () => setState(() {
+                _future = _load();
+              }),
             );
           }
           return SessionSettlementView(detail: snapshot.requireData);
