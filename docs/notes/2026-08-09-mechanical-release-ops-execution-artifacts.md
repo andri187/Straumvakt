@@ -1,4 +1,6 @@
 # Mechanical release-ops execution artifacts
+> **Superseded in part by [the overnight verification-prep packet](2026-08-09-overnight-verification-prep-packet.md).** That run corrected several findings recorded here: the estate is **29 registered worktrees, not 6**; three worktrees are checked out **at** forbidden commits; the wrangler linter emits **5 L2 / 6 L3**, not 4 / 3; the linter's inheritance model was wrong and is fixed; and the money-unit finding's **mechanism** was wrong — there is no cancelling pair inside the API. See "Corrections" there.
+
 
 **Run.** `next-mechanical-claude-b-release-ops-execution-artifacts-2026-08-09.md`
 **Worktree.** `E:\Claude\Straumvakt-beta-production` · branch `docs/beta-production-release-architecture`
@@ -70,7 +72,7 @@ files** — 160 untracked entries at the top level, 22,759 files in total, mostl
 tool caches (`.jadx-1.5.5`, `.zaptec-apk`, `.zaptec-jadx`, `cache/`).
 
 That is worse than no version control, because the presence of `.git` invites the
-assumption that it is safe. This folder holds the 28 prompts driving all three
+assumption that it is safe. This folder holds the 33 markdown documents driving all three
 agents and the coordinator ledger. → Appendix G P-04, ISS-33, CL-48.
 
 ### C-2 — Renumbering the validator rules silently dropped one
@@ -150,7 +152,7 @@ predicted: `apps/api` and `gateway` each declare neither `routes` nor
 `env.staging` is clean because it declares `workers_dev: true` at
 `wrangler.jsonc:67` alongside its routes.
 
-Three L3 informational findings confirm the service-binding-by-name coupling,
+Six L3 informational findings confirm the service-binding-by-name coupling,
 including `gateway → MAIN_APP → hlada-api-staging`, which a rename breaks.
 → Appendix F.
 
@@ -167,7 +169,7 @@ lanes: **B** release ops, **A** Claude A, **X** Codex, **H** Andri.
 | **F-02** | 7 control-plane facts blocked | Appendix A | No rollback target, no cutover | B | AD-02 | CL-01…CL-13 | evidence bundle hashed | n/a | F-01 | All 7 captured | **Blocked** |
 | **F-03** | Route omission behaviour | Cloudflare docs | Misprediction of routing | B | — | D-24 | route list captured | n/a | — | Understood | **Closed** |
 | **F-04** | Wildcard covers one subdomain level | Cloudflare docs | Wrong coverage assumption | B | — | D-24 | pattern review | n/a | — | Understood | **Closed** |
-| **F-05** | Adding `routes` infers `workers_dev=false` | Cloudflare docs + D-29 | **Fleet/app outage** | B | — | ISS-01, ISS-02, ISS-03 | `lint-wrangler.mjs` L1 | revert config | — | Declared in all 3 configs | **Open — 4 L2 warnings** |
+| **F-05** | Adding `routes` infers `workers_dev=false` | Cloudflare docs + D-29 | **Fleet/app outage** | B | — | ISS-01, ISS-02, ISS-03 | `lint-wrangler.mjs` L1 | revert config | — | Declared in all 3 configs | **Open — 5 L2 warnings** |
 | **F-06** | Mobile pins the API workers.dev host | `apps/mobile/lib/api/client.dart` | Total mobile outage | B+X | AD-08 | ISS-01, CL-14 | CL-56 smoke check | re-enable toggle | F-05 | Declared + addressing decided | **Open** |
 | **F-07** | Gateway carries the same condition | `gateway/wrangler.jsonc` | **Charger fleet offline** | B | AD-08 | ISS-02, CL-17 | `lint-wrangler.mjs` | re-enable toggle | F-05 | Declared | **Open** |
 | **F-08** | web→API is the only plain-HTTPS path | 4-path map, D-23 | Total web outage if it becomes a route | B+A | AD-09 | ISS-23, CL-18…CL-20 | CL-19 local proof | **flag flip, no deploy** | ISS-24 | Service binding, soaked | **Open** |
@@ -290,7 +292,7 @@ node scripts/analysis/manifest/self-test-all.mjs
 
 node validate-release-manifest.mjs --strict <warns fixtures>   → exit 1 (correct)
 node validate-release-manifest.mjs --strict <valid fixture>    → exit 0 (correct)
-node lint-wrangler.mjs                                          → 0 errors, 4 L2 warnings
+node lint-wrangler.mjs                                          → 0 errors, 5 L2 warnings
 grep -n '^import' scripts/analysis/**/*.mjs                     → node: builtins only
 ```
 

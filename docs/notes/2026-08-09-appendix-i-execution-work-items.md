@@ -426,7 +426,7 @@ Owner lanes: **B** = release ops (this track), **A** = Claude A backend/domain,
 - **Impact** none · **Artifact** Appendix D D-25
 
 #### CFI-09 — Script: list Hyperdrive configs
-- **Evidence** Fact F5.
+- **Evidence** Fact F4.
 - **Scope** `GET /accounts/{id}/hyperdrive/configs`. **Non-goals** patching origin.
 - **Do** Save JSON; the password field is not returned.
 - **Mutation** `RO` · **Owner** B · **Deps** CFA-07
@@ -1260,7 +1260,7 @@ Owner lanes: **B** = release ops (this track), **A** = Claude A backend/domain,
 - **Impact** A and X · **Artifact** AD-04
 
 #### SBH-09 — Record the relationship of every worktree branch to the trunk
-- **Evidence** Six active worktrees exist across three agents; their divergence is not tracked anywhere.
+- **Evidence** Twenty-nine worktrees are registered (28 on disk) across three agents; their divergence is not tracked anywhere.
 - **Scope** ahead/behind counts per worktree. **Non-goals** rebasing anyone's work.
 - **Do** Loop the worktrees and compute counts against the trunk.
 - **Mutation** `RO` · **Owner** B · **Deps** GBS-09

@@ -1,4 +1,6 @@
 # Appendix K — Rollback drills, beta rehearsals, production no-gos
+> **Superseded in part by [the overnight verification-prep packet](2026-08-09-overnight-verification-prep-packet.md).** That run corrected several findings recorded here: the estate is **29 registered worktrees, not 6**; three worktrees are checked out **at** forbidden commits; the wrangler linter emits **5 L2 / 6 L3**, not 4 / 3; the linter's inheritance model was wrong and is fixed; and the money-unit finding's **mechanism** was wrong — there is no cancelling pair inside the API. See "Corrections" there.
+
 
 **10 rollback drills · 8 beta rehearsal scenarios · 6 production no-go scenarios.**
 
@@ -406,7 +408,7 @@ cleared by whoever is most impatient.
 > **STOP. This release can remove the hostname every shipped mobile app depends on. There is no client-side fix and a store release takes days.**
 
 **Trigger.** Any Worker with `workersDevRequired: true` does not declare `workers_dev` in its config; or the release adds `routes` to such a Worker.
-**Evidence.** `apps/api/wrangler.jsonc` and `gateway/wrangler.jsonc` declare neither `routes` nor `workers_dev` — confirmed by `lint-wrangler.mjs`, which reports **four L2 warnings** across both, at top level and in `env.staging`. Rule R4 rejects such a manifest. `apps/mobile/lib/api/client.dart` pins the API host.
+**Evidence.** `apps/api/wrangler.jsonc` and `gateway/wrangler.jsonc` declare neither `routes` nor `workers_dev` — confirmed by `lint-wrangler.mjs`, which reports **five L2 warnings** — apps/api and gateway each at top level and in `env.staging`, plus the web config's own top level. Rule R4 rejects such a manifest. `apps/mobile/lib/api/client.dart` pins the API host.
 **Who can clear it.** The release approver, only after the config declares it and `lint-wrangler.mjs` reports no L1 error.
 **Required fix.** ISS-01, ISS-02, ISS-03.
 **What may continue.** Everything. The fix is a two-line configuration change.

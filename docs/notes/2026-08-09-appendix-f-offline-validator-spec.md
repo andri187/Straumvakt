@@ -1,4 +1,6 @@
 # Appendix F — Offline validator and linter specification
+> **Superseded in part by [the overnight verification-prep packet](2026-08-09-overnight-verification-prep-packet.md).** That run corrected several findings recorded here: the estate is **29 registered worktrees, not 6**; three worktrees are checked out **at** forbidden commits; the wrangler linter emits **5 L2 / 6 L3**, not 4 / 3; the linter's inheritance model was wrong and is fixed; and the money-unit finding's **mechanism** was wrong — there is no cancelling pair inside the API. See "Corrections" there.
+
 
 **Implemented and passing, not proposed.** Everything below exists as code in
 `scripts/analysis/`, self-tests, and was run in this session.
@@ -138,7 +140,7 @@ gateway/wrangler.jsonc      WARN L2 [top-level straumvakt-ocpp]
                             INFO L3 [env.staging] MAIN_APP -> hlada-api-staging
 ```
 
-Zero L1 errors — nothing is broken today. **Four L2 warnings** — the API and
+Zero L1 errors — nothing is broken today. **Five L2 warnings** — the API and
 gateway are both latent in exactly the way described, at both the top level and
 in `env.staging`. The web config's `env.staging` is clean because it declares
 `workers_dev: true` at `wrangler.jsonc:67` alongside its routes.

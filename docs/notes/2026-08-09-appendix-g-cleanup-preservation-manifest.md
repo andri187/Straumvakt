@@ -1,11 +1,13 @@
 # Appendix G — Cleanup preservation manifest (20 records)
+> **Superseded in part by [the overnight verification-prep packet](2026-08-09-overnight-verification-prep-packet.md).** That run corrected several findings recorded here: the estate is **29 registered worktrees, not 6**; three worktrees are checked out **at** forbidden commits; the wrangler linter emits **5 L2 / 6 L3**, not 4 / 3; the linter's inheritance model was wrong and is fixed; and the money-unit finding's **mechanism** was wrong — there is no cancelling pair inside the API. See "Corrections" there.
+
 
 **Nothing in this appendix has been deleted, moved, or modified.** This is a
 register of what must survive, how to prove it survived, and what has to be true
 before any deletion is even proposed.
 
-The measurement behind it: **43.76 GB total, 41.57 GB (95%) regenerable,
-2.25 GB real content.** The first attempt at that measurement followed junctions,
+The measurement behind it: **45.2 GB total, 42.92 GB (95%) regenerable, 2.28 GB real content**
+(re-measured 2026-08-09 by an independent implementation; the earlier 43.76 / 41.57 / 2.25 figures were the same method on a slightly smaller tree). The first attempt at that measurement followed junctions,
 double-counted shared `node_modules`, and produced impossible figures — negative
 real content, and more reclaimable space than the tree contained. The correction
 is recorded rather than silently applied, because the cause (tools follow
@@ -59,8 +61,8 @@ someone's optimism.
 
 ## P-04 — `C:\Users\Andri\Documents\New project` (prompts and evidence)
 **Kind** The programme's own instructions, evidence, and cross-agent record.
-**Why preserve** **Correction to the earlier finding.** This was recorded as "unbacked". The truth is worse: it has a `.git` directory with **zero commits and zero tracked files**, 160 untracked entries at the top level, and 22,759 files in total. The presence of `.git` invites the assumption that it is safe. It is not — it has the appearance of version control and none of the substance.
-**Prove preserved** `git log --oneline` shows at least one commit; the **28 top-level markdown prompts** are tracked.
+**Why preserve** **Correction to the earlier finding.** This was recorded as "unbacked". The truth is worse: it has a `.git` directory with **zero commits and zero tracked files**, 170 untracked entries at the top level, and 22,888 files in total (~9.04 GB). The presence of `.git` invites the assumption that it is safe. It is not — it has the appearance of version control and none of the substance.
+**Prove preserved** `git log --oneline` shows at least one commit; the **33 top-level markdown documents** are tracked.
 **Checksum plan** A commit is the checksum. Until one exists, SHA-256 per document.
 **Archive target** Its own repository, plus an off-machine copy.
 **Approval** Andri. **Safe-delete prerequisite** Nothing here is a deletion candidate. The tool caches (`.jadx-1.5.5`, `.zaptec-apk`, `.zaptec-jadx`, `cache/`) are, but only after the documents are committed.
@@ -86,7 +88,7 @@ someone's optimism.
 > **This track preserves it and does not edit it.** Updating it belongs to the coordinator, and this run wrote to the ledger documents instead.
 
 ## P-07 — Worktrees and their branches
-**Kind** Six active git worktrees.
+**Kind** Twenty-nine registered git worktrees, 28 on disk, 1 stale registration.
 **Why preserve** A worktree may be retired only when it holds nothing that exists nowhere else. Session-start state: `Straumvakt-release-candidate` `4b69d0f`, `Straumvakt-onboarding-domain` `4dea004`, `Straumvakt-onboarding-web` `7a25fa5`, `Straumvakt-driver-access-ui` `ad5d8c7`, `Straumvakt-n1` `52e3b32`, `Straumvakt-beta-production` `31ce40b`.
 **Prove preserved** `git branch --list` still shows every branch after any retirement.
 **Checksum plan** Tip sha per worktree, recorded before and after.

@@ -1,4 +1,6 @@
 # Appendix H — Approval decision records (16)
+> **Superseded in part by [the overnight verification-prep packet](2026-08-09-overnight-verification-prep-packet.md).** That run corrected several findings recorded here: the estate is **29 registered worktrees, not 6**; three worktrees are checked out **at** forbidden commits; the wrangler linter emits **5 L2 / 6 L3**, not 4 / 3; the linter's inheritance model was wrong and is fixed; and the money-unit finding's **mechanism** was wrong — there is no cancelling pair inside the API. See "Corrections" there.
+
 
 Written to be answerable in one sitting, without reconstructing context. Every
 record recommends — a list of options with no recommendation transfers the whole
@@ -205,7 +207,7 @@ Note also: the web Worker sets `workers_dev: true` at `wrangler.jsonc:67`. Wheth
 **Recommendation: (a).** Deleting the directory leaves the worktree registered and the repository confused. The branch is never deleted — it is the cheap part, and keeping it makes the retirement fully reversible.
 
 **Consequence of yes.** Disk reclaimed with an exact undo: `git worktree add` from the surviving branch.
-**Consequence of no.** Six working copies of a repository whose build output is 95% of a 43.76 GB tree.
+**Consequence of no.** Twenty-eight working copies of a repository whose build output is 95% of a 43.76 GB tree.
 
 **Prerequisites.** ISS-38. **Evidence required.** D-47 — and note a zero-unique worktree with **dirty files** is not a candidate; that is another agent's work.
 

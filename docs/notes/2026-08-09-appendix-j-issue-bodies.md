@@ -312,7 +312,7 @@ other documents can act on it. Mutation categories are as defined in Appendix I.
 
 **Problem.** The repository has a stale default branch and a separate deploy pointer. Neither is unambiguously the trunk, so new work branches from whatever the author happened to have checked out.
 
-**Evidence.** Sixteen remote branches; the default is stale; `origin/staging` is the deploy pointer; six worktrees are on six different branches.
+**Evidence.** Sixteen remote branches; the default is stale; `origin/staging` is the deploy pointer; 29 worktrees are registered across 43 local branches, of which only 16 exist on the remote.
 
 **Proposed action.** Choose the trunk, record the promotion direction as trunk → staging → production with fast-forward only, and state it where A and X will read it.
 
@@ -462,7 +462,7 @@ other documents can act on it. Mutation categories are as defined in Appendix I.
 
 **Problem.** Hyperdrive sits between the Worker and Postgres. If it points at the wrong Neon branch, application code cannot tell — the queries succeed against the wrong data.
 
-**Evidence.** Blocked fact F5.
+**Evidence.** Blocked fact F4.
 
 **Proposed action.** `GET /accounts/{id}/hyperdrive/configs`. The password is not returned by the API, which is the correct behaviour and must not be worked around.
 
@@ -1062,7 +1062,7 @@ other documents can act on it. Mutation categories are as defined in Appendix I.
 
 **Problem.** A Worker that deploys without its secrets fails at first request, not at deploy time, so the failure appears after the cutover looks successful.
 
-**Evidence.** Blocked fact F4 covers the beta secret names.
+**Evidence.** Blocked fact F5 covers the beta secret names.
 
 **Proposed action.** Cross-reference. Names only; values never appear in any artifact.
 
@@ -1087,7 +1087,7 @@ other documents can act on it. Mutation categories are as defined in Appendix I.
 
 **Problem.** The production secret list cannot be derived without knowing what beta actually has, and this is exactly the capture where a values leak is most likely.
 
-**Evidence.** Blocked fact F4.
+**Evidence.** Blocked fact F5.
 
 **Proposed action.** `GET .../scripts/{name}/secrets` returns names and types; the dashboard shows names with values hidden. Never click a reveal control.
 
