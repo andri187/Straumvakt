@@ -14,6 +14,7 @@ import '../i18n/strings.dart';
 import '../theme/palette.dart';
 import 'login.dart';
 import 'charge_history.dart';
+import 'account_privacy.dart';
 import 'my_vehicle.dart';
 import 'profile.dart';
 import 'redeem_invite.dart';
@@ -157,6 +158,19 @@ class MenuDrawer extends StatelessWidget {
                       Navigator.of(context).push(
                         MaterialPageRoute(
                           builder: (_) => ProfileScreen(driver: driver),
+                        ),
+                      );
+                    },
+                  ),
+                  _MenuTile(
+                    icon: Icons.shield_outlined,
+                    label: 'Account & privacy',
+                    subtitle: 'Account status and requests',
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => AccountPrivacyScreen(driver: driver),
                         ),
                       );
                     },
