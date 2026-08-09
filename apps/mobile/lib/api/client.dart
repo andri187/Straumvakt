@@ -14,9 +14,14 @@ class ApiException implements Exception {
 }
 
 class StraumvaktApi {
-  StraumvaktApi({String? baseUrl}) : baseUrl = baseUrl ?? defaultBaseUrl;
+  StraumvaktApi({String? baseUrl, http.Client? client})
+    : baseUrl = baseUrl ?? defaultBaseUrl,
+      _client = client ?? http.Client(),
+      _ownsClient = client == null;
 
   final String baseUrl;
+  final http.Client _client;
+  final bool _ownsClient;
 
   // Pinned to staging. Swap for production when that domain lands.
   // No localhost fallback — the standalone bridge is retired.
@@ -27,7 +32,7 @@ class StraumvaktApi {
     required String email,
     required String password,
   }) async {
-    final res = await http.post(
+    final res = await _client.post(
       Uri.parse('$baseUrl/api/driver/login'),
       headers: {'content-type': 'application/json'},
       body: jsonEncode({'email': email, 'password': password}),
@@ -45,7 +50,7 @@ class StraumvaktApi {
   }
 
   Future<DriverProfile> getMe(String accessToken) async {
-    final res = await http.get(
+    final res = await _client.get(
       Uri.parse('$baseUrl/api/driver/me'),
       headers: _authHeaders(accessToken),
     );
@@ -65,7 +70,7 @@ class StraumvaktApi {
     required String accessToken,
     required String connectorId,
   }) async {
-    final res = await http.post(
+    final res = await _client.post(
       Uri.parse('$baseUrl/api/driver/start-session'),
       headers: _authHeaders(accessToken),
       body: jsonEncode({'connectorId': connectorId}),
@@ -94,7 +99,7 @@ class StraumvaktApi {
     required String kennitala,
     required String password,
   }) async {
-    final res = await http.post(
+    final res = await _client.post(
       Uri.parse('$baseUrl/api/public/invites/consume'),
       headers: {'content-type': 'application/json'},
       body: jsonEncode({
@@ -140,7 +145,7 @@ class StraumvaktApi {
   // The endpoint returns an envelope because a driver can have more than
   // one in-progress session. Rows are newest first.
   Future<List<ActiveSession>> getCurrentSessions(String accessToken) async {
-    final res = await http.get(
+    final res = await _client.get(
       Uri.parse('$baseUrl/api/driver/sessions/current'),
       headers: _authHeaders(accessToken),
     );
@@ -171,7 +176,7 @@ class StraumvaktApi {
     required String accessToken,
     required String sessionId,
   }) async {
-    final res = await http.post(
+    final res = await _client.post(
       Uri.parse('$baseUrl/api/driver/stop-session'),
       headers: _authHeaders(accessToken),
       body: jsonEncode({'sessionId': sessionId}),
@@ -195,7 +200,7 @@ class StraumvaktApi {
     required String accessToken,
     required String locale,
   }) async {
-    final res = await http.patch(
+    final res = await _client.patch(
       Uri.parse('$baseUrl/api/driver/me'),
       headers: _authHeaders(accessToken),
       body: jsonEncode({'locale': locale}),
@@ -213,7 +218,7 @@ class StraumvaktApi {
   }
 
   Future<List<DriverCharger>> getChargers(String accessToken) async {
-    final res = await http.get(
+    final res = await _client.get(
       Uri.parse('$baseUrl/api/driver/chargers'),
       headers: _authHeaders(accessToken),
     );
@@ -249,7 +254,7 @@ class StraumvaktApi {
     int? rssi,
     String? deviceHandle,
   }) async {
-    final res = await http.post(
+    final res = await _client.post(
       Uri.parse('$baseUrl/api/driver/tap-intent'),
       headers: _authHeaders(accessToken),
       body: jsonEncode({
@@ -274,7 +279,7 @@ class StraumvaktApi {
     required String accessToken,
     required String intentId,
   }) async {
-    final res = await http.delete(
+    final res = await _client.delete(
       Uri.parse('$baseUrl/api/driver/tap-intent/$intentId'),
       headers: _authHeaders(accessToken),
     );
@@ -303,7 +308,7 @@ class StraumvaktApi {
     required String serial,
   }) async {
     try {
-      final res = await http.get(
+      final res = await _client.get(
         Uri.parse('$baseUrl/api/driver/chargers/$serial/ble-pin'),
         headers: _authHeaders(accessToken),
       );
@@ -335,7 +340,7 @@ class StraumvaktApi {
     required String serial,
   }) async {
     try {
-      final res = await http.get(
+      final res = await _client.get(
         Uri.parse('$baseUrl/api/driver/chargers/$serial/advanced-grant'),
         headers: _authHeaders(accessToken),
       );
@@ -381,7 +386,7 @@ class StraumvaktApi {
     Map<String, String>? query,
   }) async {
     final uri = Uri.parse('$baseUrl$path').replace(queryParameters: query);
-    final res = await http.get(uri, headers: _authHeaders(accessToken));
+    final res = await _client.get(uri, headers: _authHeaders(accessToken));
     final body = _decode(res);
     if (res.statusCode != 200) {
       throw ApiException(
@@ -401,7 +406,7 @@ class StraumvaktApi {
     required String accessToken,
     required String sessionId,
   }) async {
-    final res = await http.get(
+    final res = await _client.get(
       Uri.parse('$baseUrl/api/driver/sessions/$sessionId'),
       headers: _authHeaders(accessToken),
     );
@@ -427,7 +432,7 @@ class StraumvaktApi {
     required String accessToken,
     required String displayName,
   }) async {
-    final res = await http.patch(
+    final res = await _client.patch(
       Uri.parse('$baseUrl/api/driver/me'),
       headers: _authHeaders(accessToken),
       body: jsonEncode({'displayName': displayName}),
@@ -456,5 +461,11 @@ class StraumvaktApi {
     } catch (_) {
       return r.body;
     }
+  }
+
+  /// Releases the production HTTP client. Injected clients remain owned by
+  /// their caller so a test can reuse one across several API instances.
+  void close() {
+    if (_ownsClient) _client.close();
   }
 }
