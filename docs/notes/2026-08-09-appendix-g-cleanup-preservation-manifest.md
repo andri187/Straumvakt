@@ -154,7 +154,7 @@ someone's optimism.
 ## P-14 — Build output classified as regenerable
 **Kind** `node_modules`, `.next`, `.open-next`, `.dart_tool`, `build` — **41.57 GB, 95% of the tree.**
 **Why preserve** Conditionally, and only until regeneration is demonstrated. "Regenerable" assumes lockfiles resolve and registries are reachable, including for pinned versions that may since have been unpublished.
-**Prove preserved** Not preserved — **proven reproducible**: `npm ci` into a temporary copy, `flutter pub get` into a temporary copy, both succeeding.
+**Prove preserved** Not preserved — **proven reproducible**: `npm install` into a temporary copy (NOT `npm ci` — package-lock.json is untracked and ignored at .gitignore:51, so `npm ci` cannot run in this repository at all), `flutter pub get` into a temporary copy, both succeeding.
 **Checksum plan** None. Reproduction, not integrity, is the property that matters.
 **Archive target** None, once reproduction is demonstrated.
 **Approval** Andri. **Safe-delete prerequisite** Reproduction demonstrated for **each** ecosystem, not assumed from one.
