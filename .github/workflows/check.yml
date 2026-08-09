@@ -68,3 +68,26 @@ jobs:
       # every file that touches the database.
       - run: npm run db:generate
       - run: npm run check
+      # The unit/route suite. Measured on a clean install of this tree:
+      # 50 files, 686 tests, ~10s, no database, no network, no bindings.
+      # It was never wired here — and unlike `check:migrations` above,
+      # whose exclusion is a documented decision, this one was simply
+      # absent. Adoption cost is zero: the suite is green today, so there
+      # is no backlog of red tests to clear before turning it on.
+      #
+      # NOT redundant with `npm run check`. That runs nine static checks;
+      # typecheck and vitest catch disjoint failures, and both directions
+      # were observed while wiring this up — a test file that passed
+      # vitest failed tsc (an untyped global), and a broken
+      # `assertPermission` passed 686 tests because nothing covers it.
+      #
+      # NOTE for whoever turns this on: `npm run check` is RED on every
+      # branch today, and has been since before this step existed.
+      # check:work-view compares src/app/(app)/admin/work/page.tsx, and
+      # that file no longer exists — the whole (app) console moved to
+      # archive/straumvakt-org-console-2026-08-08/. Adding this step does
+      # not make CI red; CI is already red. Resolve work-view first, or
+      # this step's value is invisible under a failure nobody looks at.
+      - run: npm test
+        env:
+          CI: "true"
