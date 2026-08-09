@@ -84,7 +84,13 @@ export async function middleware(req: NextRequest) {
   }
 
   if (
-    (pathname === "/local/product-preview" || pathname === "/visual") &&
+    (
+      pathname === "/local/product-preview" ||
+      pathname === "/visual" ||
+      pathname === "/login-demo" ||
+      pathname === "/app" ||
+      pathname.startsWith("/app/")
+    ) &&
     process.env.STRAUMVAKT_LOCAL_PRODUCT_PREVIEW === "1"
   ) {
     return NextResponse.next();

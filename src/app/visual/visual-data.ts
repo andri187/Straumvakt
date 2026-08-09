@@ -36,7 +36,7 @@ const cpoBase = {
   rows: [
     ["DEMO-ZP-001", "Main office", "Charging", "22.1 kW", "Monitor"],
     ["DEMO-ZP-007", "Warehouse", "Offline", "Unavailable", "Review case"],
-    ["DEMO-EA-004", "Harbour depot", "Available", "0.0 kW", "None"],
+    ["DEMO-EA-004", "Harbour depot", "Available", "Not charging", "None"],
   ],
   queue: [q("Warehouse charger 07", "Offline for 43 minutes", "bad"), q("Three access requests", "Waiting for organisation decision", "warn"), q("Cost factor review", "Future effective date", "info")],
 };
