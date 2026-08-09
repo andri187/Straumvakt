@@ -56,11 +56,30 @@ describe("expandPermissionsSync — platform.tenant.* expansion", () => {
     expect(perms).toContain("charger.remote_start");
     expect(perms).toContain("billing.write");
     expect(perms).toContain("billing.export");
-    expect(perms).toContain("member.invite");
-    expect(perms).toContain("member.write");
-    expect(perms).toContain("member.remove");
     expect(perms).toContain("site.delete");
     expect(perms).toContain("property.delete");
+  });
+
+  it("no platform grant confers membership ADMINISTRATION, only visibility", () => {
+    // The carve-out the hierarchy-review note proposed and 4.3 deferred.
+    // member.write gates PUT /api/admin/users/:id/password, which sets any
+    // user's password; the unconditional expansion handed that to every
+    // platform.tenant.write holder, sales_cs included.
+    for (const role of ["platform_admin", "super_user", "sales_cs"] as const) {
+      const perms = expandPermissionsSync(null, { role });
+      expect(perms).toContain("member.read"); // support still needs to see
+      expect(perms).not.toContain("member.write");
+      expect(perms).not.toContain("member.invite");
+      expect(perms).not.toContain("member.remove");
+    }
+  });
+
+  it("a membership that grants member.write still does", () => {
+    // The carve-out must not lock out the legitimate path. An org owner
+    // administers their own members; only the platform shortcut is gone.
+    const perms = expandPermissionsSync({ role: "owner" }, { role: "sales_cs" });
+    expect(perms).toContain("member.write");
+    expect(perms).toContain("member.remove");
   });
 
   it("sales_cs (platform.tenant.{read,write} only) gets read+write but NOT delete", () => {
@@ -245,14 +264,19 @@ describe("satisfiedOnlyByPlatformGrant", () => {
     expect(r.viaPlatform).toContain("site.delete");
   });
 
-  it("a sales_cs grant alone satisfies member.write — the escalation, asserted", () => {
-    // Not an endorsement. permissions.ts:268 annotates this role
-    // "column-restricted in repo layer (org notes/tags only)"; no such
-    // restriction is implemented anywhere. Pinned here so narrowing the
-    // expansion has to change a test on purpose rather than by accident.
+  it("a sales_cs grant no longer reaches member.write — the takeover path, closed", () => {
+    // permissions.ts:268 annotates sales_cs "column-restricted in repo
+    // layer (org notes/tags only)" — a restriction implemented nowhere.
+    // Until the carve-out, this role reached member.write and therefore
+    // PUT /api/admin/users/:id/password for any user in any tenant.
     const r = resolutionFor(null, "sales_cs");
-    expect(satisfiedOnlyByPlatformGrant(r, "member.write")).toBe(true);
+    expect(satisfiedOnlyByPlatformGrant(r, "member.write")).toBe(false);
+
+    // Still reachable, and still not restricted by anything. Recorded
+    // rather than fixed: narrowing charger control is a separate decision
+    // about what customer-success staff are meant to be able to do.
     expect(satisfiedOnlyByPlatformGrant(r, "charger.remote_start")).toBe(true);
+    expect(satisfiedOnlyByPlatformGrant(r, "billing.write")).toBe(true);
   });
 });
 

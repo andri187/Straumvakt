@@ -90,15 +90,37 @@ export async function getActivePlatformGrant(
 // ─────────────────────────────────────────────────────────────────────
 
 /**
+ * Membership administration is NOT conferred by a platform grant.
+ *
+ * This is the carve-out the hierarchy-review note proposed and Sprint 4.3
+ * deferred. It matters more than "tidier bundles": `member.write` is what
+ * gates `PUT /api/admin/users/:id/password`
+ * (domains/identity/routes/admin-users.ts:138), which sets any user's
+ * password. Through the unconditional expansion, every holder of
+ * `platform.tenant.write` had it — including `sales_cs`, whose bundle is
+ * annotated "column-restricted in repo layer (org notes/tags only)"
+ * (permissions.ts:268), a restriction implemented nowhere. A sales grant
+ * could take over any account in any tenant.
+ *
+ * Staff who legitimately administer members do so through a membership in
+ * that organisation, which is the path `satisfiedOnlyByPlatformGrant`
+ * exists to distinguish. Removing the shortcut is what makes that
+ * distinction mean anything.
+ */
+const MEMBER_ADMIN_VERBS = new Set<PerTenantPermission>([
+  "member.write",
+  "member.invite",
+  "member.remove",
+]);
+
+/**
  * When a PlatformGrant carries `platform.tenant.read`, the user
  * effectively has every per-tenant *.read verb. Same for write
- * (read + write) and delete (read + write + delete).
+ * (read + write) and delete (read + write + delete) — except the
+ * membership-administration verbs above, which no platform grant confers.
  *
- * Caveat (see hierarchy-review note): this expansion includes
- * member.* — Straumvakt staff with platform.tenant.write can today
- * invite/remove members directly. The note proposes carving
- * member.* OUT in a future revision; Sprint 4.3 ships the simpler
- * full-expansion behaviour and re-checks at Sprint 4.4 / 4 retro.
+ * `member.read` is deliberately still expanded: staff must be able to SEE
+ * a tenant's members to support it. Only mutation is withdrawn.
  */
 function expandPlatformTenantVerbs(perms: Permission[]): Permission[] {
   const set = new Set<Permission>(perms);
@@ -110,13 +132,14 @@ function expandPlatformTenantVerbs(perms: Permission[]): Permission[] {
   );
   const WRITES: PerTenantPermission[] = PER_TENANT_PERMISSIONS.filter(
     (p) =>
-      p.endsWith(".write") ||
-      p === "member.invite" ||
-      p === "member.remove" ||
-      p === "billing.export" ||
-      p === "charger.config" ||
-      p === "charger.remote_start" ||
-      p === "charger.remote_stop",
+      !MEMBER_ADMIN_VERBS.has(p) &&
+      (p.endsWith(".write") ||
+        p === "member.invite" ||
+        p === "member.remove" ||
+        p === "billing.export" ||
+        p === "charger.config" ||
+        p === "charger.remote_start" ||
+        p === "charger.remote_stop"),
   );
   const DELETES: PerTenantPermission[] = PER_TENANT_PERMISSIONS.filter((p) =>
     p.endsWith(".delete"),
