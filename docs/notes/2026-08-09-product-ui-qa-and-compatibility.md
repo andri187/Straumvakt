@@ -92,3 +92,25 @@ The five-version matrix separates compilation, deterministic widget behavior, ap
 ## Evidence
 
 Screenshots are stored outside Git under `C:\Users\Andri\Documents\New project\evidence\product-to-market-2026-08-09`. Browser screenshots are generated from the local gated preview at 1280 x 720, 1024 x 768 and 390 x 844. Android 15 (API 35) was verified on `emulator-5554`; the normal APK SHA-256 is `31656338C1739264531F4B0301D0549062D1691093BB96AE239A5CAE1CFD2B04`. The guest capture uses the real entry point. Unaffiliated, safe-invitation and blocked-installation captures used a temporary local-only QA entry point; that file was deleted, the normal APK was rebuilt, and the normal APK was reinstalled before closeout.
+
+## Hardening continuation evidence
+
+Authenticated organisation routes now share loading, empty, error, metric, status and contract-gate components. One-time charger credentials are focused and announced, clipboard failure has a manual fallback, ambiguous create results are not automatically retried, driver denial requires a meaningful reason and restores focus, and session/agreement nulls remain truthful.
+
+The staff readiness page filters by state, persona and text while explicitly excluding repository-health/work-view information. Support context says assistance is not impersonation; audit and onboarding aggregate controls remain disabled until canonical reads exist.
+
+Accessibility advanced in twelve verified areas: consistent focus-visible treatment; busy and alert semantics; captioned/scoped tables; one-time credential announcements; decision focus restoration; dependency-labelled disabled controls; mobile semantic headings; mobile live outcomes; decorative-image exclusion; removal of negative display letter spacing; 200% browser captures; and 130% Android font-scale evidence.
+
+### Updated Android matrix
+
+| Android | Device | Install/open | Screen evidence | Large text | Crash buffer | Result |
+| --- | --- | --- | --- | --- | --- | --- |
+| 11 | No local device/AVD | Blocked | Not run | Not run | Not run | Only Pixel_8 API 35 AVD is installed |
+| 12 / API 31 | Samsung SM-A217F, `R58NB07VBMY` | Passed | Guest captured | Widget matrix | Empty | Real-device UI only; no hardware claim |
+| 13 | No local device/AVD | Blocked | Not run | Not run | Not run | No API 33 AVD or device |
+| 14 | No local device/AVD | Blocked | Not run | Not run | Not run | No API 34 AVD or device |
+| 15 / API 35 | Pixel_8 AVD, `emulator-5554` | Passed | Guest captured | 130% passed | Empty | Emulator UI regression verified |
+
+Normal APK SHA-256: `0FB301C625C637794E3D3BC0FED6877B91D95A1F8377F54B3CA15247F3620934`. New evidence is under `C:\Users\Andri\Documents\New project\evidence\product-ui-hardening-2026-08-09`: 12 web groups plus Android 12, Android 15 and Android 15 large-text groups.
+
+The full Flutter suite passes 58 tests and analysis reports no issues. Web focused guards pass 36 tests; the full web suite passes 699 tests with one skipped and one pre-existing `scripts/check-workspace-typecheck.test.mjs` loader syntax failure in this junction-backed worktree. Production build and root TypeScript pass.

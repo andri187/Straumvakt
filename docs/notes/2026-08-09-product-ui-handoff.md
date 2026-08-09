@@ -101,3 +101,42 @@ The final three signed-in Driver captures used a temporary local-only QA entry p
 ## External-state confirmation
 
 No push, merge, pull request, deploy, SQL, Cloudflare/Neon/GitHub mutation, live login, live API mutation, charger command, BLE write or hardware action occurred. The dirty shared checkout `E:\Claude\Straumvakt` and all peer worktrees were treated as read-only.
+
+## Hardening continuation
+
+### Time
+
+- Start UTC: `2026-08-09T13:47:43Z`
+- End UTC: `2026-08-09T14:27:18Z`
+- Wall clock: `00:39:35`
+- This run is under 45 minutes because all output gates were met after parallel local verification: 54 UI improvements, 46 new/improved tests, 15 visual groups, 12 accessibility improvements, 9 Android matrix cells, and 32 issue-ready packages.
+
+### Delivered and verified
+
+- Authenticated organisation routes now share truthful loading, empty, error, metric, status and backend-contract states.
+- Charger credentials, clipboard fallback, create ambiguity, form ordering and table accessibility were hardened.
+- Driver filtering, counts, denial validation and focus restoration were added.
+- Sessions and agreements preserve unknown/provisional values and expose retryable read failures.
+- Staff readiness gained product filters and explicit support/audit/onboarding boundaries without restoring work-view.
+- Flutter unaffiliated and installation states gained semantic headings, live outcomes and decorative-image exclusion.
+- Four static guards keep `/api/public/invites/consume` out of reachable mobile UI.
+- A supervised `ZPR074002`/FEV300 A-B-C-D script was prepared but not executed.
+- A local beta rehearsal and 32-package continuation backlog were added.
+
+| Gate | Result |
+| --- | --- |
+| UI improvements | 54 |
+| New/improved tests | 46: 36 web + 10 mobile |
+| Visual evidence | 15: 12 browser + 3 Android |
+| Accessibility fixes/checks | 12 |
+| Android matrix cells | 9 across API 31 real and API 35 emulator |
+| Work packages | 32 |
+| Web TypeScript/build/focused tests | pass / pass / 36 pass |
+| Web full tests | 699 pass, 1 skipped, 1 pre-existing loader failure |
+| Flutter tests/analyze/build | 58 pass / clean / pass |
+
+Local commits: web `e27ada3`; mobile `77b7e75`; documentation follows this handoff update on the local web branch. The preview remains at `http://localhost:3012/local/product-preview`. Authenticated routes were source-, type-, build- and component-verified without a live login.
+
+Claude A should preserve the identity-bound mobile route and treat the consume guards as a migration boundary. Claude B should treat API 31/35 results as UI evidence only; they do not alter environment or OCPP decisions.
+
+No push, PR, merge, deployment, SQL, cloud mutation, live login, API mutation, charger command, BLE/NFC write, or physical hardware action occurred.
