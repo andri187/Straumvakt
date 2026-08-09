@@ -38,7 +38,8 @@
     "db:migrate:status": "npm --prefix apps/api exec -- drizzle-kit check",
     "check:schema-consistency": "node scripts/check-schema-consistency.mjs",
     "work-view": "node scripts/gen-work-view.mjs",
-    "check:work-view": "node scripts/gen-work-view.mjs --check"
+    "check:work-view": "node scripts/gen-work-view.mjs --check",
+    "check:invite-guard": "node scripts/check-invite-guard.mjs"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

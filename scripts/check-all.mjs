@@ -33,6 +33,10 @@ const CHECKS = [
   // as api-endpoints and schema-parity. It regenerates from WORKSPACE.md +
   // TASKS.md and byte-compares the committed page; needs no DB or network.
   ["work-view", "npm run check:work-view"],
+  // S2 ordering guard. The invite-consume Critical is an ORDERING bug,
+  // and a status-code test cannot see it — the route returns the same 409
+  // whether or not it burned the invite on the way out. Offline, no DB.
+  ["invite-guard", "npm run check:invite-guard"],
 ];
 
 const results = [];
