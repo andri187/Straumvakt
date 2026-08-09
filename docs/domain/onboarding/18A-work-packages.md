@@ -1,6 +1,6 @@
 # Appendix 18A — backend work packages
 
-**171 non-duplicate packages** across 18 groups. Continues
+**204 non-duplicate packages** across 18 groups. Continues
 [17-ultra-backend-market-runway](17-ultra-backend-market-runway.md) from
 `4dea004`.
 
@@ -342,9 +342,14 @@ rollback = additive fields ignored.*
 ## Counts
 
 A 14 · B 14 · C 15 · D 10 · E 17 · F 10 · G 12 · H 8 · I 10 · J 8 · K 14 ·
-L 12 · M 8 · N 8 · O 10 · P 12 · Q 12 · R 10 = **171**
+L 12 · M 8 · N 8 · O 10 · P 12 · Q 12 · R 10 = **204**
 
-Every required group minimum is met or exceeded.
+Every required group minimum is met or exceeded; the total exceeds the required
+160 by 44.
+
+*(Verified by counting distinct IDs in this file, not by hand — an earlier draft
+of this line said 171, which was an arithmetic slip in summing the groups. The
+group counts themselves were correct.)*
 
 ## Critical path through the backlog
 
