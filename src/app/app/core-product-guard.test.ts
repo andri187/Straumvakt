@@ -5,9 +5,10 @@ import { describe, expect, it } from "vitest";
 const root = path.resolve(process.cwd(), "src/app/app");
 const data = fs.readFileSync(path.join(root, "core-product-data.ts"), "utf8");
 const backendContract = fs.readFileSync(path.join(root, "core-backend-contract-data.ts"), "utf8");
+const integration = fs.readFileSync(path.join(root, "core-integration-quality-data.ts"), "utf8");
 const shell = fs.readFileSync(path.join(root, "post-login-shell.tsx"), "utf8");
 const css = fs.readFileSync(path.join(root, "post-login.css"), "utf8");
-const runtime = `${data}\n${backendContract}\n${shell}`;
+const runtime = `${data}\n${backendContract}\n${integration}\n${shell}`;
 
 describe("Core product visual guard", () => {
   it("contains no request client", () => {
@@ -45,19 +46,21 @@ describe("Core product visual guard", () => {
     expect(data).toContain("Correction ADJ-04");
     expect(data).toContain("adjustmentIsk");
   });
-  it("holds energy when meter semantics are uncertain", () => {
+  it("holds only anomalous sessions after the meter-delta fix", () => {
     expect(backendContract).toContain("meterStop");
     expect(backendContract).toContain("Verified meter delta");
-    expect(backendContract).toContain("meter stop rather than meter stop minus meter start");
+    expect(backendContract).toContain("billing engine uses meter stop minus meter start");
+    expect(backendContract).toContain("hold only this session");
   });
   it("distinguishes CDR shape from price authority", () => {
     expect(backendContract).toContain("CDR-shaped");
     expect(backendContract).toContain("Shape is not authority");
     expect(backendContract).toContain("Pending source check");
   });
-  it("shows heartbeat cost gating without an operator toggle", () => {
-    expect(backendContract).toContain("Routine heartbeat filtering before queueing is not implemented");
-    expect(backendContract).toContain("there is no operator toggle");
+  it("shows the heartbeat fast path while verification remains incomplete", () => {
+    expect(backendContract).toContain("heartbeat fast path exists in source");
+    expect(backendContract).toContain("gateway-suite/toolchain completion");
+    expect(backendContract).toContain("Deployment\", \"Unverified");
   });
   it("states that the connector frame cap is missing", () => {
     expect(backendContract).toContain("No per-connector frame cap");
@@ -66,6 +69,25 @@ describe("Core product visual guard", () => {
   it("keeps manual driver authority blocked", () => {
     expect(backendContract).toContain("Manual driver management authority is not proven");
     expect(backendContract).toMatch(/action: "Add driver manually"[\s\S]*notice:/);
+  });
+  it("credits the fixed meter engine without clearing per-session holds", () => {
+    expect(integration).toContain("Engine\", \"Delta fixed");
+    expect(integration).toContain("per-session evidence hold");
+    expect(integration).not.toContain("billing engine still uses meter stop as energy");
+  });
+  it("credits the fast path without claiming deployed queue proof", () => {
+    expect(integration).toContain("Fast path\", \"Exists");
+    expect(integration).toContain("Deployment\", \"Unverified");
+    expect(integration).toContain("queue deployment state remains unknown");
+  });
+  it("states that the offline sweep is missing", () => {
+    expect(integration).toContain("offline reconciliation sweep is not built");
+    expect(integration).not.toContain("Offline sweep active");
+  });
+  it("holds mismatch and unlabelled CDR authority", () => {
+    expect(integration).toContain("CDR mismatch review");
+    expect(integration).toContain("Price source is not labelled");
+    expect(integration).toContain("not labelled CDR-ready");
   });
   it("shows delivery while refusing bank claims", () => {
     expect(data).toContain("Billing delivery log");

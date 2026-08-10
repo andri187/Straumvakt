@@ -55,7 +55,7 @@ type ScreenSeed = {
 
 const q = (title: string, detail: string, tone: Tone) => ({ title, detail, tone });
 const queue = [
-  q("Verify meter meaning", "Use meter stop minus meter start only after the contract is proven", "warn"),
+  q("Verify session meter evidence", "The engine uses meter delta; hold only sessions with incomplete or anomalous evidence", "warn"),
   q("Confirm CDR authority", "Do not label OCPP-derived price as CDR authority", "bad"),
   q("Keep corrections additive", "Preserve original evidence and show the adjustment", "info"),
 ];
@@ -105,11 +105,11 @@ const driverSeeds: ScreenSeed[] = [
     notice: "Draft values can change and are not invoice or payment truth.",
   },
   {
-    id: "meter-verification-held", label: "Meter verification", eyebrow: "Energy held", title: "Meter semantics need verification",
-    summary: "Withhold billed kWh when the source may be meter stop rather than meter stop minus meter start.",
-    state: "Verification held", tone: "bad",
+    id: "meter-verification-held", label: "Meter verification", eyebrow: "Session evidence held", title: "Per-session meter evidence needs review",
+    summary: "The billing engine uses meter stop minus meter start; hold only this session while its readings or units remain anomalous.",
+    state: "Session held", tone: "warn",
     metrics: [["Meter start", "1.842 kWh", "Demo register"], ["Meter stop", "1.866 kWh", "Demo register"], ["Expected delta", "24 kWh", "Not authoritative", "warn"], ["Billed energy", "Unavailable", "Held safely", "bad"]],
-    action: "Download statement", notice: "Export is blocked until billed-energy semantics are verified.",
+    action: "Download statement", notice: "Export is blocked for this session until its meter evidence is complete; the engine-level delta fix already exists.",
   },
   {
     id: "cdr-authority-pending", label: "CDR authority", eyebrow: "Provenance pending", title: "Charge record authority is pending",
@@ -171,11 +171,11 @@ const adminSeeds: ScreenSeed[] = [
     notice: "Cross-tenant reads require explicit platform authority; this view is a local fixture only.",
   },
   {
-    id: "ocpp-cost-gate", label: "Cost gate", eyebrow: "Fleet cost control", title: "Routine message cost gate",
-    summary: "Show whether routine heartbeat traffic bypasses costly processing without protocol noise.",
-    state: "Not implemented", tone: "bad",
-    metrics: [["Routine filter", "Missing", "Before queue", "bad"], ["Queue cost", "Exposed", "Heartbeat path", "warn"], ["Driver impact", "None intended", "Operational"], ["Gate", "Backend required", "No UI control"]],
-    notice: "Routine heartbeat filtering before queueing is not implemented; there is no operator toggle.",
+    id: "ocpp-cost-gate", label: "Cost gate", eyebrow: "Fleet cost control", title: "Routine message fast path",
+    summary: "Show that routine heartbeat filtering exists while gateway-suite and deployment evidence remain incomplete.",
+    state: "Implemented / unverified", tone: "warn",
+    metrics: [["Fast path", "Implemented", "Source evidence", "good"], ["Gateway suite", "Incomplete", "Toolchain", "warn"], ["Deployment", "Unverified", "Runtime evidence", "bad"], ["UI control", "None", "Correct boundary"]],
+    notice: "The heartbeat fast path exists in source; gateway-suite/toolchain completion and deployed queue evidence are still unverified.",
   },
   {
     id: "connector-frame-cap", label: "Frame cap", eyebrow: "Connection protection", title: "Connector message protection",
@@ -198,8 +198,8 @@ const orgSeeds: ScreenSeed[] = [
     id: "pricing-readiness", label: "Pricing readiness", eyebrow: "Organisation billing", title: "Pricing and statement readiness",
     summary: "Separate configured rates from verified meter and CDR authority before final status.",
     state: "Evidence pending", tone: "warn",
-    metrics: [["Rate version", "Configured", "ISK-2026.08-A"], ["Meter meaning", "Verify", "Backend", "bad"], ["CDR authority", "Pending", "Source", "warn"], ["Statement", "Held", "Safe state"]],
-    notice: "Configured rates are not enough to make statement energy and price authoritative.",
+    metrics: [["Rate version", "Configured", "ISK-2026.08-A"], ["Meter engine", "Delta fixed", "Verify per session", "good"], ["CDR authority", "Pending", "Source", "warn"], ["Statement", "Held", "Safe state"]],
+    notice: "The meter-delta engine fix exists; configured rates still do not prove each session's readings or CDR price authority.",
   },
   {
     id: "driver-authority", label: "Driver authority", eyebrow: "Manual management", title: "Manual driver management readiness",
