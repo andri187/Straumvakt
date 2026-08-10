@@ -1,0 +1,87 @@
+import fs from "node:fs";
+import path from "node:path";
+import { describe, expect, it } from "vitest";
+
+const root = path.resolve(process.cwd(), "src/app/app");
+const data = fs.readFileSync(path.join(root, "core-product-data.ts"), "utf8");
+const shell = fs.readFileSync(path.join(root, "post-login-shell.tsx"), "utf8");
+const css = fs.readFileSync(path.join(root, "post-login.css"), "utf8");
+const runtime = `${data}\n${shell}`;
+
+describe("Core product visual guard", () => {
+  it("contains no request client", () => {
+    expect(runtime).not.toMatch(/\bfetch\s*\(/);
+    expect(runtime).not.toContain("apiFetch");
+    expect(runtime).not.toContain("/api/");
+  });
+  it("contains no persistence form", () => {
+    expect(runtime).not.toContain("onSubmit");
+    expect(runtime).not.toContain('method="POST"');
+  });
+  it("states the Iceland-only market and timezone", () => {
+    expect(data).toContain("Iceland only / UTC+0");
+    expect(shell).toContain("Iceland / ISK / UTC+0");
+  });
+  it("shows all locked Core pricing terms", () => {
+    expect(data).toContain("CORE_CONNECTOR_RATE_ISK = 200");
+    expect(data).toContain("CORE_ACTIVE_DRIVER_RATE_ISK = 50");
+    expect(data).toContain("CORE_CAP_PER_CONNECTOR_ISK = 450");
+  });
+  it("shows DSO, retailer, CPO, plug-time and grace controls", () => {
+    expect(data).toContain("DSO / network");
+    expect(data).toContain("Electricity retailer");
+    expect(data).toContain("CPO add-on");
+    expect(data).toContain("Plug-time fee");
+    expect(data).toContain("gracePeriod");
+  });
+  it("shows rate version and effective dates", () => {
+    expect(data).toContain("rateVersion");
+    expect(data).toContain("effectiveFrom");
+    expect(data).toContain("Effective rate version");
+  });
+  it("shows CDR-backed billing material and corrections", () => {
+    expect(data).toContain("CDR-backed");
+    expect(data).toContain("Correction ADJ-04");
+    expect(data).toContain("adjustmentIsk");
+  });
+  it("shows delivery while refusing bank claims", () => {
+    expect(data).toContain("Billing delivery log");
+    expect(data).toContain("No bank integration");
+    expect(data).not.toMatch(/bank connected|bank export ready|payment sent/i);
+  });
+  it("keeps invite-by-link gated", () => {
+    expect(data).toContain("Invite link");
+    expect(data).toContain("identity-bound backend path");
+    expect(data).not.toContain("Invite sent successfully");
+  });
+  it("keeps period close and export disabled", () => {
+    expect(data).toMatch(/action: "Lock billing period", actionDisabled: true/);
+    expect(data).toMatch(/action: "Export report", actionDisabled: true/);
+    expect(data).toMatch(/action: "Download statement", actionDisabled: true/);
+  });
+  it("keeps Premium capabilities outside actions", () => {
+    const actions = [...data.matchAll(/action: "([^"]+)"/g)].map((match) => match[1]).join(" ");
+    expect(actions).not.toMatch(/custom integration|contractor|service|live telemetry|payroll/i);
+  });
+  it("does not represent a raw telemetry livestream", () => {
+    expect(data).toContain("No live-stream claim");
+    expect(data).toContain("No raw telemetry livestream");
+  });
+  it("marks money-like output at the render boundary", () => {
+    expect(shell).toContain("Demo / read only");
+    expect(shell).toContain("isMoney(cell)");
+  });
+  it("provides a semantic Core contract section", () => {
+    expect(shell).toContain('aria-labelledby="core-contract-title"');
+    expect(shell).toContain('id="core-contract-title"');
+  });
+  it("keeps Core panels responsive", () => {
+    expect(css).toContain(".pl-core-contract>div{display:grid");
+    expect(css).toContain(".pl-metrics,.pl-core-contract>div{grid-template-columns:1fr 1fr}");
+    expect(css).toContain(".pl-metrics,.pl-core-contract>div{grid-template-columns:1fr}");
+  });
+  it("supports reduced motion and forced colors", () => {
+    expect(css).toContain("prefers-reduced-motion:reduce");
+    expect(css).toContain("forced-colors:active");
+  });
+});

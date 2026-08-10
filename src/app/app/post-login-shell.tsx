@@ -10,6 +10,7 @@ import type { Route } from "next";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { VisualFamily, VisualScreen } from "../visual/visual-data";
+import { getCoreDetail } from "./core-product-data";
 import { postLoginHref, type PostLoginPersona } from "./post-login-data";
 
 const navIcons = [LayoutDashboard, Building2, RadioTower, UsersRound, KeyRound, History, FileText, Settings, CircleHelp];
@@ -27,6 +28,7 @@ export function PostLoginShell({
   const [navOpen, setNavOpen] = useState(false);
   const [query, setQuery] = useState("");
   const ContextIcon = contextIcons[persona.routeId];
+  const coreDetail = getCoreDetail(persona.routeId, screen.id);
   const filteredRows = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return needle ? screen.rows.filter((row) => row.some((cell) => cell.toLowerCase().includes(needle))) : screen.rows;
@@ -86,9 +88,19 @@ export function PostLoginShell({
           </div>
           {screen.notice ? <div className="pl-warning" role="alert"><AlertTriangle size={18} /><span>{screen.notice}</span></div> : null}
 
-          <section className="pl-metrics" aria-label="Key measures">
-            {screen.metrics.map((metric) => <Metric key={metric.label} metric={metric} />)}
-          </section>
+          {coreDetail ? (
+            <section className="pl-core-contract" aria-labelledby="core-contract-title">
+              <header><div><p>{coreDetail.eyebrow}</p><h2 id="core-contract-title">Core product contract</h2></div><span>Iceland / ISK / UTC+0</span></header>
+              <div>{coreDetail.items.map((item) => <article key={item.label}><span>{item.label}</span><strong className={`tone-${item.tone}`}>{item.value}</strong><small>{item.detail}</small></article>)}</div>
+              <footer>{coreDetail.summary}</footer>
+            </section>
+          ) : null}
+
+          {!coreDetail ? (
+            <section className="pl-metrics" aria-label="Key measures">
+              {screen.metrics.map((metric) => <Metric key={metric.label} metric={metric} />)}
+            </section>
+          ) : null}
 
           <div className="pl-grid">
             <section className="pl-table-panel" aria-labelledby="post-login-table-title">

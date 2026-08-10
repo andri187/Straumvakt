@@ -1,4 +1,5 @@
 import { visualFamilies, type VisualFamily, type VisualScreen } from "../visual/visual-data";
+import { coreScreensByPersona } from "./core-product-data";
 
 export type PostLoginRouteId = "admin" | "org" | "driver";
 
@@ -51,7 +52,8 @@ export function getPostLoginPersona(routeId: string): PostLoginPersona | undefin
 }
 
 export function getPostLoginFamily(persona: PostLoginPersona): VisualFamily {
-  return visualFamilies.find((family) => family.id === persona.familyId)!;
+  const family = visualFamilies.find((item) => item.id === persona.familyId)!;
+  return { ...family, screens: [...family.screens, ...coreScreensByPersona[persona.routeId]] };
 }
 
 export function getPostLoginScreen(
