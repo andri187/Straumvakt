@@ -92,3 +92,10 @@ packages/*/node_modules/
 # event data we shouldn't preserve in git history.
 apps/api/scripts/zaptec-amqp-probe.jsonl
 apps/api/scripts/*-probe-output.jsonl
+
+# Local Google Maps key for the DSO lookup POC (public/dso-lookup.html).
+# The page reads window.STRAUMVAKT_MAPS_KEY from this file when present, or
+# ?key= from the URL. A Maps JS key is necessarily visible to the client, so
+# it must be restricted by HTTP referrer to https://straumvakt.org/* — but it
+# still must never be committed.
+public/dso-lookup-config.js

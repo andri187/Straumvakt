@@ -55,10 +55,16 @@ export default function RootPage() {
 
   return (
     <main className="straumvakt-landing" aria-label="Straumvakt">
-      {/* Admin button = Straumvakt staff (env-secret credentials). Hosts and
-          drivers log in via the form below. */}
-      <a className="admin-link" href="/login" aria-label="Admin login">
-        Admin
+      {/* Top-right slot now opens the DSO map proof of concept — a standalone
+          static page at /dso-lookup.html showing Icelandic distribution-operator
+          service areas. It is not part of this login flow and shares no session
+          with it.
+
+          This replaced the "Admin" link that used to sit here. Straumvakt staff
+          still sign in at /login exactly as before; only the shortcut is gone,
+          and the route itself is unchanged. */}
+      <a className="admin-link" href="/dso-lookup.html">
+        DSO map
       </a>
       <section className="lockup" aria-label="Straumvakt">
         <picture>

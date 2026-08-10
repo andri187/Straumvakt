@@ -9,7 +9,10 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["src/**/*.test.ts", "apps/api/src/**/*.test.ts"],
+    // scripts/**/*.test.mjs covers offline guards for standalone assets in
+    // public/ (see scripts/dso-poc.test.mjs). Without this line those tests
+    // are silently never collected, which is worse than having none.
+    include: ["src/**/*.test.ts", "apps/api/src/**/*.test.ts", "scripts/**/*.test.mjs"],
     globals: false,
   },
 });
