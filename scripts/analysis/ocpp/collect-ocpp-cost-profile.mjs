@@ -66,14 +66,27 @@ const heartbeatRawLine = locate(DO_SRC, /action === "Heartbeat"\)\s*return "raw_
 
 // Is there any guard that skips the enqueue for a heartbeat? Look for an early
 // return, continue, or conditional around the ingest call that mentions Heartbeat.
+// Detected structurally rather than by keyword: the guard must appear BEFORE the
+// enqueue and must end in a return, and the reply must still be sent on that
+// path. A guard that skipped the enqueue and also skipped the reply would pass a
+// naive keyword search and break charging.
 let heartbeatSkipsQueue = false;
+let fastPathAt = null;
+let fastPathRepliesBeforeReturn = false;
 if (DO_SRC) {
   const lines = DO_SRC.split('\n');
-  const start = Math.max(0, (enqueueLine ?? 1) - 60);
-  const window = lines.slice(start, (enqueueLine ?? 1)).join('\n');
-  heartbeatSkipsQueue = /Heartbeat[\s\S]{0,200}(return|continue)/.test(window)
-    || /(if|unless)[^\n]*Heartbeat[^\n]*\)\s*(return|continue)/.test(window);
+  for (let i = 0; i < lines.length; i++) {
+    if (!/if\s*\(\s*bypassesIngest\s*\(/.test(lines[i])) continue;
+    if (enqueueLine != null && i + 1 >= enqueueLine) break;   // guard must precede the send
+    const body = lines.slice(i, i + 6).join('\n');
+    if (!/\breturn\b/.test(body)) break;
+    fastPathAt = i + 1;
+    fastPathRepliesBeforeReturn = /ws\.send\(serializeCallResult\(/.test(body);
+    heartbeatSkipsQueue = fastPathRepliesBeforeReturn;
+    break;
+  }
 }
+const frameCapWired = DO_SRC ? /frameCapDecision\s*\(/.test(DO_SRC) && /cap\.shedIngest/.test(DO_SRC) : false;
 
 const queuesOf = (c) => {
   const envs = [{ label: 'top-level', node: c ?? {} }];
@@ -104,6 +117,8 @@ const profile = {
     heartbeatClassifiedRawProtocolAt: heartbeatRawLine ? `gateway/src/identity-do.ts:${heartbeatRawLine}` : null,
     everyFrameEnqueuedAt: enqueueLine ? `gateway/src/identity-do.ts:${enqueueLine}` : null,
     heartbeatSkipsQueue,
+    fastPathAt: fastPathAt ? `gateway/src/identity-do.ts:${fastPathAt}` : null,
+    fastPathRepliesBeforeReturn,
     retentionClassCarriedOnEvent: DO_SRC ? /retentionClass:\s*retentionClassFor\(/.test(DO_SRC) : false,
   },
 
@@ -146,6 +161,8 @@ const profile = {
     }
     return out;
   })(),
+
+  limits: { perConnectorFramesPerHourCap: frameCapWired ? 120 : null },
 
   pricing: {
     perConnectorPerMonthIsk: 200,
