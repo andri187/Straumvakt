@@ -98,3 +98,9 @@ apps/api/prisma/generated/
 
 # Claude Code local config
 .claude/
+
+# Local Google Maps key for the DSO lookup POC (public/dso-lookup.html).
+# The page reads window.STRAUMVAKT_MAPS_KEY from this file when present, or
+# ?key= from the URL. The key must never be committed — in production it is
+# injected from a Cloudflare secret at deploy time.
+public/dso-lookup-config.js
