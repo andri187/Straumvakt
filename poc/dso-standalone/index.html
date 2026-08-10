@@ -268,6 +268,12 @@
   </main>
 </div>
 
+<!-- Optional local key file, git-ignored. Define
+     window.STRAUMVAKT_MAPS_KEY = "..." in it, or pass ?key= in the URL.
+     When the file is absent this 404s harmlessly in the console and the page
+     shows its missing-key panel — no key is ever committed. -->
+<script src="./dso-lookup-config.js" onerror="void 0"></script>
+
 <script type="module">
 import {
   resolveMapsKey, googleMapsScriptUrl,

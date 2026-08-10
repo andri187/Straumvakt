@@ -98,4 +98,7 @@ apps/api/scripts/*-probe-output.jsonl
 # ?key= from the URL. A Maps JS key is necessarily visible to the client, so
 # it must be restricted by HTTP referrer to https://straumvakt.org/* — but it
 # still must never be committed.
-public/dso-lookup-config.js
+# Matched at any depth on purpose: the file is created next to whichever copy
+# of the page is being served (public/ for the site, poc/dso-standalone/ for
+# the subdomain bundle), and it must never be committed from either.
+dso-lookup-config.js

@@ -26,6 +26,7 @@ const html = readFileSync(join(here, "../public/dso-lookup.html"), "utf8");
 const mjs = readFileSync(join(here, "../public/dso-lookup.mjs"), "utf8");
 const landing = readFileSync(join(here, "../src/app/page.tsx"), "utf8");
 const landingCss = readFileSync(join(here, "../src/app/landing.css"), "utf8");
+const gitignore = readFileSync(join(here, "../.gitignore"), "utf8");
 /**
  * Copy text as a reader sees it: HTML entities decoded and whitespace
  * collapsed. Asserting against raw source would fail on `&ndash;` and on
@@ -143,6 +144,18 @@ describe("the Google key is never committed", () => {
   it("tells the user exactly which Google APIs are needed", () => {
     expect(prose).toMatch(/Maps JavaScript API/);
     expect(prose).toMatch(/Places API/);
+  });
+
+  it("actually LOADS the local key file it tells the user to create", () => {
+    // The page documented public/dso-lookup-config.js but had no script tag
+    // for it, so window.STRAUMVAKT_MAPS_KEY could never be set that way.
+    expect(html).toMatch(/<script src="\.\/dso-lookup-config\.js"/);
+    // Relative, so it works from a subdomain root too.
+    expect(html).not.toMatch(/<script src="\/dso-lookup-config\.js"/);
+  });
+
+  it("keeps that key file out of git", () => {
+    expect(gitignore).toMatch(/dso-lookup-config\.js/);
   });
 });
 
