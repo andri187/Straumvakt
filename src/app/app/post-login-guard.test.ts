@@ -50,7 +50,7 @@ describe("local post-login route boundary", () => {
   });
 
   it("disables application actions and explains the boundary", () => {
-    expect(shell).toMatch(/<button type="button" disabled aria-describedby="demo-action-boundary">/);
+    expect(shell).toMatch(/<button\s+type="button"\s+disabled\s+aria-describedby="demo-action-boundary"/);
     expect(shell).toContain("Data-changing actions are unavailable");
     expect(shell).not.toContain("onSubmit");
   });

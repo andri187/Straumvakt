@@ -4,8 +4,14 @@ import { describe, expect, it } from "vitest";
 
 const root = path.resolve(process.cwd(), "src/app/app");
 const data = fs.readFileSync(path.join(root, "core-product-data.ts"), "utf8");
-const backendContract = fs.readFileSync(path.join(root, "core-backend-contract-data.ts"), "utf8");
-const integration = fs.readFileSync(path.join(root, "core-integration-quality-data.ts"), "utf8");
+const backendContract = fs.readFileSync(
+  path.join(root, "core-backend-contract-data.ts"),
+  "utf8",
+);
+const integration = fs.readFileSync(
+  path.join(root, "core-integration-quality-data.ts"),
+  "utf8",
+);
 const shell = fs.readFileSync(path.join(root, "post-login-shell.tsx"), "utf8");
 const css = fs.readFileSync(path.join(root, "post-login.css"), "utf8");
 const runtime = `${data}\n${backendContract}\n${integration}\n${shell}`;
@@ -49,7 +55,9 @@ describe("Core product visual guard", () => {
   it("holds only anomalous sessions after the meter-delta fix", () => {
     expect(backendContract).toContain("meterStop");
     expect(backendContract).toContain("Verified meter delta");
-    expect(backendContract).toContain("billing engine uses meter stop minus meter start");
+    expect(backendContract).toContain(
+      "billing engine uses meter stop minus meter start",
+    );
     expect(backendContract).toContain("hold only this session");
   });
   it("distinguishes CDR shape from price authority", () => {
@@ -60,24 +68,30 @@ describe("Core product visual guard", () => {
   it("shows the heartbeat fast path while verification remains incomplete", () => {
     expect(backendContract).toContain("heartbeat fast path exists in source");
     expect(backendContract).toContain("gateway-suite/toolchain completion");
-    expect(backendContract).toContain("Deployment\", \"Unverified");
+    expect(backendContract).toContain('Deployment", "Unverified');
   });
   it("states that the connector frame cap is missing", () => {
     expect(backendContract).toContain("No per-connector frame cap");
     expect(backendContract).not.toContain("Frame cap enabled");
   });
   it("keeps manual driver authority blocked", () => {
-    expect(backendContract).toContain("Manual driver management authority is not proven");
-    expect(backendContract).toMatch(/action: "Add driver manually"[\s\S]*notice:/);
+    expect(backendContract).toContain(
+      "Manual driver management authority is not proven",
+    );
+    expect(backendContract).toMatch(
+      /action: "Add driver manually"[\s\S]*notice:/,
+    );
   });
   it("credits the fixed meter engine without clearing per-session holds", () => {
-    expect(integration).toContain("Engine\", \"Delta fixed");
+    expect(integration).toContain('Engine", "Delta fixed');
     expect(integration).toContain("per-session evidence hold");
-    expect(integration).not.toContain("billing engine still uses meter stop as energy");
+    expect(integration).not.toContain(
+      "billing engine still uses meter stop as energy",
+    );
   });
   it("credits the fast path without claiming deployed queue proof", () => {
-    expect(integration).toContain("Fast path\", \"Exists");
-    expect(integration).toContain("Deployment\", \"Unverified");
+    expect(integration).toContain('Fast path", "Exists');
+    expect(integration).toContain('Deployment", "Unverified');
     expect(integration).toContain("queue deployment state remains unknown");
   });
   it("states that the offline sweep is missing", () => {
@@ -105,8 +119,12 @@ describe("Core product visual guard", () => {
     expect(data).toMatch(/action: "Download statement", actionDisabled: true/);
   });
   it("keeps Premium capabilities outside actions", () => {
-    const actions = [...data.matchAll(/action: "([^"]+)"/g)].map((match) => match[1]).join(" ");
-    expect(actions).not.toMatch(/custom integration|contractor|service|live telemetry|payroll/i);
+    const actions = [...data.matchAll(/action: "([^"]+)"/g)]
+      .map((match) => match[1])
+      .join(" ");
+    expect(actions).not.toMatch(
+      /custom integration|contractor|service|live telemetry|payroll/i,
+    );
   });
   it("does not represent a raw telemetry livestream", () => {
     expect(data).toContain("No live-stream claim");
@@ -120,10 +138,33 @@ describe("Core product visual guard", () => {
     expect(shell).toContain('aria-labelledby="core-contract-title"');
     expect(shell).toContain('id="core-contract-title"');
   });
+  it("labels capability, provenance and backend boundaries at the render edge", () => {
+    expect(shell).toContain("Screen capability and data state");
+    expect(shell).toContain("Local fixture");
+    expect(shell).toContain("Read only");
+    expect(shell).toContain("Backend gated");
+  });
+  it("explains each persona workflow without implying payment", () => {
+    expect(shell).toContain("Platform control path");
+    expect(shell).toContain("Monthly operating path");
+    expect(shell).toContain("Your charging record");
+    expect(shell).toContain(
+      "It is not an invoice, payment request or paid status",
+    );
+  });
+  it("keeps large review inventories grouped and collapsible", () => {
+    expect(shell).toContain("NavigationSection");
+    expect(shell).toContain("section.collapsed");
+    expect(css).toContain(".pl-nav-group");
+  });
   it("keeps Core panels responsive", () => {
     expect(css).toContain(".pl-core-contract>div{display:grid");
-    expect(css).toContain(".pl-metrics,.pl-core-contract>div{grid-template-columns:1fr 1fr}");
-    expect(css).toContain(".pl-metrics,.pl-core-contract>div{grid-template-columns:1fr}");
+    expect(css).toContain(
+      ".pl-metrics,.pl-core-contract>div{grid-template-columns:1fr 1fr}",
+    );
+    expect(css).toContain(
+      ".pl-metrics,.pl-core-contract>div{grid-template-columns:1fr}",
+    );
   });
   it("supports reduced motion and forced colors", () => {
     expect(css).toContain("prefers-reduced-motion:reduce");
