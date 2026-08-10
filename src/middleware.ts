@@ -86,6 +86,7 @@ export async function middleware(req: NextRequest) {
   if (
     (
       pathname === "/local/product-preview" ||
+      pathname === "/local/dso-lookup" ||
       pathname === "/visual" ||
       pathname === "/login-demo" ||
       pathname === "/app" ||
