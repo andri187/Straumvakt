@@ -175,6 +175,27 @@ describe("the Google key is never committed", () => {
     expect(prose).toMatch(/Restrict the key by HTTP referrer/i);
   });
 
+  it("handles Google REFUSING the key, naming the hostname it refused", () => {
+    // The key is restricted to *.straumvakt.org, so it is refused on
+    // localhost and on *.pages.dev. Google's own failure is an opaque overlay
+    // that does not say which hostname was rejected; gm_authFailure is the
+    // documented hook for replacing it with something actionable.
+    expect(html).toMatch(/window\.gm_authFailure\s*=/);
+    expect(html).toMatch(/location\.hostname/);
+    expect(html).toMatch(/location\.origin/);
+    expect(prose).toMatch(/referrer restriction on the key does not cover it/i);
+  });
+
+  it("keeps the DSO answer working when Google is refused or unreachable", () => {
+    // Every Google failure path must still call setupSearch() and
+    // loadFeatures() — the operator answer owes nothing to Google.
+    const start = html.slice(html.indexOf("async function start()"), html.indexOf("function loadScript"));
+    const returns = start.split("return;").length - 1;
+    const searches = start.split("setupSearch()").length - 1;
+    expect(returns).toBeGreaterThanOrEqual(2);
+    expect(searches).toBeGreaterThanOrEqual(returns);
+  });
+
   it("refuses to build a script URL without a key", () => {
     expect(() => googleMapsScriptUrl(null)).toThrow(/maps_key_missing/);
     expect(() => googleMapsScriptUrl("")).toThrow(/maps_key_missing/);

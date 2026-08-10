@@ -338,9 +338,32 @@ async function start() {
     return;
   }
 
+  // Google calls this global when the key is rejected — wrong referrer,
+  // disabled API, billing off. Without it the failure is Google's opaque
+  // "This page can't load Google Maps correctly" overlay, which does not say
+  // WHICH hostname was refused. That matters here: the key is restricted to
+  // *.straumvakt.org, so it is refused on localhost and on *.pages.dev, and
+  // the fix is different in each case.
+  window.gm_authFailure = () => {
+    const host = location.hostname || "this page";
+    setStatus(`Google rejected the Maps key for ${host}.`);
+    $("map").innerHTML =
+      '<div style="padding:24px;max-width:640px;line-height:1.6">' +
+      '<h2 style="margin:0 0 8px;font-size:15px;color:#ff8f8f">Google refused the key for ' + host + '</h2>' +
+      '<p style="color:#92a0b3">The key loaded, but Google will not serve a map to this hostname. ' +
+      'Almost always the HTTP-referrer restriction on the key does not cover it.</p>' +
+      '<p style="color:#92a0b3">Either add <code style="color:#3ee9a7">' + location.origin +
+      '/*</code> to the key\'s referrer list in the Google Cloud console, or open this page from a ' +
+      'host that is already allowed.</p>' +
+      '<p style="color:#92a0b3;font-size:11px">Other causes: Maps JavaScript API not enabled, or billing ' +
+      'not active on the project.</p>' +
+      '<p style="color:#92a0b3;font-size:11px">Address search and operator resolution below are ' +
+      'unaffected &mdash; they do not use Google.</p></div>';
+  };
+
   setStatus("Loading Google Maps…");
   try { await loadScript(googleMapsScriptUrl(key)); }
-  catch { setStatus("Google Maps failed to load. Check the key, its referrer restrictions, and that Maps JavaScript API is enabled."); await loadFeatures(); return; }
+  catch { setStatus("Google Maps failed to load. Check the key, its referrer restrictions, and that Maps JavaScript API is enabled."); setupSearch(); await loadFeatures(); return; }
 
   map = new google.maps.Map($("map"), {
     ...VIEWS.southwest,
