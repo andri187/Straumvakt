@@ -78,7 +78,14 @@ if (DO_SRC) {
   for (let i = 0; i < lines.length; i++) {
     if (!/if\s*\(\s*bypassesIngest\s*\(/.test(lines[i])) continue;
     if (enqueueLine != null && i + 1 >= enqueueLine) break;   // guard must precede the send
-    const body = lines.slice(i, i + 6).join('\n');
+    // Strip comments before looking for control flow. Mutation testing caught
+    // this: a guard whose `return;` had been replaced by `/* no return */` still
+    // satisfied a naive /\breturn\b/, because the word survived in the comment.
+    // The gate reported the fast path as intact while the frame fell through to
+    // the enqueue — exactly the regression it exists to prevent.
+    const body = lines.slice(i, i + 6).join('\n')
+      .replace(/\/\*[\s\S]*?\*\//g, ' ')
+      .replace(/\/\/[^\n]*/g, ' ');
     if (!/\breturn\b/.test(body)) break;
     fastPathAt = i + 1;
     fastPathRepliesBeforeReturn = /ws\.send\(serializeCallResult\(/.test(body);
