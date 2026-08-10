@@ -222,6 +222,7 @@ export function DsoLookup() {
             showOverlay={showOverlay}
             marker={selected ? { lat: selected.lat, lng: selected.lng } : null}
             markerLabel={selected ? `${selected.heitiNf} ${selected.husnr}` : undefined}
+            suggestion={suggestion}
           />
 
           {layer === "orkusparsvaedi" ? (

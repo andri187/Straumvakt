@@ -183,8 +183,9 @@ All new, under `src/app/local/dso-lookup/`:
 | `address-fixtures.ts` | 40 HMS-shaped demo addresses |
 | `address-search.ts` | Icelandic-folding search (pure) |
 | `demo-credential.ts` | The `DSO`/`map` literals + `checkDemoCredential` |
+| `map-description.ts` | The map as prose — text alternative (pure) |
 
-Plus six co-located `*.test.ts` files, and **one** edit to an existing file:
+Plus seven co-located `*.test.ts` files, and **one** edit to an existing file:
 `src/middleware.ts` gains `pathname === "/local/dso-lookup"` in the
 already-existing preview allowlist. No other existing file was touched.
 
@@ -192,7 +193,7 @@ already-existing preview allowlist. No other existing file was touched.
 
 ## 7. Tests
 
-**144 tests across 6 files, all passing.** `environment: "node"`, no network.
+**160 tests across 7 files, all passing.** `environment: "node"`, no network.
 
 Note the constraint that shaped them: this worktree has **no DOM test
 environment** (no jsdom/happy-dom/@testing-library) and the root include glob is
@@ -254,6 +255,50 @@ worktree. Fixable by normalising line endings (`.gitattributes` / `core.autocrlf
 which is a repo-hygiene change and out of scope here.
 
 ---
+
+## 8b. Accessibility and the no-map fallback
+
+The map is a stack of remote images at a fixed logical size. Three groups get
+nothing from it: screen-reader users, anyone on a narrow screen (it crops
+rather than reflows), and anyone whose tiles or WMS request fail. An `alt` on
+each tile does not help — an individual tile has no meaning.
+
+So `map-description.ts` renders the same content as prose, from the same
+numbers the map is drawn from: centre coordinates, ground width, which overlay
+is active, where the marker is, the suggested operator and service area, the
+tariff class, the nearest competing operator, the confidence, and the
+"an administrator must confirm" caveat.
+
+It is shown in a visible `<details>` element rather than hidden behind a
+screen-reader-only class, deliberately: *"the overlay failed to load"* is a
+state a sighted user needs to diagnose too. The collapsed one-line form is
+also used as the map's `aria-label`.
+
+Tested (`map-description.test.ts`, 16 cases) including that **every** fixture
+address produces a description containing the confirmation caveat, and that a
+coverage-gap address never claims a service area.
+
+## 8c. Fallback-queue audit: existing DSO route is cross-tenant
+
+Checked as part of the fallback queue — **documented only, not changed.**
+
+`GET /api/admin/billing/dso` (`apps/api/src/routes/admin/billing-dso.ts:34`) is
+gated `requirePermission("billing.read")` with **no `orgIdParam`**, and its
+repository `getDsoCostFactors(db)` (`repositories/billing-dso.ts:61`) takes no
+`orgId` at all — its only filter is `where: { anchorTier: "site" }`. It then
+groups by organisation and returns per-org tariff definitions including
+`orgId` and organisation display names.
+
+That is the same shape as the 33 org-blind billing gates catalogued in
+`2026-08-10-core-backend-commercial-hardening.md`: simultaneously too closed
+(no ordinary org member can pass an org-blind gate, because a null `orgId`
+skips the membership lookup) and too open (whoever does pass sees every
+tenant).
+
+**The consequence for this work:** when
+`POST /organisations/:id/sites/:siteId/dso-confirmation` is built, it must
+follow the two-layer `bill-objects` pattern — `orgIdParam` on the gate **and**
+an `orgId` re-check in the repository — and must not copy `billing-dso.ts`.
 
 ## 9. Intended production architecture
 

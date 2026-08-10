@@ -37,6 +37,8 @@ import {
   type LatLng,
   type Viewport,
 } from "./web-mercator";
+import { describeMap, describeMapBriefly } from "./map-description";
+import type { DsoSuggestion } from "./dso-resolve";
 
 export interface DsoMapProps {
   viewport: Viewport;
@@ -44,24 +46,30 @@ export interface DsoMapProps {
   showOverlay: boolean;
   marker?: LatLng | null;
   markerLabel?: string;
+  suggestion?: DsoSuggestion | null;
 }
 
-export function DsoMap({ viewport, layer, showOverlay, marker, markerLabel }: DsoMapProps) {
+export function DsoMap({
+  viewport,
+  layer,
+  showOverlay,
+  marker,
+  markerLabel,
+  suggestion,
+}: DsoMapProps) {
   const tiles = tilesForViewport(viewport);
   const overlayUrl = buildGetMapUrl(layer, viewport);
   const markerPx = marker ? projectToViewportPx(marker, viewport) : null;
   const meta = DSO_LAYERS[layer];
+  const description = { viewport, layer, showOverlay, marker, markerLabel, suggestion };
 
   return (
+    <>
     <div
       className="relative overflow-hidden border border-bg-border bg-bg-surface"
       style={{ height: viewport.heightPx }}
       role="img"
-      aria-label={
-        marker && markerLabel
-          ? `Map of Iceland showing ${markerLabel} with the ${meta.label} distribution-area overlay`
-          : `Map of Iceland with the ${meta.label} distribution-area overlay`
-      }
+      aria-label={describeMapBriefly(description)}
     >
       <div
         className="absolute top-0"
@@ -118,5 +126,23 @@ export function DsoMap({ viewport, layer, showOverlay, marker, markerLabel }: Ds
         {OSM_ATTRIBUTION} · {WMS_ATTRIBUTION}
       </p>
     </div>
+
+    {/*
+      The same content as prose. Not hidden behind a screen-reader-only
+      class: the map is a fixed logical size that crops on narrow screens,
+      and its imagery is remote, so a sighted user on a phone or a bad
+      connection needs this just as much.
+    */}
+    <details className="mt-2 border border-bg-border bg-bg-surface text-xs">
+      <summary className="cursor-pointer px-3 py-2 text-ink-400 hover:text-ink-50">
+        Text description of this map
+      </summary>
+      <ul className="grid gap-1 border-t border-bg-border px-4 py-3 text-[11px] leading-relaxed text-ink-400">
+        {describeMap(description).map((line) => (
+          <li key={line}>{line}</li>
+        ))}
+      </ul>
+    </details>
+    </>
   );
 }
