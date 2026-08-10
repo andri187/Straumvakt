@@ -485,6 +485,77 @@ export function legendEntries() {
   return Object.entries(DSO_COLORS).map(([name, color]) => ({ name, color }));
 }
 
+// ── Control groups (parent bar -> child bar) ──────────────────────────────
+//
+// The child control bar is getting crowded, and it is about to hold controls
+// for three unrelated data domains. So the parent bar selects the DOMAIN and
+// the child bar only ever shows the controls belonging to the active one.
+//
+// Two kinds of child control exist and the distinction matters:
+//   - GENERAL map controls (view presets, base map type) belong to no domain
+//     and are always shown. Hiding the "Iceland" button because a data layer
+//     is off would be a bug, not a feature.
+//   - DOMAIN controls appear and disappear with their parent.
+//
+// Only `dso` is implemented. `bev` and `forecast` are declared here, disabled,
+// so the bar has its final shape and nobody has to guess where they go — but
+// they are explicitly NOT ready, and the UI must render them as inert rather
+// than as buttons that silently do nothing.
+
+/** Child controls that belong to no domain and are always visible. */
+export const GENERAL_CONTROLS = ["view-southwest", "view-iceland", "type-roadmap", "type-hybrid"];
+
+export const CONTROL_GROUPS = [
+  {
+    id: "dso",
+    label: "Dreifiveitusvæði",
+    title: "Distribution service areas (Raforkudreifing)",
+    ready: true,
+    children: ["overlay-toggle", "layer-raforkudreifing", "layer-orkusparsvaedi", "opacity"],
+  },
+  {
+    id: "bev",
+    label: "BEV",
+    title: "Battery-electric vehicles — not implemented yet",
+    ready: false,
+    children: [],
+  },
+  {
+    id: "forecast",
+    label: "Orkuspá",
+    title: "Energy forecast — scope not defined yet",
+    ready: false,
+    children: [],
+  },
+];
+
+export function controlGroup(id) {
+  return CONTROL_GROUPS.find((g) => g.id === id) ?? null;
+}
+
+/**
+ * Which child controls should be on screen, given the active parent group.
+ *
+ * `activeGroupId` of null means every domain is switched off — the general map
+ * controls remain, because they are not part of any domain.
+ */
+export function visibleChildControls(activeGroupId) {
+  const group = activeGroupId ? controlGroup(activeGroupId) : null;
+  const domain = group && group.ready ? group.children : [];
+  return [...GENERAL_CONTROLS, ...domain];
+}
+
+/** True when the DSO map layers should be drawn at all. */
+export function dsoLayersActive(activeGroupId) {
+  return activeGroupId === "dso";
+}
+
+/** A group the user may actually select. Unready ones are inert. */
+export function isSelectable(id) {
+  const g = controlGroup(id);
+  return !!g && g.ready === true;
+}
+
 // ── Address fixtures (fallback when Places is unavailable) ────────────────
 
 /**

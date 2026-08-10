@@ -182,8 +182,44 @@
   /* ── map ──────────────────────────────────────────────────────── */
   main { position: relative; }
   #map { width: 100%; height: 100%; background: #0e131b; }
+  /* Parent bar sits directly above the child bar, visually dominant. */
+  #parentbar {
+    position: absolute; top: 10px; left: 10px; z-index: 6;
+    display: flex; flex-wrap: wrap; gap: 6px;
+    background: rgba(11,15,22,.92);
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    padding: 6px;
+    max-width: calc(100% - 20px);
+  }
+  #parentbar .pbtn {
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    color: var(--muted);
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .01em;
+  }
+  #parentbar .pbtn:hover:not([disabled]) { border-color: #3d5468; color: var(--text); }
+  #parentbar .pbtn[aria-pressed="true"] {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(62,233,167,.12);
+  }
+  /* Not-yet-built groups are inert and must LOOK inert - a button that
+     silently does nothing is worse than one that says it is not ready. */
+  #parentbar .pbtn[disabled] {
+    opacity: .45;
+    cursor: not-allowed;
+    border-style: dashed;
+  }
+  #parentbar .pbtn[disabled]::after { content: " (later)"; font-weight: 400; font-size: 10px; }
+
   #maptools {
-    position: absolute; top: 10px; left: 10px; z-index: 5;
+    position: absolute; top: 56px; left: 10px; z-index: 5;
     display: flex; flex-wrap: wrap; gap: 6px;
     background: rgba(11,15,22,.86);
     border: 1px solid var(--line);
@@ -191,6 +227,8 @@
     padding: 6px;
     max-width: calc(100% - 20px);
   }
+  #maptools[hidden] { display: none; }
+  #maptools [data-ctl][hidden] { display: none; }
   #maptools label { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); }
   #status {
     position: absolute; bottom: 10px; left: 10px; z-index: 5;
@@ -295,15 +333,19 @@
   </aside>
 
   <main>
+    <!-- Parent bar selects the data domain; the child bar below shows only
+         that domain's controls. General map controls stay put regardless. -->
+    <div id="parentbar" role="group" aria-label="Data layer groups"></div>
+
     <div id="maptools">
-      <button class="btn" data-view="southwest" aria-pressed="true">Southwest</button>
-      <button class="btn" data-view="iceland" aria-pressed="false">Iceland</button>
-      <button class="btn" data-type="roadmap" aria-pressed="true">Roadmap</button>
-      <button class="btn" data-type="hybrid" aria-pressed="false">Hybrid</button>
-      <button class="btn" id="ovl" aria-pressed="true">Overlay on</button>
-      <button class="btn" data-layer="raforkudreifing" aria-pressed="true">Raforkudreifing</button>
-      <button class="btn" data-layer="orkusparsvaedi" aria-pressed="false">Orkuspársvæði</button>
-      <label>Opacity <input type="range" id="op" min="0" max="100" value="55" style="width:70px" /></label>
+      <button class="btn" data-ctl="view-southwest" data-view="southwest" aria-pressed="true">Southwest</button>
+      <button class="btn" data-ctl="view-iceland" data-view="iceland" aria-pressed="false">Iceland</button>
+      <button class="btn" data-ctl="type-roadmap" data-type="roadmap" aria-pressed="true">Roadmap</button>
+      <button class="btn" data-ctl="type-hybrid" data-type="hybrid" aria-pressed="false">Hybrid</button>
+      <button class="btn" data-ctl="overlay-toggle" id="ovl" aria-pressed="true">Overlay on</button>
+      <button class="btn" data-ctl="layer-raforkudreifing" data-layer="raforkudreifing" aria-pressed="true">Raforkudreifing</button>
+      <button class="btn" data-ctl="layer-orkusparsvaedi" data-layer="orkusparsvaedi" aria-pressed="false">Orkuspársvæði</button>
+      <label data-ctl="opacity">Opacity <input type="range" id="op" min="0" max="100" value="55" style="width:70px" /></label>
     </div>
     <div id="map"></div>
     <div id="status">Starting&hellip;</div>
@@ -323,6 +365,7 @@ import {
   searchFixtures, formatDistance, BOUNDARY_SAMPLES,
   DSO_LAYER, COMPARISON_LAYER,
   styleForFeature, legendEntries, FILL_OPACITY, STROKE_OPACITY,
+  CONTROL_GROUPS, visibleChildControls, dsoLayersActive, isSelectable,
 } from "./dso-lookup.mjs";
 
 const $ = (id) => document.getElementById(id);
@@ -466,10 +509,16 @@ function buildOverlay() {
 }
 
 function applyOverlay() {
+  if (!map) return;
   map.overlayMapTypes.clear();
   map.data.setStyle(styleFn);
   map.data.revertStyle();
-  if (!overlayOn) { map.data.setStyle({ visible: false }); return; }
+  // Switching the parent group off takes its map layers with it. The DSO
+  // ANSWER is unaffected - it comes from the geometry, not from what is drawn.
+  if (!dsoLayersActive(activeGroup) || !overlayOn) {
+    map.data.setStyle({ visible: false });
+    return;
+  }
   if (layer === COMPARISON_LAYER) {
     map.data.setStyle({ visible: false });
     overlays[COMPARISON_LAYER].setOpacity(opacity);
@@ -507,7 +556,52 @@ function renderLegend() {
     `<li class="op">All areas: fill ${FILL_OPACITY}, stroke ${STROKE_OPACITY} — identical for every operator.</li>`);
 }
 
+// ── Parent bar ──────────────────────────────────────────────────────
+// Which data domain is on screen. Only "dso" is built; the other two are
+// rendered disabled so the bar has its final shape without pretending to work.
+let activeGroup = "dso";
+
+function renderParentBar() {
+  const bar = $("parentbar");
+  bar.innerHTML = "";
+  for (const g of CONTROL_GROUPS) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "pbtn";
+    b.textContent = g.label;
+    b.title = g.title;
+    b.dataset.group = g.id;
+    b.setAttribute("aria-pressed", String(activeGroup === g.id));
+    if (!g.ready) { b.disabled = true; b.setAttribute("aria-disabled", "true"); }
+    else b.addEventListener("click", () => setActiveGroup(g.id));
+    bar.appendChild(b);
+  }
+}
+
+/** Clicking the active group again switches it off, hiding its controls. */
+function setActiveGroup(id) {
+  if (!isSelectable(id)) return;
+  activeGroup = activeGroup === id ? null : id;
+  renderParentBar();
+  applyGroupVisibility();
+  applyOverlay();
+  setStatus(
+    activeGroup === "dso"
+      ? "Dreifiveitusvæði layer on."
+      : "Dreifiveitusvæði layer off. Address lookup still resolves the operator.",
+  );
+}
+
+function applyGroupVisibility() {
+  const allowed = new Set(visibleChildControls(activeGroup));
+  for (const el of document.querySelectorAll("#maptools [data-ctl]")) {
+    el.hidden = !allowed.has(el.dataset.ctl);
+  }
+}
+
 function wireControls() {
+  renderParentBar();
+  applyGroupVisibility();
   document.querySelectorAll("[data-view]").forEach((b) =>
     b.addEventListener("click", () => {
       const v = VIEWS[b.dataset.view];

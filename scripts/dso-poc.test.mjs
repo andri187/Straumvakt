@@ -19,6 +19,7 @@ import {
   BOUNDARY_SAMPLES, FIXTURE_ADDRESSES,
   styleForFeature, colorForOperator, legendEntries,
   readStoredMapsKey, writeStoredMapsKey, MAPS_KEY_STORAGE_KEY,
+  CONTROL_GROUPS, GENERAL_CONTROLS, controlGroup, visibleChildControls, dsoLayersActive, isSelectable,
   DSO_COLORS, DEFAULT_DSO_COLOR, FILL_OPACITY, STROKE_OPACITY,
 } from "../public/dso-lookup.mjs";
 
@@ -511,6 +512,86 @@ describe("containment — this POC touches nothing of Straumvakt's", () => {
 
   it("asks search engines not to index it", () => {
     expect(html).toMatch(/name="robots" content="noindex/);
+  });
+});
+
+describe("parent control bar drives the child bar", () => {
+  it("declares exactly three groups, in order", () => {
+    expect(CONTROL_GROUPS.map((g) => g.id)).toEqual(["dso", "bev", "forecast"]);
+    expect(CONTROL_GROUPS.map((g) => g.label)).toEqual(["Dreifiveitusvæði", "BEV", "Orkuspá"]);
+  });
+
+  it("marks only Dreifiveitusvæði as built", () => {
+    expect(controlGroup("dso").ready).toBe(true);
+    expect(controlGroup("bev").ready).toBe(false);
+    expect(controlGroup("forecast").ready).toBe(false);
+    expect(isSelectable("dso")).toBe(true);
+    expect(isSelectable("bev")).toBe(false);
+    expect(isSelectable("forecast")).toBe(false);
+    expect(isSelectable("nonexistent")).toBe(false);
+  });
+
+  it("shows the DSO child controls when its group is active", () => {
+    const v = visibleChildControls("dso");
+    for (const c of ["overlay-toggle", "layer-raforkudreifing", "layer-orkusparsvaedi", "opacity"]) {
+      expect(v).toContain(c);
+    }
+  });
+
+  it("HIDES those child controls when the group is switched off", () => {
+    const v = visibleChildControls(null);
+    for (const c of ["overlay-toggle", "layer-raforkudreifing", "layer-orkusparsvaedi", "opacity"]) {
+      expect(v).not.toContain(c);
+    }
+  });
+
+  it("keeps general map controls visible in every state", () => {
+    // Hiding "Iceland" because a data layer is off would be a bug.
+    //
+    // The expected ids are listed literally rather than looped over
+    // GENERAL_CONTROLS: iterating the very array under test makes the
+    // assertion vacuously true the moment that array is emptied, which is
+    // exactly the regression this is meant to catch.
+    const expected = ["view-southwest", "view-iceland", "type-roadmap", "type-hybrid"];
+    expect(GENERAL_CONTROLS).toEqual(expected);
+    for (const state of ["dso", "bev", "forecast", null]) {
+      const v = visibleChildControls(state);
+      for (const c of expected) expect(v).toContain(c);
+    }
+  });
+
+  it("shows no domain controls for a group that is not built yet", () => {
+    expect(visibleChildControls("bev")).toEqual(GENERAL_CONTROLS);
+    expect(visibleChildControls("forecast")).toEqual(GENERAL_CONTROLS);
+  });
+
+  it("ties the DSO map layers to the DSO group only", () => {
+    expect(dsoLayersActive("dso")).toBe(true);
+    expect(dsoLayersActive("bev")).toBe(false);
+    expect(dsoLayersActive(null)).toBe(false);
+  });
+
+  it("every declared child id exists as a control in the markup", () => {
+    // Catches a rename on one side only, which would silently hide a button.
+    const inMarkup = [...html.matchAll(/data-ctl="([^"]+)"/g)].map((m) => m[1]);
+    for (const id of visibleChildControls("dso")) expect(inMarkup).toContain(id);
+    expect(new Set(inMarkup).size).toBe(inMarkup.length); // no duplicates
+  });
+
+  it("renders the parent bar above the child bar", () => {
+    expect(html).toMatch(/id="parentbar"/);
+    expect(html.indexOf('id="parentbar"')).toBeLessThan(html.indexOf('id="maptools"'));
+  });
+
+  it("renders unbuilt groups as genuinely disabled, not as dead buttons", () => {
+    expect(html).toMatch(/b\.disabled = true/);
+    expect(html).toMatch(/aria-disabled/);
+    expect(html).toMatch(/\[disabled\]::after \{ content: " \(later\)"/);
+  });
+
+  it("switching the group off does not disable the operator lookup", () => {
+    // The answer comes from geometry, not from what is drawn.
+    expect(html).toMatch(/Address lookup still resolves the operator/);
   });
 });
 
