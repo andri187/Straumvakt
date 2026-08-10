@@ -4,9 +4,10 @@ import { describe, expect, it } from "vitest";
 
 const root = path.resolve(process.cwd(), "src/app/app");
 const data = fs.readFileSync(path.join(root, "core-product-data.ts"), "utf8");
+const backendContract = fs.readFileSync(path.join(root, "core-backend-contract-data.ts"), "utf8");
 const shell = fs.readFileSync(path.join(root, "post-login-shell.tsx"), "utf8");
 const css = fs.readFileSync(path.join(root, "post-login.css"), "utf8");
-const runtime = `${data}\n${shell}`;
+const runtime = `${data}\n${backendContract}\n${shell}`;
 
 describe("Core product visual guard", () => {
   it("contains no request client", () => {
@@ -43,6 +44,28 @@ describe("Core product visual guard", () => {
     expect(data).toContain("CDR-backed");
     expect(data).toContain("Correction ADJ-04");
     expect(data).toContain("adjustmentIsk");
+  });
+  it("holds energy when meter semantics are uncertain", () => {
+    expect(backendContract).toContain("meterStop");
+    expect(backendContract).toContain("Verified meter delta");
+    expect(backendContract).toContain("meter stop rather than meter stop minus meter start");
+  });
+  it("distinguishes CDR shape from price authority", () => {
+    expect(backendContract).toContain("CDR-shaped");
+    expect(backendContract).toContain("Shape is not authority");
+    expect(backendContract).toContain("Pending source check");
+  });
+  it("shows heartbeat cost gating without an operator toggle", () => {
+    expect(backendContract).toContain("Routine heartbeat filtering before queueing is not implemented");
+    expect(backendContract).toContain("there is no operator toggle");
+  });
+  it("states that the connector frame cap is missing", () => {
+    expect(backendContract).toContain("No per-connector frame cap");
+    expect(backendContract).not.toContain("Frame cap enabled");
+  });
+  it("keeps manual driver authority blocked", () => {
+    expect(backendContract).toContain("Manual driver management authority is not proven");
+    expect(backendContract).toMatch(/action: "Add driver manually"[\s\S]*notice:/);
   });
   it("shows delivery while refusing bank claims", () => {
     expect(data).toContain("Billing delivery log");
@@ -83,5 +106,11 @@ describe("Core product visual guard", () => {
   it("supports reduced motion and forced colors", () => {
     expect(css).toContain("prefers-reduced-motion:reduce");
     expect(css).toContain("forced-colors:active");
+  });
+  it("restores visible focus after the filter removes its native outline", () => {
+    expect(css).toContain(".pl-root input:focus-visible");
+    expect(css).toContain("outline:2px solid var(--pl-accent)");
+    expect(css).toContain(".pl-search:focus-within");
+    expect(css).toContain(".pl-table-scroll:focus-visible");
   });
 });

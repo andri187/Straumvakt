@@ -117,10 +117,10 @@ describe("Driver statement variants", () => {
 });
 
 describe("Core route screens", () => {
-  it("adds four Admin, six CPO, and three Driver views", () => {
-    expect(coreScreensByPersona.admin).toHaveLength(4);
-    expect(coreScreensByPersona.org).toHaveLength(6);
-    expect(coreScreensByPersona.driver).toHaveLength(3);
+  it("adds eight Admin, ten CPO, and thirteen Driver views", () => {
+    expect(coreScreensByPersona.admin).toHaveLength(8);
+    expect(coreScreensByPersona.org).toHaveLength(10);
+    expect(coreScreensByPersona.driver).toHaveLength(13);
   });
   for (const routeId of ["admin", "org", "driver"] as const) {
     for (const screen of coreScreensByPersona[routeId]) {

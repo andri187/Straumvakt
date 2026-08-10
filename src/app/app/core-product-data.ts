@@ -1,5 +1,6 @@
 import type { Tone, VisualScreen } from "../visual/visual-data";
 import type { PostLoginRouteId } from "./post-login-data";
+import { backendContractScreensByPersona } from "./core-backend-contract-data";
 
 export const CORE_CONNECTOR_RATE_ISK = 200;
 export const CORE_ACTIVE_DRIVER_RATE_ISK = 50;
@@ -184,6 +185,7 @@ export const coreScreensByPersona: Record<PostLoginRouteId, VisualScreen[]> = {
       { label: "UI", value: "Reviewable", detail: "Local fixtures", tone: "good" }, { label: "Pricing", value: "Formula locked", detail: "Counts pending", tone: "warn" },
       { label: "Billing", value: "Material only", detail: "No invoice issue" }, { label: "Export", value: "Unknown", detail: "Iceland research", tone: "bad" },
     ], tableTitle: "Core release gates", queueTitle: "Before wiring", action: "Approve Core release", actionDisabled: true, notice: "No production billing, payment, bank export or invite flow is implied by this screen." }),
+    ...backendContractScreensByPersona.admin,
   ],
   org: [
     coreScreen({ id: "core-pricing", label: "Core subscription", eyebrow: CORE_MARKET, title: "Your Core monthly price", summary: "Understand active connector and driver charges, including the high-driver cap, before a billing period closes.", state: "Read only", stateTone: "info", metrics: [
@@ -231,6 +233,7 @@ export const coreScreensByPersona: Record<PostLoginRouteId, VisualScreen[]> = {
       ["Fleet", "8 active / 1 inactive", "Warehouse", "Operating", "Disabled"],
       ["Temporary", "0 active", "None", "Draft", "Disabled"],
     ], tableTitle: "Access-group register", queueTitle: "Driver actions", action: "Add driver manually", actionDisabled: true, notice: "Invite-by-link stays disabled until an identity-bound backend path is proven safe." }),
+    ...backendContractScreensByPersona.org,
   ],
   driver: [
     coreScreen({ id: "monthly-statement", label: "Monthly statement", eyebrow: "August 2026 / draft", title: "Your charging statement", summary: "Review CDR-backed sessions and cost ownership without presenting a payment or final invoice state.", state: "Draft material", stateTone: "warn", metrics: [
@@ -255,6 +258,7 @@ export const coreScreensByPersona: Record<PostLoginRouteId, VisualScreen[]> = {
       { label: "Draft", value: "Estimate", detail: "Can change" }, { label: "Report ready", value: "CDR closed", detail: "Reviewable", tone: "good" },
       { label: "Invoice", value: "Not issued", detail: "No contract" }, { label: "Payment", value: "Unavailable", detail: "Not Core UI" },
     ], tableTitle: "Statement lifecycle", queueTitle: "Driver explanations", notice: "No raw telemetry livestream, card payment, bank payment or final invoice is represented." }),
+    ...backendContractScreensByPersona.driver,
   ],
 };
 
