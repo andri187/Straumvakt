@@ -67,6 +67,24 @@
 import type { DurableObjectState } from "@cloudflare/workers-types";
 import { parseFrame, serializeCallResult, serializeCall } from "./ocpp-frame";
 import { enqueueOrPost, type IngestEvent } from "./ingest-client";
+import {
+  bypassesIngest,
+  recordFrame,
+  frameCapDecision,
+  type LivenessState,
+  type FrameCapState,
+} from "./heartbeat-fastpath";
+
+/**
+ * Liveness and frame-cap state share one storage key so a heartbeat costs a
+ * single read and a single write. Two keys would double the storage operations
+ * for no benefit — they are always read together and always written together.
+ */
+const OPS_STATE_KEY = "ops";
+interface OpsState {
+  liveness: LivenessState;
+  cap: FrameCapState;
+}
 import type { GatewayEnv } from "./auth";
 
 /**
@@ -594,16 +612,72 @@ export class IdentityDurableObject {
     // Sprint 1.5 will move translation to the gateway side via TS path
     // import — the infra (shared/ocpp path alias) is configured in
     // gateway/tsconfig.json and gateway/vitest.config.ts.
+    // ── Liveness, rollup and frame cap ───────────────────────────────
+    // One storage read and one write per frame, under a single key. That is
+    // deliberately cheaper than the path it replaces for a heartbeat: a queue
+    // operation, a consumer invocation and a row a TTL later deletes. See
+    // heartbeat-fastpath.ts for the cost argument in full.
+    const nowMs = Date.now();
+    const stored = (await this.state.storage.get<OpsState>(OPS_STATE_KEY)) ?? null;
+    const live = recordFrame(stored?.liveness ?? null, frame.action, nowMs);
+    const cap = frameCapDecision(stored?.cap ?? null, frame.action, nowMs);
+    await this.state.storage.put(OPS_STATE_KEY, { liveness: live.next, cap: cap.next } satisfies OpsState);
+
+    if (cap.emitBreachEvent) {
+      console.warn("[ocpp-gw] frame_cap.breached", {
+        identityString: this.meta.identityString,
+        reason: cap.reason,
+        consecutiveBreaches: cap.next.consecutiveBreaches,
+      });
+    }
+    if (cap.emitAnomalyEvent) {
+      console.error("[ocpp-gw] frame_cap.anomaly", {
+        identityString: this.meta.identityString,
+        consecutiveBreaches: cap.next.consecutiveBreaches,
+      });
+    }
+
+    // THE FAST PATH. A heartbeat that changes nothing produces no ingest at
+    // all: the reply still goes back on the wire, liveness is already recorded
+    // above, and nothing reaches the queue. A heartbeat that DOES change
+    // something — a recovery from silence, or an hour boundary that closes a
+    // rollup bucket — falls through and is emitted as that meaningful event
+    // rather than as a raw frame.
+    if (bypassesIngest(frame.action) && !live.emitTransition && !live.flushRollup) {
+      ws.send(serializeCallResult(frame.uniqueId, this.stubResponseFor(frame.action)));
+      return;
+    }
+
+    // Shedding is a COST control, never a protocol one. The reply is always
+    // sent; only the ingest is dropped, and never for a financial frame.
+    if (cap.shedIngest) {
+      ws.send(serializeCallResult(frame.uniqueId, this.stubResponseFor(frame.action)));
+      return;
+    }
+
     const event: IngestEvent = {
       eventId: crypto.randomUUID(),
       orgId: this.meta.orgId,
       aggregateType: "ocpp_identity",
       aggregateId: this.meta.identityId,
-      eventType: `ocpp.raw.${frame.action}`,
+      // A liveness frame that got this far is here because it MEANS something.
+      // Emit it as the meaning, not as a raw frame — that is the difference
+      // between 720 rows a month and roughly two.
+      eventType: live.emitTransition
+        ? "ocpp.liveness.transition"
+        : live.flushRollup
+          ? "ocpp.liveness.rollup"
+          : `ocpp.raw.${frame.action}`,
       occurredAt: new Date().toISOString(),
       correlationId: frame.uniqueId,
-      retentionClass: retentionClassFor(frame.action),
-      payload: { action: frame.action, request: frame.payload },
+      retentionClass: live.emitTransition || live.flushRollup
+        ? "operational"
+        : retentionClassFor(frame.action),
+      payload: live.emitTransition
+        ? { action: frame.action, transition: live.transition, previousStateDurationMs: live.previousStateDurationMs }
+        : live.flushRollup
+          ? { action: frame.action, rollup: live.flushedBucket }
+          : { action: frame.action, request: frame.payload },
     };
 
     // Sprint 5 / ADR 0017 — primary path is queue.send (sub-ms
