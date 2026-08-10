@@ -46,16 +46,50 @@ export function checkCredential(user, pass) {
 // ── Google Maps key handling ──────────────────────────────────────────────
 
 /**
+ * Where a pasted key is remembered. Deliberately the same name the earlier
+ * local Google viewer used, so a key already pasted there is picked up here
+ * when both are opened from the same origin.
+ */
+export const MAPS_KEY_STORAGE_KEY = "straumvakt-google-maps-key";
+
+/**
  * Resolve the Maps key from runtime sources, never from source control.
  *
- * Order: ?key= in the URL (local testing), then window.STRAUMVAKT_MAPS_KEY
- * (set by an ignored local config file or injected at deploy time).
- * Returns null when absent so the UI can say so plainly.
+ * Order:
+ *   1. ?key= in the URL          — explicit, one-off, wins over everything
+ *   2. window.STRAUMVAKT_MAPS_KEY — deploy-time injection or local config file
+ *   3. localStorage              — a key the user pasted into this page before
+ *
+ * Returns null when absent so the UI can ask for one rather than fail silently.
+ *
+ * Note what this means for deployment: because a key can be pasted at runtime
+ * and kept in the browser, the deployed bundle needs NO key baked into it and
+ * no Cloudflare secret. A Maps JS key is visible to the client by nature, so
+ * the real protection is an HTTP-referrer restriction on the key itself, not
+ * secrecy about where it is stored.
  */
-export function resolveMapsKey({ search = "", injected = null } = {}) {
+export function resolveMapsKey({ search = "", injected = null, stored = null } = {}) {
   const fromQuery = new URLSearchParams(search).get("key");
-  const key = (fromQuery || injected || "").trim();
+  const key = (fromQuery || injected || stored || "").trim();
   return key.length > 0 ? key : null;
+}
+
+/** Read the remembered key. Safe where storage is unavailable or blocked. */
+export function readStoredMapsKey(storage) {
+  try {
+    return storage?.getItem(MAPS_KEY_STORAGE_KEY) || null;
+  } catch {
+    return null; // private mode, blocked cookies, etc.
+  }
+}
+
+export function writeStoredMapsKey(storage, key) {
+  try {
+    if (key) storage?.setItem(MAPS_KEY_STORAGE_KEY, key);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function googleMapsScriptUrl(key, { places = true } = {}) {

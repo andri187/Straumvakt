@@ -18,6 +18,7 @@ import {
   MERCATOR_HALF_WORLD_M, NEAR_BOUNDARY_M, UNDEFINED_OPERATOR,
   BOUNDARY_SAMPLES, FIXTURE_ADDRESSES,
   styleForFeature, colorForOperator, legendEntries,
+  readStoredMapsKey, writeStoredMapsKey, MAPS_KEY_STORAGE_KEY,
   DSO_COLORS, DEFAULT_DSO_COLOR, FILL_OPACITY, STROKE_OPACITY,
 } from "../public/dso-lookup.mjs";
 
@@ -39,7 +40,7 @@ const prose = html
   .replace(/&hellip;/g, "…")
   .replace(/&rsquo;/g, "’")
   .replace(/&deg;/g, "°")
-  .replace(/"\s*\+\s*"/g, "")
+  .replace(/["']\s*\+\s*["']/g, "")
   .replace(/\s+/g, " ");
 
 // A unit square around (0,0) and a neighbour to its east, as a stand-in for
@@ -79,11 +80,20 @@ describe("the demo gate", () => {
     }
   });
 
-  it("issues nothing — no cookie, storage, token or session anywhere in the POC", () => {
+  it("issues no cookie, token or session", () => {
     for (const src of [html, mjs]) {
-      expect(src).not.toMatch(/document\.cookie|localStorage|setItem\(/);
+      expect(src).not.toMatch(/document\.cookie/);
       expect(src).not.toMatch(/\bjwt\b|Bearer |Authorization/i);
     }
+  });
+
+  it("uses storage ONLY for the user's own Google key, never for identity", () => {
+    // localStorage is allowed here for exactly one thing: remembering the
+    // Maps key the user pasted. It must never hold a credential or session.
+    const storageCalls = [...mjs.matchAll(/(?:get|set)Item\(([^)]*)\)/g)].map((m) => m[1].trim());
+    expect(storageCalls.length).toBeGreaterThan(0);
+    for (const arg of storageCalls) expect(arg).toContain("MAPS_KEY_STORAGE_KEY");
+    expect(mjs).not.toMatch(/setItem\([^)]*(?:pass|cred|token|session|user)/i);
   });
 
   it("is currently UNGATED, and says so in the source", () => {
@@ -123,10 +133,46 @@ describe("the Google key is never committed", () => {
     expect(resolveMapsKey({ search: "?key=fromurl", injected: "xyz" })).toBe("fromurl");
   });
 
-  it("returns null when absent, so the UI can say so", () => {
+  it("returns null when absent, so the UI can ask for one", () => {
     expect(resolveMapsKey({ search: "" })).toBeNull();
     expect(resolveMapsKey({ search: "?key=", injected: "  " })).toBeNull();
     expect(resolveMapsKey()).toBeNull();
+  });
+
+  it("falls back to a key the user pasted earlier", () => {
+    expect(resolveMapsKey({ stored: "FROM_STORAGE" })).toBe("FROM_STORAGE");
+    // Explicit sources still win over the remembered one.
+    expect(resolveMapsKey({ search: "?key=URL", stored: "FROM_STORAGE" })).toBe("URL");
+    expect(resolveMapsKey({ injected: "CFG", stored: "FROM_STORAGE" })).toBe("CFG");
+  });
+
+  it("reads and writes the remembered key without throwing when storage is blocked", () => {
+    const blocked = { getItem() { throw new Error("blocked"); }, setItem() { throw new Error("blocked"); } };
+    expect(readStoredMapsKey(blocked)).toBeNull();
+    expect(writeStoredMapsKey(blocked, "x")).toBe(false);
+    expect(readStoredMapsKey(undefined)).toBeNull();
+
+    const store = new Map();
+    const ok = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, v) };
+    expect(writeStoredMapsKey(ok, "K1")).toBe(true);
+    expect(readStoredMapsKey(ok)).toBe("K1");
+  });
+
+  it("reuses the storage key the earlier local viewer already used", () => {
+    // So a key pasted into the older Google viewer is picked up here on the
+    // same origin, rather than asking for it twice.
+    expect(MAPS_KEY_STORAGE_KEY).toBe("straumvakt-google-maps-key");
+  });
+
+  it("offers a paste field so no key has to be baked into the deploy", () => {
+    expect(html).toMatch(/id="key-input"/);
+    expect(html).toMatch(/id="key-save"/);
+    expect(prose).toMatch(/kept in this browser only/i);
+    expect(prose).toMatch(/never sent to Straumvakt/i);
+  });
+
+  it("tells the user to restrict the key by referrer", () => {
+    expect(prose).toMatch(/Restrict the key by HTTP referrer/i);
   });
 
   it("refuses to build a script URL without a key", () => {

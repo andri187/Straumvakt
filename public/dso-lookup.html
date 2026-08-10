@@ -276,7 +276,7 @@
 
 <script type="module">
 import {
-  resolveMapsKey, googleMapsScriptUrl,
+  resolveMapsKey, googleMapsScriptUrl, readStoredMapsKey, writeStoredMapsKey,
   wmsTileUrl, wfsGeoJsonUrl, resolveDso, runBoundaryCheck,
   searchFixtures, formatDistance, BOUNDARY_SAMPLES,
   DSO_LAYER, COMPARISON_LAYER,
@@ -301,24 +301,35 @@ async function start() {
   const key = resolveMapsKey({
     search: location.search,
     injected: window.STRAUMVAKT_MAPS_KEY,
+    stored: readStoredMapsKey(window.localStorage),
   });
   if (!key) {
     setStatus("No Google Maps API key.");
     $("map").innerHTML =
-      '<div style="padding:24px;max-width:620px;line-height:1.6">' +
-      '<h2 style="margin:0 0 8px;font-size:15px;color:#ff8f8f">Google Maps API key missing</h2>' +
-      '<p style="color:#92a0b3">This page needs a Maps JavaScript API key. No key is committed to ' +
-      'the repository, by design. Supply one of:</p>' +
-      '<ul style="color:#92a0b3"><li>append <code style="color:#3ee9a7">?key=YOUR_KEY</code> to this URL ' +
-      '(local testing only), or</li>' +
-      '<li>create <code style="color:#3ee9a7">public/dso-lookup-config.js</code> containing ' +
-      '<code style="color:#3ee9a7">window.STRAUMVAKT_MAPS_KEY="YOUR_KEY"</code> ' +
-      '(git-ignored), or</li>' +
-      '<li>inject it at deploy time from a Cloudflare secret.</li></ul>' +
-      '<p style="color:#92a0b3">Required API: <b>Maps JavaScript API</b>. Optional: ' +
-      '<b>Places API</b> for address autocomplete.</p>' +
-      '<p style="color:#92a0b3">The DSO lookup itself does not need Google. Address search ' +
-      'and operator resolution below still work &mdash; only the map is missing.</p></div>';
+      '<div style="padding:24px;max-width:640px;line-height:1.6">' +
+      '<h2 style="margin:0 0 8px;font-size:15px;color:#f2c465">Google Maps API key needed</h2>' +
+      '<p style="color:#92a0b3">Paste a <b>Maps JavaScript API</b> key to draw the map. It is kept ' +
+      'in this browser only (localStorage) and is never sent to Straumvakt or committed anywhere.</p>' +
+      '<div style="display:flex;gap:6px;margin:12px 0;flex-wrap:wrap">' +
+      '<input id="key-input" type="password" autocomplete="off" placeholder="Paste Google Maps JavaScript API key" ' +
+      'style="flex:1;min-width:260px;background:#0b0f16;border:1px solid #26313f;color:#e9eef4;padding:7px 9px;border-radius:4px" />' +
+      '<button id="key-save" style="background:rgba(62,233,167,.1);border:1px solid rgba(62,233,167,.5);color:#3ee9a7;' +
+      'padding:7px 12px;border-radius:4px;cursor:pointer">Load map</button></div>' +
+      '<p style="color:#92a0b3;font-size:11px">Restrict the key by HTTP referrer to this site in the Google ' +
+      'Cloud console &mdash; a Maps JS key is always visible to the browser, so referrer restriction is what ' +
+      'protects it. Optional: <b>Places API</b> for address autocomplete.</p>' +
+      '<p style="color:#92a0b3;font-size:11px">The DSO answer does not need Google &mdash; address search and ' +
+      'operator resolution below already work.</p></div>';
+
+    const save = () => {
+      const pasted = $("key-input").value.trim();
+      if (!pasted) return;
+      writeStoredMapsKey(window.localStorage, pasted);
+      location.reload();
+    };
+    $("key-save").addEventListener("click", save);
+    $("key-input").addEventListener("keydown", (e) => { if (e.key === "Enter") save(); });
+
     // Nothing about the ANSWER depends on Google: the fixture search and the
     // point-in-polygon resolution are ours. So the page stays useful without a
     // key instead of degrading to an error message.
