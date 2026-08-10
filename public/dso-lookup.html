@@ -30,12 +30,33 @@
   button, input, select { font: inherit; }
 
   /* ── layout ───────────────────────────────────────────────────── */
-  #app { height: 100%; display: grid; grid-template-columns: 360px 1fr; }
+  #app { display: none; height: 100%; }
+  #app.ready { display: grid; grid-template-columns: 360px 1fr; }
   @media (max-width: 860px) {
     body { overflow: auto; }
-    #app { grid-template-columns: 1fr; height: auto; }
+    #app.ready { grid-template-columns: 1fr; height: auto; }
     #map { height: 60vh !important; }
   }
+
+  /* ── gate ─────────────────────────────────────────────────────── */
+  #gate {
+    position: fixed; inset: 0; z-index: 50;
+    display: grid; place-items: center;
+    background: radial-gradient(900px 500px at 50% 0%, #14202c, var(--bg));
+    padding: 16px;
+    overflow: auto;
+  }
+  #gate .card {
+    width: 100%; max-width: 430px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 18px;
+  }
+  #gate h1 { margin: 6px 0 0; font-size: 17px; }
+  #gate form { display: grid; gap: 9px; margin-top: 14px; }
+  #gate label { font-size: 11px; color: var(--muted); display: grid; gap: 4px; }
+  .err { color: var(--bad); font-size: 11px; min-height: 15px; }
 
   aside {
     border-right: 1px solid var(--line);
@@ -187,14 +208,35 @@
 </head>
 <body>
 
-<!-- No gate. This page is deliberately open: everything on it is public
-     reference data (Orkustofnun's published distribution-service areas plus
-     demo address records). It reaches no Straumvakt API, reads no tenant,
-     customer, site or billing data, and issues no session, cookie or token.
-     A credential gate is planned but has not been applied yet — see
-     checkCredential() in dso-lookup.mjs, which is retained for that. -->
+<!-- Page-local gate. NOT authentication, and the card below says so.
+     It compares two strings and flips a variable. It sets no cookie, stores
+     nothing, issues no session or token, and reaches no Straumvakt API — so
+     it does not survive a reload, by design. What it protects is public
+     reference data anyway; it exists to keep the tool out of a casual
+     visitor's way, not to secure anything. -->
+<div id="gate">
+  <div class="card">
+    <div class="brand"><b>Straumvakt</b> <span class="tag">Public-data DSO lookup POC</span></div>
+    <h1>DSO lookup</h1>
+    <p class="note">
+      Which Icelandic electricity distribution operator serves an address, from
+      Orkustofnun&rsquo;s published <code>raforkudreifing</code> service areas.
+    </p>
+    <p class="note">
+      <b style="color:var(--warn)">This is not Straumvakt tenant/admin authentication.</b>
+      It is a client-side check over public map data. No cookie, no session, no token,
+      and no Straumvakt API is contacted. Do not treat it as a security control.
+    </p>
+    <form id="gate-form">
+      <label>User <input type="text" id="u" autocomplete="off" autocapitalize="none" spellcheck="false" /></label>
+      <label>Password <input type="password" id="p" autocomplete="off" /></label>
+      <div class="err" id="gate-err" role="alert" aria-live="polite"></div>
+      <button class="btn primary" type="submit">Open</button>
+    </form>
+  </div>
+</div>
 
-<div id="app" class="ready">
+<div id="app">
   <aside>
     <div class="sec pad">
       <div class="brand"><b>DSO lookup</b> <span class="tag">Public-data POC</span></div>
@@ -276,7 +318,7 @@
 
 <script type="module">
 import {
-  resolveMapsKey, googleMapsScriptUrl, readStoredMapsKey, writeStoredMapsKey,
+  checkCredential, resolveMapsKey, googleMapsScriptUrl, readStoredMapsKey, writeStoredMapsKey,
   wmsTileUrl, wfsGeoJsonUrl, resolveDso, runBoundaryCheck,
   searchFixtures, formatDistance, BOUNDARY_SAMPLES,
   DSO_LAYER, COMPARISON_LAYER,
@@ -286,8 +328,23 @@ import {
 const $ = (id) => document.getElementById(id);
 const setStatus = (t) => { $("status").textContent = t; };
 
-// No gate — the page opens straight into the workspace. See the comment at
-// the top of the body for why that is acceptable here.
+// ── Gate ────────────────────────────────────────────────────────────
+// Nothing is persisted: reloading re-gates. That is deliberate — persisting
+// it would mean storing something that looks like an auth decision, and this
+// is not authentication.
+$("gate-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  if (!checkCredential($("u").value, $("p").value)) {
+    $("gate-err").textContent = "Incorrect credential.";
+    $("p").value = "";
+    $("p").focus();
+    return;
+  }
+  $("gate-err").textContent = "";
+  $("gate").remove();
+  $("app").classList.add("ready");
+  start();
+});
 
 // ── State ───────────────────────────────────────────────────────────
 let map = null, overlays = {}, features = null, marker = null;
@@ -598,8 +655,6 @@ function select(addr) {
 }
 
 // ── Boundary check ──────────────────────────────────────────────────
-start();
-
 function renderBoundaryCheck() {
   const tb = $("bc").querySelector("tbody");
   tb.innerHTML = "<tr><th>Point</th><th>Operator</th><th>Edge</th></tr>";

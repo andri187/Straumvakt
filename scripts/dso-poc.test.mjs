@@ -96,23 +96,54 @@ describe("the demo gate", () => {
     expect(mjs).not.toMatch(/setItem\([^)]*(?:pass|cred|token|session|user)/i);
   });
 
-  it("is currently UNGATED, and says so in the source", () => {
-    // Deliberate: the page is open until a gate is applied. Everything on it
-    // is public reference data, so there is nothing behind it to protect.
-    expect(html).not.toMatch(/id="gate-form"/);
-    expect(html).toMatch(/No gate\./);
-    expect(html).toMatch(/A credential gate is planned but has not been applied yet/);
+  it("the page is GATED — the form exists and guards the app", () => {
+    expect(html).toMatch(/id="gate-form"/);
+    expect(html).toMatch(/id="u"/);
+    expect(html).toMatch(/type="password" id="p"/);
+    expect(html).toMatch(/checkCredential\(\$\("u"\)\.value, \$\("p"\)\.value\)/);
   });
 
-  it("still tells the reader it is a POC and not a login", () => {
-    // Losing the gate must not lose the labelling — it moved into the page.
-    expect(prose).toMatch(/not a Straumvakt product page and not a\s*login/i);
-    expect(prose).toMatch(/Public-data POC/);
+  it("the workspace is hidden until the gate opens it", () => {
+    // #app is display:none and only .ready reveals it, and .ready is added
+    // solely in the success branch. A CSS-only reader sees nothing.
+    expect(html).toMatch(/#app \{ display: none;/);
+    expect(html).toMatch(/#app\.ready \{ display: grid;/);
+    expect(html).toMatch(/classList\.add\("ready"\)/);
   });
 
-  it("keeps checkCredential available for when gating returns", () => {
-    expect(checkCredential("DSO", "map")).toBe(true);
-    expect(mjs).toMatch(/export function checkCredential/);
+  it("does not start the app except through the gate", () => {
+    // No top-level start(): if one crept back, the map would load for
+    // everyone regardless of the credential.
+    expect(html).not.toMatch(/^start\(\);/m);
+
+    // Assert ORDER inside the success branch, not exact adjacency — a test
+    // that breaks on an inserted comment is noise, not a guard.
+    const handler = html.slice(html.indexOf('$("gate-form")'), html.indexOf("// ── State"));
+    const success = handler.slice(handler.indexOf("return;") + "return;".length);
+    const reveal = success.indexOf('classList.add("ready")');
+    const boot = success.indexOf("start();");
+    expect(reveal).toBeGreaterThan(-1);
+    expect(boot).toBeGreaterThan(reveal); // revealed before booted
+    // and start() is reached ONLY after the credential check passes
+    expect(handler.slice(0, handler.indexOf("return;"))).not.toContain("start();");
+  });
+
+  it("shows a small error on a wrong credential and clears the password", () => {
+    expect(html).toMatch(/Incorrect credential\./);
+    expect(html).toMatch(/id="gate-err"/);
+    expect(html).toMatch(/\$\("p"\)\.value = "";/);
+  });
+
+  it("carries the two required labels verbatim", () => {
+    expect(prose).toMatch(/Public-data DSO lookup POC/);
+    expect(prose).toMatch(/This is not Straumvakt tenant\/admin authentication/);
+  });
+
+  it("the gate persists NOTHING, so a reload re-gates", () => {
+    // Anything persisted here would be a stored auth decision, which is
+    // exactly what this must not be.
+    const gateBlock = html.slice(html.indexOf('$("gate-form")'), html.indexOf("// ── State"));
+    expect(gateBlock).not.toMatch(/localStorage|sessionStorage|document\.cookie|setItem/);
   });
 });
 
