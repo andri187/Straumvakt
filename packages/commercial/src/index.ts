@@ -25,6 +25,7 @@ export * from "./agreement/resolve";
 // OCCUPANCY per session, and decide which rate version applies when a
 // session crosses a rate change — all three listed as out of scope in
 // compute-session-cost.ts.
+export * from "./core-billing/meter-energy";
 export * from "./core-billing/subscription";
 export * from "./core-billing/plug-time";
 export * from "./core-billing/rate-window";

@@ -28,6 +28,7 @@ import {
 } from "./events-repository";
 import type { IngestEvent } from "./event-envelope";
 import { computeSessionCost } from "../tariff/compute-session-cost";
+import { sessionEnergyWh } from "@straumvakt/commercial";
 import {
   resolveTariffChainWithIdsForSession,
   TariffResolutionError,
@@ -913,19 +914,51 @@ const onOcppRawStopTransaction: ProjectionHandler = async (tx, event) => {
     return;
   }
 
+  // Session energy is meterStop MINUS meterStart, not meterStop.
+  //
+  // `session.energyWh` still holds the meterStart value written by
+  // onOcppRawStartTransaction (:869) — this update is what overwrites it.
+  // OCPP 1.6 does not promise the energy register resets per transaction,
+  // so a charger reporting a cumulative lifetime register would otherwise
+  // be billed its entire lifetime as one session.
+  //
+  // Measured on the deployed fleet 2026-08-10: 1,655 sessions, median
+  // 9.85 kWh, max 79.5 kWh, and sequence-vs-energy correlation of -0.075 /
+  // +0.112 / -0.145 on the three busiest chargers. That fleet is
+  // per-session, so meterStart is 0 or absent and this subtraction is a
+  // no-op today. It stops being a no-op the day a cumulative charger is
+  // onboarded, which is the point.
+  //
+  // The fallback keeps behaviour byte-identical when the reading cannot be
+  // resolved (missing stop, or a register that went backwards): prefer the
+  // old value and warn, rather than introduce a new unpriced path here.
+  const meterStartWh =
+    session.energyWh !== null && session.energyWh !== undefined
+      ? Number(session.energyWh)
+      : null;
+  const resolvedEnergyWh = sessionEnergyWh({ meterStartWh, meterStopWh });
+  if (resolvedEnergyWh === null && meterStopWh !== undefined) {
+    console.warn("[ocpp.raw.StopTransaction] meter reading unresolvable, billing meterStop", {
+      sessionId: session.id,
+      meterStartWh,
+      meterStopWh,
+    });
+  }
+  const billableEnergyWh = resolvedEnergyWh ?? meterStopWh;
+
   // ENRICH-1 — mirror the OCPP figure onto `ocppEnergyKwh` /
   // `ocppStoppedAt` so the later CDR / AMQP overlay can't silently
   // erase what OCPP saw. Canonical `energy_wh` + `ended_at` stay
   // unchanged for back-compat billing reads.
   const ocppEnergyKwh =
-    meterStopWh !== undefined ? (meterStopWh / 1000).toFixed(4) : undefined;
+    billableEnergyWh !== undefined ? (billableEnergyWh / 1000).toFixed(4) : undefined;
   const updated = await tx.chargeSession.update({
     where: { id: session.id },
     data: {
       endedAt,
       stopReason: stopReason ?? null,
       status: "completed",
-      energyWh: meterStopWh !== undefined ? BigInt(meterStopWh) : undefined,
+      energyWh: billableEnergyWh !== undefined ? BigInt(billableEnergyWh) : undefined,
       ...(ocppEnergyKwh !== undefined ? { ocppEnergyKwh } : {}),
       ocppStoppedAt: endedAt,
     },
