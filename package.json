@@ -39,6 +39,7 @@
     "check:schema-consistency": "node scripts/check-schema-consistency.mjs",
     "work-view": "node scripts/gen-work-view.mjs",
     "check:work-view": "node scripts/gen-work-view.mjs --check",
+    "check:pricing-ssot": "node scripts/check-pricing-ssot.mjs",
     "check:invite-guard": "node scripts/check-invite-guard.mjs"
   },
   "prisma": {
