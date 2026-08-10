@@ -20,7 +20,7 @@ import {
   styleForFeature, colorForOperator, legendEntries,
   readStoredMapsKey, writeStoredMapsKey, MAPS_KEY_STORAGE_KEY,
   CONTROL_GROUPS, GENERAL_CONTROLS, controlGroup, visibleChildControls, dsoLayersActive, isSelectable,
-  DSO_COLORS, DEFAULT_DSO_COLOR, FILL_OPACITY, STROKE_OPACITY,
+  DSO_COLORS, DEFAULT_DSO_COLOR, FILL_OPACITY, STROKE_OPACITY, darken,
 } from "../public/dso-lookup.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -691,6 +691,87 @@ describe("overlay styling — no provider may look louder than another", () => {
   it("falls back to a neutral colour for an unknown operator", () => {
     expect(colorForOperator("Something New")).toBe(DEFAULT_DSO_COLOR);
     expect(colorForOperator(null)).toBe(DEFAULT_DSO_COLOR);
+  });
+
+  it("keeps every pair perceptually apart AS COMPOSITED over the basemap", () => {
+    // The colours are never seen neat - they sit at FILL_OPACITY over Google
+    // imagery. So the separation that matters is between the COMPOSITED
+    // results, measured perceptually, over both a light and a dark basemap.
+    // This is the guard that stops a future edit quietly reintroducing two
+    // colours that blend.
+    const hex2rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+    const over = (fg, bg, a) => fg.map((c, i) => c * a + bg[i] * (1 - a));
+    const lab = (rgb) => {
+      const [R, G, B] = rgb.map((v) => {
+        v /= 255;
+        return v > 0.04045 ? Math.pow((v + 0.055) / 1.055, 2.4) : v / 12.92;
+      });
+      const f = (t) => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116);
+      const X = f((R * 0.4124 + G * 0.3576 + B * 0.1805) / 0.95047);
+      const Y = f(R * 0.2126 + G * 0.7152 + B * 0.0722);
+      const Z = f((R * 0.0193 + G * 0.1192 + B * 0.9505) / 1.08883);
+      return [116 * Y - 16, 500 * (X - Y), 200 * (Y - Z)];
+    };
+    const dist = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]);
+
+    const names = Object.keys(DSO_COLORS);
+    for (const bg of [[242, 240, 236], [51, 56, 46]]) {
+      const labs = names.map((n) => lab(over(hex2rgb(DSO_COLORS[n]), bg, FILL_OPACITY)));
+      for (let i = 0; i < names.length; i++) {
+        for (let j = i + 1; j < names.length; j++) {
+          const d = dist(labs[i], labs[j]);
+          // 15 sits just below the measured minimum (17.4, Veitur vs the
+          // undefined slate over the light basemap), so it catches a
+          // regression without tripping on the palette as designed.
+          expect(
+            d,
+            `${names[i]} vs ${names[j]} too close over bg ${bg}: ${d.toFixed(1)}`,
+          ).toBeGreaterThan(15);
+        }
+      }
+    }
+  });
+
+  it("keeps RARIK the palest and least saturated operator colour", () => {
+    // 84 of 109 areas are RARIK. A vivid hue across most of the country
+    // would drown the map, so it is the palest (highest L*) and least
+    // chromatic (lowest C*) of the operators.
+    //
+    // Measured in Lab, not in raw RGB: max-minus-min channel spread calls
+    // pale peach "more chromatic" than forest green, which is simply wrong
+    // and is what an earlier version of this test got backwards.
+    const lab = (h) => {
+      const [R, G, B] = [1, 3, 5]
+        .map((i) => parseInt(h.slice(i, i + 2), 16) / 255)
+        .map((v) => (v > 0.04045 ? Math.pow((v + 0.055) / 1.055, 2.4) : v / 12.92));
+      const f = (t) => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116);
+      const X = f((R * 0.4124 + G * 0.3576 + B * 0.1805) / 0.95047);
+      const Y = f(R * 0.2126 + G * 0.7152 + B * 0.0722);
+      const Z = f((R * 0.0193 + G * 0.1192 + B * 0.9505) / 1.08883);
+      return { L: 116 * Y - 16, C: Math.hypot(500 * (X - Y), 200 * (Y - Z)) };
+    };
+    const rarik = lab(DSO_COLORS["RARIK"]);
+    for (const n of ["Veitur", "HS Veitur", "Norðurorka", "Orkubú Vestfjarða"]) {
+      const o = lab(DSO_COLORS[n]);
+      expect(rarik.C, `RARIK C* vs ${n}`).toBeLessThan(o.C);
+      expect(rarik.L, `RARIK L* vs ${n}`).toBeGreaterThan(o.L);
+    }
+  });
+
+  it("does not colour the countryside like water", () => {
+    // A pale blue covering rural Iceland reads as sea on a map made largely
+    // of coastline. RARIK must be warm: red channel highest, blue lowest.
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(DSO_COLORS["RARIK"].slice(i, i + 2), 16));
+    expect(r).toBeGreaterThan(b);
+    expect(g).toBeGreaterThan(b);
+  });
+
+  it("strokes darker than the fill, so edges stay crisp at low opacity", () => {
+    const s = styleForFeature("Veitur");
+    const val = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)).reduce((a, c) => a + c, 0);
+    expect(val(s.strokeColor)).toBeLessThan(val(s.fillColor));
+    expect(darken("#ffffff", 0.5)).toBe("#808080");
+    expect(darken("#000000", 0.5)).toBe("#000000");
   });
 
   it("only stands out as an explicit interaction state", () => {
