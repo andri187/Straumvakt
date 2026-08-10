@@ -403,6 +403,29 @@ describe("containment — this POC touches nothing of Straumvakt's", () => {
   });
 });
 
+describe("the standalone bundle stays in sync with the site copy", () => {
+  // poc/dso-standalone/ is what gets deployed to a subdomain (Pages serves
+  // index.html at the root). It is a copy, so the only real risk is drift —
+  // someone edits public/ and the subdomain quietly serves something older.
+  const standaloneHtml = readFileSync(join(here, "../poc/dso-standalone/index.html"), "utf8");
+  const standaloneMjs = readFileSync(join(here, "../poc/dso-standalone/dso-lookup.mjs"), "utf8");
+
+  it("index.html is byte-identical to public/dso-lookup.html", () => {
+    expect(standaloneHtml).toBe(html);
+  });
+
+  it("dso-lookup.mjs is byte-identical to public/dso-lookup.mjs", () => {
+    expect(standaloneMjs).toBe(mjs);
+  });
+
+  it("resolves its module by a relative path, so it works at any origin", () => {
+    // "./dso-lookup.mjs" — not "/dso-lookup.mjs". An absolute path would
+    // break the moment the page is served from a subdomain root.
+    expect(standaloneHtml).toMatch(/from "\.\/dso-lookup\.mjs"/);
+    expect(standaloneHtml).not.toMatch(/from "\/dso-lookup\.mjs"/);
+  });
+});
+
 describe("formatting", () => {
   it("uses metres below a kilometre", () => {
     expect(formatDistance(36)).toBe("36 m");
