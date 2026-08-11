@@ -40,6 +40,7 @@
     "work-view": "node scripts/gen-work-view.mjs",
     "check:work-view": "node scripts/gen-work-view.mjs --check",
     "check:pricing-ssot": "node scripts/check-pricing-ssot.mjs",
+    "check:orgid-param": "node scripts/check-orgid-param.mjs",
     "check:invite-guard": "node scripts/check-invite-guard.mjs"
   },
   "prisma": {

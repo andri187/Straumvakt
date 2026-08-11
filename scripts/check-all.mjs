@@ -37,6 +37,12 @@ const CHECKS = [
   // and they can disagree about what a driver owes; this fails when a
   // fifth appears, so the next one is a decision rather than an accident.
   ["pricing-ssot", "npm run check:pricing-ssot"],
+  // Tenant-scoping guard. requirePermission without orgIdParam resolves orgId
+  // to null, which SKIPS the membership lookup — so the gate is both
+  // unreachable for org members and tenant-wide for platform grants. 75 such
+  // gates exist today and are allowlisted with reasons; this fails on the 76th,
+  // and equally when one is fixed and left in the list. Offline, no DB.
+  ["orgid-param", "npm run check:orgid-param"],
   // S2 ordering guard. The invite-consume Critical is an ORDERING bug,
   // and a status-code test cannot see it — the route returns the same 409
   // whether or not it burned the invite on the way out. Offline, no DB.
