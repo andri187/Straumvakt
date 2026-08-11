@@ -225,6 +225,15 @@ export function evaluate(f) {
   const gw = f.configs?.["gateway/wrangler.jsonc"];
   const api = f.configs?.["apps/api/wrangler.jsonc"];
 
+  // OB28 — a config that exists but does not parse must fail loudly.
+  // Found by a fixture: `environmentsOf` returns null on a parse error,
+  // which made every per-environment rule below silently skip. A
+  // checker that goes quiet on a broken config is worse than one that
+  // is absent, because the run still ends green.
+  if (f.wrangler && gw === null) {
+    err("OB28", "gateway/wrangler.jsonc is present but does not parse — every per-environment rule was skipped");
+  }
+
   if (gw) {
     for (const [envName, node] of Object.entries(gw)) {
       const producers = node?.queues?.producers ?? [];
@@ -563,6 +572,121 @@ const FIXTURES = [
   // A checker that silently passes on a missing tree is worse than no
   // checker, so absent configs must still produce the config errors.
   ["configs-absent.invalid", mut({ configs: undefined }), ["OB21"]],
+
+  // ── Cloudflare config edge cases ─────────────────────────────────
+  // These exist because wrangler's inheritance and inference rules are
+  // where this project has repeatedly been wrong, in both directions.
+  // Parse failure makes `environmentsOf` return null, which silently
+  // skipped OB16/OB19/OB24. Without the raw text the checker cannot
+  // tell "absent" from "broken", so OB28 keys on having both.
+  ["cfg-unparseable-with-raw.invalid", mut({
+    wrangler: "{ this is not json",
+    configs: { "gateway/wrangler.jsonc": environmentsOf("{ this is not json"), "apps/api/wrangler.jsonc": okApiCfg() },
+  }), ["OB14", "OB15", "OB21", "OB28"]],
+  ["cfg-jsonc-comments-tolerated.valid", mut({
+    configs: {
+      "gateway/wrangler.jsonc": environmentsOf(`{
+        // a line comment
+        "name": "straumvakt-ocpp", "workers_dev": true,
+        /* a block comment */
+        "queues": { "producers": [{ "binding": "OCPP_EVENTS_QUEUE", "queue": "q" }] },
+        "version_metadata": { "binding": "CF_VERSION_METADATA" },
+        "triggers": { "crons": ["0 3 * * *"] }
+      }`),
+      "apps/api/wrangler.jsonc": okApiCfg(),
+    },
+  }), []],
+  ["cfg-trailing-comma-tolerated.valid", mut({
+    configs: {
+      "gateway/wrangler.jsonc": environmentsOf(`{ "name": "g", "workers_dev": true, "triggers": { "crons": ["x"] },
+        "queues": { "producers": [{ "binding": "OCPP_EVENTS_QUEUE", "queue": "q" }] },
+        "version_metadata": {}, }`),
+      "apps/api/wrangler.jsonc": okApiCfg(),
+    },
+  }), []],
+  ["cfg-url-in-string-survives-comment-strip.valid", mut({
+    configs: {
+      "gateway/wrangler.jsonc": environmentsOf(`{ "name": "g", "workers_dev": true,
+        "vars": { "UPSTREAM": "https://example.net/path" },
+        "queues": { "producers": [{ "binding": "OCPP_EVENTS_QUEUE", "queue": "q" }] },
+        "version_metadata": {}, "triggers": { "crons": ["x"] } }`),
+      "apps/api/wrangler.jsonc": okApiCfg(),
+    },
+  }), []],
+  ["cfg-empty-producers-array.invalid", mut({
+    configs: { ...GOOD_CONFIGS, "gateway/wrangler.jsonc": { "top-level": { ...okGatewayCfg()["top-level"], queues: { producers: [] } } } },
+  }), ["OB16"]],
+  ["cfg-consumers-but-no-producers.invalid", mut({
+    configs: { ...GOOD_CONFIGS, "gateway/wrangler.jsonc": { "top-level": { ...okGatewayCfg()["top-level"], queues: { consumers: [{ queue: "q" }] } } } },
+  }), ["OB16"]],
+  ["cfg-three-envs-one-missing-queue.invalid", mut({
+    configs: {
+      ...GOOD_CONFIGS,
+      "gateway/wrangler.jsonc": { ...okGatewayCfg(), preview: { name: "gw-preview", workers_dev: true, version_metadata: {} } },
+    },
+  }), ["OB16"]],
+  ["cfg-workers-dev-false-is-declared.valid", mut({
+    configs: { "gateway/wrangler.jsonc": okGatewayCfg({ workers_dev: false, routes: [{ pattern: "a.b" }] }), "apps/api/wrangler.jsonc": okApiCfg() },
+  }), []],
+  ["cfg-route-singular-counts.valid", mut({
+    configs: { "gateway/wrangler.jsonc": okGatewayCfg({ workers_dev: undefined, route: "a.b/*" }), "apps/api/wrangler.jsonc": okApiCfg() },
+  }), []],
+  ["cfg-empty-routes-array-still-declared.valid", mut({
+    configs: { "gateway/wrangler.jsonc": okGatewayCfg({ workers_dev: undefined, routes: [] }), "apps/api/wrangler.jsonc": okApiCfg() },
+  }), []],
+  ["cfg-env-declares-own-workersdev.valid", mut({
+    configs: {
+      "gateway/wrangler.jsonc": { "top-level": { ...okGatewayCfg()["top-level"], workers_dev: undefined, routes: [{ pattern: "p" }] }, staging: { ...okGatewayCfg().staging, workers_dev: true } },
+      "apps/api/wrangler.jsonc": okApiCfg(),
+    },
+  }), []],
+  ["cfg-toplevel-bare-env-inherits-nothing.invalid", mut({
+    configs: {
+      "gateway/wrangler.jsonc": { "top-level": { name: "g", queues: { producers: [{ binding: "OCPP_EVENTS_QUEUE", queue: "q" }] }, version_metadata: {}, triggers: { crons: ["x"] } }, staging: { name: "s", queues: { producers: [{ binding: "OCPP_EVENTS_QUEUE", queue: "q2" }] } } },
+      "apps/api/wrangler.jsonc": okApiCfg(),
+    },
+  }), ["OB19"]],
+  ["cfg-dlq-empty-string.invalid", mut({
+    configs: { ...GOOD_CONFIGS, "apps/api/wrangler.jsonc": { "top-level": { ...okApiCfg()["top-level"], queues: { consumers: [{ queue: "straumvakt-ocpp-events", dead_letter_queue: "" }] } } } },
+  }), ["OB17"]],
+  ["cfg-consumer-name-variant-matches.valid", mut({
+    configs: { ...GOOD_CONFIGS, "apps/api/wrangler.jsonc": { "top-level": { ...okApiCfg()["top-level"], queues: { consumers: [{ queue: "straumvakt-ocpp-events-staging", dead_letter_queue: "dlq" }] } } } },
+  }), []],
+  ["cfg-multiple-consumers-one-ocpp.valid", mut({
+    configs: { ...GOOD_CONFIGS, "apps/api/wrangler.jsonc": { "top-level": { ...okApiCfg()["top-level"], queues: { consumers: [{ queue: "straumvakt-outbound", dead_letter_queue: "d1" }, { queue: "straumvakt-ocpp-events", dead_letter_queue: "d2" }] } } } },
+  }), []],
+  ["cfg-r2-present-no-warning.valid", mut({}), []],
+  ["cfg-version-metadata-empty-object-counts.valid", mut({
+    configs: { "gateway/wrangler.jsonc": okGatewayCfg({ version_metadata: {} }), "apps/api/wrangler.jsonc": okApiCfg() },
+  }), []],
+  ["cfg-cron-empty-array-is-no-scheduler.invalid", mut({
+    configs: { "gateway/wrangler.jsonc": okGatewayCfg({ triggers: { crons: [] } }), "apps/api/wrangler.jsonc": okApiCfg() },
+  }), ["OB21"]],
+  ["cfg-scheduler-on-api-side-counts.valid", mut({
+    configs: {
+      "gateway/wrangler.jsonc": okGatewayCfg({ triggers: undefined }),
+      "apps/api/wrangler.jsonc": { "top-level": { ...okApiCfg()["top-level"], triggers: { crons: ["0 4 1 * *"] } } },
+    },
+  }), []],
+  ["cfg-access-on-any-worker-counts.valid", mut({
+    configs: { "gateway/wrangler.jsonc": okGatewayCfg({ access: { app: "ops" } }), "apps/api/wrangler.jsonc": { "top-level": { ...okApiCfg()["top-level"], access: undefined } } },
+  }), []],
+  ["cfg-third-config-file-also-checked.invalid", mut({
+    configs: { ...GOOD_CONFIGS, "wrangler.jsonc": { "top-level": { name: "hlada" } } },
+  }), ["OB19"]],
+  ["cfg-null-env-node-tolerated.invalid", mut({
+    configs: { "gateway/wrangler.jsonc": { "top-level": null }, "apps/api/wrangler.jsonc": okApiCfg() },
+  }), ["OB16", "OB19", "OB21", "OB24"]],
+  // Genuinely absent: no raw text either, so OB13 fires and OB28 does
+  // not. The distinction between "absent" and "broken" is the point.
+  ["cfg-gateway-absent-entirely.invalid", mut({
+    wrangler: null,
+    configs: { "gateway/wrangler.jsonc": null, "apps/api/wrangler.jsonc": okApiCfg() },
+  }), ["OB13", "OB21"]],
+  ["cfg-api-absent-entirely.warns", mut({
+    configs: { "gateway/wrangler.jsonc": okGatewayCfg(), "apps/api/wrangler.jsonc": null },
+  }), []],
+  ["cfg-both-configs-good.valid", mut({}), []],
 ];
 
 function selfTest() {
