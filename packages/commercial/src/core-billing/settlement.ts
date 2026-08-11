@@ -310,18 +310,64 @@ export function buildSettlementSnapshot(input: SettlementInput): SettlementSnaps
 }
 
 /**
+ * Ex-VAT aurar this snapshot's energy would cost at the given prices.
+ *
+ * Exported so "what would this session cost under today's rate book" is
+ * answerable without re-settling it — which is the question a dispute asks,
+ * and the question snapshotIsImmutableUnder needs in order to mean anything.
+ */
+export function repriceExVat(
+  snapshot: SettlementSnapshot,
+  components: readonly { kind: RateComponentInput["kind"]; pricePerKwhMinor: Aurar }[],
+): Aurar {
+  const wh = snapshot.energyWh === null ? 0n : BigInt(Math.round(snapshot.energyWh));
+  const energy = components.reduce(
+    (sum, c) => sum + (wh * c.pricePerKwhMinor + WH_PER_KWH / 2n) / WH_PER_KWH,
+    0n,
+  );
+  return energy + snapshot.plugTimeFeeMinor;
+}
+
+/**
  * Would a later rate edit change this snapshot?
  *
  * The answer must always be no, and this makes that testable rather than
- * merely asserted in a comment. A snapshot carries its own prices, so
- * re-pricing it against a new rate book must produce the same figure.
+ * merely asserted in a comment.
+ *
+ * THIS FUNCTION USED TO PROVE NOTHING. It was
+ * `snapshot.components.every(c => typeof c.pricePerKwhMinor === "bigint")`,
+ * with `newComponents` explicitly voided — which is true of every snapshot
+ * this module can produce, so it returned true unconditionally and its test
+ * passed for a reason unrelated to rate lock-in. That is worse than no check:
+ * the name is quoted elsewhere as evidence the property holds.
+ *
+ * It now checks two things, and both use both arguments:
+ *
+ *   1. SELF-CONSISTENCY. The stored ex-VAT figure must be reproducible from
+ *      the prices the snapshot itself carries. False here means the snapshot
+ *      is storing one price and billing another.
+ *
+ *   2. INDEPENDENCE. If the new rate book's prices differ, re-pricing under it
+ *      must produce a DIFFERENT figure. Otherwise the stored total cannot be
+ *      distinguished from one computed against whatever is current — locking
+ *      and coincidence would look the same.
+ *
+ * Skipped when there is no energy: at zero kWh every price gives zero, so (2)
+ * would report a lock failure for a session that simply has nothing to price.
  */
 export function snapshotIsImmutableUnder(
   snapshot: SettlementSnapshot,
   newComponents: readonly RateComponentInput[],
 ): boolean {
-  void newComponents; // deliberately unused: the snapshot does not consult it
-  return snapshot.components.every((c) => typeof c.pricePerKwhMinor === "bigint");
+  if (repriceExVat(snapshot, snapshot.components) !== snapshot.amountExVatMinor) return false;
+
+  if (snapshot.energyWh === null || snapshot.energyWh === 0) return true;
+
+  const own = new Map(snapshot.components.map((c) => [c.kind, c.pricePerKwhMinor]));
+  const pricesDiffer = newComponents.some((c) => own.get(c.kind) !== c.pricePerKwhMinor);
+  if (!pricesDiffer) return true;
+
+  return repriceExVat(snapshot, newComponents) !== snapshot.amountExVatMinor;
 }
 
 /** Split a settled total between bearers without losing aurar. */
