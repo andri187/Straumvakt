@@ -343,13 +343,23 @@ station lookup (:149-152) is likewise unfiltered, and nothing checks that the re
 identity's org matches the org owning the credential passed to `syncZaptecSessions`.
 
 **C. The 100× driver-facing money defect is still live on both endpoints `money.ts` names.**
-[driver-sessions.ts:93-98](apps/api/src/routes/public/driver-sessions.ts#L93) defines
-`minorToIsk` as `return Number(minor)` under the comment "ISK has no minor unit, so minor
-=== major". `driver-invoices.ts:66-67` independently does `Number(lc)` and emits it as
-`costIsk`. Both are wrong: `compute-session-cost.ts:12-21` fixes minor = 1/100 króna and
+[repositories/driver-sessions.ts:93-98](apps/api/src/repositories/driver-sessions.ts#L93)
+defines `minorToIsk` as `return Number(minor)` under the comment "ISK has no minor unit, so
+minor === major". `driver-invoices.ts:66-68` independently does `Number(lc)` and emits it as
+`costIsk`. Both are wrong: `compute-session-cost.ts:12-21` fixes minor = 1/100 króna —
+"aurar are a formally-defined subunit even though no aurar coins circulate today" — and
 `projections.ts:437` persists `costIskMinor` in aurar, which `projections.test.ts:397` pins
 at `64988n` for a 649.88 kr session. **Both endpoints render 64,988 kr.** `money.ts:112-115`
 supplies the fix and neither endpoint imports it.
+
+*(Census correction, verified 2026-08-11: the census reported this file under
+`routes/public/`. It is `repositories/`. The finding is unchanged; the path was wrong.)*
+
+**And the defect is pinned by a passing test.** `driver-sessions.test.ts:216` feeds
+`costIskMinor: 64988n` and `:246` asserts `costIsk: 64988`. So this is not an untested
+corner — the wrong number is locked in by a green assertion, and fixing the code will turn
+that test red. Whoever fixes it must change the expectation rather than assume they broke
+something.
 
 **D. Rate lock-in does not hold, and cannot on today's data path.**
 `resolve-tariff-chain.ts:125-128` defines `ResolveInput` as `{ siteId; chargingStationId }`

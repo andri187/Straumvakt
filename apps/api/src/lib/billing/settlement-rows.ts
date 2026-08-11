@@ -5,8 +5,8 @@
 // Between them is the place every previous billing generation went wrong: the
 // translation. Two examples already in this tree, both live today —
 //
-//   driver-sessions.ts:93-98  `const minorToIsk = (minor) => Number(minor)`
-//   driver-invoices.ts:66-67  `costIsk: Number(lc)`
+//   repositories/driver-sessions.ts:93-98  minorToIsk = (minor) => Number(minor)
+//   repositories/driver-invoices.ts:66-68  costIsk: Number(lc)
 //
 // — under a comment claiming ISK has no minor unit. It does: minor is 1/100
 // króna, projections.ts persists aurar, and projections.test.ts:397 pins a
