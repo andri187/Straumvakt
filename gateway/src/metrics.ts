@@ -123,14 +123,44 @@ export function pseudonymiseIdentity(identity: string, salt = ""): string {
  * type, blob4 = error kind, blob5 = period. A dashboard query depends
  * on this order, so it is asserted in the tests.
  */
+/**
+ * Longest a dimension value may be. Two reasons, both real:
+ *
+ *  - **Blob bloat.** Analytics Engine bills and truncates on blob size;
+ *    an unbounded value turns one stray call into a per-frame cost.
+ *  - **Accidental payload dump.** The type system stops an OCPP frame
+ *    reaching `eventType`, but a caller can still interpolate one into
+ *    a string. 64 characters fits every legitimate value here (action
+ *    names, error kinds, `2026-08` periods) and truncates a smuggled
+ *    payload into something obviously wrong rather than something
+ *    quietly leaked.
+ */
+export const MAX_DIMENSION_LENGTH = 64;
+
+/**
+ * Free-text markers. `eventType`, `errorKind` and `period` are meant to
+ * be enum-like tokens; a space or an `@` means someone passed a
+ * sentence or an address, and neither belongs in telemetry.
+ */
+const FREE_TEXT_RE = /[\s@]/;
+
 export function buildBlobs(
   name: MetricName,
   dims: MetricDimensions,
   salt = "",
 ): string[] {
-  for (const key of Object.keys(dims)) {
+  for (const [key, value] of Object.entries(dims)) {
     if (FORBIDDEN_DIMENSION_KEYS.has(key.toLowerCase())) {
       throw new Error(`metrics: forbidden dimension "${key}"`);
+    }
+    if (typeof value !== "string") continue;
+    if (value.length > MAX_DIMENSION_LENGTH) {
+      throw new Error(`metrics: dimension "${key}" exceeds ${MAX_DIMENSION_LENGTH} chars`);
+    }
+    // `identity` is exempt: it is hashed before it is written, so its
+    // content never reaches a blob and its shape is not ours to police.
+    if (key !== "identity" && FREE_TEXT_RE.test(value)) {
+      throw new Error(`metrics: dimension "${key}" looks like free text, not a token`);
     }
   }
   return [

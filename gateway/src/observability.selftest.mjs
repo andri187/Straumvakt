@@ -249,5 +249,203 @@ describe('sentry scrubber', () => {
   });
 });
 
+// ── Phase 3 · hardening ────────────────────────────────────────────
+describe('dimension validation', () => {
+  check('MAX_DIMENSION_LENGTH is exported and sane', () => {
+    expect(met.MAX_DIMENSION_LENGTH).toBe(64);
+  });
+  check('an over-long dimension is refused', () => {
+    let threw = false;
+    try { met.buildBlobs('gateway_errors_by_type', { errorKind: 'x'.repeat(65) }); } catch { threw = true; }
+    expect(threw).toBeTruthy();
+  });
+  check('a dimension exactly at the limit is allowed', () => {
+    expect(met.buildBlobs('gateway_errors_by_type', { errorKind: 'x'.repeat(64) })[3].length).toBe(64);
+  });
+  check('free-text dimensions are refused (space)', () => {
+    let threw = false;
+    try { met.buildBlobs('gateway_errors_by_type', { errorKind: 'connection reset by peer' }); } catch { threw = true; }
+    expect(threw).toBeTruthy();
+  });
+  check('free-text dimensions are refused (@, i.e. an address)', () => {
+    let threw = false;
+    try { met.buildBlobs('queue_messages_by_type', { eventType: 'driver@example.is' }); } catch { threw = true; }
+    expect(threw).toBeTruthy();
+  });
+  check('identity is exempt from the token rule but still hashed', () => {
+    // A charger id with odd characters must not be rejected — it never
+    // reaches a blob in raw form anyway.
+    const b = met.buildBlobs('heartbeats_received', { identity: 'ZPR 074002@site' });
+    expect(b[1]).toContain('cid_');
+    if (b.join('|').includes('ZPR 074002')) throw new Error('raw identity leaked');
+  });
+  check('legitimate token values still pass', () => {
+    for (const v of ['Heartbeat', 'parse_error', '2026-08', 'MeterValues']) {
+      met.buildBlobs('queue_messages_by_type', { eventType: v });
+    }
+  });
+  check('an over-long dimension does not crash the hot path', () => {
+    const seen = [];
+    const r = recorder();
+    met.createMetricsWriter(r, { onError: (e) => seen.push(e) })
+      .count('gateway_errors_by_type', { errorKind: 'x'.repeat(999) });
+    expect(r.points.length).toBe(0);
+    expect(seen.length).toBe(1);
+  });
+  check('cardinality: index is the metric name only', () => {
+    const r = recorder();
+    const w = met.createMetricsWriter(r);
+    for (let i = 0; i < 50; i++) w.count('heartbeats_received', { identity: `ZPR${i}` });
+    const distinct = new Set(r.points.map((p) => p.indexes.join('|')));
+    expect(distinct.size).toBe(1); // 50 chargers, one index — no explosion
+    expect(r.points.length).toBe(50);
+  });
+});
+
+describe('sentry config hardening', () => {
+  check('a well-formed DSN enables reporting', () => {
+    const c = sc.sentryConfigFrom({ SENTRY_DSN: ['https://', 'abc123', '@o1.example.net/42'].join('') });
+    expect(c.enabled).toBeTruthy();
+    expect(c.reason).toBeUndefined();
+  });
+  check('a malformed DSN fails closed with a reason', () => {
+    const c = sc.sentryConfigFrom({ SENTRY_DSN: 'not-a-dsn' });
+    expect(c.enabled).toBeFalsy();
+    expect(c.reason).toBe('malformed-dsn');
+  });
+  check('a DSN missing the project id fails closed', () => {
+    expect(sc.sentryConfigFrom({ SENTRY_DSN: ['https://', 'abc', '@o1.example.net'].join('') }).reason).toBe('malformed-dsn');
+  });
+  check('an http (non-TLS) DSN fails closed', () => {
+    expect(sc.sentryConfigFrom({ SENTRY_DSN: ['http://', 'abc', '@o1.example.net/2'].join('') }).reason).toBe('malformed-dsn');
+  });
+  check('absent DSN reports no-dsn, not malformed', () => {
+    expect(sc.sentryConfigFrom({}).reason).toBe('no-dsn');
+    expect(sc.sentryConfigFrom({ SENTRY_DSN: '  ' }).reason).toBe('no-dsn');
+  });
+  check('the rejected DSN value is never echoed back', () => {
+    const c = sc.sentryConfigFrom({ SENTRY_DSN: 'https://leakme@bad' });
+    if (JSON.stringify(c).includes('leakme')) throw new Error('malformed DSN echoed into config');
+    expect(c.dsn).toBeUndefined();
+  });
+  check('release is carried even when reporting is disabled', () => {
+    // The version id is useful for logs regardless of Sentry.
+    const c = sc.sentryConfigFrom({ CF_VERSION_METADATA: { id: 'v-9' } });
+    expect(c.enabled).toBeFalsy();
+    expect(c.release).toBe('v-9');
+  });
+  check('CF_VERSION_METADATA absent does not throw', () => {
+    expect(sc.sentryConfigFrom({}).release).toBeUndefined();
+  });
+});
+
+describe('scrubber edge cases', () => {
+  check('MeterValues nested arrays are dropped, not passed through', () => {
+    const out = sc.scrubOcppPayload({
+      connectorId: 1,
+      meterValue: [{ sampledValue: [{ value: '42', idTag: 'DEADBEEF' }] }],
+    });
+    expect(out.connectorId).toBe(1);
+    if (JSON.stringify(out).includes('DEADBEEF')) throw new Error('nested idTag leaked');
+    expect(out.meterValue).toBeUndefined();
+  });
+  check('an array payload is not passed through', () => {
+    expect(sc.scrubOcppPayload([{ idTag: 'X' }])._dropped).toBe(sc.REDACTED);
+  });
+  check('deeply nested denied keys are still caught', () => {
+    const deep = { a: { b: { c: { d: { e: { idTag: 'DEADBEEF' } } } } } };
+    if (JSON.stringify(sc.scrubValue(deep)).includes('DEADBEEF')) throw new Error('deep idTag leaked');
+  });
+  check('depth bound truncates rather than recursing forever', () => {
+    let node = { v: 'leaf' };
+    for (let i = 0; i < 30; i++) node = { nested: node };
+    const out = sc.scrubValue(node); // must terminate
+    expect(typeof out).toBe('object');
+  });
+  check('wide objects are bounded', () => {
+    const wide = {};
+    for (let i = 0; i < 500; i++) wide[`k${i}`] = i;
+    expect(Object.keys(sc.scrubValue(wide)).length).toBe(100);
+  });
+  check('long arrays are bounded', () => {
+    expect(sc.scrubValue(Array.from({ length: 500 }, (_, i) => i)).length).toBe(50);
+  });
+  check('scrubEvent leaves a clean event materially intact', () => {
+    const out = sc.scrubEvent({ message: 'boom', tags: { env: 'staging' }, release: 'v-1' });
+    expect(out.message).toBe('boom');
+    expect(out.tags.env).toBe('staging');
+    expect(out.release).toBe('v-1');
+  });
+  check('scrubEvent on an empty event does not throw', () => {
+    expect(typeof sc.scrubEvent({})).toBe('object');
+  });
+  check('URL with no credentials survives readable', () => {
+    expect(sc.scrubUrl('wss://ocpp.straumvakt.org/ocpp/ZPR074002')).toContain('ZPR074002');
+  });
+  check('query string is stripped even without credentials', () => {
+    const u = sc.scrubUrl('https://h/p?token=abc&x=1');
+    if (u.includes('abc')) throw new Error('query leaked');
+  });
+});
+
+describe('interval / cost coupling', () => {
+  check('the advertised interval and the liveness window cannot disagree', () => {
+    // The whole point of the derivation. If this ever fails, the cost
+    // model and the offline rule have drifted apart again.
+    const cfg = hb.DEFAULT_LIVENESS_CONFIG;
+    expect(hb.bootNotificationIntervalSeconds(cfg) * 1000).toBe(cfg.idleHeartbeatIntervalMs);
+  });
+  check('monthly idle frames at the product frame are 720', () => {
+    const perMonth = (30 * 24 * 3600) / hb.bootNotificationIntervalSeconds();
+    expect(Math.round(perMonth)).toBe(720);
+  });
+  check('a 60 s override would be a 60x multiplier', () => {
+    const { seconds } = hb.resolveHeartbeatIntervalSeconds('60');
+    expect(Math.round(hb.bootNotificationIntervalSeconds() / seconds)).toBe(60);
+    expect(Math.round((30 * 24 * 3600) / seconds)).toBe(43200);
+  });
+  check('bounds are exactly inclusive', () => {
+    expect(hb.resolveHeartbeatIntervalSeconds('60').source).toBe('env-override');
+    expect(hb.resolveHeartbeatIntervalSeconds('86400').source).toBe('env-override');
+    expect(hb.resolveHeartbeatIntervalSeconds('86401').source).toBe('rejected-override');
+  });
+});
+
+describe('fast-path invariants', () => {
+  check('billing-material actions are never shed by the cap', () => {
+    for (const a of ['StartTransaction', 'StopTransaction', 'MeterValues', 'Authorize', 'BootNotification']) {
+      if (!hb.CAP_EXEMPT_ACTIONS.has(a)) throw new Error(`${a} is not cap-exempt — a noisy-charger cap could drop billing data`);
+    }
+  });
+  check('Heartbeat is NOT cap-exempt', () => {
+    // The one action the cap exists to shed.
+    expect(hb.CAP_EXEMPT_ACTIONS.has('Heartbeat')).toBeFalsy();
+  });
+  check('only Heartbeat bypasses ingest', () => {
+    expect(hb.bypassesIngest('Heartbeat')).toBeTruthy();
+    for (const a of ['BootNotification', 'MeterValues', 'StartTransaction', 'StatusNotification', 'Authorize']) {
+      if (hb.bypassesIngest(a)) throw new Error(`${a} must not bypass ingest`);
+    }
+  });
+  check('pseudonymisation does not collide across a realistic fleet', () => {
+    const ids = new Set();
+    for (let i = 0; i < 2000; i++) ids.add(met.pseudonymiseIdentity(`ZPR${String(i).padStart(6, '0')}`));
+    expect(ids.size).toBe(2000);
+  });
+  check('metrics writer reports enabled state honestly', () => {
+    expect(met.createMetricsWriter({ writeDataPoint: () => {} }).enabled).toBeTruthy();
+    expect(met.createMetricsWriter({}).enabled).toBeFalsy();
+    expect(met.createMetricsWriter(null).enabled).toBeFalsy();
+  });
+  check('an explicit zero value is still recorded', () => {
+    // 0 is meaningful for a gauge-like count; it must not be dropped as
+    // falsy the way a naive `if (!value)` would.
+    const r = recorder();
+    met.createMetricsWriter(r).count('missed_heartbeats', {}, 0);
+    expect(r.points.length).toBe(1);
+    expect(r.points[0].doubles).toEqual([0]);
+  });
+});
+
 console.log(`\n  ${pass} passed, ${fail} failed`);
 process.exitCode = fail === 0 ? 0 : 1;

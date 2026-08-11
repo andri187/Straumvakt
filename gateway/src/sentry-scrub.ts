@@ -193,13 +193,6 @@ export function scrubEvent(event: SentryEventLike): SentryEventLike {
   return out;
 }
 
-export interface SentryConfig {
-  enabled: boolean;
-  dsn?: string;
-  release?: string;
-  environment: string;
-}
-
 /**
  * Builds config from the environment. Absent DSN disables reporting
  * rather than throwing — a missing optional secret must not stop a
@@ -209,14 +202,35 @@ export interface SentryConfig {
  * binding. Without it a regression cannot be keyed to a deploy, which
  * is currently the project's single blocking release gap.
  */
+/**
+ * A well-formed Sentry DSN: `https://<publicKey>@<host>/<projectId>`.
+ *
+ * Validated rather than trusted because a malformed DSN does not fail
+ * loudly — most SDKs log once and then silently drop every event, which
+ * looks identical to "no errors happened". Failing closed here turns
+ * that into an explicit `enabled: false` plus a `reason`.
+ */
+const DSN_SHAPE = /^https:\/\/[0-9a-zA-Z]+@[\w.-]+\/\d+$/;
+
+export interface SentryConfig {
+  enabled: boolean;
+  dsn?: string;
+  release?: string;
+  environment: string;
+  /** Why reporting is off, when it is. Never contains the DSN. */
+  reason?: "no-dsn" | "malformed-dsn";
+}
+
 export function sentryConfigFrom(env: Partial<GatewayEnv>, environment = "unknown"): SentryConfig {
-  const dsn = typeof env.SENTRY_DSN === "string" && env.SENTRY_DSN.trim() !== ""
-    ? env.SENTRY_DSN.trim()
-    : undefined;
-  return {
-    enabled: dsn !== undefined,
-    dsn,
-    release: env.CF_VERSION_METADATA?.id,
-    environment,
-  };
+  const raw = typeof env.SENTRY_DSN === "string" ? env.SENTRY_DSN.trim() : "";
+  const release = env.CF_VERSION_METADATA?.id;
+  if (raw === "") {
+    return { enabled: false, release, environment, reason: "no-dsn" };
+  }
+  if (!DSN_SHAPE.test(raw)) {
+    // Deliberately does not echo the value: a malformed DSN is still a
+    // credential-shaped string and this result gets logged.
+    return { enabled: false, release, environment, reason: "malformed-dsn" };
+  }
+  return { enabled: true, dsn: raw, release, environment };
 }
