@@ -12,9 +12,13 @@ const integration = fs.readFileSync(
   path.join(root, "core-integration-quality-data.ts"),
   "utf8",
 );
+const marketContract = fs.readFileSync(
+  path.join(root, "market-route-contract.ts"),
+  "utf8",
+);
 const shell = fs.readFileSync(path.join(root, "post-login-shell.tsx"), "utf8");
 const css = fs.readFileSync(path.join(root, "post-login.css"), "utf8");
-const runtime = `${data}\n${backendContract}\n${integration}\n${shell}`;
+const runtime = `${data}\n${backendContract}\n${integration}\n${marketContract}\n${shell}`;
 
 describe("Core product visual guard", () => {
   it("contains no request client", () => {
@@ -140,9 +144,17 @@ describe("Core product visual guard", () => {
   });
   it("labels capability, provenance and backend boundaries at the render edge", () => {
     expect(shell).toContain("Screen capability and data state");
-    expect(shell).toContain("Local fixture");
-    expect(shell).toContain("Read only");
-    expect(shell).toContain("Backend gated");
+    expect(shell).toContain("marketContract.classificationLabel");
+    expect(shell).toContain("marketContract.dataTruthLabel");
+    expect(shell).toContain("marketContract.interactionLabel");
+    expect(shell).toContain("Backend:");
+  });
+  it("shows the route-specific honesty risk at the render edge", () => {
+    expect(shell).toContain("marketContract.honestyRiskLabel");
+    expect(shell).toContain("marketContract.honestyNote");
+    expect(marketContract).toContain("Money is illustrative");
+    expect(marketContract).toContain("Measurement provenance");
+    expect(marketContract).toContain("Source is not runtime proof");
   });
   it("explains each persona workflow without implying payment", () => {
     expect(shell).toContain("Platform control path");
@@ -150,6 +162,15 @@ describe("Core product visual guard", () => {
     expect(shell).toContain("Your charging record");
     expect(shell).toContain(
       "It is not an invoice, payment request or paid status",
+    );
+  });
+  it("makes the onboarding-to-billing path locally navigable", () => {
+    expect(shell).toContain('screenId: "settings"');
+    expect(shell).toContain('screenId: "access-groups"');
+    expect(shell).toContain('screenId: "rates"');
+    expect(shell).toContain('screenId: "billing-material"');
+    expect(shell).toMatch(
+      /aria-current=\{\s*step\.screenId === currentScreenId \? "step" : undefined\s*\}/,
     );
   });
   it("keeps large review inventories grouped and collapsible", () => {

@@ -28,6 +28,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { VisualFamily, VisualScreen } from "../visual/visual-data";
 import { getCoreDetail } from "./core-product-data";
+import { getMarketRouteContract } from "./market-route-contract";
 import {
   getPostLoginNavigationSections,
   postLoginHref,
@@ -62,6 +63,14 @@ export function PostLoginShell({
   const ContextIcon = contextIcons[persona.routeId];
   const coreDetail = getCoreDetail(persona.routeId, screen.id);
   const navigationSections = getPostLoginNavigationSections(persona, family);
+  const currentWorkflow =
+    navigationSections.find((section) => section.screenIds.includes(screen.id))
+      ?.label ?? "Workspace";
+  const marketContract = getMarketRouteContract(
+    persona.routeId,
+    screen,
+    currentWorkflow,
+  );
   const filteredRows = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return needle
@@ -174,10 +183,12 @@ export function PostLoginShell({
                 className="pl-capabilities"
                 aria-label="Screen capability and data state"
               >
-                <span>Core</span>
-                <span>Local fixture</span>
-                <span>Read only</span>
-                {screen.actionDisabled ? <span>Backend gated</span> : null}
+                <span className={`is-${marketContract.classification}`}>
+                  {marketContract.classificationLabel}
+                </span>
+                <span>{marketContract.dataTruthLabel}</span>
+                <span>{marketContract.interactionLabel}</span>
+                <span>Backend: {marketContract.backendDependency}</span>
               </div>
             </div>
             <div className="pl-actions">
@@ -209,7 +220,7 @@ export function PostLoginShell({
             </div>
           ) : null}
 
-          <PersonaWorkflowBand persona={persona.routeId} />
+          <PersonaWorkflowBand persona={persona} currentScreenId={screen.id} />
 
           {coreDetail ? (
             <section
@@ -345,6 +356,13 @@ export function PostLoginShell({
                 <p>{screen.review.blocked}</p>
               </div>
             </article>
+            <article>
+              <ShieldCheck size={17} />
+              <div>
+                <strong>{marketContract.honestyRiskLabel}</strong>
+                <p>{marketContract.honestyNote}</p>
+              </div>
+            </article>
           </section>
         </div>
       </section>
@@ -365,7 +383,9 @@ function NavigationSection({
   currentScreenId: string;
   onNavigate: () => void;
 }) {
-  const [expanded, setExpanded] = useState(section.screenIds.includes(currentScreenId));
+  const [expanded, setExpanded] = useState(
+    section.screenIds.includes(currentScreenId),
+  );
   const screens = section.screenIds
     .map((id) => family.screens.find((screen) => screen.id === id))
     .filter((item): item is VisualScreen => Boolean(item));
@@ -411,35 +431,38 @@ function NavigationSection({
 
 const workflowCopy: Record<
   PostLoginPersona["routeId"],
-  { label: string; steps: string[]; note: string }
+  { label: string; steps: { label: string; screenId: string }[]; note: string }
 > = {
   admin: {
     label: "Platform control path",
     steps: [
-      "Organisation readiness",
-      "Fleet exceptions",
-      "Billing evidence",
-      "Attributed support",
+      { label: "Organisations", screenId: "organisations" },
+      { label: "Fleet exceptions", screenId: "fleet" },
+      { label: "Billing evidence", screenId: "billing-trust" },
+      { label: "Launch readiness", screenId: "readiness" },
     ],
     note: "Support can inspect context; it cannot impersonate a tenant or complete commercial acceptance.",
   },
   org: {
     label: "Monthly operating path",
     steps: [
-      "CDR evidence",
-      "Versioned rates",
-      "Period review",
-      "Statements and delivery",
+      { label: "Organisation", screenId: "settings" },
+      { label: "Sites", screenId: "sites" },
+      { label: "Connectors", screenId: "chargers" },
+      { label: "Drivers and access", screenId: "access-groups" },
+      { label: "Pricing", screenId: "rates" },
+      { label: "Billing material", screenId: "billing-material" },
     ],
     note: "A configured tariff is not proof of a final charge. Mismatched or unlabelled sessions remain held.",
   },
   driver: {
     label: "Your charging record",
     steps: [
-      "Access scope",
-      "Metered energy",
-      "Rate and fees",
-      "Statement status",
+      { label: "Access scope", screenId: "access" },
+      { label: "Assigned chargers", screenId: "chargers" },
+      { label: "Active session", screenId: "active" },
+      { label: "Cost explanation", screenId: "cost-trust" },
+      { label: "Monthly statement", screenId: "monthly-statement" },
     ],
     note: "A statement explains charging costs. It is not an invoice, payment request or paid status.",
   },
@@ -447,10 +470,12 @@ const workflowCopy: Record<
 
 function PersonaWorkflowBand({
   persona,
+  currentScreenId,
 }: {
-  persona: PostLoginPersona["routeId"];
+  persona: PostLoginPersona;
+  currentScreenId: string;
 }) {
-  const workflow = workflowCopy[persona];
+  const workflow = workflowCopy[persona.routeId];
   return (
     <section className="pl-workflow" aria-label={workflow.label}>
       <header>
@@ -459,9 +484,16 @@ function PersonaWorkflowBand({
       </header>
       <ol>
         {workflow.steps.map((step, index) => (
-          <li key={step}>
-            <span>{index + 1}</span>
-            <strong>{step}</strong>
+          <li key={step.screenId}>
+            <Link
+              href={postLoginHref(persona, step.screenId) as Route}
+              aria-current={
+                step.screenId === currentScreenId ? "step" : undefined
+              }
+            >
+              <span>{index + 1}</span>
+              <strong>{step.label}</strong>
+            </Link>
           </li>
         ))}
       </ol>
