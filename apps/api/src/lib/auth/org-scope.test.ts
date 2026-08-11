@@ -1,91 +1,203 @@
-// Row-level tenant scope.
+// resolveOrgScope — the ROW gate.
 //
-// requirePermission answers "may you call this verb". orgInScope answers
-// "which tenants' rows may come back". The census found those two conflated on
-// 33 of the 41 billing.* gates: an omitted orgIdParam makes requirePermission
-// resolve orgId to null and skip the membership lookup entirely, so the verb is
-// satisfiable only by a platform grant — and then the row layer applies no
-// filter at all.
+// This was the only module in lib/auth with no test file, which matters
+// more than it sounds: requirePermission decides "may you call this verb",
+// resolveOrgScope decides "whose rows may come back". A support context
+// enforced only on the verb gate leaves every tenant's rows readable.
 //
-// This file covers the predicate itself and the decision table around it. The
-// async resolveOrgScope needs a database and belongs in test/parity; the
-// predicate does not, and it is the half that actually gates a row.
+// The module's own header notes it is a no-op today because only
+// bootstrap/platform sessions reach admin routes. That is exactly why it
+// needs tests — it activates silently the first time a host_admin session
+// reaches a route, and nothing would catch a regression until then.
 
-import { describe, expect, it } from "vitest";
-import { orgInScope, type OrgScope } from "./org-scope";
+import { describe, expect, it, vi, beforeEach } from "vitest";
 
-const ORG_A = "3f8a1c2e-4b5d-4e6f-8a9b-0c1d2e3f4a5b";
-const ORG_B = "9e8d7c6b-5a4f-4e3d-8c2b-1a0f9e8d7c6b";
-const ORG_C = "5c4d3e2f-1a0b-4c9d-8e7f-6a5b4c3d2e1f";
+const state = vi.hoisted(() => ({
+  viaPlatform: [] as string[],
+  platformRole: null as string | null,
+  memberOrgIds: [] as string[],
+}));
+
+vi.mock("../drizzle", () => ({
+  makeDrizzle: () => ({
+    select: () => ({
+      from: () => ({
+        where: () =>
+          Promise.resolve(state.memberOrgIds.map((orgId) => ({ orgId }))),
+      }),
+    }),
+  }),
+}));
+
+vi.mock("./effective-permissions", () => ({
+  resolvePermissionsWithProvenance: async () => ({
+    all: state.viaPlatform,
+    viaMembership: [],
+    viaPlatform: state.viaPlatform,
+    membershipRole: null,
+    platformRole: state.platformRole,
+  }),
+}));
+
+import { resolveOrgScope, orgInScope } from "./org-scope";
+import type { SessionPayload } from "../admin-session";
+import type { Env } from "../../bindings";
+
+const env = {} as unknown as Env;
+
+function session(userId?: string): SessionPayload {
+  return {
+    sub: "admin" as const,
+    role: "admin" as const,
+    email: "staff-carol@example.test",
+    exp: Math.floor(Date.now() / 1000) + 3600,
+    ...(userId ? { userId } : {}),
+  } as SessionPayload;
+}
 
 describe("orgInScope", () => {
-  it("lets a platform-wide scope see any org", () => {
-    const all: OrgScope = { all: true };
-    for (const org of [ORG_A, ORG_B, ORG_C]) expect(orgInScope(all, org)).toBe(true);
+  it("allows anything under an unrestricted scope", () => {
+    expect(orgInScope({ all: true }, "org_alpha")).toBe(true);
   });
 
-  it("lets a member see their own org", () => {
-    expect(orgInScope({ all: false, orgIds: [ORG_A] }, ORG_A)).toBe(true);
+  it("allows only listed orgs under a restricted scope", () => {
+    const scope = { all: false as const, orgIds: ["org_alpha"] };
+    expect(orgInScope(scope, "org_alpha")).toBe(true);
+    expect(orgInScope(scope, "org_beta")).toBe(false);
   });
 
-  it("REFUSES a member another org's row", () => {
-    expect(orgInScope({ all: false, orgIds: [ORG_A] }, ORG_B)).toBe(false);
+  it("denies everything under an empty restricted scope", () => {
+    expect(orgInScope({ all: false, orgIds: [] }, "org_alpha")).toBe(false);
+  });
+});
+
+describe("resolveOrgScope", () => {
+  beforeEach(() => {
+    state.viaPlatform = [];
+    state.platformRole = null;
+    state.memberOrgIds = [];
+    vi.restoreAllMocks();
   });
 
-  it("handles a member of several orgs", () => {
-    const s: OrgScope = { all: false, orgIds: [ORG_A, ORG_B] };
-    expect(orgInScope(s, ORG_A)).toBe(true);
-    expect(orgInScope(s, ORG_B)).toBe(true);
-    expect(orgInScope(s, ORG_C)).toBe(false);
+  // Same bypass as the verb gate: a validly-signed session with
+  // sub:"admin" and no userId short-circuits before any lookup.
+  it("grants unrestricted scope to a bootstrap session with no lookup", async () => {
+    const scope = await resolveOrgScope(env, session());
+    expect(scope).toEqual({ all: true });
   });
 
-  it("DENIES everything for an unknown caller", () => {
-    // resolveOrgScope returns this for a session with no userId. Deny-all is
-    // the only safe default: an empty list must not read as "no filter".
-    const none: OrgScope = { all: false, orgIds: [] };
-    for (const org of [ORG_A, ORG_B, ORG_C]) expect(orgInScope(none, org)).toBe(false);
+  it("denies all rows when the session has no userId and is not bootstrap", async () => {
+    const ghost = {
+      sub: "user" as unknown as "admin",
+      role: "admin" as const,
+      email: "ghost@example.test",
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    } as SessionPayload;
+    expect(await resolveOrgScope(env, ghost)).toEqual({
+      all: false,
+      orgIds: [],
+    });
   });
 
-  it("does not match on a prefix or a case fold", () => {
-    expect(orgInScope({ all: false, orgIds: [ORG_A] }, ORG_A.slice(0, 8))).toBe(false);
-    expect(orgInScope({ all: false, orgIds: [ORG_A] }, ORG_A.toUpperCase())).toBe(false);
+  it("grants unrestricted scope to a platform.tenant.read holder", async () => {
+    state.viaPlatform = ["platform.tenant.read", "site.read"];
+    state.platformRole = "auditor";
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      expect(await resolveOrgScope(env, session("staff-1"))).toEqual({
+        all: true,
+      });
+      // The row gate is the seam a verb-only support context misses.
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0]![0]).toContain("support-context");
+    } finally {
+      warn.mockRestore();
+    }
   });
 
-  it("an empty orgIds list with all:true is still all — the flag decides, not the list", () => {
-    expect(orgInScope({ all: true }, ORG_A)).toBe(true);
+  it("narrows a plain org member to their active memberships", async () => {
+    state.viaPlatform = [];
+    state.memberOrgIds = ["org_alpha", "org_beta"];
+    const scope = await resolveOrgScope(env, session("member-1"));
+    expect(scope).toEqual({ all: false, orgIds: ["org_alpha", "org_beta"] });
+  });
+
+  it("does not widen scope for a platform grant that lacks tenant.read", async () => {
+    // finance_internal-shaped: platform verbs, but if tenant.read were
+    // ever dropped from its bundle this must NOT fall through to `all`.
+    state.viaPlatform = ["platform.finance.read"];
+    state.memberOrgIds = ["org_alpha"];
+    const scope = await resolveOrgScope(env, session("finance-1"));
+    expect(scope).toEqual({ all: false, orgIds: ["org_alpha"] });
+  });
+
+  it("returns an empty restricted scope for a user with no memberships", async () => {
+    state.memberOrgIds = [];
+    expect(await resolveOrgScope(env, session("nobody"))).toEqual({
+      all: false,
+      orgIds: [],
+    });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Added 2026-08-11 with the by-id session-read hardening.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("orgInScope does not match loosely", () => {
+  // A prefix or case-fold match would turn the row gate into a suggestion.
+  const ORG = "3f8a1c2e-4b5d-4e6f-8a9b-0c1d2e3f4a5b";
+
+  it("rejects a prefix of a scoped org id", () => {
+    expect(orgInScope({ all: false, orgIds: [ORG] }, ORG.slice(0, 8))).toBe(false);
+  });
+
+  it("rejects a case-folded org id", () => {
+    expect(orgInScope({ all: false, orgIds: [ORG] }, ORG.toUpperCase())).toBe(false);
+  });
+
+  it("lets the flag decide, not the list — all:true with no orgIds is still all", () => {
+    expect(orgInScope({ all: true }, ORG)).toBe(true);
+  });
+
+  it("handles membership in several orgs", () => {
+    const s = { all: false as const, orgIds: ["org_alpha", "org_beta"] };
+    expect(orgInScope(s, "org_alpha")).toBe(true);
+    expect(orgInScope(s, "org_beta")).toBe(true);
+    expect(orgInScope(s, "org_gamma")).toBe(false);
   });
 });
 
 describe("the decision the by-id session routes now make", () => {
   // GET /api/admin/billing/sessions/:id and /:id/full previously returned
   // findUnique({ where: { id } }) for ANY tenant's session, with the /full
-  // variant additionally serving raw OCMF/723 blobs on ?include=raw. The
-  // repository header says "no auth scoping here — caller (the route) checks
-  // permission"; the route checked the verb and not the row. Each side
+  // variant additionally serving raw OCMF/723 blobs on ?include=raw.
+  // session-detail.ts:1-4 says "no auth scoping here — caller (the route)
+  // checks permission"; the route checked the verb and not the row. Each side
   // documented the other as the enforcement point.
   //
-  // These cases pin the table the route now implements. They exercise the
-  // predicate rather than the handler because the handler needs an Env, a
-  // session cookie and a Prisma client — but the predicate IS the decision,
-  // and getting it wrong is what the last four years of this bug looked like.
-  const decide = (scope: OrgScope, rowOrgId: string) =>
+  // These pin the table callerMaySee now implements. They exercise the
+  // predicate rather than the Hono handler because the handler needs an Env, a
+  // signed session cookie and a Prisma client — but the predicate IS the
+  // decision, and getting it wrong is what the bug looked like.
+  const decide = (scope: Parameters<typeof orgInScope>[0], rowOrgId: string) =>
     orgInScope(scope, rowOrgId) ? "200" : "404";
 
   it("platform staff keep reading every tenant — no live workflow moves", () => {
-    expect(decide({ all: true }, ORG_B)).toBe("200");
+    expect(decide({ all: true }, "org_beta")).toBe("200");
   });
 
   it("an org member reading their own session gets it", () => {
-    expect(decide({ all: false, orgIds: [ORG_A] }, ORG_A)).toBe("200");
+    expect(decide({ all: false, orgIds: ["org_alpha"] }, "org_alpha")).toBe("200");
   });
 
   it("an org member reading ANOTHER tenant's session gets 404, not 403", () => {
-    // 403 would confirm that the session id exists. 404 is the same answer a
+    // 403 would confirm that the session id exists. 404 is the answer a
     // made-up id gets, which is the point.
-    expect(decide({ all: false, orgIds: [ORG_A] }, ORG_B)).toBe("404");
+    expect(decide({ all: false, orgIds: ["org_alpha"] }, "org_beta")).toBe("404");
   });
 
   it("a caller with no memberships gets 404 for everything", () => {
-    expect(decide({ all: false, orgIds: [] }, ORG_A)).toBe("404");
+    expect(decide({ all: false, orgIds: [] }, "org_alpha")).toBe("404");
   });
 });

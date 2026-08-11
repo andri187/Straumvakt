@@ -118,10 +118,21 @@ behaviour the repository header already claimed.
 **404, not 403.** A 403 confirms that the session id exists; 404 is the same
 answer a made-up id gets.
 
-**Tested** in `apps/api/src/lib/auth/org-scope.test.ts` — 11 assertions covering
-the predicate and the four-row decision table the routes now implement,
-including the deny-all case (`{ all: false, orgIds: [] }` for a caller with no
-memberships, which must not read as "no filter").
+**Tested** in `apps/api/src/lib/auth/org-scope.test.ts`, which already existed
+and already covered `resolveOrgScope` itself through mocks — the bootstrap
+bypass, the `platform.tenant.read` warn, and the case that matters most for a
+future role change ("a platform grant lacking `tenant.read` must NOT fall
+through to `all`"). Eight assertions were **added** on top: four pinning the
+four-row decision table the routes now implement, including the deny-all case
+(`{ all: false, orgIds: [] }` for a caller with no memberships, which must not
+read as "no filter"), and four proving the predicate does not match on a prefix
+or a case fold.
+
+*(Correction: an earlier draft of this run replaced that file rather than
+extending it, deleting the `resolveOrgScope` coverage. Caught by reading the
+commit's diffstat — 180 lines changed on a file I believed I had created — and
+restored before it went anywhere. Recorded because a silently narrowed test file
+is exactly the failure mode this document is about.)*
 
 ## Also shipped: the guard that stops the 76th
 
