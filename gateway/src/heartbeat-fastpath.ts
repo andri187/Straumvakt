@@ -287,3 +287,65 @@ export function frameCapDecision(
 
   return { next, shedIngest: false, emitBreachEvent: false, emitAnomalyEvent: false, reason: null };
 }
+
+// ───────────────────────────────────────────────────────────────────
+// BootNotification interval
+// ───────────────────────────────────────────────────────────────────
+
+/**
+ * The interval, in seconds, the gateway asks a charger to heartbeat at
+ * in its BootNotification reply.
+ *
+ * This is deliberately DERIVED from `idleHeartbeatIntervalMs` rather
+ * than being an independent constant. The two numbers must agree: the
+ * liveness window declares a charger offline after
+ * `offlineAfterMissedIntervals` idle intervals, so if BootNotification
+ * asked for 60 s while liveness assumed 3600 s, a perfectly healthy
+ * charger would be judged against a window 60x too wide — and the cost
+ * model, which is sized off this number, would be wrong by the same
+ * factor. Deriving it makes that class of drift unrepresentable.
+ *
+ * Product frame: 3600 s. See docs/notes/2026-08-11-ocpp-heartbeat-
+ * interval-and-cost-gate.md.
+ */
+export const PRODUCT_HEARTBEAT_INTERVAL_SECONDS = 3600;
+
+/** Range a charger-facing interval may legally take (OCPP 1.6J leaves this open). */
+export const MIN_HEARTBEAT_INTERVAL_SECONDS = 60;
+export const MAX_HEARTBEAT_INTERVAL_SECONDS = 86_400;
+
+export function bootNotificationIntervalSeconds(
+  cfg: LivenessConfig = DEFAULT_LIVENESS_CONFIG,
+): number {
+  return Math.round(cfg.idleHeartbeatIntervalMs / 1000);
+}
+
+/**
+ * Resolves the interval to advertise, allowing an env override for the
+ * case the prompt anticipates: hardware that proves a different safe
+ * value. An override outside the legal range, or unparseable, is
+ * ignored in favour of the product frame — a typo must never be able to
+ * put the fleet on a 1-second heartbeat.
+ *
+ * Returns the value plus why it was chosen, so the caller can log the
+ * decision rather than silently swallowing a rejected override.
+ */
+export function resolveHeartbeatIntervalSeconds(raw: string | undefined | null): {
+  seconds: number;
+  source: "product-default" | "env-override" | "rejected-override";
+} {
+  const fallback = bootNotificationIntervalSeconds();
+  if (raw == null || raw.trim() === "") {
+    return { seconds: fallback, source: "product-default" };
+  }
+  const parsed = Number(raw.trim());
+  if (
+    !Number.isFinite(parsed) ||
+    !Number.isInteger(parsed) ||
+    parsed < MIN_HEARTBEAT_INTERVAL_SECONDS ||
+    parsed > MAX_HEARTBEAT_INTERVAL_SECONDS
+  ) {
+    return { seconds: fallback, source: "rejected-override" };
+  }
+  return { seconds: parsed, source: "env-override" };
+}

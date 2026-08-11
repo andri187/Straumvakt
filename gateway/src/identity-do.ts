@@ -71,6 +71,7 @@ import {
   bypassesIngest,
   recordFrame,
   frameCapDecision,
+  resolveHeartbeatIntervalSeconds,
   type LivenessState,
   type FrameCapState,
 } from "./heartbeat-fastpath";
@@ -1024,8 +1025,21 @@ export class IdentityDurableObject {
   private stubResponseFor(action: string): Record<string, unknown> {
     const now = new Date().toISOString();
     switch (action) {
-      case "BootNotification":
-        return { status: "Accepted", currentTime: now, interval: 60 };
+      case "BootNotification": {
+        // Derived from the liveness config, never a literal — see
+        // resolveHeartbeatIntervalSeconds. A literal here is what put a
+        // 60 s interval in front of a 3600 s cost model.
+        const { seconds, source } = resolveHeartbeatIntervalSeconds(
+          this.env.OCPP_HEARTBEAT_INTERVAL_SECONDS,
+        );
+        if (source === "rejected-override") {
+          console.error("[ocpp-gw] heartbeat interval override rejected", {
+            raw: this.env.OCPP_HEARTBEAT_INTERVAL_SECONDS,
+            using: seconds,
+          });
+        }
+        return { status: "Accepted", currentTime: now, interval: seconds };
+      }
       case "Heartbeat":
         return { currentTime: now };
       case "Authorize":
