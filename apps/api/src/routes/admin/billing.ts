@@ -19,7 +19,7 @@ import { Hono, type Context } from "hono";
 import { makePrisma } from "../../lib/prisma";
 import { requireAdmin, type AuthVars } from "../../lib/auth-middleware";
 import { requirePermission } from "../../lib/auth/require-permission";
-import { resolveOrgScope } from "../../lib/auth/org-scope";
+import { orgInScope, resolveOrgScope } from "../../lib/auth/org-scope";
 import {
   listSessionLedger,
   totalSessionLedger,
@@ -66,6 +66,32 @@ function scopeFromQuery(c: BillingContext): LedgerScope {
   return { kind: "admin" };
 }
 
+/**
+ * May this caller see a row belonging to `orgId`?
+ *
+ * The by-id session reads had NO tenant check at all. session-detail.ts:1-4
+ * states "no auth scoping here — caller (the route) checks permission", and
+ * the route checked `billing.read` and then handed back
+ * `findUnique({ where: { id } })` for any tenant's session. Each side
+ * documented the other as the enforcement point; neither enforced.
+ *
+ * This is the same helper pair GET /tariffs already uses two hundred lines
+ * below — resolveOrgScope + a row-level test — applied to the two routes that
+ * were missing it. Deliberately NOT a new mechanism.
+ *
+ * Behaviour for platform staff is unchanged: resolveOrgScope returns
+ * { all: true } for a bootstrap session or a platform.tenant.read grant, so
+ * orgInScope is always true for them and no live operator workflow moves. What
+ * changes is that an org member who reaches these routes now gets their own
+ * org's sessions instead of everyone's.
+ *
+ * 404, not 403: telling a caller "that session exists but is not yours"
+ * confirms the existence of another tenant's session id.
+ */
+async function callerMaySee(c: BillingContext, orgId: string): Promise<boolean> {
+  return orgInScope(await resolveOrgScope(c.env, c.get("session")), orgId);
+}
+
 function dateOrUndefined(value: string | undefined): Date | undefined {
   if (!value) return undefined;
   const d = new Date(value);
@@ -90,6 +116,7 @@ adminBilling.get(
     const db = makePrisma(c.env);
     const detail = await getSessionDetail(db, c.req.param("id"));
     if (!detail) return c.json({ error: "not_found" }, 404);
+    if (!(await callerMaySee(c, detail.orgId))) return c.json({ error: "not_found" }, 404);
     return c.json({ session: detail });
   },
 );
@@ -106,6 +133,10 @@ adminBilling.get(
     const includeRaw = c.req.query("include") === "raw";
     const detail = await getSessionFullDetail(db, c.req.param("id"), { includeRaw });
     if (!detail) return c.json({ error: "not_found" }, 404);
+    // This one also serves raw OCMF/723 blobs on ?include=raw, so an unscoped
+    // read here hands over another tenant's signed meter evidence, not just a
+    // total.
+    if (!(await callerMaySee(c, detail.orgId))) return c.json({ error: "not_found" }, 404);
     return c.json({ session: detail });
   },
 );
