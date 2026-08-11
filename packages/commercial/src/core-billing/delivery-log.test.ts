@@ -14,6 +14,7 @@ import {
   DEFAULT_MAX_DELIVERY_ATTEMPTS,
   type DeliveryState,
   type StatementDeliveryRow,
+  type EmailSendResult,
 } from "./delivery-log";
 
 describe("reading what email.ts actually returns", () => {
@@ -26,6 +27,40 @@ describe("reading what email.ts actually returns", () => {
   it("refuses to call an id-less success delivered", () => {
     // Nothing to point at later when the customer says they never got it.
     expect(classifyEmailResult({ ok: true }).kind).toBe("permanent");
+  });
+
+  it("does NOT retry an ack the provider could not identify — the real shape", () => {
+    // Regression for a defect in the original module. lib/email.ts does not
+    // report this as ok:false with no id; it reports
+    // { ok:false, reason:"send_failed", status:<2xx>, error:"missing_response_id" }.
+    // That fell past the 429 and 4xx checks onto `retriable`, so a send the
+    // provider ACCEPTED was retried five times — five statements to one
+    // customer. A 2xx is an acknowledgement; retrying it is the one thing we
+    // must never do.
+    const real: EmailSendResult = {
+      ok: false, reason: "send_failed", status: 200, error: "missing_response_id",
+    };
+    expect(classifyEmailResult(real).kind).toBe("permanent");
+    expect(classifyEmailResult(real).kind).not.toBe("retriable");
+  });
+
+  it("treats every 2xx as terminal, not just 200", () => {
+    for (const status of [200, 201, 202, 204, 299]) {
+      expect(
+        classifyEmailResult({ ok: false, reason: "send_failed", status }).kind,
+        `status ${status}`,
+      ).toBe("permanent");
+    }
+  });
+
+  it("an accepted-but-unidentifiable send reaches a human, and sends once", () => {
+    const outcome = classifyEmailResult({
+      ok: false, reason: "send_failed", status: 202, error: "missing_response_id",
+    });
+    const decision = applyDeliveryAttempt({ state: "sending", attempts: 1, outcome });
+    expect(decision.nextState).toBe("failed");
+    expect(decision.retryInMs).toBeNull();
+    expect(decision.requiresOperatorAction).toBe(true);
   });
 
   it("gives a missing binding its OWN kind, not success and not retriable", () => {

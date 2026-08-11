@@ -111,12 +111,26 @@ export function nextAttemptDelayMs(
 export function classifyEmailResult(result: EmailSendResult): SendOutcome {
   if (result.ok) {
     if (!result.id) {
-      // email.ts already treats a missing id as a failure; if that ever
-      // changes, an acknowledged-but-unidentifiable send must not be
-      // recorded as delivered — there would be nothing to point at.
       return { kind: "permanent", error: "provider_ack_without_id" };
     }
     return { kind: "ack", providerId: result.id };
+  }
+
+  // An acknowledged-but-unidentifiable send, arriving the way lib/email.ts
+  // actually reports it.
+  //
+  // This branch is the fix for a real defect in the original module. The
+  // check above assumed email.ts would surface such a send as ok:false with
+  // no id. It does not: email.ts:91-99 returns
+  // { ok:false, reason:"send_failed", status:<2xx>, error:"missing_response_id" }.
+  // That fell past the 429 test and the 4xx test and landed on `retriable`,
+  // so a send the provider ACCEPTED but could not identify was retried five
+  // times — mailing the customer five copies of their statement, which is
+  // precisely what the comment above says must never happen.
+  //
+  // A 2xx is an acknowledgement. Retrying it is the one thing we must not do.
+  if (result.status !== undefined && result.status >= 200 && result.status < 300) {
+    return { kind: "permanent", error: result.error ?? "provider_ack_without_id" };
   }
 
   if (result.reason === "binding_missing") {

@@ -28,6 +28,9 @@ export * from "./agreement/resolve";
 // govern what a ledger row may claim about where its figure came from.
 export * from "./core-billing/cdr-provenance";
 export * from "./core-billing/delivery-log";
+export * from "./core-billing/money";
+export * from "./core-billing/settlement";
+export * from "./core-billing/statement";
 export * from "./core-billing/provenance-state";
 export * from "./core-billing/meter-energy";
 export * from "./core-billing/period-close";
