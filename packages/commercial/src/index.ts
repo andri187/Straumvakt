@@ -42,5 +42,8 @@ export * from "./core-billing/flat-fee";
 // The activity source the flat-fee feeder consumes. Closes preflight gap 9.6:
 // reports.connector_activity_month and driver_activity_month had zero writers.
 export * from "./core-billing/activity-month";
+// The port between the feeder and the activity tables. Keeps flat-fee.ts pure
+// and lets the first-invoice dry run exercise the whole path with no database.
+export * from "./core-billing/activity-source";
 export * from "./core-billing/plug-time";
 export * from "./core-billing/rate-window";

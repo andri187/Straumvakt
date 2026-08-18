@@ -46,9 +46,11 @@ import {
   driverActivityMonth,
 } from "@straumvakt/shared/db/commercial";
 import {
+  countFromRows,
   deriveConnectorActivity,
   deriveDriverActivity,
   periodBounds,
+  type ActivitySourcePort,
   type BillingPeriodRef,
   type ConnectorActivityRow,
   type ConnectorManualAssertion,
@@ -417,6 +419,45 @@ export async function readDriverActivityCount(
       ),
     );
   return rows.length;
+}
+
+// ── The port adapter ─────────────────────────────────────────────────────
+
+/**
+ * The Drizzle-backed implementation of `ActivitySourcePort`.
+ *
+ * This is the ONLY place the flat-fee feeder touches a database, and it does so
+ * through an interface the feeder defines — so `flat-fee.ts` stays pure and the
+ * first-invoice dry run can hand the same feeder a fixture-backed port instead.
+ *
+ * `activityJobHasRun` is passed through to `countFromRows` rather than inferred
+ * from the row count, because the two zeroes are different facts: an org with
+ * genuinely no connectors, and an org whose activity aggregation has not run.
+ * Only the caller knows which it is looking at. Today no `billing_periods` row
+ * records that the job ran, so callers must state it — and until one exists,
+ * stating `false` is the honest default. Preflight delta 9.8.
+ */
+export function makeActivitySourcePort(
+  db: Db,
+  access: ActivityAccess,
+  opts: { activityJobHasRun: boolean },
+): ActivitySourcePort {
+  return {
+    async connectorCount(period) {
+      const rows = await readConnectorActivityCount(db, period, access);
+      return countFromRows(rows, {
+        activityJobHasRun: opts.activityJobHasRun,
+        source: "activity_month_table",
+      });
+    },
+    async driverCount(period) {
+      const rows = await readDriverActivityCount(db, period, access);
+      return countFromRows(rows, {
+        activityJobHasRun: opts.activityJobHasRun,
+        source: "activity_month_table",
+      });
+    },
+  };
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────
