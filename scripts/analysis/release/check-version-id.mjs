@@ -78,7 +78,14 @@ const FIXTURES = [
   ],
 ];
 
-if (process.argv.includes("--self-test")) {
+// Only run the CLI when invoked directly. Without this guard, importing the
+// module for a test executes the usage branch and calls process.exit(1) —
+// which is how a script becomes untestable and therefore untested.
+const RUN_AS_CLI = process.argv[1] && import.meta.url.endsWith(process.argv[1].replace(/\\/g, "/").split("/").pop());
+
+export { FIXTURES as VERSION_ID_FIXTURES };
+
+if (RUN_AS_CLI && process.argv.includes("--self-test")) {
   let passed = 0;
   let failed = 0;
   for (const [name, body, expectOk] of FIXTURES) {
@@ -101,8 +108,8 @@ const at = (flag) => {
   return i === -1 ? null : argv[i + 1] ?? null;
 };
 
-const recorded = at("--recorded");
-const probe = at("--probe");
+const recorded = RUN_AS_CLI ? at("--recorded") : null;
+const probe = RUN_AS_CLI ? at("--probe") : null;
 
 if (recorded) {
   if (!existsSync(recorded)) {
@@ -129,7 +136,9 @@ if (probe) {
   process.exit(r.ok ? 0 : 1);
 }
 
-process.stdout.write(
-  "usage: check-version-id.mjs --self-test | --probe <origin> | --recorded <file.json>\n",
-);
-process.exit(1);
+if (RUN_AS_CLI) {
+  process.stdout.write(
+    "usage: check-version-id.mjs --self-test | --probe <origin> | --recorded <file.json>\n",
+  );
+  process.exit(1);
+}

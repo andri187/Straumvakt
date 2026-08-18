@@ -298,6 +298,18 @@ function selfTest() {
 
 // ── main ────────────────────────────────────────────────────────────────
 
+// Only run the CLI when invoked directly, so the module can be imported by a
+// test without exiting the process.
+const RUN_AS_CLI =
+  process.argv[1] &&
+  import.meta.url.endsWith(process.argv[1].replace(/\\/g, "/").split("/").pop());
+
+export { FIXTURES as BINDING_FIXTURES, SNAP as BINDING_SNAPSHOT_FIXTURE };
+
+if (!RUN_AS_CLI) {
+  // Imported for testing — stop before the CLI body.
+} else {
+
 if (process.argv.includes("--self-test")) {
   process.exit(selfTest());
 }
@@ -333,3 +345,5 @@ if (allErrors.length) {
   process.exit(1);
 }
 process.stdout.write(`\nall bindings resolve (${allNotes.length} pending-creation, recorded)\n`);
+
+} // end RUN_AS_CLI
