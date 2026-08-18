@@ -14,3 +14,26 @@
 
 export * from "./agreement/types";
 export * from "./agreement/resolve";
+
+// Core billing — the locked Iceland Core frame (200/50/450 kr), plug-time
+// occupancy, rate-version window selection, meter-energy resolution, CDR
+// provenance and billing-period close. Pure, no I/O, no ORM, in the same
+// money conventions as the session-cost engine: BigInt minor units
+// (1/100 króna) and half-up rounding.
+//
+// These are additions, not replacements. The session-cost engine still
+// prices ENERGY per session; these price the SUBSCRIPTION per month and the
+// OCCUPANCY per session, decide which rate version applies when a session
+// crosses a rate change, resolve what a meter reading actually means, and
+// govern what a ledger row may claim about where its figure came from.
+export * from "./core-billing/cdr-provenance";
+export * from "./core-billing/delivery-log";
+export * from "./core-billing/money";
+export * from "./core-billing/settlement";
+export * from "./core-billing/statement";
+export * from "./core-billing/provenance-state";
+export * from "./core-billing/meter-energy";
+export * from "./core-billing/period-close";
+export * from "./core-billing/subscription";
+export * from "./core-billing/plug-time";
+export * from "./core-billing/rate-window";

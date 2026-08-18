@@ -23,6 +23,59 @@ function isPublicAsset(pathname: string): boolean {
   );
 }
 
+// ── Straumvakt-employee entrance (/staff) ───────────────────────────────
+// Added with the employee landing page. Kept as one self-contained block
+// with a single call site below, on purpose: the org-facing entrance is
+// being added to this same file in parallel, and a contiguous addition
+// merges next to another contiguous addition without a fight.
+//
+// Two rules, both scoped to this prefix and nothing else:
+//
+//   • "/staff" is public. It *is* the sign-in page, so it has to be
+//     reachable without a session; a visitor who already has one skips
+//     straight past it, exactly like the "/" special-case below.
+//   • Everything under "/staff/" is session-gated and, when the session is
+//     missing, bounces to "/staff" rather than the generic "/". Staff whose
+//     session lapsed should get their own door back, not the org login.
+//
+// Note this only proves a *session* exists. Whether it carries platform
+// scope is decided by GET /api/admin/me inside src/app/staff/overview —
+// middleware cannot tell the two login paths apart, and shouldn't try.
+//
+// CAVEAT, verified 2026-08-08 and NOT introduced here: this file does not
+// currently execute. Next 16 resolves the convention to src/middleware.ts
+// when a src/ directory exists, so nothing below runs and /home is already
+// reachable without a session on this branch. Copying this file to
+// src/middleware.ts makes every rule here (including the two above) take
+// effect immediately — confirmed against `next dev`. That move is left
+// undone deliberately: it is a whole-file relocation, and the org-facing
+// entrance is being added to this same file in parallel. /staff/overview
+// therefore does not lean on middleware for its gate — it verifies the
+// session server-side and renders nothing it cannot fetch.
+const STAFF_LANDING = "/staff";
+const STAFF_HOME = "/staff/overview";
+
+function staffRouteResponse(
+  pathname: string,
+  session: Awaited<ReturnType<typeof verifyAdminSession>>,
+  req: NextRequest,
+  headers: Headers,
+): NextResponse | null {
+  if (pathname !== STAFF_LANDING && !pathname.startsWith(`${STAFF_LANDING}/`)) {
+    return null; // not ours — let the existing rules run
+  }
+  if (pathname === STAFF_LANDING) {
+    return session
+      ? NextResponse.redirect(new URL(STAFF_HOME, req.url))
+      : NextResponse.next({ request: { headers } });
+  }
+  if (!session) {
+    return NextResponse.redirect(new URL(STAFF_LANDING, req.url));
+  }
+  headers.set(ADMIN_HEADER, "1");
+  return NextResponse.next({ request: { headers } });
+}
+
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
@@ -56,6 +109,9 @@ export async function middleware(req: NextRequest) {
     }
     return NextResponse.next({ request: { headers: sanitisedHeaders } });
   }
+
+  const staff = staffRouteResponse(pathname, session, req, sanitisedHeaders);
+  if (staff) return staff;
 
   if (PUBLIC_PATHS.has(pathname)) {
     return NextResponse.next({ request: { headers: sanitisedHeaders } });

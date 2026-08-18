@@ -94,6 +94,29 @@ for (const f of fs.readdirSync(DRIZZLE_DIR).filter((x) => x.endsWith(".ts"))) {
   }
 }
 
+// ── Sanity: neither side may be empty ─────────────────────────────────────
+//
+// Both sides are parsed with regexes over source files. If a parse silently
+// yields nothing — a directory moved or renamed, a `.prisma`/`.ts` extension
+// change, or a declaration style the regex above stops matching — then every
+// loop below iterates zero times, `problems` stays empty, and the check exits
+// 0 announcing "Drizzle and Prisma agree (0 tables, 0 columns)".
+//
+// That is the exact failure this check was written to replace: one that runs
+// and proves nothing. A repository with zero tables on either side is not a
+// state worth passing, so fail loudly instead of agreeing vacuously.
+if (drizzleTables.size === 0 || prismaTables.size === 0) {
+  console.error(
+    `Schema parse produced nothing — refusing to pass vacuously.\n\n` +
+      `  Drizzle tables parsed from ${path.relative(ROOT, DRIZZLE_DIR)}: ${drizzleTables.size}\n` +
+      `  Prisma  tables parsed from ${path.relative(ROOT, PRISMA_DIR)}: ${prismaTables.size}\n\n` +
+      `Both sides must yield at least one table. A zero here means the parse\n` +
+      `broke — a moved directory, a renamed extension, or a declaration style\n` +
+      `the regexes no longer match — not that the schemas agree.\n`,
+  );
+  process.exit(1);
+}
+
 // ── Compare ───────────────────────────────────────────────────────────────
 const problems = [];
 for (const [t, dcols] of drizzleTables) {
