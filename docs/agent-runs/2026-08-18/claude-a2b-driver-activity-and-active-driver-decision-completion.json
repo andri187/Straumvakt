@@ -1,0 +1,143 @@
+{
+  "agent": "claude-a",
+  "chunk": "A2b of 3",
+  "status": "complete",
+  "prompt_file": "docs/agent-prompts/2026-08-18/2026-08-18-1805-claude-a2b-driver-activity-and-active-driver-decision.md",
+  "previous_chunk_artifact": "docs/agent-runs/2026-08-18/claude-a2a-connector-activity-writer-completion.md",
+  "start_utc": "2026-08-18T18:18:02Z",
+  "end_utc": "2026-08-18T18:26:00Z",
+  "wall_clock_seconds": 478,
+  "target_met": null,
+  "target_note": "No wall-clock target. Deliverable-gated; 14 of 14 gates met.",
+  "worktree": "E:\\Claude\\Straumvakt-core-billing",
+  "branch": "dev/core-billing-integration",
+  "start_tip": "3a27999",
+  "end_tip": "21191c8",
+  "dirty": 0,
+  "commits": [
+    { "sha": "950dc83", "subject": "test(driver-activity): idempotency, the named refusal reason, and the fool test" },
+    { "sha": "21191c8", "subject": "docs: the active-driver decision packet" }
+  ],
+  "files_changed": {
+    "created": [
+      "docs/notes/2026-08-18-active-driver-definition.md"
+    ],
+    "modified": [
+      "apps/api/src/repositories/activity-month.test.ts",
+      "packages/commercial/src/core-billing/flat-fee.test.ts",
+      "packages/commercial/src/core-billing/activity-month.test.ts"
+    ],
+    "note": "The driver derivation and writer already existed, carried by salvage from the interrupted 15:40 run. This chunk verified and extended rather than rebuilt, as chunk 1's artifact flagged."
+  },
+  "tests": {
+    "start_passed": 1582,
+    "final_files": 87,
+    "final_passed": 1590,
+    "final_failed": 0,
+    "final_skipped": 1,
+    "added_this_chunk": 8,
+    "tsc_apps_api": "pass",
+    "npm_run_check": "all 16 pass",
+    "fool_tests_run": 1,
+    "fool_tests_caught": 1,
+    "fool_test_detail": "deriveActiveDrivers made to return measured(new Set(chargingDriverIds).size, ...) instead of refusing -> 3 tests failed. Restored and re-verified green."
+  },
+  "gates_met": {
+    "total": 14,
+    "met": 14,
+    "unmet": 0,
+    "detail": {
+      "0_chunk1_state_confirmed": "met - every promised item verified present; one filename discrepancy recorded (the prompt cited 2026-08-18-connector-activity-source.md; chunk 1 named it 2026-08-18-activity-source-census.md)",
+      "1_driver_source_table": "met - 4 sources, pre-Authorize stated as structurally unattributable rather than error",
+      "2_typed_union_consistent": "met - same 3-value shape as the connector union, plus a drift guard",
+      "3_pure_then_repository": "met",
+      "4_refusal_named_reason": "met - driver_definition_incomplete, asserted NOT to be the generic no_activity_source",
+      "5_upsert_and_idempotency": "met - proven by test, identical evidence in any order yields an identical payload",
+      "6_five_plus_driver_tests": "met - 7 derivation plus 8 added",
+      "7_fool_test": "met - 3 tests failed",
+      "8_decision_packet_six_parts": "met - plus a seventh, the counter-argument",
+      "9_gap_quantified": "met - 1 driver under-count, 50 kr/month, 0.83% today, ~15% at MDU scale",
+      "10_commercial_consequence": "met - arithmetic shown at one and at ten customers",
+      "11_narrowing_named": "met - flat-fee.ts / deriveActiveDrivers, with the 3 tests that fail by design",
+      "12_one_way_door_answered": "met - answered in those words, with the correction-line remedy",
+      "13_artifact_written_and_committed": "met"
+    }
+  },
+  "decision_packet": {
+    "file": "docs/notes/2026-08-18-active-driver-definition.md",
+    "awaiting": "Andri's answer",
+    "headline": "The locked definition cannot be computed - reporting activity has no persisted event of any kind.",
+    "gap_at_customer_1": "1 driver under-counted = 50 kr/month = 0.83% of a 6,050 kr bill",
+    "gap_at_ten_customers": "500 kr/month = 6,000 kr/year",
+    "gap_at_mdu_scale": "30 connectors, 30 residents, 10 charging = 1,000 kr/month = 15.4%",
+    "evidence_dates": {
+      "roster": "2026-05-31 integrity audit (staging) - 2 driver_group_memberships, 1 of them with no IdToken",
+      "charging": "2026-08-07 test branch br-withered-hat-abtc5gzi - 128 billing lines, 64 sessions, all to a single payer"
+    },
+    "options": ["A narrow to charging (minutes)", "B build reporting capture first (~an afternoon)", "C bill the roster (needs removed_at + status first)", "D leave it refusing - current state, no invoice can be produced"],
+    "recommendation": "A now, B next, with subscription.ts:10's comment fixed in the same commit and the gap recorded on the first invoice's review notes",
+    "one_way_door": "No, but the door only opens forwards. Closed periods are never restated (FOCUS rule 4, enforced by settlement_components storing price and window as copies), and the evidence for a widened definition will not exist retroactively. Remedy is a next-period correction line - StatementLineKind already carries 'correction', CorrectionReason carries 'tariff_misapplied'."
+  },
+  "blockers": [
+    {
+      "id": "active-driver-definition-unanswered",
+      "severity": "blocks the first invoice",
+      "detail": "deriveActiveDrivers still refuses, correctly. Until Andri answers the decision packet, every period holds. Chunk 3's dry run must supply its driver count explicitly via measured(n, 'activity_month_table') AND say in its output that it did so, or it will quietly demonstrate a capability that does not exist."
+    },
+    {
+      "id": "two-tables-record-creation-never-removal",
+      "severity": "structural, affects both halves of the count",
+      "detail": "agreements.driver_group_memberships has only added_at - no status, no removed_at - so the roster cannot be intersected with a billing month. assets.connectors has the same hole (no disabled_at, no status history). This is why the roster proxy is unavailable today and why manually_asserted must be asserted rather than inferred."
+    },
+    {
+      "id": "no-manual-assertion-table",
+      "severity": "carried from chunk 1",
+      "detail": "manually_asserted is a valid connector source value with no table behind it. Preflight delta 9.7."
+    }
+  ],
+  "next_actions": [
+    "Andri answers the active-driver decision packet: A (narrow to charging), B (build reporting capture), C (bill the roster, needs a migration first) or D (leave it refusing, no invoice possible).",
+    "Dispatch chunk A2c: wire the feeder to the activity source through a repository interface, and produce the first-invoice dry run.",
+    "Chunk 3 must expect every real period to hold, and must make its fixture's driver count visibly supplied rather than derived."
+  ],
+  "external_state": {
+    "push": false,
+    "deploy": false,
+    "migration_applied": false,
+    "sql_executed_against_any_environment": false,
+    "database_connected": false,
+    "cloudflare_mutation": false,
+    "neon_mutation": false,
+    "github_mutation": false,
+    "charger_or_hardware_action": false,
+    "ble_nfc": false,
+    "branch_or_tag_deleted": false,
+    "git_clean_reset_rebase_amend_or_force": false,
+    "gitattributes_added_or_proposed": false,
+    "contracts_invoice_edited": false,
+    "branches_written_to": ["dev/core-billing-integration"],
+    "note": "No database was connected to, which is why every figure in the decision packet is cited to a recorded note and dated rather than measured live. One demo account email appears in the packet, quoted from a committed integrity-audit note already in the repository."
+  },
+  "chunk_3_expects": {
+    "branch": "dev/core-billing-integration",
+    "tip": "21191c8 plus the artifact commit",
+    "dirty": 0,
+    "tests": "1590 passing, 1 skipped, 0 failing",
+    "checks": "all 16 pass",
+    "exists": [
+      "both activity derivations, pure",
+      "both repository writers plus runActivityAggregation",
+      "docs/notes/2026-08-18-activity-source-census.md",
+      "docs/notes/2026-08-18-active-driver-definition.md - awaiting Andri's answer",
+      "flat-fee.ts generateFlatFeeStatement, still holding on any unavailable count",
+      "B's invoice rail, read-only, CR-1 closed"
+    ],
+    "does_not_exist": [
+      "feeder wiring to the activity source through a repository interface",
+      "scripts/dry-run-first-invoice.mts",
+      "an assertion table for manually_asserted",
+      "any narrowing of deriveActiveDrivers - it still refuses"
+    ]
+  },
+  "very_tldr": "Chunk 2 of 3. The driver writer already existed from salvage, so this chunk verified and extended it - idempotency proven, the refusal sharpened to name the missing source rather than erroring generically, and a drift guard added so the connector and driver source unions cannot diverge. The real deliverable is the active-driver decision packet, which quantifies what was previously only asserted: the charging-only count under-states customer 1 by one driver, 50 kr/month, 0.83% of the bill today - but structurally ~15% in the MDU shape the product is built for. Narrowing is one line and is not a one-way door, though the door only opens forwards. Includes the counter-argument to its own recommendation."
+}

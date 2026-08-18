@@ -7,6 +7,8 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  CONNECTOR_ACTIVITY_SOURCES,
+  DRIVER_ACTIVITY_SOURCES,
   deriveConnectorActivity,
   deriveDriverActivity,
   type ConnectorSessionObservation,
@@ -360,6 +362,61 @@ describe("deriveConnectorActivity", () => {
       statuses: [],
     });
     expect(out.rows[0]!.sessionCount).toBe(1);
+  });
+});
+
+// ── The two source unions must not drift apart ───────────────────────
+//
+// They are separate unions on separate tables and they will be edited by
+// separate people. What must stay true of both is the SHAPE: every value a
+// derivation can emit is in its union, and each union carries exactly one
+// value that is never derived — the operator assertion that exists so a
+// missing count is asked about rather than invented.
+
+describe("the connector and driver source unions", () => {
+  it("every value a derivation emits is a member of its own union", () => {
+    const c = deriveConnectorActivity({
+      period: PERIOD,
+      sessions: [session(C1, 5)],
+      statuses: [status(C2, 6)],
+      assertions: [
+        { orgId: ORG_A, connectorId: "conn-3", chargingStationId: null, assertedAt: at(7) },
+      ],
+    });
+    for (const row of c.rows) {
+      expect(CONNECTOR_ACTIVITY_SOURCES).toContain(row.source);
+    }
+    const d = deriveDriverActivity({
+      period: PERIOD,
+      sessions: [{ orgId: ORG_A, driverUserId: "drv-1", startedAt: at(3) }],
+    });
+    for (const row of d.rows) {
+      expect(DRIVER_ACTIVITY_SOURCES).toContain(row.source);
+    }
+  });
+
+  it("each union carries exactly one never-derived assertion value", () => {
+    // If someone adds a second never-derived value to one union and not the
+    // other, the two tables stop agreeing about what an operator assertion
+    // means — and only one of them will be audited for it.
+    expect(CONNECTOR_ACTIVITY_SOURCES).toContain("manually_asserted");
+    expect(DRIVER_ACTIVITY_SOURCES).toContain("roster_membership");
+    expect(CONNECTOR_ACTIVITY_SOURCES).toHaveLength(3);
+    expect(DRIVER_ACTIVITY_SOURCES).toHaveLength(3);
+  });
+
+  it("the never-derived values are in fact never derived", () => {
+    // The safety property of both unions, asserted rather than trusted.
+    const c = deriveConnectorActivity({ period: PERIOD, sessions: [session(C1, 5)], statuses: [] });
+    expect(c.rows.some((r) => r.source === "manually_asserted")).toBe(false);
+    const d = deriveDriverActivity({
+      period: PERIOD,
+      sessions: [{ orgId: ORG_A, driverUserId: "drv-1", startedAt: at(3) }],
+    });
+    expect(d.rows.some((r) => r.source === "roster_membership")).toBe(false);
+    // And reporting_access is never derived either, because nothing persists
+    // it — that is the whole subject of the active-driver decision packet.
+    expect(d.rows.some((r) => r.source === "reporting_access")).toBe(false);
   });
 });
 
