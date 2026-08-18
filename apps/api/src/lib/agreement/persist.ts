@@ -25,6 +25,10 @@
 import type { PrismaClient } from "../../generated/prisma/client";
 import { resolveBillingLines } from "./resolve";
 import {
+  agreementBillingLineKey,
+  planGeneration,
+} from "../billing/generation-idempotency";
+import {
   allocationSchema,
   type ClauseInput,
   type RateRefInput,
@@ -40,7 +44,12 @@ export type AgreementDenialReason =
   | "no_membership"        // driver has no DriverGroup membership covering the charger's installation
   | "no_session"           // sessionId not found
   | "session_incomplete"   // session has no endedAt / energyWh — not finalized
-  | "session_user_unknown"; // session has no userId — enrichment hasn't run yet
+  | "session_user_unknown"  // session has no userId — enrichment hasn't run yet
+  // The resolver emitted two lines claiming the same (session, factor, kind).
+  // That is a resolver defect, not a session problem: keeping the first and
+  // dropping the second would write a plausible-looking set of lines that
+  // nobody could tell apart from a correct one.
+  | "resolver_emitted_duplicate_lines";
 
 export type AgreementContextMeta = {
   installationAgreement: { id: string; displayName: string } | null;
@@ -353,15 +362,32 @@ export async function resolveAndPersistForSession(
     return { ok: false, reason: "session_incomplete" };
   }
 
-  // Idempotency — skip if any billing_lines already exist for this
-  // session. The route handler can decide whether to surface that as
-  // a successful no-op or as a 409.
-  const existing = await prisma.agreementBillingLine.count({
+  // Idempotency — read the natural keys already present for this session
+  // rather than counting rows.
+  //
+  // What stood here was `count({ where: { sessionId } })` followed, several
+  // awaits later and outside any transaction, by `createMany`. Two overlapping
+  // cron ticks both read zero and both insert, and agreements.billing_lines
+  // has only `@@index([sessionId, factorCode, kind])` — a plain index, not
+  // unique — so the database does not stop them. billing-tick.ts's header
+  // calls this idempotent; it is idempotent against a SEQUENTIAL re-run and
+  // not against a concurrent one, which is the only kind a cron produces.
+  //
+  // Reading keys instead of a count also fixes the quieter half: a batch that
+  // died partway leaves some rows present, and `count > 0` then skips the
+  // remainder of that session forever. That under-bills, and nothing errors.
+  //
+  // This closes the read-decide gap as far as application code can. The
+  // remaining half is a UNIQUE constraint on (session_id, factor_code, kind),
+  // which needs a dedupe-then-index migration — written up, unapplied, in
+  // docs/notes/2026-08-18-migration-0002-preflight.md.
+  const existingRows = await prisma.agreementBillingLine.findMany({
     where: { sessionId },
+    select: { factorCode: true, kind: true },
   });
-  if (existing > 0) {
-    return { ok: true, emitted: 0, alreadyExisted: true };
-  }
+  const existingKeys = existingRows.map((r) =>
+    agreementBillingLineKey(sessionId, r.factorCode, r.kind),
+  );
 
   const startedAt = session.startedAt;
   const endedAt = session.endedAt;
@@ -383,13 +409,30 @@ export async function resolveAndPersistForSession(
     return { ok: false, reason: ctxResult.reason };
   }
 
-  const lines = resolveBillingLines(ctxResult.ctx);
+  const resolved = resolveBillingLines(ctxResult.ctx);
 
-  if (lines.length === 0) {
+  if (resolved.length === 0) {
     // Granted but no factor-rate combination produced an output — record
     // nothing. Returns ok=true, emitted=0 so caller can distinguish
     // from idempotent skip.
     return { ok: true, emitted: 0, alreadyExisted: false, lines: [] } as ResolveAndPersistResult;
+  }
+
+  // Per-key, not per-count. `alreadyPresent` is the ordinary state of a
+  // re-run; `conflicting` means the resolver emitted two lines claiming the
+  // same (session, factor, kind), which is a resolver bug and must not be
+  // quietly deduplicated into a plausible-looking write.
+  const plan = planGeneration(
+    resolved,
+    (l) => agreementBillingLineKey(sessionId, l.factorCode, l.kind),
+    existingKeys,
+  );
+  if (plan.conflicting.length > 0) {
+    return { ok: false, reason: "resolver_emitted_duplicate_lines" };
+  }
+  const lines = plan.toWrite;
+  if (lines.length === 0) {
+    return { ok: true, emitted: 0, alreadyExisted: true };
   }
 
   // BearerType in the DB enum is org | usr | trd. The resolver's
