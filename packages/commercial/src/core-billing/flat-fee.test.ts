@@ -320,6 +320,36 @@ describe("flat fee — refuses rather than billing a guess", () => {
     expect(r.holds.length).toBeGreaterThanOrEqual(6);
   });
 
+  it("the refusal names the MISSING SOURCE, not a generic error", () => {
+    // The reason code is the whole value of the refusal. "unavailable" tells
+    // an operator nothing; "driver_definition_incomplete" points at the one
+    // thing that has to change — reporting activity has no persisted event —
+    // and it is what docs/notes/2026-08-18-active-driver-definition.md is
+    // written to resolve.
+    const out = deriveActiveDrivers(["d1"], PERIOD);
+    expect(out.kind).toBe("unavailable");
+    if (out.kind !== "unavailable") return;
+    expect(out.reason).toBe("driver_definition_incomplete");
+    // Explicitly NOT the generic no-source code: the sources exist, the
+    // DEFINITION is what cannot be satisfied.
+    expect(out.reason).not.toBe("no_activity_source");
+  });
+
+  it("the refusal survives any charging count, including a large one", () => {
+    // A bigger lower bound is not closer to the truth in a way that justifies
+    // shipping it. 200 drivers who charged still says nothing about the ones
+    // who only used a reporting surface.
+    const many = Array.from({ length: 200 }, (_, i) => `drv-${i}`);
+    expect(deriveActiveDrivers(many, PERIOD)).toEqual({
+      kind: "unavailable",
+      reason: "driver_definition_incomplete",
+    });
+    expect(deriveActiveDrivers([], PERIOD)).toEqual({
+      kind: "unavailable",
+      reason: "driver_definition_incomplete",
+    });
+  });
+
   it("deriveActiveDrivers refuses even when it has a charging count", () => {
     // "Active driver" is charging OR REPORTING activity, and reporting
     // activity has no persisted event of any kind. A charging-only count is a

@@ -236,6 +236,42 @@ describe("writeDriverActivity", () => {
     ).rejects.toThrow("activity_period_org_not_in_scope");
   });
 
+  it("is idempotent: identical evidence produces an identical insert payload", async () => {
+    // The unique index (org, year, month, driver) is the mechanism; this is
+    // the half the repository controls — same evidence in, same statement out.
+    const sessions = [
+      { orgId: ORG_A, driverUserId: "drv-1", startedAt: at(4) },
+      { orgId: ORG_A, driverUserId: "drv-1", startedAt: at(9) },
+      { orgId: ORG_A, driverUserId: "drv-2", startedAt: at(9) },
+    ];
+    const a = makeFake();
+    const b = makeFake();
+    await writeDriverActivity(a.db, PERIOD, sessions, ONLY_A);
+    await writeDriverActivity(b.db, PERIOD, [sessions[2]!, sessions[1]!, sessions[0]!], ONLY_A);
+    expect(JSON.stringify(a.inserts[0]!.values)).toBe(JSON.stringify(b.inserts[0]!.values));
+  });
+
+  it("targets the four-column unique index, so a re-run collides", async () => {
+    const f = makeFake();
+    await writeDriverActivity(
+      f.db,
+      PERIOD,
+      [{ orgId: ORG_A, driverUserId: "drv-1", startedAt: at(4) }],
+      ONLY_A,
+    );
+    expect(f.inserts[0]!.conflict.target as unknown[]).toHaveLength(4);
+  });
+
+  it("writes nothing for a period with no attributable sessions", async () => {
+    // The pre-Authorize shape: sessions exist, none carries a driver. Writing
+    // nothing is correct — a zero-count row would assert we checked and found
+    // the org had no active drivers, which is a different claim.
+    const f = makeFake();
+    const out = await writeDriverActivity(f.db, PERIOD, [], ONLY_A);
+    expect(out.rowsWritten).toBe(0);
+    expect(f.inserts).toHaveLength(0);
+  });
+
   it("has no cap_applied_isk to preserve, so its SET is the recomputable four", async () => {
     const f = makeFake();
     await writeDriverActivity(
