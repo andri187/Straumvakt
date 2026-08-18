@@ -13,3 +13,4 @@ export * from "./delivery";
 export * from "./dunning";
 export * from "./reconciliation";
 export * from "./header";
+export * from "./kennitala";

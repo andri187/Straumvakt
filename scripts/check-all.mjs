@@ -64,6 +64,13 @@ const CHECKS = [
   // are gated now, not after something has already been sent to a host.
   // See docs/notes/2026-08-18-invoice-delivery-decision.md.
   ["invoice", "npm run check:invoice"],
+  // Every service / queue / R2 / Hyperdrive binding must name a resource that
+  // exists on the account. Added 2026-08-18 after `gateway/wrangler.jsonc`
+  // was found binding MAIN_APP to `hlada-api` — a Worker that has never
+  // existed — with nothing to catch it, because nothing compared config
+  // against reality. Runs offline against a recorded account snapshot, so it
+  // needs no credential and works on every branch.
+  ["bindings", "npm run check:bindings"],
 ];
 
 const results = [];

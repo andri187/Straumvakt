@@ -26,6 +26,7 @@
  */
 import { authenticate } from "./auth";
 import { IdentityDurableObject } from "./identity-do";
+import { versionResponseBody } from "./version";
 
 export { IdentityDurableObject };
 
@@ -33,6 +34,13 @@ interface Env {
   IDENTITY_DO: DurableObjectNamespace;
   MAIN_APP: { fetch: (req: Request) => Promise<Response> };
   OCPP_INGEST_SECRET: string;
+  /**
+   * Populated by Cloudflare when `version_metadata` is declared. Optional
+   * because the binding is still commented out in wrangler.jsonc pending
+   * approval — the runtime half is built so that enabling it is a config
+   * change and not a code change.
+   */
+  CF_VERSION_METADATA?: { id: string; tag?: string; timestamp?: string };
 }
 
 export default {
@@ -40,7 +48,20 @@ export default {
     const url = new URL(request.url);
 
     if (url.pathname === "/health") {
+      // Exactly the bytes "ok". The alert policy specifies a synthetic probe
+      // against this route; deployment identity lives on /version so this
+      // contract never has to change.
       return new Response("ok", { status: 200 });
+    }
+
+    // Deployment identity. Always 200 — an unconfigured version id is a
+    // release-readiness problem, not an outage, and a 5xx here would trip
+    // uptime alerting for the wrong reason. `check:version-id` is what fails.
+    if (url.pathname === "/version") {
+      return new Response(versionResponseBody(env, "straumvakt-ocpp"), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
     }
 
     // WebSocket upgrade from a charger. Accept both /ocpp/<id> and
