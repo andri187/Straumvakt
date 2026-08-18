@@ -25,6 +25,29 @@ const read = (p) => (existsSync(p) ? readFileSync(p, "utf8") : null);
 const stripComments = (s) =>
   s.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/\/\/[^\n]*/g, " ");
 
+/**
+ * The body of `alarm()`, by brace matching — not by a character window.
+ *
+ * OB18 used `[\s\S]{0,3000}?` after `async alarm(`, which passed on a mention
+ * of "liveness" belonging to an unrelated method 100 lines below. A window is
+ * not a scope. Returns "" when an alarm exists but is empty, and null when
+ * there is no alarm at all, so the caller can tell those apart.
+ */
+function alarmBodyOf(src) {
+  const m = /(?:async\s+)?alarm\s*\([^)]*\)\s*(?::[^{]*)?\{/.exec(src);
+  if (!m) return null;
+  let depth = 1;
+  const start = m.index + m[0].length;
+  for (let i = start; i < src.length; i++) {
+    if (src[i] === "{") depth++;
+    else if (src[i] === "}") {
+      depth--;
+      if (depth === 0) return src.slice(start, i);
+    }
+  }
+  return src.slice(start); // unbalanced source: treat what we have as the body
+}
+
 /** JSONC → JSON, string-aware so a `//` inside a value survives. */
 function stripJsonc(text) {
   let out = "", inStr = false, esc = false, line = false, block = false;
@@ -338,8 +361,23 @@ export function evaluate(f) {
     // relying on a comment: `doSrc` has comments stripped, so a rule
     // that matched a `/* missed_heartbeat */` note would pass on an
     // empty handler. It must see a real reference in live code.
-    const hasLivenessSweeper =
-      /async\s+alarm\s*\([\s\S]{0,3000}?(liveness|missed[_ ]?heartbeat|expectedNextHeartbeat)/i.test(doSrc);
+    //
+    // CORRECTION 2026-08-18 — this rule was giving a FALSE PASS.
+    //
+    // The window form above (`[\s\S]{0,3000}?`) matches any occurrence of
+    // "liveness" within 3000 characters AFTER `async alarm(` — which in
+    // identity-do.ts is satisfied by `recordFrame(stored?.liveness ...)` in a
+    // completely different method further down the file. The alarm body it
+    // was pointed at is still, verbatim, the outbound-command timeout sweep
+    // the rule text itself says does not count.
+    //
+    // A window is not a scope. Extract the actual method body by brace
+    // matching and look only inside it. Fourth instance in this file of a
+    // rule matching text NEAR the thing instead of the thing.
+    const hasLivenessSweeper = alarmBodyOf(doSrc) !== null &&
+      /(liveness|missed[_ ]?heartbeat|expectedNextHeartbeat|sweepLiveness)/i.test(
+        alarmBodyOf(doSrc),
+      );
     if (!hasLivenessSweeper) {
       err("OB18", "no liveness sweeper — offline is detected only on the next inbound frame, so a charger that goes silent produces no event; the existing DO alarm is the outbound-command timeout sweep");
     }
@@ -501,6 +539,25 @@ const FIXTURES = [
   // ── OB18 · liveness sweeper ──────────────────────────────────────
   ["no-liveness-sweeper.invalid", mut({ identityDo: GOOD.identityDo.replace("async alarm() { this.sweepLiveness(); /* missed_heartbeat */ }", "async alarm() { this.sweepOutboundTimeouts(); }") }), ["OB18"]],
   ["sweeper-present.valid", mut({}), []],
+  // Regression for the 2026-08-18 false pass: "liveness" appearing in a
+  // DIFFERENT method must not satisfy OB18. Under the old 3000-character
+  // window this fixture PASSED, which is exactly how the real identity-do.ts
+  // passed while the gap was wide open.
+  ["liveness-mentioned-outside-alarm.invalid", mut({
+    identityDo:
+      GOOD.identityDo.replace(
+        "async alarm() { this.sweepLiveness(); /* missed_heartbeat */ }",
+        "async alarm() { this.sweepOutboundTimeouts(); }",
+      ) +
+      "\nasync onFrame(f) { const live = recordFrame(this.stored?.liveness ?? null, f.action, Date.now()); return live; }\n",
+  }), ["OB18"]],
+  // An alarm that exists but is empty is not a sweeper either.
+  ["empty-alarm.invalid", mut({
+    identityDo: GOOD.identityDo.replace(
+      "async alarm() { this.sweepLiveness(); /* missed_heartbeat */ }",
+      "async alarm() { }",
+    ),
+  }), ["OB18"]],
 
   // ── OB19 · pinned-host foot-gun, per environment ─────────────────
   ["no-routes-no-workersdev.invalid", mut({
