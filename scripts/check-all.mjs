@@ -44,6 +44,12 @@ const CHECKS = [
   // nothing. That is detectable with no database and no credential, so unlike
   // check:migrations it can run on every branch and PR.
   ["migrations-visible", "npm run check:migrations-visible"],
+  // Invoice issuability. Offline and credential-free like migrations-visible,
+  // so it runs on every branch. It exists because the first invoice will be
+  // produced by a generator that does not exist yet: the rules it must satisfy
+  // are gated now, not after something has already been sent to a host.
+  // See docs/notes/2026-08-18-invoice-delivery-decision.md.
+  ["invoice", "npm run check:invoice"],
 ];
 
 const results = [];
