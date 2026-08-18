@@ -17,7 +17,37 @@ import {
 } from "./fixtures";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const golden = (name: string) => readFileSync(join(HERE, "__golden__", name), "utf8");
+
+/**
+ * Read a golden file, normalising the CHECKOUT's newline convention away.
+ *
+ * ── CR-1, raised by claude-a 2026-08-18 ─────────────────────────────────
+ *
+ * `core.autocrlf=true` is set at system level on this machine, so git
+ * converts LF→CRLF **on checkout**. The committed blob is LF and
+ * `renderHeaderText` emits LF, but a fresh checkout puts CRLF on disk and
+ * `readFileSync(..., "utf8")` returns it verbatim — so `toBe` compared LF
+ * against CRLF and failed.
+ *
+ * It passed in the worktree that created these files only because they were
+ * WRITTEN there and never subsequently checked out. A's merge was the first
+ * checkout of those blobs, which is when the conversion first applied. That
+ * makes it a latent defect, not a merge artefact: it would fail identically
+ * on any fresh Windows clone, and it is not observable on the branch that
+ * created it.
+ *
+ * Fixed by normalising the file side only. Deliberately NOT by normalising
+ * both sides: the renderer emitting CRLF would be a real content change and
+ * must still fail — see the "renderer emits LF only" test below, which is
+ * the guard that would otherwise have been thrown away with the bug.
+ *
+ * Deliberately NOT fixed with `.gitattributes` — round 2's rules forbid one,
+ * and calibration note 14 records why the line-ending premise is not to be
+ * acted on. A newline convention on disk is a checkout artefact; the golden
+ * files exist to detect changes in CONTENT.
+ */
+const golden = (name: string) =>
+  readFileSync(join(HERE, "__golden__", name), "utf8").replace(/\r\n/g, "\n");
 
 function draftNamed(name: string): InvoiceDraft {
   const f = DOCUMENT_FIXTURES.find((x) => x.name === name);
@@ -182,5 +212,20 @@ describe("golden files", () => {
   it("the agent golden contains the f.h. construction and the principal one does not", () => {
     expect(golden("header-agent.txt")).toContain(" f.h. ");
     expect(golden("header-principal.txt")).not.toContain(" f.h. ");
+  });
+
+  // The guard that CR-1's fix must not throw away. Normalising the file side
+  // hides the checkout's convention; normalising BOTH sides would also hide a
+  // renderer that started emitting CRLF, which is a real content change.
+  it("the renderer emits LF only, on every platform", () => {
+    expect(renderHeaderText(PRINCIPAL)).not.toContain("\r");
+    expect(renderHeaderText(AGENT)).not.toContain("\r");
+  });
+
+  // Proves the comparison is independent of the checkout's newline
+  // convention, without needing a fresh clone to find out.
+  it("a CRLF checkout of the same content still matches", () => {
+    const asCheckedOutOnWindows = renderHeaderText(PRINCIPAL).replace(/\n/g, "\r\n");
+    expect(asCheckedOutOnWindows.replace(/\r\n/g, "\n")).toBe(golden("header-principal.txt"));
   });
 });

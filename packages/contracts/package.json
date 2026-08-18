@@ -49,7 +49,8 @@
     "./invoice/dunning": "./src/invoice/dunning.ts",
     "./invoice/reconciliation": "./src/invoice/reconciliation.ts",
     "./invoice/header": "./src/invoice/header.ts",
-    "./invoice/fixtures": "./src/invoice/fixtures.ts"
+    "./invoice/fixtures": "./src/invoice/fixtures.ts",
+    "./invoice/kennitala": "./src/invoice/kennitala.ts"
   },
   "dependencies": {
     "zod": "^4.3.6"
