@@ -267,6 +267,89 @@ describe("deriveConnectorActivity", () => {
     expect(out.rows.every((r) => r.capAppliedIsk === null)).toBe(true);
   });
 
+  // ── Calendar boundaries ────────────────────────────────────────────
+  //
+  // Every one of these is a month whose length or position the derivation
+  // must take from the calendar rather than from a constant. A hardcoded 30
+  // or 31 would bill a real month wrong exactly once a year, quietly.
+
+  it("includes 29 February in a leap year", () => {
+    const feb2028 = { orgId: ORG_A, year: 2028, month: 2 };
+    const leapDay = new Date(Date.UTC(2028, 1, 29, 12));
+    const out = deriveConnectorActivity({
+      period: feb2028,
+      sessions: [{ orgId: ORG_A, connectorId: C1, chargingStationId: STN, startedAt: leapDay }],
+      statuses: [],
+    });
+    expect(out.rows).toHaveLength(1);
+    expect(out.outOfPeriodObservations).toBe(0);
+    expect(out.rows[0]!.activeDays).toBe(1);
+  });
+
+  it("excludes 29 February from the following March", () => {
+    const out = deriveConnectorActivity({
+      period: { orgId: ORG_A, year: 2028, month: 3 },
+      sessions: [
+        {
+          orgId: ORG_A,
+          connectorId: C1,
+          chargingStationId: STN,
+          startedAt: new Date(Date.UTC(2028, 1, 29, 12)),
+        },
+      ],
+      statuses: [],
+    });
+    expect(out.rows).toEqual([]);
+    expect(out.outOfPeriodObservations).toBe(1);
+  });
+
+  it("counts the last instant of a 31-day month and not the first of the next", () => {
+    const lastInstant = new Date(Date.UTC(2026, 2, 31, 23, 59, 59, 999));
+    const firstOfApril = new Date(Date.UTC(2026, 3, 1, 0, 0, 0, 0));
+    const out = deriveConnectorActivity({
+      period: PERIOD,
+      sessions: [
+        { orgId: ORG_A, connectorId: C1, chargingStationId: STN, startedAt: lastInstant },
+        { orgId: ORG_A, connectorId: C1, chargingStationId: STN, startedAt: firstOfApril },
+      ],
+      statuses: [],
+    });
+    expect(out.rows[0]!.sessionCount).toBe(1);
+    expect(out.rows[0]!.lastSeenAt).toEqual(lastInstant);
+    expect(out.outOfPeriodObservations).toBe(1);
+  });
+
+  it("handles the December to January year rollover", () => {
+    const dec = { orgId: ORG_A, year: 2026, month: 12 };
+    const newYearsEve = new Date(Date.UTC(2026, 11, 31, 23, 0));
+    const newYearsDay = new Date(Date.UTC(2027, 0, 1, 1, 0));
+    const out = deriveConnectorActivity({
+      period: dec,
+      sessions: [
+        { orgId: ORG_A, connectorId: C1, chargingStationId: STN, startedAt: newYearsEve },
+        { orgId: ORG_A, connectorId: C1, chargingStationId: STN, startedAt: newYearsDay },
+      ],
+      statuses: [],
+    });
+    expect(out.rows[0]!.sessionCount).toBe(1);
+    expect(out.rows[0]!.periodYear).toBe(2026);
+    expect(out.rows[0]!.periodMonth).toBe(12);
+    expect(out.outOfPeriodObservations).toBe(1);
+  });
+
+  it("a period with no sessions anywhere still bills on status alone", () => {
+    // The shape of a real quiet month across a whole org: nobody charged,
+    // every connector was up. All of them are billable.
+    const out = deriveConnectorActivity({
+      period: PERIOD,
+      sessions: [],
+      statuses: [status(C1, 4), status(C2, 4), status(C1, 25)],
+    });
+    expect(out.rows).toHaveLength(2);
+    expect(out.rows.every((r) => r.sessionCount === 0)).toBe(true);
+    expect(out.rows.every((r) => r.source === "status_available")).toBe(true);
+  });
+
   it("handles a period containing pre-Authorize sessions without special-casing", () => {
     // Pre-Authorize sessions are unattributable to a DRIVER. They still name a
     // connector, so connector activity is unaffected - which is the point:

@@ -267,7 +267,19 @@ be written deliberately. An out-of-scope org **throws** rather than writing
 nothing quietly — an empty result and a refusal look identical to a caller that
 only checks `rowsWritten`.
 
-### Tests — 44
+### Deepening under §7 — five calendar-boundary cases
+
+Added after the gates were met, staying inside the chunk. Each is a month whose
+length or position must come from the calendar rather than a constant; a
+hardcoded 30 or 31 would bill a real month wrong exactly once a year, quietly.
+
+29 February included in a leap year (Feb 2028) · 29 February excluded from the
+following March · the last instant of a 31-day month counted while the first of
+the next is not · the December→January year rollover · **a period with no
+sessions anywhere still bills on status alone**, which is the shape of a real
+quiet month across a whole org.
+
+### Tests — 49
 
 `packages/commercial/.../activity-month.test.ts` (25, pure): empty period; one
 connector one session; **one connector zero sessions**; both evidence kinds
