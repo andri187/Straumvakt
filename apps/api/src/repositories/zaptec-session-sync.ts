@@ -295,6 +295,14 @@ async function importOne(
   // endedAt, energyWh, stopReason, status, cost.
   const existingRow = await tx.chargeSession.findFirst({
     where: {
+      // FOCUS rule 5 — org_id in the query. A station belongs to exactly one
+      // org, so today this term selects the same row either way; it is here
+      // because the NEXT reader of this predicate should not have to prove
+      // that to themselves, and because the day a station is re-parented
+      // between orgs, an unscoped ±60s window would overlay one tenant's CDR
+      // onto the other's session row. Census rows 98 and 105, previously
+      // "unknown — did not open the org predicate on the update path".
+      orgId: identity.orgId,
       chargingStationId: identity.chargingStationId,
       startedAt: {
         gte: new Date(startedAt.getTime() - 60_000),

@@ -7,6 +7,7 @@ import { Hono } from "hono";
 import { makePrisma } from "../../lib/prisma";
 import { requireAdmin, type AuthVars } from "../../lib/auth-middleware";
 import { requirePermission } from "../../lib/auth/require-permission";
+import { resolveOrgScope } from "../../lib/auth/org-scope";
 import {
   getPeriodTotals,
   getTariffCoverage,
@@ -39,6 +40,14 @@ summaryRouter.get(
   async (c) => {
     const db = makePrisma(c.env);
 
+    // Tenant confinement for every ledger-backed tile. `{ all: true }` —
+    // bootstrap or a platform.tenant.read grant — maps to null and keeps
+    // today's platform behaviour; everyone else sees their own orgs. A caller
+    // with no memberships and no platform grant previously got the whole
+    // table; they now get an empty allow-list, which matches nothing.
+    const orgScope = await resolveOrgScope(c.env, c.get("session"));
+    const restrictToOrgIds = orgScope.all ? null : orgScope.orgIds;
+
     const now = new Date();
     const curYear = now.getUTCFullYear();
     const curMonth = now.getUTCMonth() + 1; // 1-indexed
@@ -55,12 +64,12 @@ summaryRouter.get(
       projectedClose,
       recentEntries,
     ] = await Promise.all([
-      getPeriodTotals(db, curYear, curMonth),
-      getPeriodTotals(db, prevYear, prevMonth),
+      getPeriodTotals(db, curYear, curMonth, restrictToOrgIds),
+      getPeriodTotals(db, prevYear, prevMonth, restrictToOrgIds),
       getTariffCoverage(db),
-      getCostHealthMetric(db),
-      getProjectedOrgRevenue(db, curYear, curMonth, 10),
-      getRecentLedgerEntries(db, 10),
+      getCostHealthMetric(db, restrictToOrgIds),
+      getProjectedOrgRevenue(db, curYear, curMonth, 10, restrictToOrgIds),
+      getRecentLedgerEntries(db, 10, restrictToOrgIds),
     ]);
 
     return c.json({
