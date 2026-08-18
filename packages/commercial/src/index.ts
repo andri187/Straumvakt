@@ -35,5 +35,9 @@ export * from "./core-billing/provenance-state";
 export * from "./core-billing/meter-energy";
 export * from "./core-billing/period-close";
 export * from "./core-billing/subscription";
+// The flat-fee feeder — the market line. Uses subscription.ts for the cap
+// arithmetic and pickActiveRate for the rate window, so it is a second feeder
+// into one engine rather than a second engine.
+export * from "./core-billing/flat-fee";
 export * from "./core-billing/plug-time";
 export * from "./core-billing/rate-window";

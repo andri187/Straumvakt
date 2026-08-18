@@ -31,10 +31,18 @@ export type RuleAudience = (typeof RULE_AUDIENCES)[number];
  * connector-days. It needs no new enum value and makes every invoice line
  * misstate its unit, permanently, to someone who will eventually read it.
  *
- * NOTE — the Postgres enum `agreements."RateBasis"` does NOT yet carry this
- * value. Until that migration runs, a rate reference cannot be STORED with
- * this basis; the union is ahead of the column on purpose, so the resolver
- * and its tests can be settled before the schema moves.
+ * NOTE CORRECTED 2026-08-18. This paragraph used to read: "the Postgres enum
+ * `agreements."RateBasis"` does NOT yet carry this value ... the union is
+ * ahead of the column on purpose." That stopped being true in the very commit
+ * that added the value here — `19bb4ef` was deliberately atomic across all
+ * four declarations, and it shipped `apps/api/drizzle/0001_regular_talos.sql`,
+ * whose entire body is
+ * `ALTER TYPE "agreements"."RateBasis" ADD VALUE 'per_connector';`.
+ *
+ * So the union is NOT ahead of the column: the TS union, the Prisma enum, the
+ * Drizzle enum and migration `0001` all carry `per_connector`. What remains
+ * open is only whether `0001` has been APPLIED to a given database, which is
+ * an environment question and not a declaration one.
  */
 export const RATE_BASES = [
   "per_kwh",
