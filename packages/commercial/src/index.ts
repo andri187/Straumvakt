@@ -39,5 +39,8 @@ export * from "./core-billing/subscription";
 // arithmetic and pickActiveRate for the rate window, so it is a second feeder
 // into one engine rather than a second engine.
 export * from "./core-billing/flat-fee";
+// The activity source the flat-fee feeder consumes. Closes preflight gap 9.6:
+// reports.connector_activity_month and driver_activity_month had zero writers.
+export * from "./core-billing/activity-month";
 export * from "./core-billing/plug-time";
 export * from "./core-billing/rate-window";
