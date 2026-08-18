@@ -44,6 +44,32 @@
     "enabled": true
   },
 
+  // ── OBSERVABILITY-TODO ────────────────────────────────────────────
+  // Two bindings the observability slice needs are declared here as
+  // comments rather than config, deliberately: turning them on changes
+  // what a deploy produces, and that needs Andri's approval. The gate
+  // `scripts/analysis/observability/check-observability.mjs` (OB9/OB12)
+  // fails while these remain commented, so this cannot be forgotten.
+  //
+  // 1. Workers Analytics Engine — OCPP economics counters (metrics.ts).
+  //    The dataset is created on first write, so no account-side setup
+  //    is required; the name below is a proposal, not a discovered one.
+  //
+  //    "analytics_engine_datasets": [
+  //      { "binding": "OCPP_METRICS", "dataset": "straumvakt_ocpp_metrics" }
+  //    ],
+  //
+  // 2. Worker version id — becomes the Sentry release, so a regression
+  //    can be keyed to a deploy. This is also the project's single
+  //    blocking release gap (no version id has ever been recorded).
+  //
+  //    "version_metadata": { "binding": "CF_VERSION_METADATA" },
+  //
+  // SENTRY_DSN is a *secret*, set with `wrangler secret put SENTRY_DSN`.
+  // It must never appear in this file — a DSN is a credential.
+  // Full procedure: docs/notes/2026-08-11-sentry-analytics-engine-setup-runbook.md
+  // ──────────────────────────────────────────────────────────────────
+
   // Hibernation API is the recommended pattern for long-lived charger
   // connections — WebSockets don't hold the Worker in memory between
   // frames. Secrets (OCPP_INGEST_SECRET — shared with main app) live in

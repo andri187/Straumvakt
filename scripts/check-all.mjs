@@ -13,6 +13,11 @@ import { spawnSync } from "node:child_process";
 
 const CHECKS = [
   ["typecheck", "npm run typecheck"],
+  // `npm run typecheck --workspaces --if-present` treats a missing typecheck
+  // script as success, so a package with TypeScript and no script is compiled
+  // by nothing while the pipeline prints PASS. That is how shared/commercial/
+  // contracts went unchecked. This asserts the invariant, not the instance.
+  ["workspace-typecheck", "npm run check:workspace-typecheck"],
   ["schemas", "npm run check:schemas"],
   ["api-schema", "npm run check:api-schema"],
   // Replaced check:schema-parity on 2026-08-07 (ADR 0051). That one ran
@@ -47,6 +52,18 @@ const CHECKS = [
   // and a status-code test cannot see it — the route returns the same 409
   // whether or not it burned the invite on the way out. Offline, no DB.
   ["invite-guard", "npm run check:invite-guard"],
+  // Tier 0 of docs/operator/CI_MIGRATION_CHECK_CREDENTIAL.md. The regression
+  // that hid two unapplied migrations was pure config — prisma.config.ts had
+  // no migrations.path, so `migrate status` reported "up to date" having seen
+  // nothing. That is detectable with no database and no credential, so unlike
+  // check:migrations it can run on every branch and PR.
+  ["migrations-visible", "npm run check:migrations-visible"],
+  // Invoice issuability. Offline and credential-free like migrations-visible,
+  // so it runs on every branch. It exists because the first invoice will be
+  // produced by a generator that does not exist yet: the rules it must satisfy
+  // are gated now, not after something has already been sent to a host.
+  // See docs/notes/2026-08-18-invoice-delivery-decision.md.
+  ["invoice", "npm run check:invoice"],
 ];
 
 const results = [];

@@ -32,6 +32,34 @@ export interface GatewayEnv {
   OCPP_EVENTS_QUEUE?: {
     send: (body: unknown) => Promise<void>;
   };
+  // Optional override for the BootNotification heartbeat interval, in
+  // seconds. Absent means the product frame (3600). Values outside
+  // 60..86400 are rejected and logged — see
+  // resolveHeartbeatIntervalSeconds in heartbeat-fastpath.ts.
+  OCPP_HEARTBEAT_INTERVAL_SECONDS?: string;
+  // Workers Analytics Engine dataset for OCPP economics. Optional so
+  // local dev and tests run without the binding; the metrics writer
+  // degrades to a no-op. See metrics.ts.
+  OCPP_METRICS?: AnalyticsEngineLike;
+  // Sentry DSN, supplied as a Worker *secret*, never a plaintext var.
+  // Absent means error reporting is disabled rather than broken.
+  SENTRY_DSN?: string;
+  // Worker version id, bound via `version_metadata`, used as the Sentry
+  // release so a regression can be keyed to a deploy.
+  CF_VERSION_METADATA?: { id: string; tag?: string };
+}
+
+/**
+ * The one method of Analytics Engine this gateway uses. Declared
+ * structurally so tests can substitute a recorder without pulling in
+ * workers-types, and so the binding stays optional.
+ */
+export interface AnalyticsEngineLike {
+  writeDataPoint: (point: {
+    indexes?: string[];
+    blobs?: string[];
+    doubles?: number[];
+  }) => void;
 }
 
 /**
