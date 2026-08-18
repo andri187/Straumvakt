@@ -1,0 +1,42 @@
+{
+  "_what": "A recorded snapshot of which Cloudflare resources actually exist on the account. It is the offline oracle for scripts/analysis/bindings/check-bindings.mjs, so that gate runs in CI with no credentials and no network.",
+  "_why": "gateway/wrangler.jsonc bound MAIN_APP to `hlada-api` — a Worker that has never existed — and nothing caught it, because nothing compared config against reality. A binding that names a nonexistent resource is a deploy-time or run-time failure that looks like a working config file.",
+  "_how_to_refresh": "From an authenticated session, READ-ONLY: `wrangler deployments list --name <worker>` per Worker (code 10007 means it does not exist), `wrangler queues list`, `wrangler r2 bucket list`. Update capturedAtUtc. Never record a secret VALUE — names only, and this file records no secrets at all.",
+  "capturedAtUtc": "2026-08-18T15:00:00Z",
+  "capturedBy": "claude-b, read-only wrangler session",
+  "accountNote": "Single account. Account id deliberately omitted — it is not needed by the gate.",
+
+  "workers": [
+    { "name": "hlada", "exists": true, "note": "top-level console. Last deployed 2026-04-23. Returns 404/error-1042 on its workers.dev hostname — not reachable." },
+    { "name": "hlada-staging", "exists": true, "note": "serves straumvakt.org and www.straumvakt.org" },
+    { "name": "hlada-api", "exists": false, "note": "NEVER EXISTED. `wrangler deployments list` returns code 10007." },
+    { "name": "hlada-api-staging", "exists": true, "note": "serves api.straumvakt.org (verified by tail probe 2026-08-18)" },
+    { "name": "straumvakt-ocpp", "exists": true, "note": "top-level gateway. Last deployed 2026-04-19. 404/error-1042 on workers.dev; zero tail events in 25s. Serves nobody." },
+    { "name": "straumvakt-ocpp-staging", "exists": true, "note": "S0 — serves ws.straumvakt.org AND straumvakt-ocpp-staging.straumvakt.workers.dev. 21 chargers." }
+  ],
+
+  "queues": [
+    { "name": "straumvakt-ocpp-events-staging", "exists": true },
+    { "name": "straumvakt-ocpp-events-dlq-staging", "exists": true },
+    { "name": "straumvakt-archive-events-staging", "exists": true },
+    { "name": "straumvakt-archive-events-dlq-staging", "exists": true },
+    { "name": "straumvakt-outbound-staging", "exists": true },
+    { "name": "straumvakt-outbound-dlq-staging", "exists": true }
+  ],
+
+  "r2Buckets": [
+    { "name": "straumvakt-evidence-staging", "exists": true }
+  ],
+
+  "_pendingCreationNote": "A binding may name a resource that does not exist ONLY if it is listed here with a reason and an owner. This is the escape hatch that keeps the gate green while recording the debt — an unlisted missing resource is an error.",
+  "pendingCreation": [
+    {
+      "kind": "worker",
+      "name": "hlada-api",
+      "referencedBy": "gateway/wrangler.jsonc [top-level] services.MAIN_APP",
+      "reason": "Blocked on the production-definition decision. Under option (a) this Worker is never created and the top-level gateway is retired; under (b) it is created. The binding is therefore option-dependent and is deliberately NOT fixed — see docs/notes/2026-08-18-what-production-means.md Q1.",
+      "owner": "Andri",
+      "blocksDeployOf": "gateway [top-level] only. The staging gateway, which is the live one, binds to hlada-api-staging and is unaffected."
+    }
+  ]
+}

@@ -28,11 +28,34 @@
   // discovery, ocpp-events).
   //   prod    → hlada-api
   //   staging → hlada-api-staging
-  // The UI Worker (hlada / hlada-staging) is no longer in the gateway
-  // path; once gateway redeploys land in both environments, the dead
-  // code in src/lib/ocpp/* + src/app/api/ocpp/events/ + src/app/api/
-  // internal/ocpp-auth/ on the UI Worker side gets deleted in a
-  // follow-up commit.
+  // The UI Worker (hlada / hlada-staging) is no longer in the gateway path.
+  //
+  // CORRECTION 2026-08-18 — the sentence that used to be here said the dead
+  // UI-side code "gets deleted in a follow-up commit". IT ALREADY WAS:
+  // src/lib/ocpp/, src/app/api/ocpp/events/ and src/app/api/internal/
+  // ocpp-auth/ do not exist in this tree, and `OCPP_WEBHOOK_SECRET` appears
+  // in no source file. What survives is the SECRET, still set on the
+  // top-level `hlada` Worker only. Retirement plan:
+  // docs/notes/2026-08-18-dead-paths-and-deploy-runbook.md §2.
+  //
+  // ── THIS BINDING IS KNOWN-BROKEN AND DELIBERATELY NOT FIXED ────────
+  //
+  // `hlada-api` HAS NEVER EXISTED on the account (verified read-only
+  // 2026-08-18: `wrangler deployments list --name hlada-api` → code 10007).
+  // So this top-level block cannot deploy into a working state.
+  //
+  // It is not fixed here because the correct value is option-dependent:
+  // under "adopt staging as production" this whole top-level Worker is
+  // retired and the binding should go away; under "build top-level fresh"
+  // `hlada-api` is created and the binding becomes correct as written.
+  // See docs/notes/2026-08-18-what-production-means.md.
+  //
+  // It is not silent either: `npm run check:bindings` lists it as
+  // pending-creation with an owner and a reason, and FAILS if any other
+  // binding starts naming something that does not exist.
+  //
+  // The live gateway is the `staging` env below, which binds to
+  // `hlada-api-staging` and is unaffected by any of this.
   "services": [
     {
       "binding": "MAIN_APP",
@@ -91,6 +114,35 @@
           "service": "hlada-api-staging"
         }
       ],
+
+      // ── S0 · THE CHARGER-FACING HOSTNAMES ─────────────────────────
+      //
+      // Both of these serve live charger traffic RIGHT NOW. Verified
+      // 2026-08-18 by a read-only session:
+      //
+      //   ws.straumvakt.org                          → this Worker.
+      //       Proven by tailing straumvakt-ocpp-staging while requesting
+      //       /health?probe=… and watching the probe arrive.
+      //   straumvakt-ocpp-staging.straumvakt.workers.dev → this Worker.
+      //       GET /health returns 200 "ok".
+      //
+      // ADR 0035 records chargers configured against the workers.dev
+      // host; the custom domain was added later, out of band. Until every
+      // charger's device config is audited, ASSUME THE FLEET IS SPLIT
+      // ACROSS BOTH and preserve both. 21 chargers hold live WebSockets.
+      //
+      // WHY THIS BLOCK EXISTS AT ALL: until now neither hostname appeared
+      // in any committed config — they existed only in the dashboard. So
+      // nothing in version control recorded that they exist, and nothing
+      // would restore them if they were lost.
+      //
+      // WHY workers_dev IS EXPLICIT: declaring `routes` without it makes
+      // wrangler infer workers_dev=false, which REMOVES the workers.dev
+      // hostname on the next deploy. That is gate OB19's foot-gun, and
+      // here it would disconnect whichever chargers use that host. The
+      // `true` below is load-bearing — do not "tidy" it away.
+      "routes": [{ "pattern": "ws.straumvakt.org", "custom_domain": true }],
+      "workers_dev": true,
       // Sprint 5 / ADR 0017 — inbound OCPP events queue. The DO
       // enqueues raw envelopes here instead of awaiting a synchronous
       // service-binding write to apps/api. apps/api is the consumer
