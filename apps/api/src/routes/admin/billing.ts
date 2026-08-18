@@ -186,9 +186,10 @@ adminBilling.get(
         durationSec: r.durationSec,
         energyKwh: r.energyKwh,
         costIskMinor: r.costIskMinor?.toString() ?? null,
-        costFormatted: r.costIskMinor
-          ? formatIskMinor(r.costIskMinor)
-          : null,
+        // `r.costIskMinor ? …` treated a genuinely free session (0n is falsy)
+        // as never-costed, so "0.00 kr." rendered as "—". A zero and an
+        // unknown are different facts about money; only null is unknown.
+        costFormatted: r.costIskMinor != null ? formatIskMinor(r.costIskMinor) : null,
         tariffDefinitionId: r.tariffDefinitionId,
         stopReason: r.stopReason,
       })),
