@@ -25,9 +25,10 @@
 // different requests under one key is a caller bug, and answering the second
 // with the first one's result would hide it.
 
-import { Hono, type Context } from "hono";
+import { Hono, type Context, type MiddlewareHandler } from "hono";
 import { requireAdmin, type AuthVars } from "../../../lib/auth-middleware";
-import { requirePermission } from "../../../lib/auth/require-permission";
+import { requirePermission as realRequirePermission } from "../../../lib/auth/require-permission";
+
 import { resolveOrgScope } from "../../../lib/auth/org-scope";
 import {
   BillingRequestError,
@@ -54,9 +55,37 @@ export interface BillingRouterDeps {
   makePort: (c: BillingCtx, access: BillingAccess) => BillingOperationsPort;
   /** Injected so tests are deterministic and the handler reads no clock. */
   now: () => Date;
+  /**
+   * The session gate. Defaults to the real one.
+   *
+   * Injectable for the same reason the port is: the first-invoice dry run
+   * drives these handlers with no database AND no session infrastructure, and
+   * a route that can only be exercised behind a live auth stack is a route
+   * nobody exercises. Production passes nothing and gets `requireAdmin`.
+   */
+  requireAuth?: MiddlewareHandler;
+  /**
+   * How the caller's tenant scope is resolved. Defaults to the real one.
+   *
+   * Same reason as `requireAuth`: `resolveOrgScope` opens a Drizzle client,
+   * and the dry run has no database. The DECISION it feeds — which orgs this
+   * caller may touch — is what the tenancy assertions actually depend on, and
+   * that stays identical either way.
+   */
+  resolveAccess?: (c: BillingCtx) => Promise<BillingAccess>;
+  /**
+   * The permission gate factory. Defaults to the real one.
+   *
+   * Third and last injection point, and for the same reason as the other two:
+   * `requirePermission` opens a Drizzle client to resolve effective
+   * permissions. What it GATES is unchanged — every route still names
+   * `billing.read` or `billing.write` with a real `orgIdParam`, which is what
+   * check:orgid-param verifies by reading this source.
+   */
+  requirePerm?: typeof realRequirePermission;
 }
 
-async function accessFor(c: BillingCtx): Promise<BillingAccess> {
+async function defaultAccessFor(c: BillingCtx): Promise<BillingAccess> {
   const scope = await resolveOrgScope(c.env, c.get("session"));
   return { restrictToOrgIds: scope.all ? null : scope.orgIds };
 }
@@ -130,8 +159,16 @@ export function makeBillingPeriodsRouter(deps: BillingRouterDeps) {
   // the surface doc cannot see is one that can change without a diff, which is
   // the entire reason that gate exists. So the local carries the same name as
   // the exported instance at the bottom of this file.
+  const accessFor = deps.resolveAccess ?? defaultAccessFor;
+  // SHADOWS THE IMPORT ON PURPOSE, and the name is load-bearing twice over:
+  // scripts/check-orgid-param.mjs finds every per-tenant gate by matching
+  // `requirePermission("verb", { orgIdParam: ... })` textually. Calling the
+  // injected factory `perm` would make all nine gates in this file INVISIBLE
+  // to that checker — no false pass, but no coverage either, which is worse
+  // than an allowlist entry because nothing records the gap.
+  const requirePermission = deps.requirePerm ?? realRequirePermission;
   const adminBillingPeriods = new Hono<{ Bindings: Env; Variables: AuthVars }>();
-  adminBillingPeriods.use("*", requireAdmin);
+  adminBillingPeriods.use("*", deps.requireAuth ?? requireAdmin);
 
   // Every refusal leaves as a named code, never a bare status.
   adminBillingPeriods.onError((err, c) => {

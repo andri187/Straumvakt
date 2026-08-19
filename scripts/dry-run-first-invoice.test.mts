@@ -199,10 +199,36 @@ describe("numbering is gap-free and crash-safe", () => {
   });
 });
 
+describe("the API surface, driven end to end", () => {
+  it("open -> activity -> price -> issue -> close, all 200, one document", () => {
+    // A2c proved the LIBRARY path. This drives the HANDLERS an operator will
+    // actually call — the same router index.ts mounts, with a fixture port and
+    // no database. A library that works behind a route that does not is not a
+    // working invoice, and the route is where the idempotency and lifecycle
+    // guards actually live.
+    const r = run("--case", "api-lifecycle");
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("open      200");
+    expect(r.out).toContain("issue     200");
+    expect(r.out).toContain("close     200");
+    expect(r.out).toContain("document  SV-2026-000001");
+    expect(r.out).toContain("no repeats");
+  });
+
+  it("refuses out of order, replays a retry, and demands an idempotency key", () => {
+    // This case produces no invoice, so it exits 1 — the operator-mode
+    // contract. Whether it BEHAVED is what --all checks.
+    const r = run("--case", "api-lifecycle-refusals");
+    expect(r.out).toContain("price before open        409");
+    expect(r.out).toContain("open replayed, same key  no new effect");
+    expect(r.out).toContain("activity with no key     400");
+  });
+});
+
 describe("regression mode", () => {
   it("--all exits 0 when every case behaves, refusals included", () => {
     const r = run("--all");
     expect(r.code).toBe(0);
-    expect(r.out).toContain("6/6 cases behaved as specified");
+    expect(r.out).toContain("8/8 cases behaved as specified");
   });
 });

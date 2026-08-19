@@ -82,6 +82,8 @@ import {
 } from "../packages/commercial/src/core-billing/flat-fee.ts";
 import type { RateRefInput } from "../packages/commercial/src/agreement/types.ts";
 import type { BillingPeriodRef } from "../packages/commercial/src/core-billing/period-close.ts";
+import { makeBillingPeriodsRouter } from "../apps/api/src/routes/admin/billing/periods.ts";
+import { makeFixtureOperationsPort } from "../apps/api/src/lib/billing/fixture-operations-port.ts";
 
 // ── Fixture: the org, its asset chain, its agreement ────────────────────
 
@@ -538,6 +540,109 @@ const wantJson = argv.includes("--json");
 const caseIdx = argv.indexOf("--case");
 const only = caseIdx !== -1 ? argv[caseIdx + 1] : null;
 
+
+// ── Driving the API surface, not just the library ───────────────────────
+//
+// A2c proved the LIBRARY path. These two drive the HANDLERS an operator will
+// actually call — the same router `index.ts` mounts, with a fixture port and
+// no database. A library that works behind a route that does not is not a
+// working invoice, and the route is where the idempotency and lifecycle
+// guards actually live.
+
+const API_ORG = ORG_ID;
+
+function apiHarness(connectorRows: number, driverRows: number) {
+  const k = `${API_ORG}:2026:3`;
+  const { port, state } = makeFixtureOperationsPort({
+    connectorRows: { [k]: connectorRows },
+    driverRows: { [k]: driverRows },
+    rateReferences: RATES,
+    render: (p, n) => `INVOICE ${n} — ${p.orgId} ${p.year}-${p.month}`,
+  });
+  const app = makeBillingPeriodsRouter({
+    // A stub session gate. The dry run has no auth stack and needs none — it
+    // is proving the BILLING invariants, and the session layer has its own
+    // tests. The real gate is the default when nothing is injected.
+    requireAuth: async (c, next) => {
+      c.set("session", { userId: "user-dry-run-0000-0000-000000001" });
+      await next();
+    },
+    // Platform-wide scope: the dry run is not testing tenancy, which has its
+    // own cross-tenant cases in periods.test.ts.
+    resolveAccess: async () => ({ restrictToOrgIds: null }),
+    // The permission gate resolves effective permissions from the database.
+    // What it gates is asserted in periods.test.ts; here it is a pass-through.
+    requirePerm: () => async (_c, next) => { await next(); },
+    makePort: () => port,
+    // April, so March may be opened. The handler reads no clock of its own.
+    now: () => new Date("2026-04-05T09:00:00Z"),
+  });
+  const hit = (verb: string, key: string) =>
+    app.request(`http://dry/${API_ORG}/billing/periods/2026/3/${verb}`, {
+      method: "POST",
+      headers: { "Idempotency-Key": key },
+    });
+  return { app, state, hit };
+}
+
+/** The whole lifecycle, through the handlers. */
+async function runApiLifecycle(): Promise<CaseResult> {
+  const h = apiHarness(30, 2);
+  const steps: string[] = [];
+  const plan: Array<[string, string]> = [
+    ["open", "dry-open"],
+    ["activity", "dry-activity"],
+    ["price", "dry-price"],
+    ["issue", "dry-issue"],
+    ["close", "dry-close"],
+  ];
+  for (const [verb, key] of plan) {
+    const res = await h.hit(verb, key);
+    steps.push(`${verb.padEnd(9)} ${res.status}`);
+    if (res.status !== 200) {
+      return {
+        producedInvoice: false,
+        behavedAsExpected: false,
+        output: `${verb} returned ${res.status}\n    ` + steps.join("\n    "),
+      };
+    }
+  }
+  const issued = h.state.effects.filter((e) => e.startsWith("issue:"));
+  const ok = issued.length === 1;
+  return {
+    producedInvoice: ok,
+    behavedAsExpected: ok,
+    output:
+      steps.join("\n    ") +
+      `\n    document  ${issued[0]?.split(":").pop() ?? "none"}` +
+      `\n    effects   ${h.state.effects.length}, one per step, no repeats`,
+  };
+}
+
+/** Out-of-order refusals, and a retry that does not repeat an effect. */
+async function runApiLifecycleRefusals(): Promise<CaseResult> {
+  const h = apiHarness(30, 2);
+  const notes: string[] = [];
+
+  const early = await h.hit("price", "k-early");
+  notes.push(`price before open        ${early.status}  (expect 409)`);
+
+  await h.hit("open", "k-open");
+  const before = h.state.effects.length;
+  await h.hit("open", "k-open");
+  const replayed = h.state.effects.length === before;
+  notes.push(`open replayed, same key  ${replayed ? "no new effect" : "REPEATED"}`);
+
+  const noKey = await h.app.request(
+    `http://dry/${API_ORG}/billing/periods/2026/3/activity`,
+    { method: "POST" },
+  );
+  notes.push(`activity with no key     ${noKey.status}  (expect 400)`);
+
+  const ok = early.status === 409 && replayed && noKey.status === 400;
+  return { producedInvoice: false, behavedAsExpected: ok, output: notes.join("\n    ") };
+}
+
 const CASES: Array<{ name: string; run: (seq: SequenceState) => Promise<CaseResult> | CaseResult }> = [
   { name: "happy-path", run: runHappyPath },
   { name: "holds-without-connector-rows", run: () => runHoldsWithoutConnectorRows() },
@@ -545,6 +650,8 @@ const CASES: Array<{ name: string; run: (seq: SequenceState) => Promise<CaseResu
   { name: "refuses-host-without-kennitala", run: runNoKennitala },
   { name: "refuses-mixed-posture", run: runMixedPosture },
   { name: "numbering-gap-free-and-crash-safe", run: () => runNumbering() },
+  { name: "api-lifecycle", run: () => runApiLifecycle() },
+  { name: "api-lifecycle-refusals", run: () => runApiLifecycleRefusals() },
 ];
 
 async function main(): Promise<number> {
