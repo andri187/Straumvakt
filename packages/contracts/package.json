@@ -52,7 +52,9 @@
     "./invoice/fixtures": "./src/invoice/fixtures.ts",
     "./invoice/kennitala": "./src/invoice/kennitala.ts",
     "./onboarding/org-readiness": "./src/onboarding/org-readiness.ts",
-    "./onboarding/org-exposure": "./src/onboarding/org-exposure.ts"
+    "./onboarding/org-exposure": "./src/onboarding/org-exposure.ts",
+    "./invoice/pdf": "./src/invoice/pdf.ts",
+    "./invoice/deliver-pdf": "./src/invoice/deliver-pdf.ts"
   },
   "dependencies": {
     "zod": "^4.3.6"
