@@ -43,6 +43,7 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import {
   connectorActivityMonth,
+  connectorAssertions,
   driverActivityMonth,
 } from "@straumvakt/shared/db/commercial";
 import {
@@ -51,6 +52,7 @@ import {
   deriveDriverActivity,
   periodBounds,
   type ActivitySourcePort,
+  type PeriodStateReader,
   type BillingPeriodRef,
   type ConnectorActivityRow,
   type ConnectorManualAssertion,
@@ -73,7 +75,7 @@ export interface ActivityAccess {
 
 function orgFilter(
   access: ActivityAccess,
-  column: typeof connectorActivityMonth.orgId | typeof driverActivityMonth.orgId,
+  column: typeof connectorActivityMonth.orgId | typeof driverActivityMonth.orgId | typeof connectorAssertions.orgId,
 ) {
   if (access.restrictToOrgIds === null) return undefined;
   // Empty allow-list means "may see nothing". `inArray(col, [])` is the
@@ -176,11 +178,39 @@ export async function gatherConnectorEvidence(
     observedAt: new Date(r.day),
   }));
 
-  // Manual assertions have no table yet — preflight delta 9.7. Until one
-  // exists an operator cannot assert, so a connector with no in-period
-  // evidence produces no row and the feeder holds. That is the intended
-  // behaviour, not a gap being papered over.
-  return { sessions, statuses, assertions: [] };
+  // Operator assertions — preflight delta 9.7, now closed by migration 0003.
+  //
+  // These are the connectors a human vouched for because no machine evidence
+  // exists. Every connector on a vendor-native (Zaptec-authentication)
+  // installation is permanently in that position: the Zaptec importer writes
+  // `connector_id: null` on its sessions, and StatusNotification only reaches
+  // events.event_log from our own OCPP gateway, which such a charger does not
+  // talk to. Without this read those connectors produce no row and the period
+  // holds — a host not billed for hardware that is installed and theirs.
+  const assertionRows = await db
+    .select({
+      orgId: connectorAssertions.orgId,
+      connectorId: connectorAssertions.connectorId,
+      assertedAt: connectorAssertions.assertedAt,
+    })
+    .from(connectorAssertions)
+    .where(
+      and(
+        eq(connectorAssertions.orgId, period.orgId),
+        eq(connectorAssertions.periodYear, period.year),
+        eq(connectorAssertions.periodMonth, period.month),
+        orgFilter(access, connectorAssertions.orgId),
+      ),
+    );
+
+  const assertions: ConnectorManualAssertion[] = assertionRows.map((r) => ({
+    orgId: r.orgId,
+    connectorId: r.connectorId,
+    chargingStationId: null,
+    assertedAt: r.assertedAt,
+  }));
+
+  return { sessions, statuses, assertions };
 }
 
 /** The evidence a period's driver activity is derived from. */
@@ -430,32 +460,36 @@ export async function readDriverActivityCount(
  * through an interface the feeder defines — so `flat-fee.ts` stays pure and the
  * first-invoice dry run can hand the same feeder a fixture-backed port instead.
  *
- * `activityJobHasRun` is passed through to `countFromRows` rather than inferred
- * from the row count, because the two zeroes are different facts: an org with
- * genuinely no connectors, and an org whose activity aggregation has not run.
- * Only the caller knows which it is looking at. Today no `billing_periods` row
- * records that the job ran, so callers must state it — and until one exists,
- * stating `false` is the honest default. Preflight delta 9.8.
+ * ── DELTA 9.8, CLOSED ───────────────────────────────────────────────────
+ *
+ * This used to take `{ activityJobHasRun: boolean }` from its caller, because
+ * nothing recorded whether the aggregation had run and `false` was the only
+ * honest default — which meant every period held.
+ *
+ * It now takes a `PeriodStateReader` and derives the answer from the period's
+ * recorded lifecycle state. The boolean cannot be asserted any more; it is
+ * earned by a `seal_activity` transition that records who sealed the period
+ * and when.
  */
 export function makeActivitySourcePort(
   db: Db,
   access: ActivityAccess,
-  opts: { activityJobHasRun: boolean },
+  periods: PeriodStateReader,
 ): ActivitySourcePort {
   return {
     async connectorCount(period) {
-      const rows = await readConnectorActivityCount(db, period, access);
-      return countFromRows(rows, {
-        activityJobHasRun: opts.activityJobHasRun,
-        source: "activity_month_table",
-      });
+      const [rows, periodState] = await Promise.all([
+        readConnectorActivityCount(db, period, access),
+        periods.stateOf(period),
+      ]);
+      return countFromRows(rows, { periodState, source: "activity_month_table" });
     },
     async driverCount(period) {
-      const rows = await readDriverActivityCount(db, period, access);
-      return countFromRows(rows, {
-        activityJobHasRun: opts.activityJobHasRun,
-        source: "activity_month_table",
-      });
+      const [rows, periodState] = await Promise.all([
+        readDriverActivityCount(db, period, access),
+        periods.stateOf(period),
+      ]);
+      return countFromRows(rows, { periodState, source: "activity_month_table" });
     },
   };
 }

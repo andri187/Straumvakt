@@ -27,6 +27,7 @@
 // the exact failure the whole activity-source lane exists to prevent.
 
 import { periodBounds, type BillingPeriodRef } from "./period-close";
+import { activityJobHasRun, type PeriodLifecycleState } from "./period-lifecycle";
 import {
   generateFlatFeeStatement,
   measured,
@@ -57,17 +58,40 @@ export interface ActivitySourcePort {
  * constructing it inline, so the rule lives in one place and an adapter cannot
  * quietly disagree with it.
  *
- * `expectRowsWhenPopulated` is what distinguishes the two zeroes. An org that
- * genuinely has no connectors is not the same as an org whose activity job has
- * not run, and only the caller knows which it is looking at — so it has to say.
+ * ── DELTA 9.8: THIS TAKES A STATE, NOT A BOOLEAN ────────────────────────
+ *
+ * It used to take `activityJobHasRun: boolean`, which the caller supplied.
+ * That is a fact about the caller's confidence, not about the period — and
+ * `false` was the only honest default, so every period held.
+ *
+ * It now takes the period's recorded lifecycle state and derives the answer.
+ * The boolean cannot be asserted any more; it can only be earned by a
+ * `seal_activity` transition that records who sealed the period and when.
+ *
+ * The two zeroes stay distinguishable, which is the point: an org whose
+ * activity job has not finished (`state` below `activity_sealed`) and an org
+ * that genuinely has no connectors (`state` sealed, `rowCount` 0) both produce
+ * `unavailable` — because in neither case do we know a count — but only the
+ * second is a question about the org rather than about the job.
  */
 export function countFromRows(
   rowCount: number,
-  opts: { activityJobHasRun: boolean; source: "activity_month_table" },
+  opts: { periodState: PeriodLifecycleState; source: "activity_month_table" },
 ): CountEvidence {
-  if (!opts.activityJobHasRun) return unavailable("no_activity_source");
+  if (!activityJobHasRun(opts.periodState)) return unavailable("no_activity_source");
   if (rowCount === 0) return unavailable("no_activity_source");
   return measured(rowCount, opts.source);
+}
+
+/**
+ * Where a period's recorded state comes from.
+ *
+ * A port, for the same reason `ActivitySourcePort` is one: the feeder must be
+ * drivable from fixtures with no database, or the only way to see an invoice
+ * before `0002` is applied is to apply `0002`.
+ */
+export interface PeriodStateReader {
+  stateOf(period: BillingPeriodRef): Promise<PeriodLifecycleState>;
 }
 
 /**

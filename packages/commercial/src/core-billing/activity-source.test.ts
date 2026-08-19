@@ -57,7 +57,7 @@ function portOf(connectors: CountEvidence, drivers: CountEvidence): ActivitySour
 /** A port backed by row counts, exercising the absent-is-unknown rule. */
 function portFromRows(connectorRows: number, driverRows: number, jobHasRun = true): ActivitySourcePort {
   const ev = (n: number) =>
-    countFromRows(n, { activityJobHasRun: jobHasRun, source: "activity_month_table" });
+    countFromRows(n, { periodState: jobHasRun ? "activity_sealed" : "open", source: "activity_month_table" });
   return { connectorCount: async () => ev(connectorRows), driverCount: async () => ev(driverRows) };
 }
 
@@ -128,21 +128,21 @@ describe("a period with no activity rows HOLDS", () => {
 
 describe("countFromRows — the absent-is-unknown rule, in one place", () => {
   it("zero rows is unavailable, never measured zero", () => {
-    expect(countFromRows(0, { activityJobHasRun: true, source: "activity_month_table" })).toEqual({
+    expect(countFromRows(0, { periodState: "activity_sealed", source: "activity_month_table" })).toEqual({
       kind: "unavailable",
       reason: "no_activity_source",
     });
   });
 
-  it("a job that has not run is unavailable regardless of the count", () => {
-    expect(countFromRows(7, { activityJobHasRun: false, source: "activity_month_table" })).toEqual({
+  it("a period whose activity is not sealed is unavailable regardless of the count", () => {
+    expect(countFromRows(7, { periodState: "open", source: "activity_month_table" })).toEqual({
       kind: "unavailable",
       reason: "no_activity_source",
     });
   });
 
   it("a real count is measured, and carries its source", () => {
-    expect(countFromRows(7, { activityJobHasRun: true, source: "activity_month_table" })).toEqual({
+    expect(countFromRows(7, { periodState: "activity_sealed", source: "activity_month_table" })).toEqual({
       kind: "measured",
       count: 7,
       source: "activity_month_table",

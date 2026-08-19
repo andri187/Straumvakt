@@ -1222,3 +1222,63 @@ model ConnectorActivityMonth {
   @@map("connector_activity_month")
   @@schema("reports")
 }
+
+// DOWNSTREAM MIRROR of packages/shared/src/db/commercial.ts. Drizzle is
+// authoritative (ADR 0051); this exists so check:schema-consistency passes and
+// so the Prisma client still compiles while ~500 un-ported calls remain.
+
+/// The append-only period lifecycle log — preflight delta 9.8.
+/// Fine-grained state is DERIVED from these rows rather than asserted by a
+/// caller's boolean. The Postgres PeriodState enum was deliberately not
+/// widened: ALTER TYPE ... ADD VALUE cannot run in a transaction and cannot
+/// be undone, so the fine states are text here.
+model PeriodTransition {
+  id           String   @id @default(uuid()) @db.Uuid
+  orgId        String   @map("org_id") @db.Uuid
+  periodYear   Int      @map("period_year")
+  periodMonth  Int      @map("period_month")
+  // PeriodLifecycleState — not_opened | open | activity_sealed | priced | invoiced | closed
+  fromState    String   @map("from_state")
+  toState      String   @map("to_state")
+  // PeriodEvent — open_period | seal_activity | record_pricing_settled | issue_invoice | close_period
+  event        String
+  // Never null. A transition nobody caused is one nobody can answer for.
+  actorUserId  String   @map("actor_user_id") @db.Uuid
+  reason       String?
+  occurredAt   DateTime @map("occurred_at") @db.Timestamptz(6)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  // No event occurs twice in one period's life, so a retried month-end job
+  // collides here instead of double-recording.
+  @@unique([orgId, periodYear, periodMonth, event])
+  @@index([orgId, periodYear, periodMonth, occurredAt])
+  @@map("period_transitions")
+  @@schema("billing")
+}
+
+/// A human vouching for a connector — preflight delta 9.7.
+/// Every connector on a vendor-native (Zaptec-authentication) installation
+/// produces neither session nor StatusNotification evidence, permanently: the
+/// Zaptec importer writes connector_id NULL on its sessions, and
+/// StatusNotification only reaches events.event_log from our own OCPP gateway.
+/// Without an assertion those connectors produce no activity row and the
+/// period holds.
+model ConnectorAssertion {
+  id               String   @id @default(uuid()) @db.Uuid
+  orgId            String   @map("org_id") @db.Uuid
+  periodYear       Int      @map("period_year")
+  periodMonth      Int      @map("period_month")
+  connectorId      String   @map("connector_id") @db.Uuid
+  // Never null. An unattributed assertion is an unauditable one.
+  assertedByUserId String   @map("asserted_by_user_id") @db.Uuid
+  reason           String
+  // Optional pointer at out-of-band proof — a work order, a photo, a ticket.
+  evidenceNote     String?  @map("evidence_note")
+  assertedAt       DateTime @map("asserted_at") @db.Timestamptz(6)
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([orgId, periodYear, periodMonth, connectorId])
+  @@index([orgId, periodYear, periodMonth])
+  @@map("connector_assertions")
+  @@schema("billing")
+}

@@ -45,5 +45,8 @@ export * from "./core-billing/activity-month";
 // The port between the feeder and the activity tables. Keeps flat-fee.ts pure
 // and lets the first-invoice dry run exercise the whole path with no database.
 export * from "./core-billing/activity-source";
+// The period lifecycle. Delta 9.8: activityJobHasRun stops being a parameter
+// a caller hands in and becomes a derived property of the period's state.
+export * from "./core-billing/period-lifecycle";
 export * from "./core-billing/plug-time";
 export * from "./core-billing/rate-window";

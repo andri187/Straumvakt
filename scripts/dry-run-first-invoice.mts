@@ -182,7 +182,7 @@ function makePort(opts: PortOptions = {}): ActivitySourcePort {
   return {
     connectorCount: async () =>
       countFromRows(connectorRows, {
-        activityJobHasRun: !opts.suppressConnectors,
+        periodState: opts.suppressConnectors ? "open" : "activity_sealed",
         source: "activity_month_table",
       }),
     driverCount: async () => {
@@ -192,7 +192,7 @@ function makePort(opts: PortOptions = {}): ActivitySourcePort {
         // persisted source. Kept reachable so the dry run can demonstrate it.
         const rows = deriveDriverActivity({ period: PERIOD, sessions: driverEvidence() }).rows;
         return countFromRows(rows.length, {
-          activityJobHasRun: false,
+          periodState: "open",
           source: "activity_month_table",
         });
       }

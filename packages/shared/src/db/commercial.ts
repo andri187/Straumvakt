@@ -992,3 +992,96 @@ export const connectorActivityMonth = reportsSchema.table(
   ],
 );
 
+
+/**
+ * billing.period_transitions — the append-only lifecycle log.
+ *
+ * PREFLIGHT DELTA 9.8. `billing_periods` records a period's CURRENT coarse
+ * state (open | closing | closed) and nothing records how it got there, so
+ * "has the activity aggregation run for this month?" was a boolean a caller
+ * had to hand in — and `false` was the only honest default, which means every
+ * period holds.
+ *
+ * This table is the answer. Each row is one applied transition, with the actor
+ * who caused it, so the fine-grained state
+ * (packages/commercial/.../period-lifecycle.ts) is DERIVED from evidence
+ * rather than asserted by a parameter.
+ *
+ * The Postgres enum was deliberately not widened: `ALTER TYPE ... ADD VALUE`
+ * cannot run inside a transaction block and cannot be undone, so the fine
+ * states live here as text and `coarseStateOf` keeps `billing_periods.state`
+ * meaningful to every reader that already understands it.
+ *
+ * UNIQUE (org_id, period_year, period_month, event) is the idempotency
+ * mechanism: no event occurs twice in one period's life, so a retried
+ * month-end job collides instead of double-recording.
+ */
+export const periodTransitions = billingSchema.table(
+  "period_transitions",
+  {
+    id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    orgId: uuid("org_id").notNull(),
+    periodYear: integer("period_year").notNull(),
+    periodMonth: integer("period_month").notNull(),
+    /** PeriodLifecycleState. Text, not an enum — see the note above. */
+    fromState: text("from_state").notNull(),
+    toState: text("to_state").notNull(),
+    /** PeriodEvent that caused it. */
+    event: text("event").notNull(),
+    /** Never null. A transition nobody caused is a transition nobody can answer for. */
+    actorUserId: uuid("actor_user_id").notNull(),
+    reason: text("reason"),
+    occurredAt: timestamp("occurred_at", { withTimezone: true, precision: 6, mode: "date" }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex().on(t.orgId, t.periodYear, t.periodMonth, t.event),
+    index().on(t.orgId, t.periodYear, t.periodMonth, t.occurredAt),
+  ],
+);
+
+/**
+ * billing.connector_assertions — a human vouching for a connector.
+ *
+ * PREFLIGHT DELTA 9.7. A connector is counted as active on machine evidence:
+ * a session on it, or a StatusNotification from it, inside the period. Some
+ * real connectors produce NEITHER — permanently, not occasionally. Every
+ * connector on a vendor-native (Zaptec-authentication) installation is in that
+ * position by construction: the Zaptec importer writes `connector_id: null` on
+ * every session it creates, and StatusNotification only ever reaches
+ * `events.event_log` from our own OCPP gateway, which such a charger does not
+ * talk to.
+ *
+ * Without this table those connectors produce no activity row, the period
+ * holds, and a host is not billed for hardware that is installed and theirs.
+ *
+ * An assertion is a person claiming a connector was active WITH NO MACHINE
+ * EVIDENCE, so it carries who, when and why, and it is surfaced on the
+ * invoice's provenance block beside the derived counts — never silently mixed
+ * into them.
+ *
+ * UNIQUE (org_id, period_year, period_month, connector_id) so a duplicate
+ * assertion collides rather than double-counting a connector.
+ */
+export const connectorAssertions = billingSchema.table(
+  "connector_assertions",
+  {
+    id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    orgId: uuid("org_id").notNull(),
+    periodYear: integer("period_year").notNull(),
+    periodMonth: integer("period_month").notNull(),
+    connectorId: uuid("connector_id").notNull(),
+    /** Never null. An unattributed assertion is an unauditable one. */
+    assertedByUserId: uuid("asserted_by_user_id").notNull(),
+    /** Why the operator believes it was installed. Required, free text. */
+    reason: text("reason").notNull(),
+    /** Optional pointer at out-of-band proof — a work order, a photo, a ticket. */
+    evidenceNote: text("evidence_note"),
+    assertedAt: timestamp("asserted_at", { withTimezone: true, precision: 6, mode: "date" }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex().on(t.orgId, t.periodYear, t.periodMonth, t.connectorId),
+    index().on(t.orgId, t.periodYear, t.periodMonth),
+  ],
+);

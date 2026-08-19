@@ -420,6 +420,132 @@ describe("the connector and driver source unions", () => {
   });
 });
 
+// ── Operator assertions — preflight delta 9.7 ────────────────────────
+//
+// A connector on a vendor-native (Zaptec-authentication) installation
+// produces NEITHER session nor status evidence, permanently: the Zaptec
+// importer writes connector_id NULL on its sessions, and StatusNotification
+// only reaches events.event_log from our own OCPP gateway, which such a
+// charger does not talk to. Without an assertion those connectors produce no
+// row and the period holds — a host not billed for hardware that is installed
+// and theirs.
+
+describe("connector assertions", () => {
+  const assertion = (connectorId: string, day: number, orgId = ORG_A) => ({
+    orgId,
+    connectorId,
+    chargingStationId: null,
+    assertedAt: at(day),
+  });
+
+  it("an assertion SAVES a period that would otherwise have no rows", () => {
+    // The delta-9.7 case in one test: no session, no status, and without the
+    // assertion the feeder holds.
+    const without = deriveConnectorActivity({ period: PERIOD, sessions: [], statuses: [] });
+    expect(without.rows).toEqual([]);
+
+    const with_ = deriveConnectorActivity({
+      period: PERIOD,
+      sessions: [],
+      statuses: [],
+      assertions: [assertion(C1, 15)],
+    });
+    expect(with_.rows).toHaveLength(1);
+    expect(with_.rows[0]).toMatchObject({ source: "manually_asserted", activeDays: null });
+  });
+
+  it("machine evidence WINS over an assertion for the cited source", () => {
+    // Decision, and the reasoning: the assertion claims "this connector was
+    // installed"; the evidence proves the same thing. The COUNT does not
+    // change — it was already one — so what is at stake is only which proof
+    // the invoice cites, and an invoice should cite the strongest available.
+    // The assertion row is not deleted: the audit trail should still show that
+    // a human vouched before proof existed.
+    const out = deriveConnectorActivity({
+      period: PERIOD,
+      sessions: [session(C1, 6)],
+      statuses: [],
+      assertions: [assertion(C1, 2)],
+    });
+    expect(out.rows).toHaveLength(1);
+    expect(out.rows[0]!.source).toBe("session_observed");
+    // Status evidence also outranks an assertion.
+    const out2 = deriveConnectorActivity({
+      period: PERIOD,
+      sessions: [],
+      statuses: [status(C1, 6)],
+      assertions: [assertion(C1, 2)],
+    });
+    expect(out2.rows[0]!.source).toBe("status_available");
+  });
+
+  it("an assertion adds no day evidence, so activeDays stays null under it alone", () => {
+    // NULL means "no evidence-based day count exists". It must not read as
+    // "active on zero days", which is a claim the operator did not make.
+    const out = deriveConnectorActivity({
+      period: PERIOD,
+      sessions: [],
+      statuses: [],
+      assertions: [assertion(C1, 3), assertion(C1, 20)],
+    });
+    expect(out.rows).toHaveLength(1);
+    expect(out.rows[0]!.activeDays).toBeNull();
+  });
+
+  it("a duplicate assertion counts the connector once", () => {
+    // The unique index (org, year, month, connector) makes a duplicate collide
+    // in the database; the derivation must not double-count either, so that a
+    // fixture-driven run and a database-driven run agree.
+    const out = deriveConnectorActivity({
+      period: PERIOD,
+      sessions: [],
+      statuses: [],
+      assertions: [assertion(C1, 3), assertion(C1, 3), assertion(C1, 9)],
+    });
+    expect(out.rows).toHaveLength(1);
+  });
+
+  it("an assertion cannot cross an org boundary", () => {
+    // Asserting another org's connector into this org's period would bill the
+    // wrong host 200 kr for hardware that is not theirs.
+    expect(() =>
+      deriveConnectorActivity({
+        period: PERIOD,
+        sessions: [session(C1, 5)],
+        statuses: [],
+        assertions: [assertion(C1, 7, ORG_B)],
+      }),
+    ).toThrow("connector_activity_org_conflict");
+  });
+
+  it("an assertion outside the period is discarded and counted", () => {
+    const out = deriveConnectorActivity({
+      period: PERIOD,
+      sessions: [],
+      statuses: [],
+      assertions: [
+        { orgId: ORG_A, connectorId: C1, chargingStationId: null, assertedAt: new Date(Date.UTC(2026, 1, 2)) },
+      ],
+    });
+    expect(out.rows).toEqual([]);
+    expect(out.outOfPeriodObservations).toBe(1);
+  });
+
+  it("asserted and evidenced connectors coexist in one period", () => {
+    // The realistic mixed installation: OCPP chargers that report, plus a
+    // vendor-native one that cannot.
+    const out = deriveConnectorActivity({
+      period: PERIOD,
+      sessions: [],
+      statuses: [status(C1, 4)],
+      assertions: [assertion(C2, 4)],
+    });
+    expect(out.rows).toHaveLength(2);
+    expect(out.rows.find((r) => r.connectorId === C1)!.source).toBe("status_available");
+    expect(out.rows.find((r) => r.connectorId === C2)!.source).toBe("manually_asserted");
+  });
+});
+
 describe("deriveDriverActivity", () => {
   const d1 = "drv-1-0000-0000-0000-00000001";
   const d2 = "drv-2-0000-0000-0000-00000002";
