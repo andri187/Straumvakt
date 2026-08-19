@@ -57,6 +57,12 @@ const CHECKS = [
   // against reality. Runs offline against a recorded account snapshot, so it
   // needs no credential and works on every branch.
   ["bindings", "npm run check:bindings"],
+  // Can an org still be walked from nothing to invoiceable? Offline, through
+  // ports, ending by constructing a real invoice document rather than by
+  // declaring the checklist passed. Added 2026-08-19 — the invoice pipeline
+  // refuses an unready org correctly, and this asks the same question at
+  // onboarding, where fixing it is free.
+  ["onboarding", "npm run check:onboarding"],
 ];
 
 const results = [];
