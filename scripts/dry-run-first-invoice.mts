@@ -148,13 +148,24 @@ function connectorEvidence() {
       chargingStationId: `stn-${String(i).padStart(4, "0")}`,
       startedAt: utc(4 + i),
     })),
-    statuses: Array.from({ length: CONNECTOR_COUNT }, (_, i) => ({
+    // Connector 29 is vendor-native: the Zaptec importer writes connector_id
+    // null on its sessions and it never speaks OCPP to our gateway, so it
+    // produces NO machine evidence at all. An operator vouched for it, and
+    // the provenance block below says so on the invoice.
+    statuses: Array.from({ length: CONNECTOR_COUNT - 1 }, (_, i) => ({
       orgId: ORG_ID,
       connectorId: connectorId(i),
       chargingStationId: `stn-${String(i).padStart(4, "0")}`,
       observedAt: utc(2 + (i % 20)),
     })),
-    assertions: [],
+    assertions: [
+      {
+        orgId: ORG_ID,
+        connectorId: connectorId(CONNECTOR_COUNT - 1),
+        chargingStationId: null,
+        assertedAt: utc(16),
+      },
+    ],
   };
 }
 
@@ -361,7 +372,8 @@ function runHappyPath(seq: SequenceState): Promise<CaseResult> {
     const provenance = [
       `connector count ${result.statement.activeConnectors} — DERIVED from ${connectors.rows.length} activity rows ` +
         `(${connectors.rows.filter((r) => r.source === "session_observed").length} session_observed, ` +
-        `${connectors.rows.filter((r) => r.source === "status_available").length} status_available)`,
+        `${connectors.rows.filter((r) => r.source === "status_available").length} status_available, ` +
+        `${connectors.rows.filter((r) => r.source === "manually_asserted").length} manually_asserted)`,
       `driver count ${result.statement.activeDrivers} — SUPPLIED BY THE FIXTURE, not derived. ` +
         `The charging-only derivation would give ${drivers.rows.length}; the locked definition ` +
         `("charging or reporting activity") is not computable because reporting activity has no ` +

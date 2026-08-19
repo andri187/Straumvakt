@@ -83,7 +83,11 @@ describe("the happy path produces an invoice", () => {
   it("shows the connector count WAS derived, with its evidence split", () => {
     expect(r.out).toMatch(/connector count 30 — DERIVED from 30 activity rows/);
     expect(r.out).toContain("3 session_observed");
-    expect(r.out).toContain("27 status_available");
+    expect(r.out).toContain("26 status_available");
+    // Delta 9.7 on the face of the document: a vendor-native connector nobody
+    // could evidence, vouched for by a person, cited as such beside the
+    // derived counts rather than blended into them.
+    expect(r.out).toContain("1 manually_asserted");
   });
 
   it("declares the principal posture and the market line", () => {
