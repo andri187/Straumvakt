@@ -11,6 +11,7 @@ import { sessionLedger } from "@straumvakt/shared/db/commercial";
 import { chargingStations, siteAssets, sites } from "@straumvakt/shared/db/assets";
 import { organizations } from "@straumvakt/shared/db/identity";
 import type { Db } from "../lib/drizzle";
+import { toWireAurar } from "../lib/billing/money-wire";
 
 export interface DriverInvoiceSession {
   sessionId: string;
@@ -18,8 +19,10 @@ export interface DriverInvoiceSession {
   stoppedAt: string | null;
   durationSec: number | null;
   energyKwh: number;
-  /** VAT-inclusive amount in aurar (1/100 króna), or null if never costed. */
-  costIsk: number | null;
+  /** VAT-inclusive amount in aurar (1/100 króna), or null if never costed.
+   *  This file had the unit right and the NAME wrong — it was `costIsk`. See
+   *  lib/billing/money-wire.ts for the rule that now governs both. */
+  costAurar: number | null;
   chargerName: string | null;
   siteName: string | null;
   billingHomeName: string | null;
@@ -65,8 +68,9 @@ export async function listDriverActualSessions(
 
   return rows.map((s) => {
     const lc = ledgerCost.get(s.id);
-    const cost =
-      lc != null ? Number(lc) : s.costIncVatMinor != null ? Number(s.costIncVatMinor) : null;
+    // Ledger cost wins when the session was projected; else the session's own
+    // rolled-up cost; else null. All three are aurar, and stay aurar.
+    const costAurar = toWireAurar(lc ?? s.costIncVatMinor);
     const durationSec =
       s.endedAt != null
         ? Math.max(0, Math.round((s.endedAt.getTime() - s.startedAt.getTime()) / 1000))
@@ -77,7 +81,7 @@ export async function listDriverActualSessions(
       stoppedAt: s.endedAt ? s.endedAt.toISOString() : null,
       durationSec,
       energyKwh: whToKwh(s.energyWh),
-      costIsk: cost,
+      costAurar,
       chargerName: s.chargerName ?? null,
       siteName: s.siteName ?? null,
       billingHomeName: s.orgName ?? null,

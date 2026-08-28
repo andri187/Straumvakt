@@ -36,6 +36,16 @@ import { RecordNotFoundError, UniqueViolationError, isUniqueViolation } from "./
 export type DbOrTx = Db | Parameters<Parameters<Db["transaction"]>[0]>[0];
 
 /**
+ * ISO 14443-3 reserves a leading 0x08 to mark a randomly-generated UID.
+ * The tap-and-auth path depends on that reservation: `isRandomEmulatedUid`
+ * (lib/tap-intent/random-uid.ts) routes every `08`-prefixed idTag to the
+ * tap-intent matcher BEFORE the IdToken lookup. A minted token in that
+ * space is therefore not just non-conformant, it collides with a live
+ * code path — see the note on mintRfidValue below.
+ */
+const RESERVED_RANDOM_UID_PREFIX = 0x08;
+
+/**
  * Generate an 8-uppercase-hex RFID UID. Matches MIFARE Classic 4-byte
  * UID format, which is what the existing Dalvegur portal data uses
  * (e.g. "B6432D39", "EE43C609" — though Zaptec also has 14-hex DESFire
@@ -43,12 +53,34 @@ export type DbOrTx = Db | Parameters<Parameters<Db["transaction"]>[0]>[0];
  * probability against a single existing token at our pilot scale is
  * negligible, but we still retry on a unique violation.
  *
+ * The first byte never takes the value 0x08. Without that exclusion,
+ * roughly 1 in 256 minted tokens lands in ISO 14443-3's reserved
+ * random-UID space, and `resolveAuthorize` (routes/internal/
+ * ocpp-authorize.ts:173-212) diverts such an idTag into
+ * `matchAndConsumeTapIntent` first. That matcher keys on the STATION and
+ * liveness only — never on the idTag, because a phone's UID is different
+ * on every tap — so a card in that space presented at a charger where
+ * another driver has armed an intent CONSUMES that intent and the
+ * session is attributed to the other person. With two live intents it
+ * returns `ambiguous` and the charge is Blocked. With none it falls
+ * through harmlessly, which is why this is a misattribution risk rather
+ * than a lockout.
+ *
+ * Excluding one value costs 0.4% of the keyspace and removes the class.
+ *
  * Uses crypto.getRandomValues — available in Cloudflare Workers, Node
  * 20+, modern browsers. No fallback because all our targets have it.
  */
 export function mintRfidValue(): string {
   const bytes = new Uint8Array(4);
   crypto.getRandomValues(bytes);
+  // Re-roll only the first byte; rejection-sampling the whole value would
+  // discard three good bytes to fix one.
+  while (bytes[0] === RESERVED_RANDOM_UID_PREFIX) {
+    const reroll = new Uint8Array(1);
+    crypto.getRandomValues(reroll);
+    bytes[0] = reroll[0]!;
+  }
   return Array.from(bytes)
     .map((b) => b.toString(16).toUpperCase().padStart(2, "0"))
     .join("");

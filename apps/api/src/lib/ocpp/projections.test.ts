@@ -870,6 +870,83 @@ describe("projections — per-event handlers", () => {
       expect(call.data.energyWh).toBe(15000n);
     });
 
+    // ─── Cumulative-register chargers ──────────────────────────────
+    //
+    // Every other fixture in this file starts the session at meterStart 0,
+    // so `meterStop` and `meterStop - meterStart` are the same number and
+    // the suite cannot tell which one the code uses. These two can.
+    //
+    // OCPP 1.6 does not promise the energy register resets per
+    // transaction. The deployed fleet happens to be per-session (measured
+    // 2026-08-10: 1,655 sessions, max 79.5 kWh, sequence-vs-energy
+    // correlation ~0), which is why this was invisible.
+
+    it("ocpp.raw.StopTransaction bills the DELTA for a cumulative register", async () => {
+      const tx = makeTx();
+      // Charger's lifetime register: 4,000 kWh at start, 4,010 kWh at stop.
+      // The session is 10 kWh. Billing meterStop alone would charge
+      // 4,010 kWh — 401x the true figure.
+      tx.chargeSession.findFirst = vi.fn(async () => ({
+        id: SESSION,
+        orgId: ORG,
+        siteId: null,
+        chargingStationId: null,
+        idTag: null,
+        startedAt: new Date("2026-05-11T07:30:00Z"),
+        energyWh: 4_000_000n, // meterStart, written by StartTransaction
+      })) as never;
+      await run(
+        tx,
+        rawEvent("StopTransaction", {
+          transactionId: 12345,
+          meterStop: 4_010_000,
+          reason: "Local",
+          timestamp: "2026-05-11T08:00:00.000Z",
+        }),
+      );
+      const call = tx.chargeSession.update.mock.calls[0][0] as {
+        data: { energyWh: bigint; ocppEnergyKwh: string };
+      };
+      expect(call.data.energyWh).toBe(10_000n); // NOT 4_010_000n
+      expect(call.data.ocppEnergyKwh).toBe("10.0000"); // NOT "4010.0000"
+    });
+
+    it("ocpp.raw.StopTransaction falls back to meterStop on a backwards register", async () => {
+      // Meter replacement, firmware reset or rollover. The subtraction is
+      // meaningless, so behaviour is unchanged from before the fix rather
+      // than introducing a new unpriced path — and it warns.
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      try {
+        const tx = makeTx();
+        tx.chargeSession.findFirst = vi.fn(async () => ({
+          id: SESSION,
+          orgId: ORG,
+          siteId: null,
+          chargingStationId: null,
+          idTag: null,
+          startedAt: new Date("2026-05-11T07:30:00Z"),
+          energyWh: 900_000n,
+        })) as never;
+        await run(
+          tx,
+          rawEvent("StopTransaction", {
+            transactionId: 12345,
+            meterStop: 15_000,
+            reason: "Local",
+            timestamp: "2026-05-11T08:00:00.000Z",
+          }),
+        );
+        const call = tx.chargeSession.update.mock.calls[0][0] as {
+          data: { energyWh: bigint };
+        };
+        expect(call.data.energyWh).toBe(15_000n);
+        expect(warn).toHaveBeenCalled();
+        expect(String(warn.mock.calls[0]![0])).toContain("unresolvable");
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
     // ─── Sprint 9 / ENRICH-1 — per-source mirror columns ───────────
     it("ocpp.raw.StopTransaction also writes ocppEnergyKwh + ocppStoppedAt mirror columns", async () => {
       const tx = makeTx();

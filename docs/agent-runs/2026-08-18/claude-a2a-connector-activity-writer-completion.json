@@ -1,0 +1,153 @@
+{
+  "agent": "claude-a",
+  "chunk": "A2a of 3",
+  "status": "complete",
+  "resumed_from": "docs/agent-prompts/2026-08-18/2026-08-18-1540-claude-a-activity-source-and-first-invoice-dry-run.md (interrupted by API Error 529 at e7247b6)",
+  "prompt_file": "docs/agent-prompts/2026-08-18/2026-08-18-1805-claude-a2a-connector-activity-writer.md",
+  "start_utc": "2026-08-18T18:08:43Z",
+  "end_utc": "2026-08-18T18:14:00Z",
+  "wall_clock_seconds": 317,
+  "target_met": null,
+  "target_note": "No wall-clock target. Deliverable-gated; 12 of 12 gates met.",
+  "worktree": "E:\\Claude\\Straumvakt-core-billing",
+  "branch": "dev/core-billing-integration",
+  "start_tip": "e7247b6",
+  "end_tip": "1a418df",
+  "dirty": 0,
+  "salvage": {
+    "decision": "finished and committed as its own slice",
+    "commit": "28f5fdc",
+    "stashed": false,
+    "discarded": false,
+    "entries_classified": {
+      "mine_from_interrupted_run": 6,
+      "peer": 0,
+      "generated": 0
+    },
+    "note": "The connector activity writer was already built and passing 44 tests when the 529 hit. Committed unchanged except for three unused-exports baseline entries, appended by hand rather than via --baseline so three unrelated stale entries were not silently resolved."
+  },
+  "commits": [
+    { "sha": "28f5fdc", "subject": "Salvage the connector activity writer from the interrupted run" },
+    { "sha": "1a418df", "subject": "Merge dev/market-rails at a81860b — picks up B's CR-1 fix" }
+  ],
+  "files_changed": {
+    "created": [
+      "packages/commercial/src/core-billing/activity-month.ts",
+      "packages/commercial/src/core-billing/activity-month.test.ts",
+      "apps/api/src/repositories/activity-month.ts",
+      "apps/api/src/repositories/activity-month.test.ts",
+      "docs/notes/2026-08-18-activity-source-census.md"
+    ],
+    "modified": [
+      "packages/commercial/src/index.ts",
+      ".unused-exports-known.json"
+    ],
+    "merged_in_from_market_rails": 21
+  },
+  "tests": {
+    "baseline_passed": 1533,
+    "baseline_failed": 2,
+    "baseline_failure_cause": "B's header.test.ts golden files — CR-1, B's lane, fixed by a81860b",
+    "final_files": 87,
+    "final_passed": 1582,
+    "final_failed": 0,
+    "final_skipped": 1,
+    "added_this_chunk": 49,
+    "tsc_apps_api": "pass",
+    "npm_run_typecheck": "pass",
+    "npm_run_check": "all 16 pass",
+    "check_gate_count": 16,
+    "fool_tests_run": 1,
+    "fool_tests_caught": 1,
+    "fool_test_detail": "assertOrgInScope made a no-op -> 4 of 19 repository tests failed. Restored."
+  },
+  "gates_met": {
+    "total": 12,
+    "met": 12,
+    "unmet": 0,
+    "detail": {
+      "0_salvage_recorded": "met - finished and committed, nothing stashed or discarded",
+      "1_market_rails_merged_golden_green": "met - a81860b merged, header.test.ts 23/23",
+      "2_check_runs_both_and_no_crlf": "met - 16 gates; 21/21 files identical under -w",
+      "3_source_table_cited": "met - 6 candidate sources with citations and historical coverage",
+      "4_active_connector_defined": "met - one sentence in source; zero-session case decided as ACTIVE and justified",
+      "5_source_typed_union": "met - 3 documented values",
+      "6_pure_then_repository": "met",
+      "7_upsert_semantics_stated": "met - 5 overwritten, 4 preserved",
+      "8_nullable_columns_decided": "met - active_days populated, cap_applied_isk always null, both null-meanings stated",
+      "9_hot_path_with_volumes": "met - raw SQL aggregation / Drizzle upsert, 21 and 4,000 charger estimates",
+      "10_ten_plus_tests": "met - 25 pure + 19 repository",
+      "11_fool_test": "met",
+      "12_artifact_written_and_committed": "met"
+    }
+  },
+  "blockers": [
+    {
+      "id": "activity-count-source-half-built",
+      "severity": "chunk 2 and 3 continue it",
+      "detail": "The connector half of preflight 9.6 is closed. The driver half exists as a derivation carried by salvage but the active-driver DECISION packet is not started - that is chunk 2. The feeder is not yet wired to the activity source - that is chunk 3."
+    },
+    {
+      "id": "no-manual-assertion-table",
+      "severity": "blocks billing a connector with no in-period evidence",
+      "detail": "manually_asserted is a valid source value with no table behind it, so an operator cannot assert a connector was installed. A connector with no session and no StatusNotification in the period produces no row and the feeder will hold. Preflight delta 9.7."
+    },
+    {
+      "id": "gateway-main-app-binding-pending",
+      "severity": "informational, B's lane",
+      "detail": "B's new check:bindings gate reports gateway/wrangler.jsonc binding MAIN_APP to worker 'hlada-api' as PENDING-CREATION (Andri). The gate passes with it recorded. Outside this chunk."
+    }
+  ],
+  "corrections": [
+    "CR-1 is closed by a81860b. B normalised the file side only, and the committed reasoning matches A's diagnosis exactly: the blob is LF, core.autocrlf converts on CHECKOUT, and the merge was the first checkout of those blobs.",
+    "My own, caught while writing the test: the first version asserted LEAST/GREATEST by JSON.stringify-ing a Drizzle SQL node, which is a circular structure (SQL -> column -> table -> columns). Replaced with a chunk reader that does not traverse the cycle."
+  ],
+  "next_actions": [
+    "Dispatch chunk A2b: the driver activity writer and the active-driver decision packet. Note that deriveDriverActivity and writeDriverActivity already exist, carried by salvage - VERIFY and extend rather than rebuild.",
+    "The refusal in deriveActiveDrivers is untouched and still refuses with reason driver_definition_incomplete. Chunk 2 must keep it.",
+    "Chunk A2c then wires the feeder to the activity source and produces the first-invoice dry run."
+  ],
+  "external_state": {
+    "push": false,
+    "deploy": false,
+    "migration_applied": false,
+    "sql_executed_against_any_environment": false,
+    "database_connected": false,
+    "cloudflare_mutation": false,
+    "neon_mutation": false,
+    "github_mutation": false,
+    "charger_or_hardware_action": false,
+    "ble_nfc": false,
+    "branch_or_tag_deleted": false,
+    "git_clean_reset_rebase_amend_or_force": false,
+    "anything_discarded_during_salvage": false,
+    "gitattributes_added_or_proposed": false,
+    "branches_written_to": ["dev/core-billing-integration"],
+    "branches_read_only": ["dev/market-rails", "dev/straumvakt-org-relaunch"],
+    "files_written_into_canonical_checkout": [
+      "docs/agent-runs/2026-08-18/claude-a2a-connector-activity-writer-completion.md",
+      "docs/agent-runs/2026-08-18/claude-a2a-connector-activity-writer-completion.json"
+    ]
+  },
+  "chunk_2_expects": {
+    "branch": "dev/core-billing-integration",
+    "tip": "1a418df plus the artifact commit",
+    "dirty": 0,
+    "tests": "1582 passing, 1 skipped, 0 failing",
+    "checks": "all 16 pass",
+    "exists": [
+      "packages/commercial/src/core-billing/activity-month.ts - pure derivation for connectors AND drivers",
+      "apps/api/src/repositories/activity-month.ts - gather/write/run/read for both tables",
+      "docs/notes/2026-08-18-activity-source-census.md",
+      "CR-1, closed"
+    ],
+    "does_not_exist": [
+      "the active-driver decision packet",
+      "any narrowing of deriveActiveDrivers - it still refuses",
+      "feeder wiring to the activity source",
+      "scripts/dry-run-first-invoice.mts",
+      "an assertion table for manually_asserted"
+    ]
+  },
+  "very_tldr": "Chunk 1 of 3, resuming an interrupted run. Nothing was lost: the connector activity writer was already built and green in the working tree and is committed unchanged, closing the connector half of preflight 9.6 - the table reports.connector_activity_month has had zero writers since 0002 created it. A zero-session connector is ACTIVE, because the fee is per connector and not per session. dev/market-rails re-merged at a81860b and CR-1 is closed. The branch is fully green for the first time: 16 of 16 checks, 1,577 tests, zero failures."
+}

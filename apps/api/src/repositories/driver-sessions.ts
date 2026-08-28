@@ -24,6 +24,7 @@
 // this module.
 
 import type { PrismaClient, Prisma } from "../generated/prisma/client";
+import { toWireAurar } from "../lib/billing/money-wire";
 
 // ── Public types ─────────────────────────────────────────────────────
 
@@ -35,7 +36,9 @@ export interface DriverActiveSession {
   startedAt: string;
   powerKw: number;
   energyKwh: number;
-  costIsk: number;
+  /** VAT-inclusive aurar (1/100 króna) — see lib/billing/money-wire.ts.
+   *  Reads 0 while the session is in flight; see the note on that below. */
+  costAurar: number;
 }
 
 export interface DriverHistorySession {
@@ -44,7 +47,9 @@ export interface DriverHistorySession {
   stoppedAt: string | null;
   durationSec: number | null;
   energyKwh: number;
-  costIsk: number | null;
+  /** VAT-inclusive aurar (1/100 króna), or null when never costed — a real
+   *  state, not a zero. See lib/billing/money-wire.ts for the wire rule. */
+  costAurar: number | null;
   chargerName: string | null;
   siteName: string | null;
   /** The org the session was billed under — the driver's "billing home"
@@ -90,12 +95,14 @@ function whToKwh(wh: bigint | null | undefined): number {
   return Math.round((Number(wh) / 1000) * 1000) / 1000;
 }
 
-// costIncVatMinor is BigInt currency-minor (ISK has no minor unit, so
-// minor === major). Render as a plain number for the app.
-function minorToIsk(minor: bigint | null | undefined): number {
-  if (minor == null) return 0;
-  return Number(minor);
-}
+// Money conversion is NOT done here. costIncVatMinor / costIskMinor are aurar
+// (1/100 króna) and leave this API as aurar, under a field name that says so —
+// lib/billing/money-wire.ts owns that rule and explains why.
+//
+// What used to stand here was `minorToIsk = (minor) => Number(minor)` under a
+// comment claiming "ISK has no minor unit, so minor === major". It does have
+// one, this codebase uses it, and that single false premise is why every
+// driver saw every session priced 100× too high.
 
 // ── getDriverActiveSessions ──────────────────────────────────────────
 //
@@ -134,7 +141,12 @@ export async function getDriverActiveSessions(
     startedAt: r.startedAt.toISOString(),
     powerKw: 0,
     energyKwh: whToKwh(r.energyWh),
-    costIsk: minorToIsk(r.costIncVatMinor),
+    // 0 rather than null when the session has not been costed yet. This
+    // preserves the pre-existing contract deliberately — changing zero to
+    // null is a second wire change and belongs with the one that fixes it on
+    // every driver surface at once. Recorded in
+    // docs/notes/2026-08-18-money-unit-boundary.md §"Zero is not unknown".
+    costAurar: toWireAurar(r.costIncVatMinor) ?? 0,
   }));
 }
 
@@ -267,7 +279,7 @@ export async function listDriverSessionHistory(
     stoppedAt: r.stoppedAt?.toISOString() ?? null,
     durationSec: r.durationSec,
     energyKwh: Number(r.energyKwh.toString()),
-    costIsk: r.costIskMinor == null ? null : minorToIsk(r.costIskMinor),
+    costAurar: toWireAurar(r.costIskMinor),
     chargerName: r.chargingStationId
       ? chargerNameByStation.get(r.chargingStationId) ?? null
       : null,

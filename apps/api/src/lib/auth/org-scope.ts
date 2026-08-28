@@ -20,7 +20,7 @@ import { makeDrizzle } from "../drizzle";
 import type { Env } from "../../bindings";
 import { memberships } from "@straumvakt/shared/db/identity";
 import type { SessionPayload } from "../admin-session";
-import { getActivePlatformGrant, expandPermissionsSync } from "./effective-permissions";
+import { resolvePermissionsWithProvenance } from "./effective-permissions";
 import { isBootstrapSession, sessionUserId } from "./require-permission";
 
 export type OrgScope = { all: true } | { all: false; orgIds: string[] };
@@ -49,10 +49,23 @@ export async function resolveOrgScope(
   // eight routes that call this would otherwise each have had to hold a
   // Drizzle client alongside their Prisma one purely to answer "which orgs".
   const db = makeDrizzle(env);
-  const grant = await getActivePlatformGrant(db, userId);
-  if (grant) {
-    const perms = expandPermissionsSync(null, { role: grant.role });
-    if (perms.includes("platform.tenant.read")) return { all: true };
+  // Converged onto the shared provenance helper. This module used to
+  // re-derive "is this platform-derived?" itself — getActivePlatformGrant
+  // plus expandPermissionsSync(null, {role}) — which was a THIRD
+  // definition of the same question alongside requirePermission and
+  // assertPermission. Three definitions drift the first time a role
+  // bundle changes, and this is the one gating rows.
+  const resolution = await resolvePermissionsWithProvenance(db, userId, null);
+  if (resolution.viaPlatform.includes("platform.tenant.read")) {
+    // Deliberately unconditional today, and deliberately noisy. This is
+    // the row gate: a support context enforced only in requirePermission
+    // would gate the VERB and leave every tenant's rows readable. Doc 19
+    // §3.2 — 18D named one seam; there are three.
+    console.warn("[support-context] cross-tenant row scope granted", {
+      userId,
+      platformRole: resolution.platformRole,
+    });
+    return { all: true };
   }
 
   const rows = await db

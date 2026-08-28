@@ -16,9 +16,39 @@ import { describe, expect, it, vi } from "vitest";
 // env.HYPERDRIVE_DB.connectionString off a test Env that has no bindings.
 // A mock that names the wrong module is not a mock.
 
-const mockPermissions = new Map<string, string[]>();
+interface SeededResolution {
+  all: string[];
+  viaMembership: string[];
+  viaPlatform: string[];
+}
+
+const mockPermissions = new Map<string, SeededResolution>();
+
+/**
+ * Seed a user who holds the verbs through their MEMBERSHIP. Default
+ * because it is the ordinary tenant case, and because it keeps the
+ * support-context observer quiet — a member acting as a member needs no
+ * context.
+ */
 function seedPermissions(userId: string, orgId: string | null, verbs: string[]) {
-  mockPermissions.set(JSON.stringify([userId, orgId]), verbs);
+  mockPermissions.set(JSON.stringify([userId, orgId]), {
+    all: verbs,
+    viaMembership: verbs,
+    viaPlatform: [],
+  });
+}
+
+/** Seed a user who holds the verbs ONLY through a platform grant. */
+function seedPlatformOnly(
+  userId: string,
+  orgId: string | null,
+  verbs: string[],
+) {
+  mockPermissions.set(JSON.stringify([userId, orgId]), {
+    all: verbs,
+    viaMembership: [],
+    viaPlatform: verbs,
+  });
 }
 
 vi.mock("../drizzle", () => ({
@@ -26,14 +56,32 @@ vi.mock("../drizzle", () => ({
   makeDrizzle: () => ({}) as any,
 }));
 
+// The whole module is replaced, so every symbol require-permission.ts
+// imports must appear here. Adding an import to the middleware without
+// adding it below fails with vitest's "No <name> export is defined on the
+// mock" and turns these tests 403 -> 500.
 vi.mock("./effective-permissions", () => ({
   resolveEffectivePermissions: async (
     _db: unknown,
     userId: string,
     orgId: string | null,
-  ) => {
-    return mockPermissions.get(JSON.stringify([userId, orgId])) ?? [];
-  },
+  ) => mockPermissions.get(JSON.stringify([userId, orgId]))?.all ?? [],
+  resolvePermissionsWithProvenance: async (
+    _db: unknown,
+    userId: string,
+    orgId: string | null,
+  ) =>
+    mockPermissions.get(JSON.stringify([userId, orgId])) ?? {
+      all: [],
+      viaMembership: [],
+      viaPlatform: [],
+      membershipRole: null,
+      platformRole: null,
+    },
+  // The real difference, not a stub returning a constant — a stub here
+  // would let the union bug through the one test written to catch it.
+  satisfiedOnlyByPlatformGrant: (r: SeededResolution, verb: string) =>
+    r.all.includes(verb) && !r.viaMembership.includes(verb),
 }));
 
 import { Hono } from "hono";
@@ -179,5 +227,104 @@ describe("requirePermission", () => {
     expect(res.status).toBe(403);
     const body = (await res.json()) as { reason: string };
     expect(body.reason).toBe("session_missing_user_id");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// Support context — shadow mode
+// ─────────────────────────────────────────────────────────────────────
+//
+// The guard observes and does not block. It cannot block yet:
+// support_contexts exists in no schema, so there is no context to open.
+// Shadow first is also deliberate — the bootstrap operator holds a
+// super_user grant and no membership anywhere, so enforcing on day one
+// would demand a context for every routine org-scoped action.
+
+describe("requirePermission — support-context observation", () => {
+  function staffSession(userId: string): SessionPayload {
+    return {
+      sub: "admin" as const,
+      role: "admin" as const,
+      email: "staff-carol@example.test",
+      exp: Math.floor(Date.now() / 1000) + 3600,
+      userId,
+    } as SessionPayload;
+  }
+
+  it("does NOT observe when the verb comes from the user's membership", async () => {
+    seedPermissions("member-1", "org-1", ["site.write"]);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const app = makeApp(
+        staffSession("member-1"),
+        requirePermission("site.write", { orgIdParam: "orgId" }),
+      );
+      const res = await app.request("/test/org-1", undefined, env);
+      expect(res.status).toBe(200);
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("observes, but does not block, a platform-derived org-scoped action", async () => {
+    seedPlatformOnly("staff-1", "org-1", ["site.write"]);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const app = makeApp(
+        staffSession("staff-1"),
+        requirePermission("site.write", { orgIdParam: "orgId" }),
+      );
+      const res = await app.request("/test/org-1", undefined, env);
+      expect(res.status).toBe(200); // shadow: observed, not enforced
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0]![0]).toContain("support-context");
+      expect(warn.mock.calls[0]![1]).toMatchObject({
+        userId: "staff-1",
+        orgId: "org-1",
+        verb: "site.write",
+      });
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("does not observe on a platform-scoped route (no orgId to act on behalf of)", async () => {
+    seedPlatformOnly("staff-1", null, ["site.write"]);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const app = makeApp(
+        staffSession("staff-1"),
+        requirePermission("site.write"), // no orgIdParam
+      );
+      const res = await app.request("/test", undefined, env);
+      expect(res.status).toBe(200);
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  // The gap, asserted rather than described. A validly-signed session with
+  // sub:"admin" and no userId returns next() before any of this runs.
+  it("is bypassed entirely by a bootstrap session, as the permission check is", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const bootstrap = {
+        sub: "admin" as const,
+        role: "admin" as const,
+        email: "admin-dagur@example.test",
+        exp: Math.floor(Date.now() / 1000) + 3600,
+      } as SessionPayload;
+      const app = makeApp(
+        bootstrap,
+        requirePermission("site.write", { orgIdParam: "orgId" }),
+      );
+      const res = await app.request("/test/org-1", undefined, env);
+      expect(res.status).toBe(200);
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
   });
 });

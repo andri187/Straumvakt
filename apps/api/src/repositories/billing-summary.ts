@@ -2,10 +2,49 @@
 //
 // Pulls from reports.session_ledger (pre-computed) and
 // billing.tariff_definitions / billing.cost_centers for health tiles.
-// All functions take orgId = undefined for platform-admin (no filter)
-// or a specific orgId for tenant-scoped reads.
+//
+// ── HEADER CORRECTED 2026-08-18 ──────────────────────────────────────
+//
+// This header used to claim: "All functions take orgId = undefined for
+// platform-admin (no filter) or a specific orgId for tenant-scoped reads."
+//
+// **None of the five functions had an orgId parameter.** Every one of them
+// read the whole table, and `getProjectedOrgRevenue` returned the top ten
+// orgs by revenue — one org member with `billing.read` could read a league
+// table of every other tenant's monthly revenue, from a dashboard whose
+// documentation said it was tenant-scoped.
+//
+// The four functions that read reports.session_ledger now take
+// `restrictToOrgIds` as a REQUIRED parameter — `null` means platform-wide and
+// must be written deliberately. The claim in this header is true now because
+// the parameter exists, not because someone wrote it down.
+//
+// `getTariffCoverage` is NOT scoped and is not claimed to be: it counts
+// billing.tariff_definitions rows and their anchoring, which is a
+// platform-configuration health tile rather than tenant data. If that tile
+// ever moves into an org-facing surface it needs the same treatment, and the
+// absence of a parameter is now the honest signal that it has not had it.
 
 import type { PrismaClient } from "../generated/prisma/client";
+
+/**
+ * Which orgs' ledger rows a summary call may aggregate.
+ *
+ * `null` is platform-wide. There is no default: a caller that has not decided
+ * does not compile, which is the only reliable way to stop the next dashboard
+ * tile from being added without one.
+ */
+export type SummaryTenantScope = string[] | null;
+
+/** The session_ledger predicate for a tenant scope. Shared by all four
+ *  ledger-reading functions so a tile cannot be confined differently from the
+ *  tile beside it. */
+function tenantWhere(restrictToOrgIds: SummaryTenantScope): Record<string, unknown> {
+  if (restrictToOrgIds === null) return {};
+  // Empty allow-list means "may see nothing". `{}` would mean "everything",
+  // so the empty case must be spelled out rather than fallen into.
+  return { orgId: { in: restrictToOrgIds } };
+}
 
 // ── Current / previous period totals ─────────────────────────────────────────
 
@@ -26,11 +65,13 @@ export async function getPeriodTotals(
   db: PrismaClient,
   year: number,
   month: number,
+  restrictToOrgIds: SummaryTenantScope,
 ): Promise<PeriodTotals> {
   const [start, end] = monthBounds(year, month);
   const agg = await db.sessionLedger.aggregate({
     where: {
       startedAt: { gte: start, lt: end },
+      ...tenantWhere(restrictToOrgIds),
     },
     _count: { sessionId: true },
     _sum: { energyKwh: true, costIskMinor: true },
@@ -107,18 +148,22 @@ export interface CostHealthMetric {
   pctCosted: number | null;
 }
 
-export async function getCostHealthMetric(db: PrismaClient): Promise<CostHealthMetric> {
+export async function getCostHealthMetric(
+  db: PrismaClient,
+  restrictToOrgIds: SummaryTenantScope,
+): Promise<CostHealthMetric> {
   const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
   const [totalAgg, costedAgg] = await Promise.all([
     db.sessionLedger.aggregate({
-      where: { startedAt: { gte: since } },
+      where: { startedAt: { gte: since }, ...tenantWhere(restrictToOrgIds) },
       _count: { sessionId: true },
     }),
     db.sessionLedger.aggregate({
       where: {
         startedAt: { gte: since },
         costIskMinor: { not: null },
+        ...tenantWhere(restrictToOrgIds),
       },
       _count: { sessionId: true },
     }),
@@ -146,9 +191,11 @@ export interface RecentLedgerRow {
 
 export async function getRecentLedgerEntries(
   db: PrismaClient,
-  limit = 10,
+  limit: number,
+  restrictToOrgIds: SummaryTenantScope,
 ): Promise<RecentLedgerRow[]> {
   const rows = await db.sessionLedger.findMany({
+    where: tenantWhere(restrictToOrgIds),
     orderBy: { startedAt: "desc" },
     take: limit,
     select: {
@@ -209,16 +256,21 @@ export async function getProjectedOrgRevenue(
   db: PrismaClient,
   year: number,
   month: number,
-  topN = 10,
+  topN: number,
+  restrictToOrgIds: SummaryTenantScope,
 ): Promise<ProjectedOrgRevenue[]> {
   const [start, end] = monthBounds(year, month);
 
-  // Aggregate by orgId over current period
+  // Aggregate by orgId over current period. This is the tile that made the
+  // missing parameter expensive: unscoped, it is a league table of every
+  // tenant's monthly revenue, ordered by size, served to any caller holding
+  // billing.read.
   const rows = await db.sessionLedger.groupBy({
     by: ["orgId"],
     where: {
       startedAt: { gte: start, lt: end },
       costIskMinor: { not: null },
+      ...tenantWhere(restrictToOrgIds),
     },
     _count: { sessionId: true },
     _sum: { costIskMinor: true },

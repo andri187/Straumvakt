@@ -80,41 +80,120 @@ const ROW = {
   computedAt: new Date("2026-05-04T09:00:01Z"),
 };
 
+/** Platform-wide access — the only way to get no tenant filter, and it now
+ *  has to be written out rather than arrived at by omission. */
+const PLATFORM = (scope: LedgerScope) => ({ scope, restrictToOrgIds: null });
+
 describe("listSessionLedger — scope translation", () => {
-  it("admin scope → no tenant filter", async () => {
+  it("admin scope, platform caller → no tenant filter", async () => {
     const f = makeFake([ROW]);
-    await listSessionLedger(f.db, { kind: "admin" });
+    await listSessionLedger(f.db, PLATFORM({ kind: "admin" }));
     expect(f.findManyCalls[0].where).toEqual({});
   });
 
   it("org scope → WHERE org_id = orgId", async () => {
     const f = makeFake([ROW]);
-    await listSessionLedger(f.db, { kind: "org", orgId: "org-X" });
+    await listSessionLedger(f.db, PLATFORM({ kind: "org", orgId: "org-X" }));
     expect(f.findManyCalls[0].where).toEqual({ orgId: "org-X" });
   });
 
   it("site scope → WHERE site_id = siteId", async () => {
     const f = makeFake([ROW]);
-    await listSessionLedger(f.db, { kind: "site", siteId: "site-X" });
+    await listSessionLedger(f.db, PLATFORM({ kind: "site", siteId: "site-X" }));
     expect(f.findManyCalls[0].where).toEqual({ siteId: "site-X" });
   });
 
   it("charger scope → WHERE charging_station_id = chargingStationId", async () => {
     const f = makeFake([ROW]);
-    await listSessionLedger(f.db, {
-      kind: "charger",
-      chargingStationId: "stn-X",
-    });
+    await listSessionLedger(f.db, PLATFORM({ kind: "charger", chargingStationId: "stn-X" }));
     expect(f.findManyCalls[0].where).toEqual({ chargingStationId: "stn-X" });
   });
 
   it("driver scope → WHERE driver_user_id = driverUserId", async () => {
     const f = makeFake([ROW]);
-    await listSessionLedger(f.db, {
-      kind: "driver",
-      driverUserId: "user-X",
-    });
+    await listSessionLedger(f.db, PLATFORM({ kind: "driver", driverUserId: "user-X" }));
     expect(f.findManyCalls[0].where).toEqual({ driverUserId: "user-X" });
+  });
+});
+
+// ── Tenant confinement ───────────────────────────────────────────────
+//
+// These are the assertions that fail if `restrictToOrgIds` stops being
+// applied. Before 2026-08-18 the first of them described the live behaviour
+// of GET /api/admin/billing/sessions for any org member with billing.read.
+
+describe("listSessionLedger — restrictToOrgIds confines every scope", () => {
+  it("an org-limited caller asking for everything gets only their orgs", async () => {
+    const f = makeFake([ROW]);
+    await listSessionLedger(f.db, {
+      scope: { kind: "admin" },
+      restrictToOrgIds: ["org-A", "org-B"],
+    });
+    expect(f.findManyCalls[0].where).toEqual({ orgId: { in: ["org-A", "org-B"] } });
+  });
+
+  it("a charger view is intersected with the caller's orgs, not refused", async () => {
+    // This is the alternative path that keeps the per-charger operator tab
+    // working for org members instead of denying it.
+    const f = makeFake([ROW]);
+    await listSessionLedger(f.db, {
+      scope: { kind: "charger", chargingStationId: "stn-X" },
+      restrictToOrgIds: ["org-A"],
+    });
+    expect(f.findManyCalls[0].where).toEqual({
+      chargingStationId: "stn-X",
+      orgId: { in: ["org-A"] },
+    });
+  });
+
+  it("a driver view is confined too — a driver can charge at several hosts", async () => {
+    const f = makeFake([ROW]);
+    await listSessionLedger(f.db, {
+      scope: { kind: "driver", driverUserId: "user-X" },
+      restrictToOrgIds: ["org-A"],
+    });
+    expect(f.findManyCalls[0].where).toEqual({
+      driverUserId: "user-X",
+      orgId: { in: ["org-A"] },
+    });
+  });
+
+  it("naming an in-scope org narrows to exactly that org", async () => {
+    const f = makeFake([ROW]);
+    await listSessionLedger(f.db, {
+      scope: { kind: "org", orgId: "org-A" },
+      restrictToOrgIds: ["org-A", "org-B"],
+    });
+    expect(f.findManyCalls[0].where).toEqual({ orgId: "org-A" });
+  });
+
+  it("naming an out-of-scope org matches nothing rather than everything", async () => {
+    // Defence in depth: decideLedgerAccess denies this before it reaches here.
+    // If it ever stops doing so, the repository must not answer with rows.
+    const f = makeFake([ROW]);
+    await listSessionLedger(f.db, {
+      scope: { kind: "org", orgId: "org-OTHER" },
+      restrictToOrgIds: ["org-A"],
+    });
+    expect(f.findManyCalls[0].where).toEqual({ orgId: { in: [] } });
+  });
+
+  it("an empty allow-list matches nothing, never everything", async () => {
+    // The failure mode this guards: an empty filter object is Prisma's "no
+    // WHERE at all", so `orgId: { in: [] }` has to be written explicitly.
+    const f = makeFake([ROW]);
+    await listSessionLedger(f.db, { scope: { kind: "admin" }, restrictToOrgIds: [] });
+    expect(f.findManyCalls[0].where).toEqual({ orgId: { in: [] } });
+  });
+
+  it("the totals tile is confined identically to the list beneath it", async () => {
+    // Two copies of this switch existed. A total computed across every tenant
+    // beside a list showing one is worse than either being wrong alone: the
+    // total is the number an operator believes.
+    const f = makeFake([ROW, ROW, ROW]);
+    await listSessionLedger(f.db, { scope: { kind: "admin" }, restrictToOrgIds: ["org-A"] });
+    await totalSessionLedger(f.db, { scope: { kind: "admin" }, restrictToOrgIds: ["org-A"] });
+    expect(f.aggregateCalls[0].where).toEqual(f.findManyCalls[0].where);
   });
 });
 
@@ -125,7 +204,7 @@ describe("listSessionLedger — filters", () => {
     const before = new Date("2026-06-01T00:00:00Z");
     await listSessionLedger(
       f.db,
-      { kind: "org", orgId: "org-1" },
+      PLATFORM({ kind: "org", orgId: "org-1" }),
       { startedAfter: after, startedBefore: before },
     );
     expect(f.findManyCalls[0].where).toEqual({
@@ -138,7 +217,7 @@ describe("listSessionLedger — filters", () => {
     const f = makeFake([ROW]);
     await listSessionLedger(
       f.db,
-      { kind: "admin" },
+      PLATFORM({ kind: "admin" }),
       { limit: 250, offset: 50 },
     );
     expect(f.findManyCalls[0].take).toBe(250);
@@ -147,19 +226,19 @@ describe("listSessionLedger — filters", () => {
 
   it("limit clamped to MAX_LIMIT=500 when called with 9999", async () => {
     const f = makeFake([ROW]);
-    await listSessionLedger(f.db, { kind: "admin" }, { limit: 9999 });
+    await listSessionLedger(f.db, PLATFORM({ kind: "admin" }), { limit: 9999 });
     expect(f.findManyCalls[0].take).toBe(500);
   });
 
   it("limit clamped to 1 when called with 0", async () => {
     const f = makeFake([ROW]);
-    await listSessionLedger(f.db, { kind: "admin" }, { limit: 0 });
+    await listSessionLedger(f.db, PLATFORM({ kind: "admin" }), { limit: 0 });
     expect(f.findManyCalls[0].take).toBe(1);
   });
 
   it("orderBy is startedAt desc", async () => {
     const f = makeFake([ROW]);
-    await listSessionLedger(f.db, { kind: "admin" });
+    await listSessionLedger(f.db, PLATFORM({ kind: "admin" }));
     expect(f.findManyCalls[0].orderBy).toEqual({ startedAt: "desc" });
   });
 });
@@ -167,10 +246,7 @@ describe("listSessionLedger — filters", () => {
 describe("totalSessionLedger", () => {
   it("returns counts + sums via aggregate, scope respected", async () => {
     const f = makeFake([ROW, ROW, ROW]);
-    const totals = await totalSessionLedger(f.db, {
-      kind: "org",
-      orgId: "org-1",
-    });
+    const totals = await totalSessionLedger(f.db, PLATFORM({ kind: "org", orgId: "org-1" }));
     expect(totals.sessionCount).toBe(3);
     expect(totals.totalEnergyKwh).toBe("30.000");
     expect(totals.totalCostIskMinor).toBe(64988n);

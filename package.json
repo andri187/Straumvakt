@@ -39,13 +39,16 @@
     "check:api-endpoints": "node scripts/gen-api-endpoints.mjs --check",
     "check:unused-exports": "node scripts/check-unused-exports.mjs",
     "unused-exports:baseline": "node scripts/check-unused-exports.mjs --baseline",
-    "db:generate:sql": "npm --prefix apps/api exec -- drizzle-kit generate",
+    "db:generate:sql": "npm --prefix apps/api run db:generate:sql",
     "db:baseline": "node apps/api/scripts/drizzle-baseline.mjs",
     "db:migrate:status": "npm --prefix apps/api exec -- drizzle-kit check",
     "check:schema-consistency": "node scripts/check-schema-consistency.mjs",
     "work-view": "node scripts/gen-work-view.mjs",
     "check:work-view": "node scripts/gen-work-view.mjs --check",
-    "check:onboarding": "tsx scripts/dry-run-onboard-org.mts --self-test"
+    "check:onboarding": "tsx scripts/dry-run-onboard-org.mts --self-test",
+    "check:pricing-ssot": "node scripts/check-pricing-ssot.mjs",
+    "check:orgid-param": "node scripts/check-orgid-param.mjs",
+    "check:invite-guard": "node scripts/check-invite-guard.mjs"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

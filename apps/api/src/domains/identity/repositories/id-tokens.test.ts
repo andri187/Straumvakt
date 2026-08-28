@@ -14,12 +14,13 @@
 // throws a real SQLSTATE 23505 shape so `isUniqueViolation` fires and the
 // repository raises UniqueViolationError, exactly as node-postgres would.
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   backfillPrimaryRfidForUsersWithoutTokens,
   createIdToken,
   mintRfidValue,
 } from "./id-tokens";
+import { isRandomEmulatedUid } from "../../../lib/tap-intent/random-uid";
 import { idTokens, users } from "@straumvakt/shared/db/identity";
 import type { Db } from "../../../lib/drizzle";
 
@@ -143,6 +144,50 @@ describe("mintRfidValue", () => {
     for (let i = 0; i < 100; i++) seen.add(mintRfidValue());
     // 100 8-hex draws from 4.3B options should never collide in practice.
     expect(seen.size).toBe(100);
+  });
+
+  // ── ISO 14443-3 reserved random-UID space ──────────────────────────
+  //
+  // A minted token starting 08 is diverted by resolveAuthorize into the
+  // tap-intent matcher before the IdToken lookup. That matcher keys on
+  // the station and liveness, never on the idTag, so such a card
+  // presented where another driver has armed an intent CONSUMES it and
+  // the session is attributed to that other person.
+  //
+  // The deterministic case is the one that matters: the statistical case
+  // alone would still pass roughly 1 time in 2500 with the fix reverted.
+
+  it("re-rolls the first byte when the RNG lands on the reserved 08 prefix", () => {
+    let call = 0;
+    const spy = vi
+      .spyOn(crypto, "getRandomValues")
+      .mockImplementation(((a: ArrayBufferView) => {
+        call += 1;
+        new Uint8Array(a.buffer, a.byteOffset, a.byteLength).fill(
+          call === 1 ? 0x08 : 0x42,
+        );
+        return a;
+      }) as typeof crypto.getRandomValues);
+
+    // try/finally, not a trailing mockRestore: a failing expect throws, and
+    // an unrestored crypto stub makes every later mint collide. Proven the
+    // hard way — reverting the fix took this test red AND took
+    // backfillPrimaryRfidForUsersWithoutTokens down with it.
+    try {
+      // First draw is 08 08 08 08; the re-roll replaces only byte 0.
+      expect(mintRfidValue()).toBe("42080808");
+      expect(call).toBe(2);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("never mints into the space isRandomEmulatedUid claims", () => {
+    // Cross-module: ties the mint to its real consumer rather than to a
+    // duplicated regex. 2000 draws; ~7.8 expected without the fix.
+    for (let i = 0; i < 2000; i++) {
+      expect(isRandomEmulatedUid(mintRfidValue())).toBe(false);
+    }
   });
 });
 

@@ -801,3 +801,494 @@ model AgreementBillingLine {
   @@map("billing_lines")
   @@schema("agreements")
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CORE BILLING — persistence for packages/commercial/src/core-billing
+//
+// DOWNSTREAM MIRROR. Drizzle owns these tables (ADR 0051); the authoritative
+// declarations are in packages/shared/src/db/commercial.ts, and that file
+// carries the reasoning. This exists so `npm run check:schema-consistency`
+// passes and so the ~500 un-ported Prisma calls can see the same database.
+// Change Drizzle first, then mirror here, then `npm run sync:api-schema`.
+//
+// Deviation from the ADR 0019 convention noted at SessionLedger ("TEXT for
+// enums, no Postgres enum types"): these DO use Postgres enums, matching the
+// older billing.* tables above (BalanceType, CostFactorStatus, InvoiceStatus)
+// rather than the newer agreements.* convention. The reason is that every one
+// of these unions is already exhaustively typed AND tested in
+// packages/commercial, so the set is closed by something stronger than a
+// comment; a TEXT column would discard that at the storage layer. A
+// mismatched member is caught by packages/shared/src/db/tests/core-billing-enums.test.ts.
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum PeriodState {
+  open
+  closing
+  closed
+
+  @@schema("billing")
+}
+
+enum SettlementStatus {
+  settled
+  billing_review_required
+
+  @@schema("billing")
+}
+
+enum SettlementProvenance {
+  ocpp
+  cdr
+  manual
+  unknown
+
+  @@schema("billing")
+}
+
+enum ProvenanceState {
+  estimated
+  ocpp_derived
+  cdr_pending
+  cdr_confirmed
+  cdr_mismatch
+  corrected
+  held_manual_review
+
+  @@schema("billing")
+}
+
+enum ReviewReason {
+  no_rate_at_session_start
+  meter_unresolvable
+  cdr_mismatch_beyond_tolerance
+  negative_or_impossible_energy
+  missing_session_times
+  unsupported_compute_rule
+  manual_hold
+
+  @@schema("billing")
+}
+
+enum RateComponentKind {
+  dso
+  retailer
+  cpo_addon
+
+  @@schema("billing")
+}
+
+enum StatementRecipientKind {
+  driver
+  organisation
+
+  @@schema("billing")
+}
+
+enum StatementLineKind {
+  session_energy
+  plug_time
+  subscription_connector
+  subscription_driver
+  cap_relief
+  correction
+
+  @@schema("billing")
+}
+
+enum DeliveryChannel {
+  email
+  download
+  webhook
+
+  @@schema("billing")
+}
+
+enum DeliveryState {
+  pending
+  sending
+  sent
+  retrying
+  failed
+  abandoned
+
+  @@schema("billing")
+}
+
+enum CorrectionReason {
+  cdr_mismatch_resolved
+  meter_fault
+  tariff_misapplied
+  duplicate_session
+  customer_dispute
+  operator_goodwill
+
+  @@schema("billing")
+}
+
+// One row per org per calendar month. Natural key (org_id, year, month) —
+// Core bills whole months, so there is no free date range to disagree about.
+model BillingPeriod {
+  id               String      @id @default(uuid()) @db.Uuid
+  orgId            String      @map("org_id") @db.Uuid
+  periodYear       Int         @map("period_year")
+  periodMonth      Int         @map("period_month")
+  periodStart      DateTime    @map("period_start") @db.Timestamptz(6)
+  periodEnd        DateTime    @map("period_end") @db.Timestamptz(6)
+  state            PeriodState @default(open)
+  currency         String      @default("ISK")
+  closedAt         DateTime?   @map("closed_at") @db.Timestamptz(6)
+  closedByUserId   String?     @map("closed_by_user_id") @db.Uuid
+  // CloseBlocker[] outstanding at the moment of close. Empty array = closed
+  // clean. A period closed over three held sessions is a different fact from
+  // one closed clean, and nobody remembers which six months later.
+  blockersAtClose  Json?       @map("blockers_at_close") @db.JsonB
+  reopenedAt       DateTime?   @map("reopened_at") @db.Timestamptz(6)
+  reopenedByUserId String?     @map("reopened_by_user_id") @db.Uuid
+  reopenReason     String?     @map("reopen_reason")
+  createdAt        DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([orgId, periodYear, periodMonth])
+  @@index([orgId, state])
+  @@map("billing_periods")
+  @@schema("billing")
+}
+
+// The priced snapshot. PK is session_id alone: a session settles once, and a
+// retried commit collides instead of double-billing.
+model SessionSettlement {
+  sessionId           String               @id @map("session_id") @db.Uuid
+  orgId               String               @map("org_id") @db.Uuid
+  periodId            String               @map("period_id") @db.Uuid
+  connectorId         String?              @map("connector_id") @db.Uuid
+  driverUserId        String?              @map("driver_user_id") @db.Uuid
+  startedAt           DateTime             @map("started_at") @db.Timestamptz(6)
+  stoppedAt           DateTime?            @map("stopped_at") @db.Timestamptz(6)
+  energyWh            Int?                 @map("energy_wh")
+  meterStartWh        Int?                 @map("meter_start_wh")
+  meterStopWh         Int?                 @map("meter_stop_wh")
+  cdrEnergyKwh        Decimal?             @map("cdr_energy_kwh") @db.Decimal(10, 3)
+  plugTimeSeconds     Int?                 @map("plug_time_seconds")
+  plugTimeFeeMinor    BigInt               @map("plug_time_fee_minor")
+  amountExVatMinor    BigInt               @map("amount_ex_vat_minor")
+  vatRatePct          Decimal              @map("vat_rate_pct") @db.Decimal(4, 2)
+  vatMinor            BigInt               @map("vat_minor")
+  totalIncVatMinor    BigInt               @map("total_inc_vat_minor")
+  // The BILLED figure: whole ISK, half-up. Stored because it is what the
+  // customer was shown; recomputing it later would adopt whatever rounding
+  // rule is current then.
+  totalIsk            BigInt               @map("total_isk")
+  currency            String               @default("ISK")
+  status              SettlementStatus
+  provenance          SettlementProvenance
+  provenanceState     ProvenanceState      @map("provenance_state")
+  rateSelectionPolicy String               @default("start_rate") @map("rate_selection_policy")
+  pricedAt            DateTime             @map("priced_at") @db.Timestamptz(6)
+  committedAt         DateTime?            @map("committed_at") @db.Timestamptz(6)
+  explanation         String
+  createdAt           DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([orgId, periodId])
+  @@index([periodId, status])
+  @@index([orgId, driverUserId, startedAt])
+  @@index([orgId, connectorId, startedAt])
+  @@map("session_settlements")
+  @@schema("billing")
+}
+
+// Rate lock-in. unit_price_minor / effective_from / effective_until are
+// COPIES, not joins: editing a rate row later cannot restate a settled
+// session, because nothing reads the price back through rate_version_id.
+model SettlementComponent {
+  id               String            @id @default(uuid()) @db.Uuid
+  sessionId        String            @map("session_id") @db.Uuid
+  orgId            String            @map("org_id") @db.Uuid
+  kind             RateComponentKind
+  rateVersionId    String            @map("rate_version_id") @db.Uuid
+  unitPriceMinor   BigInt            @map("unit_price_minor")
+  effectiveFrom    DateTime          @map("effective_from") @db.Timestamptz(6)
+  effectiveUntil   DateTime?         @map("effective_until") @db.Timestamptz(6)
+  amountExVatMinor BigInt            @map("amount_ex_vat_minor")
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([sessionId, kind])
+  @@index([orgId, rateVersionId])
+  @@map("settlement_components")
+  @@schema("billing")
+}
+
+// Why a session is not billable, and who cleared it. One row per (session,
+// reason) — a session can be held for several reasons and each needs clearing.
+model SettlementHold {
+  id               String       @id @default(uuid()) @db.Uuid
+  sessionId        String       @map("session_id") @db.Uuid
+  orgId            String       @map("org_id") @db.Uuid
+  reason           ReviewReason
+  detail           String?
+  raisedAt         DateTime     @default(now()) @map("raised_at") @db.Timestamptz(6)
+  resolvedAt       DateTime?    @map("resolved_at") @db.Timestamptz(6)
+  resolvedByUserId String?      @map("resolved_by_user_id") @db.Uuid
+  resolution       String?
+  // Enforced NOT NULL at the application layer once resolved: "resolved" with
+  // no reason is indistinguishable from a mis-click, and this is the row an
+  // auditor reads when a customer disputes a charge.
+  resolutionNote   String?      @map("resolution_note")
+  createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([sessionId, reason])
+  @@index([orgId, resolvedAt])
+  @@map("settlement_holds")
+  @@schema("billing")
+}
+
+// One document per recipient per period.
+model Statement {
+  id                      String                 @id @default(uuid()) @db.Uuid
+  orgId                   String                 @map("org_id") @db.Uuid
+  periodId                String                 @map("period_id") @db.Uuid
+  recipientKind           StatementRecipientKind @map("recipient_kind")
+  recipientId             String                 @map("recipient_id") @db.Uuid
+  // statementIdentity() — deterministic FNV-1a over (period, recipient,
+  // sessionIds). A regenerate producing different content is DETECTABLE
+  // rather than a silent overwrite.
+  statementKey            String                 @map("statement_key")
+  // Sum of the ROUNDED line amounts, not the rounding of the sum.
+  totalIsk                BigInt                 @map("total_isk")
+  currency                String                 @default("ISK")
+  // Sessions deliberately left off this bill, by id. Excluding a session and
+  // pricing it at zero look identical to a customer; they must not look
+  // identical here.
+  excludedSessionIds      Json                   @map("excluded_session_ids") @db.JsonB
+  generatedAt             DateTime               @map("generated_at") @db.Timestamptz(6)
+  generatedByUserId       String?                @map("generated_by_user_id") @db.Uuid
+  supersededByStatementId String?                @map("superseded_by_statement_id") @db.Uuid
+  createdAt               DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt               DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([periodId, recipientKind, recipientId])
+  @@index([orgId, periodId])
+  @@index([orgId, recipientKind, recipientId])
+  @@map("statements")
+  @@schema("billing")
+}
+
+model StatementLine {
+  id                String             @id @default(uuid()) @db.Uuid
+  statementId       String             @map("statement_id") @db.Uuid
+  orgId             String             @map("org_id") @db.Uuid
+  lineNo            Int                @map("line_no")
+  kind              StatementLineKind
+  description       String
+  quantity          Decimal?           @db.Decimal(14, 4)
+  unit              String?
+  unitPriceMinor    BigInt?            @map("unit_price_minor")
+  // Unrounded aurar, kept for audit.
+  amountMinor       BigInt             @map("amount_minor")
+  // Billed whole ISK, half-up. These sum to statements.total_isk.
+  amountIsk         BigInt             @map("amount_isk")
+  sessionId         String?            @map("session_id") @db.Uuid
+  correctsSessionId String?            @map("corrects_session_id") @db.Uuid
+  correctionReason  CorrectionReason?  @map("correction_reason")
+  reason            String?
+  createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([statementId, lineNo])
+  @@index([orgId, sessionId])
+  @@map("statement_lines")
+  @@schema("billing")
+}
+
+// The provider-proof chain email has never had. Modelled on
+// ocpp.outbound_commands, which already does this correctly in this codebase.
+model StatementDeliveryAttempt {
+  id                String          @id @default(uuid()) @db.Uuid
+  statementId       String          @map("statement_id") @db.Uuid
+  orgId             String          @map("org_id") @db.Uuid
+  channel           DeliveryChannel @default(email)
+  state             DeliveryState   @default(pending)
+  attempts          Int             @default(0)
+  notBefore         DateTime?       @map("not_before") @db.Timestamptz(6)
+  lastAttemptAt     DateTime?       @map("last_attempt_at") @db.Timestamptz(6)
+  // SendOutcomeKind: ack | retriable | permanent | not_configured. Kept
+  // separate from `state` so "we never tried, the binding was missing" stops
+  // being indistinguishable from "we tried and it bounced".
+  outcomeKind       String?         @map("outcome_kind")
+  providerMessageId String?         @map("provider_message_id")
+  // Address at time of send. Recipients change; the record must not.
+  destination       String?
+  lastError         String?         @map("last_error")
+  result            Json?           @db.JsonB
+  idempotencyKey    String          @map("idempotency_key")
+  requestedByUserId String?         @map("requested_by_user_id") @db.Uuid
+  createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([statementId, idempotencyKey])
+  @@index([orgId, state])
+  @@index([state, notBefore])
+  @@map("statement_delivery_attempts")
+  @@schema("billing")
+}
+
+// An operator asked for a file; this is what they got. content_hash makes
+// "the export disagrees with the screen" a checkable claim, not an argument.
+model StatementExport {
+  id                String   @id @default(uuid()) @db.Uuid
+  orgId             String   @map("org_id") @db.Uuid
+  periodId          String   @map("period_id") @db.Uuid
+  format            String   @default("csv")
+  rowCount          Int      @map("row_count")
+  totalIsk          BigInt   @map("total_isk")
+  contentHash       String   @map("content_hash")
+  storageKey        String?  @map("storage_key")
+  idempotencyKey    String   @map("idempotency_key")
+  requestedByUserId String?  @map("requested_by_user_id") @db.Uuid
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([orgId, idempotencyKey])
+  @@index([orgId, periodId])
+  @@map("statement_exports")
+  @@schema("billing")
+}
+
+// Idempotency for money mutations. Deliberately NOT events.idempotency_keys:
+// that table has no org_id, its scope is the hardcoded literal "ocpp" in both
+// writers, and its expires_at is written by both and read by neither — so an
+// expired row suppresses a replay permanently. Sharing it would inherit that.
+model BillingMutationReceipt {
+  id             String   @id @default(uuid()) @db.Uuid
+  orgId          String   @map("org_id") @db.Uuid
+  // Route-specific: period.close | statement.deliver | statement.export |
+  // hold.resolve | rate.write
+  scope          String
+  idempotencyKey String   @map("idempotency_key")
+  // Catches the case the key alone cannot: the same Idempotency-Key sent with
+  // a DIFFERENT body, which must 409 rather than replay the first response.
+  requestHash    String   @map("request_hash")
+  responseStatus Int      @map("response_status")
+  responseBody   Json?    @map("response_body") @db.JsonB
+  actorUserId    String?  @map("actor_user_id") @db.Uuid
+  // Meant to be ENFORCED in the WHERE clause, not merely written.
+  expiresAt      DateTime @map("expires_at") @db.Timestamptz(6)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([orgId, scope, idempotencyKey])
+  @@index([expiresAt])
+  @@map("mutation_receipts")
+  @@schema("billing")
+}
+
+// 50 kr per active driver per month — this figure IS revenue, and it cannot be
+// derived after the fact: session.user_id is nullable, "reporting activity"
+// has no persisted event of any kind, and driver_group_memberships has
+// added_at only with a unique that forbids the second row history would need.
+// Written once per month, never recomputed.
+model DriverActivityMonth {
+  id           String   @id @default(uuid()) @db.Uuid
+  orgId        String   @map("org_id") @db.Uuid
+  periodYear   Int      @map("period_year")
+  periodMonth  Int      @map("period_month")
+  driverUserId String   @map("driver_user_id") @db.Uuid
+  // charging_session | reporting_access | roster_membership — why the driver
+  // counted, so a disputed 50 kr has an answer.
+  source       String
+  sessionCount Int      @default(0) @map("session_count")
+  firstSeenAt  DateTime @map("first_seen_at") @db.Timestamptz(6)
+  lastSeenAt   DateTime @map("last_seen_at") @db.Timestamptz(6)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([orgId, periodYear, periodMonth, driverUserId])
+  @@index([orgId, periodYear, periodMonth])
+  @@map("driver_activity_month")
+  @@schema("reports")
+}
+
+// 200 kr per active connector per month, capped at 450. Same problem, other
+// cause: assets.connectors carries a MUTABLE status with no history, and
+// charging_stations has no status/active/removed column at all — a charger
+// removed in August leaves no evidence it was billable in July.
+model ConnectorActivityMonth {
+  id                String   @id @default(uuid()) @db.Uuid
+  orgId             String   @map("org_id") @db.Uuid
+  periodYear        Int      @map("period_year")
+  periodMonth       Int      @map("period_month")
+  connectorId       String   @map("connector_id") @db.Uuid
+  chargingStationId String?  @map("charging_station_id") @db.Uuid
+  // session_observed | status_available | manually_asserted
+  source            String
+  sessionCount      Int      @default(0) @map("session_count")
+  activeDays        Int?     @map("active_days")
+  firstSeenAt       DateTime @map("first_seen_at") @db.Timestamptz(6)
+  lastSeenAt        DateTime @map("last_seen_at") @db.Timestamptz(6)
+  // Whole ISK actually charged after the 450 cap. Stored rather than
+  // recomputed: the cap depends on the same month's driver count, and
+  // recomputing later would use whatever roster is current then.
+  capAppliedIsk     BigInt?  @map("cap_applied_isk")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([orgId, periodYear, periodMonth, connectorId])
+  @@index([orgId, periodYear, periodMonth])
+  @@map("connector_activity_month")
+  @@schema("reports")
+}
+
+// DOWNSTREAM MIRROR of packages/shared/src/db/commercial.ts. Drizzle is
+// authoritative (ADR 0051); this exists so check:schema-consistency passes and
+// so the Prisma client still compiles while ~500 un-ported calls remain.
+
+/// The append-only period lifecycle log — preflight delta 9.8.
+/// Fine-grained state is DERIVED from these rows rather than asserted by a
+/// caller's boolean. The Postgres PeriodState enum was deliberately not
+/// widened: ALTER TYPE ... ADD VALUE cannot run in a transaction and cannot
+/// be undone, so the fine states are text here.
+model PeriodTransition {
+  id           String   @id @default(uuid()) @db.Uuid
+  orgId        String   @map("org_id") @db.Uuid
+  periodYear   Int      @map("period_year")
+  periodMonth  Int      @map("period_month")
+  // PeriodLifecycleState — not_opened | open | activity_sealed | priced | invoiced | closed
+  fromState    String   @map("from_state")
+  toState      String   @map("to_state")
+  // PeriodEvent — open_period | seal_activity | record_pricing_settled | issue_invoice | close_period
+  event        String
+  // Never null. A transition nobody caused is one nobody can answer for.
+  actorUserId  String   @map("actor_user_id") @db.Uuid
+  reason       String?
+  occurredAt   DateTime @map("occurred_at") @db.Timestamptz(6)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  // No event occurs twice in one period's life, so a retried month-end job
+  // collides here instead of double-recording.
+  @@unique([orgId, periodYear, periodMonth, event])
+  @@index([orgId, periodYear, periodMonth, occurredAt])
+  @@map("period_transitions")
+  @@schema("billing")
+}
+
+/// A human vouching for a connector — preflight delta 9.7.
+/// Every connector on a vendor-native (Zaptec-authentication) installation
+/// produces neither session nor StatusNotification evidence, permanently: the
+/// Zaptec importer writes connector_id NULL on its sessions, and
+/// StatusNotification only reaches events.event_log from our own OCPP gateway.
+/// Without an assertion those connectors produce no activity row and the
+/// period holds.
+model ConnectorAssertion {
+  id               String   @id @default(uuid()) @db.Uuid
+  orgId            String   @map("org_id") @db.Uuid
+  periodYear       Int      @map("period_year")
+  periodMonth      Int      @map("period_month")
+  connectorId      String   @map("connector_id") @db.Uuid
+  // Never null. An unattributed assertion is an unauditable one.
+  assertedByUserId String   @map("asserted_by_user_id") @db.Uuid
+  reason           String
+  // Optional pointer at out-of-band proof — a work order, a photo, a ticket.
+  evidenceNote     String?  @map("evidence_note")
+  assertedAt       DateTime @map("asserted_at") @db.Timestamptz(6)
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([orgId, periodYear, periodMonth, connectorId])
+  @@index([orgId, periodYear, periodMonth])
+  @@map("connector_assertions")
+  @@schema("billing")
+}

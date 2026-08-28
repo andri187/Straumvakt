@@ -29,20 +29,20 @@ dead.** Zaptec calls the webhook endpoints from their own servers, and the
 public auth endpoints are hit by browsers — no grep can see either. Treat
 an empty cell as "worth asking about", not as permission to delete.
 
-**178 endpoints across 41 mounts.**
+**187 endpoints across 41 mounts.**
 
-GET 83 · POST 65 · PATCH 15 · DELETE 14 · PUT 1
+GET 86 · POST 71 · PATCH 15 · DELETE 14 · PUT 1
 
 | Domain | Endpoints | No in-repo caller |
 |---|---:|---:|
-| identity | 66 | 54 |
+| identity | 75 | 63 |
 | assets | 45 | 41 |
 | protocol | 8 | 3 |
 | charging | 4 | 0 |
 | commercial | 33 | 24 |
 | vendor | 22 | 20 |
 
-## identity — 66 endpoints, 54 with no in-repo caller
+## identity — 75 endpoints, 63 with no in-repo caller
 
 | Method | Path | Called by | Source |
 |---|---|---|---|
@@ -66,6 +66,15 @@ GET 83 · POST 65 · PATCH 15 · DELETE 14 · PUT 1
 | GET | `/api/admin/orgs/:orgId/bill-objects/:id` | — | `routes/admin/bill-objects` |
 | GET | `/api/admin/orgs/:orgId/bill-objects/:id/members` | — | `routes/admin/bill-objects` |
 | POST | `/api/admin/orgs/:orgId/bill-objects/:id/members` | — | `routes/admin/bill-objects` |
+| GET | `/api/admin/orgs/:orgId/billing/periods/:year/:month` | — | `routes/admin/billing/periods` |
+| POST | `/api/admin/orgs/:orgId/billing/periods/:year/:month/activity` | — | `routes/admin/billing/periods` |
+| POST | `/api/admin/orgs/:orgId/billing/periods/:year/:month/assertions` | — | `routes/admin/billing/periods` |
+| POST | `/api/admin/orgs/:orgId/billing/periods/:year/:month/close` | — | `routes/admin/billing/periods` |
+| GET | `/api/admin/orgs/:orgId/billing/periods/:year/:month/document` | — | `routes/admin/billing/periods` |
+| POST | `/api/admin/orgs/:orgId/billing/periods/:year/:month/issue` | — | `routes/admin/billing/periods` |
+| POST | `/api/admin/orgs/:orgId/billing/periods/:year/:month/open` | — | `routes/admin/billing/periods` |
+| POST | `/api/admin/orgs/:orgId/billing/periods/:year/:month/price` | — | `routes/admin/billing/periods` |
+| GET | `/api/admin/orgs/:orgId/billing/statements` | — | `routes/admin/billing/periods` |
 | GET | `/api/admin/orgs/:orgId/chargers` | console | `routes/admin/orgs` |
 | GET | `/api/admin/orgs/:orgId/contracts` | — | `routes/admin/orgs` |
 | GET | `/api/admin/orgs/:orgId/driver-group-memberships` | — | `routes/admin/driver-group-memberships` |

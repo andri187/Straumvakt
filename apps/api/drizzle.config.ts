@@ -22,6 +22,12 @@ export default defineConfig({
   // The hand-owned Drizzle schemas — the source of truth. These live in
   // packages/shared because the console imports them too; apps/api is not
   // allowed to be a dependency of the console (dependency-cruiser rule).
+  // NOTE: this glob is single-level and has no exclusion — drizzle-kit
+  // require()s every file it matches, as CommonJS, so a *.test.ts sitting
+  // beside a schema file kills `generate` with a stack trace about vitest and
+  // CJS that mentions no schema at all. A leading `!` pattern does NOT work
+  // here; it is silently ignored. Schema tests therefore live one directory
+  // down, in packages/shared/src/db/tests/.
   schema: ["../../packages/shared/src/db/*.ts"],
   out: "./drizzle",
   // The migrate/introspect path reads this. Runtime does not: the Worker

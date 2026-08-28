@@ -19,12 +19,15 @@ import { Hono, type Context } from "hono";
 import { makePrisma } from "../../lib/prisma";
 import { requireAdmin, type AuthVars } from "../../lib/auth-middleware";
 import { requirePermission } from "../../lib/auth/require-permission";
-import { resolveOrgScope } from "../../lib/auth/org-scope";
+import { orgInScope, resolveOrgScope } from "../../lib/auth/org-scope";
 import {
   listSessionLedger,
   totalSessionLedger,
-  type LedgerScope,
 } from "../../repositories/session-ledger";
+import {
+  decideLedgerAccess,
+  type LedgerAccessDecision,
+} from "../../lib/billing/ledger-scope";
 import { getSessionDetail } from "../../repositories/session-detail";
 import { getSessionFullDetail } from "../../repositories/session-full-detail";
 import { formatIskMinor } from "../../lib/tariff/compute-session-cost";
@@ -47,23 +50,57 @@ export const adminBilling = new Hono<{ Bindings: Env; Variables: AuthVars }>();
 adminBilling.use("*", requireAdmin);
 
 /**
- * Builds a scope from the query parameters. Specific scopes (site /
- * charger / driver) take precedence over org → admin. The route
- * gate is `billing.read`; refining further (e.g. preventing an org
- * agent from querying another org's siteId) is layered on top
- * via assertPermission once Sprint 8 Track C lands per-resource
- * checks. For Sprint 8.4 ship the admin-scope happy path.
+ * Resolve which ledger rows this caller may see.
+ *
+ * This used to be a synchronous `scopeFromQuery` that trusted every query
+ * parameter and returned `{ kind: "admin" }` — no tenant filter — when none
+ * were supplied. Its own docstring deferred the fix to "once Sprint 8 Track C
+ * lands per-resource checks", while session-ledger.ts:16-18 simultaneously
+ * declared scope authorisation to be the route's job. Neither enforced, and
+ * `requireAdmin` only verifies that an admin session cookie is valid — it does
+ * not restrict to platform staff. Any org member with `billing.read` could
+ * read every tenant's ledger by leaving the query string empty.
+ *
+ * The decision now lives in lib/billing/ledger-scope.ts and the enforcement in
+ * the repository, which takes a required `restrictToOrgIds`. This function
+ * supplies identity and nothing else.
  */
-function scopeFromQuery(c: BillingContext): LedgerScope {
-  const driverUserId = c.req.query("driverUserId");
-  if (driverUserId) return { kind: "driver", driverUserId };
-  const chargingStationId = c.req.query("chargingStationId");
-  if (chargingStationId) return { kind: "charger", chargingStationId };
-  const siteId = c.req.query("siteId");
-  if (siteId) return { kind: "site", siteId };
-  const orgId = c.req.query("orgId");
-  if (orgId) return { kind: "org", orgId };
-  return { kind: "admin" };
+async function ledgerAccessFor(c: BillingContext): Promise<LedgerAccessDecision> {
+  return decideLedgerAccess(
+    {
+      orgId: c.req.query("orgId"),
+      siteId: c.req.query("siteId"),
+      chargingStationId: c.req.query("chargingStationId"),
+      driverUserId: c.req.query("driverUserId"),
+    },
+    await resolveOrgScope(c.env, c.get("session")),
+  );
+}
+
+/**
+ * May this caller see a row belonging to `orgId`?
+ *
+ * The by-id session reads had NO tenant check at all. session-detail.ts:1-4
+ * states "no auth scoping here — caller (the route) checks permission", and
+ * the route checked `billing.read` and then handed back
+ * `findUnique({ where: { id } })` for any tenant's session. Each side
+ * documented the other as the enforcement point; neither enforced.
+ *
+ * This is the same helper pair GET /tariffs already uses two hundred lines
+ * below — resolveOrgScope + a row-level test — applied to the two routes that
+ * were missing it. Deliberately NOT a new mechanism.
+ *
+ * Behaviour for platform staff is unchanged: resolveOrgScope returns
+ * { all: true } for a bootstrap session or a platform.tenant.read grant, so
+ * orgInScope is always true for them and no live operator workflow moves. What
+ * changes is that an org member who reaches these routes now gets their own
+ * org's sessions instead of everyone's.
+ *
+ * 404, not 403: telling a caller "that session exists but is not yours"
+ * confirms the existence of another tenant's session id.
+ */
+async function callerMaySee(c: BillingContext, orgId: string): Promise<boolean> {
+  return orgInScope(await resolveOrgScope(c.env, c.get("session")), orgId);
 }
 
 function dateOrUndefined(value: string | undefined): Date | undefined {
@@ -90,6 +127,7 @@ adminBilling.get(
     const db = makePrisma(c.env);
     const detail = await getSessionDetail(db, c.req.param("id"));
     if (!detail) return c.json({ error: "not_found" }, 404);
+    if (!(await callerMaySee(c, detail.orgId))) return c.json({ error: "not_found" }, 404);
     return c.json({ session: detail });
   },
 );
@@ -106,6 +144,10 @@ adminBilling.get(
     const includeRaw = c.req.query("include") === "raw";
     const detail = await getSessionFullDetail(db, c.req.param("id"), { includeRaw });
     if (!detail) return c.json({ error: "not_found" }, 404);
+    // This one also serves raw OCMF/723 blobs on ?include=raw, so an unscoped
+    // read here hands over another tenant's signed meter evidence, not just a
+    // total.
+    if (!(await callerMaySee(c, detail.orgId))) return c.json({ error: "not_found" }, 404);
     return c.json({ session: detail });
   },
 );
@@ -114,7 +156,14 @@ adminBilling.get(
   "/sessions",
   requirePermission("billing.read"),
   async (c) => {
-    const scope = scopeFromQuery(c);
+    const decision = await ledgerAccessFor(c);
+    if (decision.kind === "deny") {
+      // 403 rather than an empty 200: a caller who asked for another org's
+      // rows and got back zero of them would reasonably conclude that org has
+      // no sessions, which is itself a disclosure.
+      return c.json({ error: "forbidden", reason: decision.reason }, 403);
+    }
+    const access = decision.access;
     const filters = {
       startedAfter: dateOrUndefined(c.req.query("startedAfter")),
       startedBefore: dateOrUndefined(c.req.query("startedBefore")),
@@ -123,11 +172,11 @@ adminBilling.get(
     };
     const db = makePrisma(c.env);
     const [rows, totals] = await Promise.all([
-      listSessionLedger(db, scope, filters),
-      totalSessionLedger(db, scope, filters),
+      listSessionLedger(db, access, filters),
+      totalSessionLedger(db, access, filters),
     ]);
     return c.json({
-      scope,
+      scope: access.scope,
       filters: {
         startedAfter: filters.startedAfter?.toISOString() ?? null,
         startedBefore: filters.startedBefore?.toISOString() ?? null,
@@ -155,9 +204,10 @@ adminBilling.get(
         durationSec: r.durationSec,
         energyKwh: r.energyKwh,
         costIskMinor: r.costIskMinor?.toString() ?? null,
-        costFormatted: r.costIskMinor
-          ? formatIskMinor(r.costIskMinor)
-          : null,
+        // `r.costIskMinor ? …` treated a genuinely free session (0n is falsy)
+        // as never-costed, so "0.00 kr." rendered as "—". A zero and an
+        // unknown are different facts about money; only null is unknown.
+        costFormatted: r.costIskMinor != null ? formatIskMinor(r.costIskMinor) : null,
         tariffDefinitionId: r.tariffDefinitionId,
         stopReason: r.stopReason,
       })),
