@@ -125,9 +125,15 @@ priced a period is evidence of who owed what, and rewriting it changes history.
 registered as a user, put in a group under the installation agreement, with
 that clause's bearer set to `org`.
 
-**The proof is mechanical: `grep -i idtag packages/contracts/src/agreements/`
-returns nothing.** The write surface expresses the case without a single
-conditional naming it, which is what gate 7 asks for.
+**Correction to my own first claim.** I wrote — in the code comment and in the
+Phase 1 commit message — that grepping the module for `idTag` returns nothing.
+It returns **four matches**: two in a comment, two in a test name. None is in
+logic.
+
+The accurate claim, and the one gate 7 actually asks for: **no statement,
+conditional, parameter or field in the write surface references the default
+idTag.** It is expressed entirely as an ordinary membership plus a clause whose
+bearer is `org`. The comment has been corrected to say that instead.
 
 ### 6–9. Ports, receipts, tenancy
 
