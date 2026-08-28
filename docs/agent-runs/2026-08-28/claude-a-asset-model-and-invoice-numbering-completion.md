@@ -1561,6 +1561,68 @@ engineering item and it is the highest-severity thing in this artifact.
 
 ---
 
+## §12 standing backlog — item 1: the `?? 0` refusal at ingest
+
+`apps/api/src/repositories/zaptec-session-sync.ts:235` read:
+
+```ts
+const energyKwh = z.Energy ?? 0;
+```
+
+**A CDR with no `Energy` field was priced at zero.** The zero reached two
+places and both believed it:
+
+- `computeSessionCost` priced the session at nothing;
+- the CDR/OCPP enrichment comparison, on a **Zaptec-native installation where
+  no OCPP row exists to disagree with**, took the `ocppValue == null` branch
+  and marked the session **`complete`**.
+
+A free session with a clean bill of health, invisible to the enrichment view
+that exists to catch exactly this. **Ledger note 22 at ingest, and the sharpest
+instance of it in the repository**, because unlike an absent row this one
+produces a present row that looks finished.
+
+### The fix, and why it skips rather than nulls
+
+A missing reading is not zero energy. It is **no reading**, and the session is
+now `skipped` with `no_energy_in_cdr`.
+
+Writing the row with a null energy was the alternative and it is worse: the row
+would be unpriceable, and the enrichment view, the ledger totals and the
+statement would each have to learn a null they have never had to handle. **A
+skipped session is visible in the report and re-importable the moment the
+vendor supplies the figure; a zero-priced one is invisible forever.**
+
+`Number.isFinite` is part of the guard, and it catches what `?? 0` never could:
+a field that is **present, non-null and not a number** falls straight through
+nullish coalescing and into the arithmetic.
+
+### The distinction the fix rests on
+
+**A measured zero is imported.** A session that genuinely delivered nothing — a
+plug-in that never drew — is a fact, and refusing it would be the same error in
+the other direction. That is its own test.
+
+### The census of the other `?? 0` sites
+
+Nine others were found and **none is the same defect**. Every one is a
+**presentation** coalesce on an aggregate that has already been computed —
+`billing-summary.ts:81`, `session-ledger.ts:286`, `billing-cost-centers.ts:135`
+and the rest are all `(_sum.x ?? 0).toString()`, where Prisma returns `null`
+for *"no rows matched"* and the surface renders `0`.
+
+That is defensible and it is not this defect: **the number is being displayed,
+not stored, and not priced.** It is arguably still worth distinguishing "no
+sessions" from "no data" on a dashboard, and that is a UI question rather than
+a money one. Recorded here so the census is not re-run from scratch:
+**one storing coalesce, nine displaying ones, and the storing one is fixed.**
+
+**Tests — 5.** Fool test 18: `?? 0` restored → **3 failed**.
+
+Suite **1,877 passed / 1 skipped / 104 files**, `npm run check` **16 of 16**.
+
+---
+
 ## External state — running
 
 No push. No deploy. **No migration applied to any database — `0002`, `0003`,

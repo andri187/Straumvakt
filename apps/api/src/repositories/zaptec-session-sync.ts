@@ -64,7 +64,24 @@ export interface ZaptecSyncSkip {
     | "session_open"
     | "no_station_mapped"
     | "no_evse_under_station"
-    | "no_site_for_station";
+    | "no_site_for_station"
+    /**
+     * The CDR carried no `Energy` field.
+     *
+     * LEDGER NOTE 22, AT INGEST. This used to be `z.Energy ?? 0`, and a
+     * zero is not a missing reading: the session was PRICED at zero and,
+     * on a Zaptec-native installation where no OCPP row exists to compare
+     * against, marked `complete`. A free session with a clean bill of
+     * health.
+     *
+     * Skipping is the honest outcome rather than writing the row with a
+     * null energy. The row would be unpriceable, and every downstream
+     * reader — the enrichment view, the ledger totals, the statement —
+     * would have to learn a null it has never had to handle. A skipped
+     * session is visible in the report and re-importable the moment the
+     * vendor supplies the figure; a zero-priced one is invisible forever.
+     */
+    | "no_energy_in_cdr";
 }
 
 export interface ZaptecSyncError {
@@ -232,7 +249,17 @@ async function importOne(
 
   const startedAt = new Date(z.StartDateTime!);
   const stoppedAt = new Date(z.EndDateTime!);
-  const energyKwh = z.Energy ?? 0;
+  // LEDGER NOTE 22, AT INGEST. `z.Energy ?? 0` was here, and the zero
+  // reached two places that both believed it: `computeSessionCost`, which
+  // priced the session at nothing, and the CDR/OCPP enrichment comparison,
+  // which on a Zaptec-native installation has no OCPP row to disagree with
+  // and therefore marked the session `complete`.
+  //
+  // A missing reading is not zero energy. It is no reading.
+  if (z.Energy === null || z.Energy === undefined || !Number.isFinite(z.Energy)) {
+    return { kind: "skipped", reason: "no_energy_in_cdr" };
+  }
+  const energyKwh = z.Energy;
   const energyWh = BigInt(Math.round(energyKwh * 1000));
   const durationSec = Math.max(
     0,

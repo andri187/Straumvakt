@@ -913,3 +913,94 @@ describe("syncZaptecSessions", () => {
     });
   });
 });
+
+// ── Ledger note 22, at ingest ────────────────────────────────────────────
+//
+// `const energyKwh = z.Energy ?? 0` stood at line 235. A CDR with no `Energy`
+// field was priced at zero and, on a Zaptec-native installation where no OCPP
+// row exists to compare against, marked `complete`: a free session with a
+// clean bill of health, invisible to the enrichment view that exists to catch
+// exactly this.
+//
+// A missing reading is not zero energy. It is no reading.
+
+function historyWithEnergy(energy: unknown): unknown {
+  const cdr: Record<string, unknown> = {
+    Id: "z-session-1",
+    ChargerId: Z_CHARGER,
+    StartDateTime: "2026-04-15T12:00:00Z",
+    EndDateTime: "2026-04-15T13:00:00Z",
+    UserUserName: "andri",
+  };
+  if (energy !== "__omit__") cdr.Energy = energy;
+  return { ok: true, value: [cdr] };
+}
+
+function emptyState(): State {
+  return {
+    importedCdrRefs: [],
+    chargeSessions: [],
+    sessionLedger: [],
+    idTokens: [],
+    memberships: [],
+  };
+}
+
+describe("a CDR with no Energy is SKIPPED, never priced at zero", () => {
+  beforeEach(() => {
+    vi.mocked(listZaptecChargeHistory).mockReset();
+  });
+
+  it("skips when the field is absent entirely", async () => {
+    vi.mocked(listZaptecChargeHistory).mockResolvedValue(historyWithEnergy("__omit__") as never);
+    const state = emptyState();
+    const report = await syncZaptecSessions(makeFakeDb(state), { accessToken: "stub" });
+
+    expect(report.skipped).toEqual([{ zaptecId: "z-session-1", reason: "no_energy_in_cdr" }]);
+    expect(report.imported).toEqual([]);
+    // The proof that matters: NO row was written. A zero-priced session is
+    // invisible forever; a skipped one is in the report and re-importable the
+    // moment the vendor supplies the figure.
+    expect(state.chargeSessions).toEqual([]);
+    expect(state.sessionLedger).toEqual([]);
+    expect(state.importedCdrRefs).toEqual([]);
+  });
+
+  it("skips when the field is null", async () => {
+    vi.mocked(listZaptecChargeHistory).mockResolvedValue(historyWithEnergy(null) as never);
+    const state = emptyState();
+    const report = await syncZaptecSessions(makeFakeDb(state), { accessToken: "stub" });
+    expect(report.skipped[0]?.reason).toBe("no_energy_in_cdr");
+    expect(state.sessionLedger).toEqual([]);
+  });
+
+  it("skips a NaN reading rather than pricing one", async () => {
+    // `Number.isFinite` catches what `?? 0` never could: a field that is
+    // present, non-null, and not a number.
+    vi.mocked(listZaptecChargeHistory).mockResolvedValue(historyWithEnergy(Number.NaN) as never);
+    const state = emptyState();
+    const report = await syncZaptecSessions(makeFakeDb(state), { accessToken: "stub" });
+    expect(report.skipped[0]?.reason).toBe("no_energy_in_cdr");
+    expect(state.sessionLedger).toEqual([]);
+  });
+
+  it("a MEASURED zero is imported — it is a real reading", async () => {
+    // The distinction the whole fix rests on. A session that genuinely
+    // delivered nothing — a plug-in that never drew — is a fact, and refusing
+    // it would be the same error in the other direction.
+    vi.mocked(listZaptecChargeHistory).mockResolvedValue(historyWithEnergy(0) as never);
+    const state = emptyState();
+    const report = await syncZaptecSessions(makeFakeDb(state), { accessToken: "stub" });
+    expect(report.skipped).toEqual([]);
+    expect(report.imported).toHaveLength(1);
+    expect(state.sessionLedger).toHaveLength(1);
+  });
+
+  it("a real reading is imported unchanged", async () => {
+    vi.mocked(listZaptecChargeHistory).mockResolvedValue(historyWithEnergy(30) as never);
+    const state = emptyState();
+    const report = await syncZaptecSessions(makeFakeDb(state), { accessToken: "stub" });
+    expect(report.skipped).toEqual([]);
+    expect(report.imported).toHaveLength(1);
+  });
+});

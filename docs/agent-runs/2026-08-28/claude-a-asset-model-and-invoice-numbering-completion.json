@@ -52,19 +52,19 @@
       "files": 92
     },
     "final": {
-      "passed": 1872,
+      "passed": 1877,
       "skipped": 1,
       "failed": 0,
       "files": 104
     },
-    "added": 183,
+    "added": 188,
     "checks": "16 of 16",
     "dry_run": "9 of 9 cases",
     "schema_consistency": {
       "tables": 85,
       "columns": 1038
     },
-    "fool_tests": 17
+    "fool_tests": 18
   },
   "gates_met": {
     "total": 31,
@@ -158,7 +158,13 @@
       "note": "LONGER than round 3, and that is honest: round 3 counted what stood between the code and AN invoice; round 4 made it correct and correctness added items that were always there."
     }
   ],
-  "backlog_items_done": [],
+  "backlog_items_done": [
+    {
+      "item": 1,
+      "title": "the ?? 0 refusal at ingest",
+      "note": "zaptec-session-sync.ts:235 priced a CDR with no Energy at zero AND marked it complete on Zaptec-native installations, because no OCPP row existed to disagree. Now skipped by name. Census: one storing coalesce fixed, nine displaying ones recorded as not the same defect."
+    }
+  ],
   "blockers": [
     "ADR 0054 is committed on NO branch. It exists only as an untracked file in the canonical working tree at E:/Claude/Straumvakt/docs/adr/0054-devices-placements-and-effective-dating.md. One git clean destroys the specification for rounds 4 and 5. Coordinator action.",
     "The PostgreSQL version Neon serves is unrecorded. Migrations 0005 and 0006 ship both constraint forms so this does not block, but it must be answered before either is applied.",
