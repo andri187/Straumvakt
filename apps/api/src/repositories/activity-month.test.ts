@@ -33,6 +33,10 @@ function evidence(over: Partial<ConnectorEvidence> = {}): ConnectorEvidence {
     ],
     statuses: [],
     assertions: [],
+    // ADR 0054 item 7 added a fourth evidence tier. Empty here on purpose:
+    // these cases are about the three DERIVED tiers, and a placement row
+    // would make them pass for a reason they are not testing.
+    placements: [],
     ...over,
   };
 }
@@ -112,7 +116,7 @@ describe("writeConnectorActivity — tenancy", () => {
     const out = await writeConnectorActivity(
       f.db,
       PERIOD,
-      { sessions: [], statuses: [], assertions: [] },
+      { sessions: [], statuses: [], assertions: [], placements: [] },
       ONLY_A,
     );
     expect(out.rowsWritten).toBe(0);

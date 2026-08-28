@@ -62,6 +62,7 @@ import {
   type DriverSessionObservation,
 } from "@straumvakt/commercial";
 import type { Db } from "../lib/drizzle";
+import type { PlacementRow } from "../lib/billing/placement-evidence";
 
 /**
  * Tenant confinement, required — the same shape established for the ledger in
@@ -95,6 +96,28 @@ export interface ConnectorEvidence {
   sessions: ConnectorSessionObservation[];
   statuses: ConnectorStatusObservation[];
   assertions: ConnectorManualAssertion[];
+  /**
+   * ADR 0054 item 7 / decision 5 — PRESENCE, and it is a fourth tier rather
+   * than a replacement for the three above.
+   *
+   * The three existing tiers all derive a connector from something that
+   * HAPPENED on it: a session, a StatusNotification, or a human vouching. The
+   * flat fee is not a usage fee — it is 200 kr per active connector per month
+   * for hardware that is installed and theirs — so the evidence that most
+   * directly answers it is that the device was PLACED there, which none of the
+   * three could see.
+   *
+   * It is also the only tier attributed by the PLACEMENT'S org rather than by
+   * the session's. That is the fix: a device that moves mid-month produces one
+   * placement row per host, so each host is billed for the period it actually
+   * held the device instead of the whole month going to whoever holds it when
+   * the query runs.
+   *
+   * Empty here is `unavailable`, never zero — `connectorSharesForPeriod`
+   * enforces that, and this array being empty is one of its inputs, not its
+   * answer.
+   */
+  placements: PlacementRow[];
 }
 
 /**
@@ -210,7 +233,66 @@ export async function gatherConnectorEvidence(
     assertedAt: r.assertedAt,
   }));
 
-  return { sessions, statuses, assertions };
+
+  // ── The placement tier — ADR 0054 item 7 ──────────────────────────────
+  //
+  // WRITTEN AND NEVER EXECUTED. `assets.placements`, `assets.devices` and
+  // `assets.vendor_config_observations` are created by migrations 0005 and
+  // 0007, neither of which has been applied to any database. The decisions
+  // this feeds are in lib/billing/placement-evidence.ts and are exercised
+  // against fixtures; this query is the shape only.
+  //
+  // `p.period && tstzrange(start, end, '[)')` is the whole point: OVERLAP,
+  // not currency. A device placed on the 2nd and removed on the 28th matches;
+  // a device that moved on the 12th matches TWICE, once per host, which is
+  // what the (org, year, month, connector) key on connector_activity_month
+  // was already shaped for.
+  //
+  // The join runs device -> evses -> connectors, which is the hierarchy
+  // migration 0007 made expressible. `e.device_id` is nullable during the
+  // transition, so an EVSE still parented only to a charging_station produces
+  // no row here and falls through to the three evidence tiers above rather
+  // than silently vanishing.
+  const placementRows = await db.execute<{
+    placement_id: string;
+    public_id: string;
+    device_id: string;
+    org_id: string;
+    installation_id: string;
+    period_lower: Date;
+    period_upper: Date | null;
+    connector_ids: string[] | null;
+  }>(sql`
+    SELECT p.id                AS placement_id,
+           p.public_id         AS public_id,
+           p.device_id         AS device_id,
+           p.org_id            AS org_id,
+           p.installation_id   AS installation_id,
+           lower(p.period)     AS period_lower,
+           CASE WHEN upper_inf(p.period) THEN NULL ELSE upper(p.period) END AS period_upper,
+           array_remove(array_agg(c.id), NULL) AS connector_ids
+      FROM assets.placements p
+      LEFT JOIN assets.evses      e ON e.device_id = p.device_id
+      LEFT JOIN assets.connectors c ON c.evse_id  = e.id
+     WHERE p.period && tstzrange(${start}, ${end}, '[)')
+       AND p.org_id = ${period.orgId}
+       ${orgIds === null ? sql`` : sql`AND p.org_id = ANY(${orgIds})`}
+     GROUP BY p.id, p.public_id, p.device_id, p.org_id, p.installation_id, p.period
+  `);
+
+  const placements: PlacementRow[] = (placementRows.rows ?? []).map((r) => ({
+    id: r.placement_id,
+    publicId: r.public_id,
+    deviceId: r.device_id,
+    orgId: r.org_id,
+    installationId: r.installation_id,
+    // Rebuilt into the same Tstzrange the pure layer uses, so there is one
+    // definition of "open-ended" rather than a NULL check in every caller.
+    period: { from: new Date(r.period_lower), until: r.period_upper === null ? null : new Date(r.period_upper) },
+    connectorIds: r.connector_ids ?? [],
+  }));
+
+  return { sessions, statuses, assertions, placements };
 }
 
 /** The evidence a period's driver activity is derived from. */

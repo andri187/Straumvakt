@@ -84,10 +84,18 @@ import type { RateRefInput } from "../packages/commercial/src/agreement/types.ts
 import type { BillingPeriodRef } from "../packages/commercial/src/core-billing/period-close.ts";
 import { makeBillingPeriodsRouter } from "../apps/api/src/routes/admin/billing/periods.ts";
 import { makeFixtureOperationsPort } from "../apps/api/src/lib/billing/fixture-operations-port.ts";
+import {
+  connectorSharesForPeriod,
+  type ConnectorPlacementShare,
+  type PlacementRow,
+} from "../apps/api/src/lib/billing/placement-evidence.ts";
+import type { VendorConfigObservation } from "../apps/api/src/lib/vendor-config/sink-port.ts";
 
 // ── Fixture: the org, its asset chain, its agreement ────────────────────
 
 const ORG_ID = "11111111-1111-1111-1111-111111111111";
+/** The second host in the mid-month-move case. Synthetic. */
+const ORG_B_ID = "22222222-2222-2222-2222-222222222222";
 const PERIOD: BillingPeriodRef = { orgId: ORG_ID, year: 2026, month: 3 };
 const CONNECTOR_COUNT = 30;
 const DRIVER_COUNT = 2;
@@ -655,6 +663,259 @@ async function runApiLifecycleRefusals(): Promise<CaseResult> {
   return { producedInvoice: false, behavedAsExpected: ok, output: notes.join("\n    ") };
 }
 
+
+// ── The mid-month move — ADR 0054 item 7 ────────────────────────────────
+//
+// One device, two hosts, one month. This is the case that a current-row read
+// gets wrong, and the case that makes the proration fork a real question
+// rather than a hypothetical.
+//
+// It runs the SAME feeder and the SAME numbering sequence as the happy path,
+// twice — once per host — because that is what `connector_activity_month`'s
+// (org, year, month, connector) key already produces. Nothing about the
+// existing cases changes; this one is added beside them.
+
+const HOST_B = {
+  legalName: "Hýsill B ehf.",
+  registeredId: "SYNTHETIC-HOST-ID-B",
+  vatNumber: "SYNTHETIC-VSK-3",
+  addressLines: ["Smiðjuvegur 4", "200 Kópavogur"] as const,
+  countryCode: "IS",
+  ref: { kind: "org", orgId: ORG_B_ID } as const,
+};
+
+/** March 2026, half-open. */
+const MARCH_WINDOW = {
+  start: new Date("2026-03-01T00:00:00Z"),
+  end: new Date("2026-04-01T00:00:00Z"),
+};
+const MOVE_DAY = new Date("2026-03-12T00:00:00Z");
+
+/** One device, one connector, moved on the 12th. */
+function movePlacements(): PlacementRow[] {
+  return [
+    {
+      id: "placement-host-a",
+      publicId: "evse-uid-host-a",
+      deviceId: "device-moved-1",
+      orgId: ORG_ID,
+      installationId: "inst-a",
+      period: { from: new Date("2026-01-15T00:00:00Z"), until: MOVE_DAY },
+      connectorIds: ["conn-moved-0001"],
+    },
+    {
+      id: "placement-host-b",
+      publicId: "evse-uid-host-b",
+      deviceId: "device-moved-1",
+      orgId: ORG_B_ID,
+      installationId: "inst-b",
+      period: { from: MOVE_DAY, until: null },
+      connectorIds: ["conn-moved-0001"],
+    },
+  ];
+}
+
+/** The device is vendor-ACTIVE, observed before the period. Half (b). */
+function moveVendorConfig(): Map<string, VendorConfigObservation[]> {
+  return new Map([
+    [
+      "device-moved-1",
+      [
+        {
+          deviceId: "device-moved-1",
+          observedAt: new Date("2026-02-01T00:00:00Z"),
+          chargerActive: true,
+          authenticationType: 2,
+          isAuthorizationRequired: false,
+          ocppDefaultIdTag: "SYNTHETIC-DEFAULT-TOKEN",
+        },
+      ],
+    ],
+  ]);
+}
+
+async function runMidMonthMove(_seq: SequenceState): Promise<CaseResult> {
+  // ONE SEQUENCE PER HOST, and that is the design rather than a convenience.
+  // `document_number_series` is keyed (org, series, year) — migration 0004 —
+  // because each host's numbering is its own unbroken run under Icelandic
+  // law. Two hosts legitimately both hold SV-2026-000001; sharing one
+  // sequence would put a hole in each of them.
+  //
+  // The parameter is ignored on purpose: the happy path's sequence belongs to
+  // Hýsill A, and threading it here would spend ordinals out of that run.
+  const seqByOrg = new Map<string, SequenceState>([
+    [ORG_ID, emptySequence({ orgScope: ORG_ID, series: "SV" })],
+    [ORG_B_ID, emptySequence({ orgScope: ORG_B_ID, series: "SV" })],
+  ]);
+
+  const placements = movePlacements();
+  const vendorConfig = moveVendorConfig();
+
+  const whole = connectorSharesForPeriod(placements, MARCH_WINDOW, vendorConfig, "whole_month_per_host");
+  const prorated = connectorSharesForPeriod(placements, MARCH_WINDOW, vendorConfig, "prorate_by_overlap_days");
+  if (whole.kind !== "counted" || prorated.kind !== "counted") {
+    return {
+      producedInvoice: false,
+      behavedAsExpected: false,
+      output: `expected counted shares, got ${whole.kind} / ${prorated.kind}`,
+    };
+  }
+
+  const out: string[] = [];
+  const hosts = [
+    { share: whole.shares.find((s) => s.orgId === ORG_ID)!, org: ORG_ID, party: HOST, label: "Hýsill A" },
+    { share: whole.shares.find((s) => s.orgId === ORG_B_ID)!, org: ORG_B_ID, party: HOST_B, label: "Hýsill B" },
+  ];
+
+  for (const h of hosts) {
+    // The same feeder, one connector, per host. The count is 1 because this
+    // host held ONE connector during the period — which is what the overlap
+    // join produced, not what a current-row read would have.
+    const result = await generateFlatFeeStatementFromSource(
+      {
+        connectorCount: async () => measured(1, "connector_lifecycle"),
+        driverCount: async () => measured(0, "activity_month_table"),
+      },
+      { period: { orgId: h.org, year: 2026, month: 3 }, rateReferences: RATES },
+    );
+    if (result.kind !== "settled") {
+      return {
+        producedInvoice: false,
+        behavedAsExpected: false,
+        output: `${h.label} held: ${JSON.stringify(result.holds)}`,
+      };
+    }
+    // `issue` is PURE and returns the next state. Discarding it is the defect
+    // its own contract warns about, and it is SILENT here: two hosts on
+    // separate series both legitimately hold 000001, so a dropped state looks
+    // identical to correct output. The first draft of this case had that bug.
+    const alloc = issue(seqByOrg.get(h.org)!, { idempotencyKey: `${h.org}:2026-03:invoice`, year: 2026 });
+    seqByOrg.set(h.org, alloc.state);
+    const draft = buildDraft(result, alloc.documentNumber, {
+      orgId: h.org,
+      recipient: { ...h.party, addressLines: [...h.party.addressLines] },
+    });
+    out.push(
+      renderInvoice(draft, [
+        `${h.label} held the device for ${h.share.overlapDays} of ${h.share.periodDays} days ` +
+          `(placement ${h.share.placementId}, OCPI EVSE.uid is the placement's public id)`,
+        `connector count 1 — DERIVED from a PLACEMENT overlapping the period, ` +
+          `not from a current-row read. Decision 5.`,
+        `vendor-active — Charger.Active true, observed 2026-02-01, before the period end`,
+        `document number ${alloc.documentNumber} — allocated${alloc.reused ? " (reused)" : ""}, gap-free sequence`,
+        `policy whole_month_per_host — the DEFAULT, and what this system does today`,
+      ]),
+    );
+  }
+
+  // THE STATE-THREADING PROOF. Both invoices above are SV-2026-000001 and
+  // that is CORRECT — the series is per-org, so two hosts legitimately hold
+  // the same number. It is also exactly what a DROPPED sequence state looks
+  // like, and the first draft of this case had that bug: `issue` is pure and
+  // returns the next state, and discarding it is the defect its own contract
+  // warns about. The two are distinguished here rather than left to the
+  // reader — a second document for Hýsill A must be 000002.
+  const secondForA = issue(seqByOrg.get(ORG_ID)!, {
+    idempotencyKey: `${ORG_ID}:2026-03:credit-note`,
+    year: 2026,
+  });
+  const threaded = secondForA.documentNumber === "SV-2026-000002";
+  out.push(
+    [
+      "  SEQUENCE",
+      `    Hýsill A next document  ${secondForA.documentNumber}${threaded ? "" : "   <- STATE WAS DROPPED"}`,
+      "    Both invoices are 000001 because the series is per-org — migration",
+      "    0004 keys document_number_series (org, series, year). This second",
+      "    allocation is what proves that is the design and not a discarded",
+      "    return value.",
+      "",
+      prorationNote(prorated.shares),
+    ].join("\n"),
+  );
+
+  return { producedInvoice: true, behavedAsExpected: threaded, output: out.join("\n\n") };
+}
+
+/**
+ * The proration arithmetic, printed beside the invoices — and the structural
+ * finding that came out of trying to produce it.
+ *
+ * THE FEEDER CANNOT EXPRESS PRORATION TODAY, and this is not a gap in the
+ * switch. `measured()` in packages/commercial/src/core-billing/flat-fee.ts
+ * throws unless the count is a non-negative INTEGER, deliberately, so a
+ * prorated share cannot be passed as a smaller count — `11/31 of a connector`
+ * is not a connector count and pretending it is would put a rounding decision
+ * in the layer that counts rather than the layer that prices.
+ *
+ * What would have to change, stated so the decision is costed rather than
+ * assumed: a per-line SHARE (numerator, denominator) carried into the engine
+ * and applied to `amountMinor` after the rate is applied, with the existing
+ * `roundAurarToIsk` doing the rounding. That keeps FOCUS rule 3 — one money
+ * engine — and it is one contract change, not a second engine.
+ *
+ * Until then this prints what proration WOULD produce, computed the same way
+ * the engine would have to, so the numbers are reviewable now.
+ */
+function prorationNote(shares: ConnectorPlacementShare[]): string {
+  const CONNECTOR_AURAR = 20_000n;
+  const lines: string[] = [];
+
+  // CUMULATIVE ALLOCATION, not per-share division.
+  //
+  // The obvious implementation — divide each share independently and add them
+  // up — was the first one written here, and it produced 199,99 kr. for a
+  // 200,00 kr. connector-month: 11/31 truncates to 70,96 and 20/31 to 129,03,
+  // and the missing eyrir goes nowhere. Silent, once per moved device, and it
+  // gets worse the more hosts a device passes through.
+  //
+  // Allocating cumulatively makes the shares sum to the total by construction:
+  // each host gets (running total so far) minus (what has already been given
+  // out), so the final share absorbs the remainder rather than dropping it.
+  // This is the same discipline `roundAurarToIsk` applies one layer up, and
+  // it is why proration must live inside the money engine rather than beside
+  // it — a caller doing its own division will make exactly this mistake.
+  const denominator = BigInt(shares[0]?.shareDenominator ?? 1);
+  let cumulativeNumerator = 0n;
+  let alreadyAllocated = 0n;
+  let total = 0n;
+
+  for (const s of shares) {
+    cumulativeNumerator += BigInt(s.shareNumerator);
+    const cumulativeAurar = (CONNECTOR_AURAR * cumulativeNumerator) / denominator;
+    const aurar = cumulativeAurar - alreadyAllocated;
+    alreadyAllocated = cumulativeAurar;
+    total += aurar;
+    lines.push(
+      `    ${s.orgId === ORG_ID ? "Hýsill A" : "Hýsill B"}  ` +
+        `${String(s.shareNumerator).padStart(2)}/${s.shareDenominator} × 200,00 kr.  =  ${isk(Number(aurar))}`,
+    );
+  }
+
+  const exact = total === CONNECTOR_AURAR;
+  return [
+    "  UNDER prorate_by_overlap_days — NOT the default, printed for the decision",
+    ...lines,
+    `    total for one connector-month                       ${isk(Number(total))}` +
+      (exact ? "" : "   <- DOES NOT SUM"),
+    "",
+    "  The shares are allocated CUMULATIVELY so they sum to the total exactly.",
+    "  Dividing each share independently loses an eyrir per move — the first",
+    "  draft of this note printed 199,99 kr. — which is silent, recurring, and",
+    "  the reason proration belongs inside the money engine rather than beside",
+    "  it.",
+    "",
+    "  Under whole_month_per_host, the same month bills 200,00 kr. TWICE —",
+    "  400,00 kr. for one physical connector. That is the arithmetic ADR 0054",
+    "  calls a defect in its double-invoice example; the only difference here",
+    "  is that both hosts consented to it.",
+    "",
+    "  THE FEEDER CANNOT EXPRESS PRORATION TODAY. `measured()` requires an",
+    "  integer count, so a share cannot be passed as a smaller count. Applying",
+    "  it needs a per-line (numerator, denominator) carried into the money",
+    "  engine and applied after the rate — one contract change, not a second",
+    "  engine. Costed here so the fork is decided with that in view.",
+  ].join("\n");
+}
 const CASES: Array<{ name: string; run: (seq: SequenceState) => Promise<CaseResult> | CaseResult }> = [
   { name: "happy-path", run: runHappyPath },
   { name: "holds-without-connector-rows", run: () => runHoldsWithoutConnectorRows() },
@@ -664,6 +925,7 @@ const CASES: Array<{ name: string; run: (seq: SequenceState) => Promise<CaseResu
   { name: "numbering-gap-free-and-crash-safe", run: () => runNumbering() },
   { name: "api-lifecycle", run: () => runApiLifecycle() },
   { name: "api-lifecycle-refusals", run: () => runApiLifecycleRefusals() },
+  { name: "mid-month-move", run: runMidMonthMove },
 ];
 
 async function main(): Promise<number> {

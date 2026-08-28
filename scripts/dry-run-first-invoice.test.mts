@@ -233,6 +233,49 @@ describe("regression mode", () => {
   it("--all exits 0 when every case behaves, refusals included", () => {
     const r = run("--all");
     expect(r.code).toBe(0);
-    expect(r.out).toContain("8/8 cases behaved as specified");
+    // 9 since ADR 0054 item 7 added `mid-month-move`. The number is asserted
+    // rather than pattern-matched on purpose: a case silently disappearing
+    // from CASES would otherwise still read as "every case behaved".
+    expect(r.out).toContain("9/9 cases behaved as specified");
+  });
+});
+
+describe("mid-month-move — ADR 0054 item 7", () => {
+  const r = run("--case", "mid-month-move");
+
+  it("exits 0 and produces TWO invoices for one device", () => {
+    expect(r.code).toBe(0);
+    // One device, two hosts, one month. Both hosts appear as GREIÐANDI.
+    expect(r.out).toContain("Hýsill A ehf.");
+    expect(r.out).toContain("Hýsill B ehf.");
+    expect(r.out.match(/Sölureikningur nr\./g)).toHaveLength(2);
+  });
+
+  it("splits the month 11 / 20 by OVERLAP, not by who holds it now", () => {
+    expect(r.out).toContain("held the device for 11 of 31 days");
+    expect(r.out).toContain("held the device for 20 of 31 days");
+    expect(r.out).toContain("DERIVED from a PLACEMENT overlapping the period");
+  });
+
+  it("gives each host its own per-org series, and proves the state was threaded", () => {
+    // Both invoices are 000001 because the series is (org, series, year).
+    // That is also what a DROPPED sequence state looks like, so the second
+    // allocation is what tells them apart.
+    expect(r.out).toContain("Hýsill A next document  SV-2026-000002");
+    expect(r.out).not.toContain("STATE WAS DROPPED");
+  });
+
+  it("prorated shares SUM to exactly one connector-month", () => {
+    // Dividing each share independently printed 199,99 kr. The shares are
+    // allocated cumulatively so the remainder lands on the last host.
+    expect(r.out).toContain("70,96 kr.");
+    expect(r.out).toContain("129,04 kr.");
+    expect(r.out).toContain("total for one connector-month                       200,00 kr.");
+    expect(r.out).not.toContain("DOES NOT SUM");
+  });
+
+  it("says plainly that the feeder cannot express proration today", () => {
+    expect(r.out).toContain("THE FEEDER CANNOT EXPRESS PRORATION TODAY");
+    expect(r.out).toContain("policy whole_month_per_host — the DEFAULT");
   });
 });

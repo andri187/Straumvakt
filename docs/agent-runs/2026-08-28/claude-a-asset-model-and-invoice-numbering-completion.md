@@ -724,6 +724,181 @@ still three SRs, diff over that path empty. No new request.
 
 ---
 
+## Phase 5 — item 7: billing counts overlap
+
+### What was wrong, and which direction it failed in
+
+`gatherConnectorEvidence` derived a connector from three kinds of evidence —
+a session, a StatusNotification, a human assertion — and **every one of them is
+attributed by the SESSION's org**. There was no placement in the picture at
+all, so:
+
+- a device placed on the 2nd and removed on the 28th, with no sessions, was
+  invisible: 26 days of hardware, nobody billed;
+- a device that moved on the 12th had its whole month attributed to whichever
+  host's rows happened to be there.
+
+The second is the worse one. It bills the **wrong** host rather than no host,
+and the invoice looks right to everyone except the two people it is wrong for.
+
+### The fix — a fourth evidence tier, not a replacement
+
+`ConnectorEvidence` gains `placements`. The three derived tiers stay exactly as
+they were, because they answer a different question: they say a connector was
+*used*, and the flat fee is not a usage fee. **200 kr per active connector per
+month is a PRESENCE fee**, and presence is what a placement records — which is
+why the placement tier is the one attributed by the placement's org rather than
+the session's.
+
+The query joins `assets.placements → assets.evses → assets.connectors` with
+`p.period && tstzrange(start, end, '[)')`. **Written and never executed** —
+migrations 0005 and 0007 are unapplied — so the decisions live in
+`apps/api/src/lib/billing/placement-evidence.ts` where a fixture can drive
+them. `e.device_id` is nullable during the transition, so an EVSE still
+parented only to a `charging_station` produces no row here and falls through to
+the three tiers above rather than silently vanishing.
+
+**The `(org_id, period_year, period_month, connector_id)` key on
+`connector_assertions` and `connector_activity_month` is untouched.** A device
+that moves mid-month naturally produces one row per host under it — that shape
+was right before anyone knew why, and it is what made this a change to the
+*evidence* rather than to the schema underneath it.
+
+### Requirement 2 — Dalvegur, old derivation and new
+
+The dry run prints the old number today, unchanged:
+
+> `connector count 30 — DERIVED from 30 activity rows (3 session_observed, 26 status_available, 1 manually_asserted)`
+
+| derivation | count | why |
+|---|---|---|
+| **old** — activity rows, unfiltered | **30** | every row in our database, ten of them vendor-deactivated |
+| **new** — placement overlap **and** `Charger.Active` | **20** | the ten deactivated rows fail half (b) |
+| in the Zaptec portal | 35 | five have no row here at all |
+
+**6,000 kr against 4,000 kr of real estate, on one site, every month.** The
+five missing rows fail the other way and no predicate can reach them: a row
+that does not exist cannot be filtered in. That is an import gap needing a
+reconciliation, and it is named separately for exactly that reason.
+
+### Requirement 3 — the proration fork, decided as far as it is mine to decide
+
+**One fee to one host is ruled out first**, because it cannot be made
+non-arbitrary: whichever host is chosen is wrong for the other, and the only
+rule that is not a coin flip — "whoever holds it at month end" — makes the fee
+depend on **when the query runs**, which is precisely what decision 5 forbids.
+A device moving on the 28th would bill the new host for a month it held for
+three days.
+
+Between the two that survive:
+
+**I argue for `prorate_by_overlap_days`.** ADR 0054 names it twice — decision 5
+says the device "belongs to the old host for eleven days and the new one for
+the rest", and "What this aligns with" lists overlap-based proration as the
+ordinary subscription convention. It gives one device-month a total of one fee
+however many hosts held it, which is the property that makes the invoice
+explainable to both of them. It also composes with FOCUS rule 3: proration is a
+multiplier on a quantity, the engine still prices one rate against one count,
+and neither money line learns about placements.
+
+**The default is `whole_month_per_host` anyway, and that is deliberate.**
+It is what the system does today, and **changing what an invoice says must not
+be a side effect of a schema change.** Flipping it is one constant in
+`placement-evidence.ts` plus a decision that is Andri's. Both branches are
+implemented, both are tested, and a test asserts that the implicit default
+equals the explicit one — so the default cannot drift without a test failing.
+
+**If proration is chosen, one thing moves with it:** the 450 kr per connector
+per month cap is expressed in whole connector-months and would have to apply to
+the prorated total rather than to each host's share. Recorded because it is the
+kind of thing that gets missed when a switch is flipped six weeks later.
+
+### Requirement 4 — the dry run, and two bugs it caught in its own case
+
+`scripts/dry-run-first-invoice.mts` gains `mid-month-move`: one device, one
+connector, host A `[Jan 15, Mar 12)`, host B `[Mar 12, )`. **Two invoices
+print.** 9/9 cases behave.
+
+**Every pre-existing case is byte-identical**, verified by diff rather than by
+eye: `--all` output lines 1–78 and the whole default happy-path run match the
+pre-change capture exactly.
+
+Writing the case found two real defects, both in code the case itself exercises:
+
+**1 · A dropped sequence state.** `issue` is pure and returns the next state;
+the first draft passed the same `seq` to both hosts and discarded the return.
+Both invoices came out `SV-2026-000001` — **which is also the correct answer**,
+because migration 0004 keys the series `(org, series, year)` and two hosts each
+legitimately hold ordinal 1. The bug and the correct behaviour are
+indistinguishable in the output. The case now allocates a second document for
+host A and prints it: `SV-2026-000002` proves the state was threaded, and the
+line reads `<- STATE WAS DROPPED` if it was not. `behavedAsExpected` is gated
+on it, so the case fails rather than printing a plausible number.
+
+**2 · Proration lost an eyrir.** Dividing each share independently printed:
+
+```
+  Hýsill A  11/31 × 200,00 kr.  =   70,96 kr.
+  Hýsill B  20/31 × 200,00 kr.  =  129,03 kr.
+  total for one connector-month     199,99 kr.
+```
+
+Both truncate, and the missing eyrir goes nowhere. Silent, once per moved
+device, and worse the more hosts a device passes through. Fixed by allocating
+**cumulatively** — each host gets the running total minus what has already been
+given out, so the last share absorbs the remainder:
+
+```
+  Hýsill A  11/31 × 200,00 kr.  =   70,96 kr.
+  Hýsill B  20/31 × 200,00 kr.  =  129,04 kr.
+  total for one connector-month     200,00 kr.
+```
+
+**And a structural finding that came out of trying to print it: the feeder
+cannot express proration today, and this is not a gap in the switch.**
+`measured()` in `flat-fee.ts` throws unless the count is a non-negative
+**integer** — deliberately — so a prorated share cannot be passed as a smaller
+count. `11/31 of a connector` is not a connector count, and pretending it is
+would put a rounding decision in the layer that counts rather than the layer
+that prices. What proration would actually need: a per-line
+`(numerator, denominator)` carried into the money engine and applied after the
+rate, with `roundAurarToIsk` doing the rounding. **One contract change, not a
+second engine** — FOCUS rule 3 survives it. Costed here so the fork is decided
+with that in view rather than discovered afterwards.
+
+### Tests — 24, and the fool test lands where it should
+
+`placement-evidence.test.ts` 19 · `dry-run-first-invoice.test.mts` +5.
+
+All five named cases present: a device that **moves on the last day** (one day,
+and under the default that is a full fee — the case that makes proration
+arguable); a device that **moves twice** (three hosts, 9 + 10 + 12 = 31 days);
+a device **placed after the period ends**; a placement that **opens and closes
+inside one day** (0 whole days of overlap and emphatically not 0 placements —
+the host had the hardware); and **no placements at all**, which is
+`unavailable` and never zero.
+
+Plus the distinction note 22 turns on, as its own test: a **vendor-deactivated**
+device returns `counted` with an empty list, not `unavailable`. We looked, we
+have the evidence, the answer is genuinely "none of these are billable".
+**Measured zero is legal; assumed zero is not.**
+
+| fool | mutation | failed |
+|---|---|---|
+| 11 | the overlap join reverted to a current-row read (`period.until === null`) | **8** |
+
+Named tests that fail: *"bills a device placed on the 2nd and removed on the
+28th"*, *"a device that moves mid-month produces ONE ROW PER HOST"*, *"a device
+that moves on the LAST DAY still gives the new host a row"*, *"a device that
+moves TWICE gives three hosts three rows"*, and four more. Requirement 6 asked
+for one; eight is the shape of a regression that could not hide.
+
+**Checks at Phase 5 close:** tsc 0, **1,808 passed / 1 skipped / 99 files**,
+`npm run check` **16 of 16**, dry run **9/9**, `check:schema-consistency` at
+**85 tables / 1,038 columns**.
+
+---
+
 ## External state — running
 
 No push. No deploy. **No migration applied to any database — `0002`, `0003`,
@@ -750,6 +925,7 @@ The only branch written to is `dev/core-billing-integration`.
 | Phase 2 | `ae99700` | SR-1, SR-2, SR-3 | all three answered |
 | Phase 3 | `d9a8b18` | unchanged — `git diff` between the two tips over that path is **empty** | none |
 | Phase 4 | `d9a8b18` | unchanged | none |
+| Phase 5 | `d9a8b18` | unchanged | none |
 
 The channel rule is that an earlier SR is never rewritten. Checked rather than
 assumed: the diff is empty, so nothing I answered has moved under me.
