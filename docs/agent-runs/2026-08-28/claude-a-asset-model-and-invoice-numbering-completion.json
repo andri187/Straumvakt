@@ -52,19 +52,19 @@
       "files": 92
     },
     "final": {
-      "passed": 1877,
+      "passed": 1882,
       "skipped": 1,
       "failed": 0,
-      "files": 104
+      "files": 105
     },
-    "added": 188,
+    "added": 193,
     "checks": "16 of 16",
     "dry_run": "9 of 9 cases",
     "schema_consistency": {
       "tables": 85,
       "columns": 1038
     },
-    "fool_tests": 18
+    "fool_tests": 19
   },
   "gates_met": {
     "total": 31,
@@ -163,6 +163,16 @@
       "item": 1,
       "title": "the ?? 0 refusal at ingest",
       "note": "zaptec-session-sync.ts:235 priced a CDR with no Energy at zero AND marked it complete on Zaptec-native installations, because no OCPP row existed to disagree. Now skipped by name. Census: one storing coalesce fixed, nine displaying ones recorded as not the same defect."
+    },
+    {
+      "item": 2,
+      "title": "Charger.Active consumers",
+      "note": "the field is already read and dropped by zaptec-charger-status-sync, which persists its two neighbours. 11 read paths censused: 5 matter, 2 matter in the OPPOSITE direction, 4 do not. Three rules, and the ordering - writer, backfill, filters - must not overlap."
+    },
+    {
+      "item": 3,
+      "title": "property-based tests for the temporal key",
+      "note": "5 tests over 8 seeds, deterministic PRNG, no new dependency. Both directions: accepted sets hold the invariant, and every rejection genuinely collides. The ADR claim about the partial index is generated rather than worked once."
     }
   ],
   "blockers": [

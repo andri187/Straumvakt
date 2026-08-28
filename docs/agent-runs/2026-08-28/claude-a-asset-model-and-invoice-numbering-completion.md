@@ -1623,6 +1623,83 @@ Suite **1,877 passed / 1 skipped / 104 files**, `npm run check` **16 of 16**.
 
 ---
 
+## §12 standing backlog — items 2 and 3
+
+### Item 2 — `Charger.Active` consumers
+
+`docs/notes/2026-08-28-charger-active-consumers.md`.
+
+**The first finding is that the question has no consumers yet, because nothing
+writes the field** — and that is the reason to do the census now, while the
+answer can still be designed rather than retrofitted.
+
+**`Active` is already read and dropped.** `lib/zaptec.ts` declares
+`Active?: boolean` on `ZaptecChargerLite`, and
+`zaptec-charger-status-sync.ts:265-280` persists the *other two* fields from
+that same response, each guarded so `undefined` does not overwrite a known
+value. There is no third block. The natural writer for
+`vendor_config_observations` is one guarded block in a sync that already writes
+its two neighbours — and **the importer is B's**, which is why the note names
+the site rather than editing it.
+
+**The census: 11 read paths, and they do not want the same rule.** Five matter,
+two matter **in the opposite direction**, and four do not. The worst is
+`routes/public/driver.ts:296` — a driver routed to a deactivated charger
+arrives at hardware that will not start. `circuits.ts` and `installations.ts`
+are the inverted pair: a deactivated charger draws no power, so including it
+**over**-estimates the circuit.
+
+Three rules fall out, and conflating them is how the next fix goes wrong:
+
+1. **money or a driver → filter to active.**
+2. **operational → SHOW deactivated rows, marked.** Hiding them makes an
+   operator wonder where their charger went; marking them answers it.
+3. **historical → do not filter at all.** Filtering history by today's state
+   rewrites the past, which is the same error `tariff_snapshot_json` prevents.
+
+**And the ordering that must not be got wrong:** until the observation table
+has rows, every consumer reads `unavailable` — which is a **hold**, not a
+filter. Adding filters before the writer exists would turn all five surfaces
+off. Writer, then backfill, then filters, not overlapping.
+
+### Item 3 — property-based tests for the temporal key
+
+`packages/shared/src/domain/effective-dating.property.test.ts` — **5 tests over
+8 seeds**, generating interval sets rather than pinning cases a human thought
+of.
+
+**No property-testing library was added.** `fast-check` would be a new
+dependency for a check that needs a seeded PRNG and a loop, and `check:deps` is
+right to make that deliberate. The generator is 20 lines and **deterministic**:
+a fixed seed means a failure is reproducible from the test output alone, which
+is the property that matters most and the one a random-per-run harness gives up.
+
+Both directions of the invariant, because only one of them is the obvious test:
+
+- **every ACCEPTED set has at most one live placement at every day** in the
+  window — checked by sampling days rather than by re-running `overlaps`, so
+  the test does not assert the implementation against itself;
+- **every REJECTED candidate genuinely collides** with something accepted. A
+  rejection with no overlapping row would be a false refusal — an operator told
+  "already placed" about a device that is free — and a constraint that is
+  merely *strict* passes the first test and fails this one. The suite also
+  asserts each seed produced at least one rejection, because a run with none
+  proves nothing about rejections.
+
+And the ADR's claim, **generated rather than worked once**: the partial unique
+index admits sets with two placements live at the same instant, and the billing
+predicate over such a set returns more than one billable row for **one device**.
+If that test ever stops finding a violation, the alternative has become
+adequate and the ADR's argument needs revisiting — the failure message says so.
+
+**Fool test 19:** an unbounded upper bound treated as an instant → **8 failed
+across 2 files**, which is the generator earning its keep: the same mutation
+against the example-based suite alone would have been quieter.
+
+Suite **1,882 passed / 1 skipped / 105 files**, `npm run check` **16 of 16**.
+
+---
+
 ## External state — running
 
 No push. No deploy. **No migration applied to any database — `0002`, `0003`,
