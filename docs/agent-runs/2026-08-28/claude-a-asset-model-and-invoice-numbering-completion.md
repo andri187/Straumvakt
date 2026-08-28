@@ -1414,6 +1414,153 @@ Suite **1,872 passed / 1 skipped / 104 files**, `npm run check` **16 of 16**.
 
 ---
 
+## §11 fallback — items 6, 7, 9, 10, and 8 as the capstone
+
+Four design notes and the revised critical-path list. No code; nothing in this
+section builds anything.
+
+### Item 6 — `docs/notes/2026-08-28-ocpp-identities-retirement-plan.md`
+
+**64 files** reference `ocpp_identities` outside generated code, and the plan
+turns on the fact that **they are not equal**. Four tiers, and **only the first
+can take the site down**: the auth path (`gateway/src/auth.ts`,
+`identity-do.ts`, `ocpp-internal-auth.ts`) — a wrong lookup for one second is
+one second in which no charger can connect. The write path, the projections and
+the sixty read-only surfaces all fail visibly.
+
+**Two findings worth having before anyone starts.**
+
+`identity-do.ts` keys its Durable Object on **`ocpp_identities.id`, the UUID,
+not the identity string** — a piece of good luck, because the DO key survives an
+identity string changing. It survives the retirement **only if the backfill
+carries the ids across**, and *that is decided at backfill time*, which is why
+it must be settled before step 2 rather than discovered at step 4. If new ids
+are issued, **every live DO is orphaned at cutover and every connected charger
+is dropped**.
+
+And a permanent hole: **the backfill cannot recover an identity that was ever
+CHANGED in place.** The old value is gone; no interval can be reconstructed. It
+should be recorded on the row rather than papered over — those devices' identity
+history begins at backfill, and any earlier question is `unavailable`.
+
+Seven ordered steps. Steps 3 and 4 must not be one deploy; step 4 and step 6
+must not be one deploy.
+
+### Item 7 — the `createCharger` call-site migration
+
+**Done in the asset-model retirement plan**, with both callers named
+(`routes/admin/chargers.ts:68`, mine; `repositories/onboarding-chains.ts:163`,
+B's) and the ordering constraint written out: **retiring it before the backfill
+leaves two paths writing to different tables for one physical charger.**
+
+### Item 9 — `docs/notes/2026-08-28-lifetime-counter-maintenance.md`
+
+**Store the device's own reading; never accumulate.** The two rejected
+approaches each fail permanently and invisibly: *summing our sessions* misses
+every session before import and looks authoritative; *incrementing per session*
+double-counts on replay and under-counts on a dropped message, with nothing to
+reconcile against.
+
+The write is an **assignment with a guard**, and three properties fall out of
+it: a replay is a no-op, an out-of-order message is a no-op, and **a reading
+that goes backwards is refused**. That last is the one that will fire in
+practice — a meter swap genuinely restarts the register — and **what to do then
+is deliberately not decided**, because the guard must make the event visible
+before anyone chooses between an offset column and a swap record.
+
+Session **count** has no OCPP 1.6 register, so it is the vendor's figure or
+`unavailable` — and it must **not** be quietly derived from our own rows, which
+is the summing error wearing a different hat.
+
+One product consequence, flagged rather than buried: no erasure on transfer
+(decision 7) means **the new host can see how much energy the unit delivered at
+its previous site.** A fact about equipment they now own, and also a number
+about somebody else's business.
+
+### Item 10 — `docs/notes/2026-08-28-ocpi-mapping.md`
+
+The receipt for ADR 0054's claim that the shape *"is what the interoperability
+specifications already require, arrived at independently"*.
+
+**`EVSE.uid` → `placements.public_id`**, never a serial, a device id or an OCPP
+identity. OCPI warns against hardware identifiers by name, because redeploying
+the same unit elsewhere then breaks uniqueness.
+
+The move maps one-to-one onto `moveDevice` — `PATCH status: REMOVED`, then
+`PUT` a new EVSE under the new Location — **and the order matters on the wire**:
+sending the PUT first makes the same physical unit live at two Locations, which
+is the roaming-visible form of the double-invoice.
+
+The status conversion is written out because it is **lossy**: five OCPP values
+collapse into `CHARGING`, and `SuspendedEV` versus `SuspendedEVSE` is gone. That
+is item 11's argument in one table — the conversion happens at the boundary, and
+the support call that needs the distinction happens on our side of it. A
+never-reported connector maps to `UNKNOWN` and **not** `INOPERATIVE`: mapping
+silence to "out of service" would route drivers away from a charger that may be
+fine.
+
+---
+
+## §11 item 8 — what NOW stands between here and a real invoice
+
+Round 3's list was *"two decisions and one migration"*. **This one is longer,
+and that is the honest answer rather than a regression.** Round 3's list was
+short because it was counting what stood between the code and *an* invoice.
+Round 4 made the invoice **correct**, and correctness added items that were
+always there and had not been counted.
+
+### On the critical path
+
+1. **Answer the active-driver decision packet.** Unchanged from round 3, still
+   one line, and until it is answered every real period holds — by design.
+2. **Authorise the migrations — now `0002` through `0008`.** Five more than
+   round 3, and **they are not all the same shape**:
+   - `0002`, `0003`, `0004`, `0005`, `0007`, `0008` are additive. `0005`
+     creates `btree_gist`.
+   - **`0006` is not.** It drops two unique indexes, backfills two columns with
+     `UPDATE`, and adds two exclusion constraints. Its own header carries the
+     verb census and the hazard: **the pair unique it drops is exactly what
+     guarantees the constraint it adds can validate**, so steps 4 and 5 of that
+     file must run in one transaction.
+3. **Decide the PostgreSQL version.** `SELECT current_setting('server_version_num')::int`.
+   `0005` and `0006` ship both constraint forms and default to the one that
+   works everywhere, so this does not block — but it must be answered before
+   either is applied, because applying Form A and later wanting Form B is a
+   `DROP CONSTRAINT` under an `ACCESS EXCLUSIVE` lock.
+4. **Decide mid-month proration.** Both branches implemented, default is
+   today's behaviour, so nothing changes silently. **New from this round:** the
+   feeder cannot express proration at all — `measured()` requires an integer
+   count — so choosing it is one contract change to the money engine, not a
+   switch flip. Costed in Phase 5.
+5. **The statement renderer.** `issueDocument` allocates a real number and then
+   refuses by name: `number_allocated_<N>_but_statement_renderer_not_built`.
+   Round 3 called migration `0004` the last engineering item on the critical
+   path; `0004` is written, and **this is what took its place.**
+
+### New on the critical path, and it was always there
+
+6. **The five Dalvegur chargers that exist in the portal and not in our
+   database.** 35 in the portal, 30 rows here. **No predicate can reach them**
+   — a row that does not exist cannot be filtered in — so this is a
+   reconciliation against the vendor and not a code change. It **under**-bills,
+   which is why nobody has noticed.
+7. **The accountant's constraint on numbering.** Still unanswered. Three things
+   his answer could move, each a one-place change by construction.
+
+### Off the critical path, unchanged
+
+The round-1 mobile money-unit patch, and B's `MAIN_APP → hlada-api`
+pending-creation binding.
+
+### The one thing that is not on any list, and should be
+
+**ADR 0054 is committed on no branch.** The document this entire round
+implements exists only as an untracked file in the canonical working tree. One
+`git clean` destroys the specification for rounds 4 and 5. It is not an
+engineering item and it is the highest-severity thing in this artifact.
+
+---
+
 ## External state — running
 
 No push. No deploy. **No migration applied to any database — `0002`, `0003`,

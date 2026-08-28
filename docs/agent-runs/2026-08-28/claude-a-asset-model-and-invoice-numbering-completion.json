@@ -131,6 +131,31 @@
       "item": 5,
       "title": "the flat-fee scenarios",
       "note": "34 scenarios plus a coverage map: 24 covered, 10 gaps. Eight of the ten are one gap - the SQL has never run. Gap 1 was closed while writing the map."
+    },
+    {
+      "item": 6,
+      "title": "the ocpp_identities retirement plan",
+      "note": "64 readers in four tiers; only the auth path can take the site down. Two findings: the Durable Object keys on ocpp_identities.id, so the backfill must carry ids across or every live DO is orphaned at cutover; and an identity ever CHANGED in place cannot be reconstructed - a permanent hole, recorded rather than papered over."
+    },
+    {
+      "item": 7,
+      "title": "the createCharger call-site migration",
+      "note": "done inside the asset-model retirement plan, both callers named with the ordering constraint."
+    },
+    {
+      "item": 9,
+      "title": "lifetime-counter maintenance",
+      "note": "store the reading, never accumulate. Assignment with a guard: replay is a no-op, out-of-order is a no-op, a backwards reading is REFUSED and what to do then is deliberately left open so the event is visible first."
+    },
+    {
+      "item": 10,
+      "title": "the OCPI mapping note",
+      "note": "EVSE.uid is the placement, never the device. The move maps onto moveDevice and the wire order matters. The status conversion is lossy and is written out."
+    },
+    {
+      "item": 8,
+      "title": "what now stands between here and a real invoice",
+      "note": "LONGER than round 3, and that is honest: round 3 counted what stood between the code and AN invoice; round 4 made it correct and correctness added items that were always there."
     }
   ],
   "backlog_items_done": [],
@@ -142,10 +167,10 @@
     "Five Dalvegur chargers exist in the Zaptec portal with no row in our database. No predicate can see them; it under-bills and needs a reconciliation."
   ],
   "next_actions": [
-    "Fallback item 10 - the OCPI mapping note (EVSE.uid -> placement id)",
-    "Fallback item 6 - the ocpp_identities retirement plan",
-    "Fallback item 9 - lifetime-counter maintenance, design only",
-    "Fallback item 8 - the round-4 revision of what stands between here and a real invoice"
+    "Standing backlog 1 - the z.Energy ?? 0 refusal in the ingest lane",
+    "Standing backlog 3 - property-based tests for the temporal key",
+    "Standing backlog 5 - an audit-trail design for the asset model",
+    "Fallback 3 continued - the 31 remaining orgIdParam gates"
   ],
   "external_state": {
     "push": false,
