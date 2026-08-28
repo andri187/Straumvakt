@@ -58,3 +58,6 @@ export * from "./onboarding/org-exposure";
 // ── agreements write surface (round 4) ──
 export * from "./agreements/write-ops";
 export * from "./agreements/writer";
+
+// ── validity resolution (round 4) ──
+export * from "./resolution/validity";

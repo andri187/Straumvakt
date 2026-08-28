@@ -57,7 +57,8 @@
     "./invoice/deliver-pdf": "./src/invoice/deliver-pdf.ts",
     "./agreements/write-ops": "./src/agreements/write-ops.ts",
     "./agreements/writer": "./src/agreements/writer.ts",
-    "./agreements/fixture-store": "./src/agreements/fixture-store.ts"
+    "./agreements/fixture-store": "./src/agreements/fixture-store.ts",
+    "./resolution/validity": "./src/resolution/validity.ts"
   },
   "dependencies": {
     "zod": "^4.3.6"

@@ -30,6 +30,8 @@
 // 3. FOCUS rule 5 — tenancy on every operation. A write whose scope does not
 //    match its target is a refusal, not a silent no-op.
 
+import type { Evidence } from "../resolution/validity";
+
 /** Half-open interval `[from, until)`. `until: null` means open-ended. */
 export interface Period {
   from: string;
@@ -262,16 +264,13 @@ export interface SettledPeriodPort {
   settledThrough(orgScope: string): Promise<Evidence<string | null>>;
 }
 
-/** Round-3 convention: absent is `unavailable`, never a value. */
-export type Evidence<T> =
-  | { status: "available"; value: T }
-  | { status: "unavailable"; reason: string };
-
-export const available = <T>(value: T): Evidence<T> => ({ status: "available", value });
-export const unavailable = <T>(reason: string): Evidence<T> => ({
-  status: "unavailable",
-  reason,
-});
+// Evidence has ONE definition, in resolution/validity.ts. An earlier draft
+// declared it here as well and the typecheck caught the collision — which is
+// the duplication this round exists to end, appearing inside the round itself.
+// Re-exported rather than redeclared so a caller importing from either module
+// gets the same type.
+export type { Evidence } from "../resolution/validity";
+export { available, unavailable } from "../resolution/validity";
 
 // ── provenance ──────────────────────────────────────────────────────────
 

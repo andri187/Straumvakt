@@ -194,3 +194,83 @@ closing it; fire the agreement writes without awaiting them.
 ---
 
 *Phases 2–6, §11 and §12 follow.*
+
+---
+
+## Phases 2 and 3 — validity replaces existence
+
+Delivered as `packages/contracts/src/resolution/validity.ts` with **27 tests**,
+and documented in
+[`docs/notes/2026-08-28-validity-census-and-authorize-switch.md`](../../notes/2026-08-28-validity-census-and-authorize-switch.md).
+
+### FINDING 2-A — the call-site count is not five. It is nine that decide.
+
+19 references across 14 files, and they are not one population. Classified:
+**9 decide access or price** (the shape item 9 is about), 6 list for a screen,
+2 write, 1 counts, 1 is this round's adapter.
+
+**So it is the primary plus eight, not the primary plus five.** Each of the
+nine is named in the note with the instant it should be asking about.
+
+### FINDING 2-B — the primary dates the wrong row
+
+`ocpp-authorize.ts:277` dates the **agreement** (`effectiveFrom <= now`,
+`effectiveUntil > now`) and **not the membership**. A driver who moved out in
+March still authorises in July as long as the agreement is live. The interval
+that matters does not exist yet — SR-2.
+
+### FINDING 2-C — `new Date()` is right for authorize and wrong for pricing
+
+Authorising asks "may this person charge *now*". Pricing asks "was this person
+a member when the session *started*", and ADR 0054 decision 6 seals the
+session. Two of the nine sites are pricing-shaped and both use the current
+instant. `membershipForSession` exists so the two questions stop sharing a
+call.
+
+### What was converted, and what honestly was not
+
+The port, the interval algebra, `membershipForSession` and the fixture adapter
+are done and tested. **The eight non-primary call sites were not converted**,
+for two reasons stated rather than worked around: the membership interval
+column does not exist (SR-2), so a converted adapter would have to fall back
+to existence — *converting the sites without changing the answer, which is
+worse than not converting them because it looks done* — and four of the files
+are not in this round's lane.
+
+### Phase 3 — the resolution chain, and ambiguity refused
+
+`PlacementResolverPort` implemented over the locked signature: identity → open
+`device_identity` → device → open `placement` → installation, **same verdicts**.
+Resolution at an instant inside a *closed* placement returns the host who held
+it then. Two open rows return `ambiguous_identity` / `ambiguous_placement`
+rather than a `LIMIT 1` pick — tested, with fool-test G showing the arbitrary
+version.
+
+### The `enforceAuthorize` premise — verified myself, as instructed
+
+| Claim | Verdict |
+|---|---|
+| defaults **false** | **CONFIRMED** — `assets.ts:139`, `assets.prisma:177` |
+| gateway replies `Accepted` regardless when false | **CONFIRMED** — `identity-do.ts:93-96` |
+| *"one of which sets it `true` on a path"* | **WRONG** — `agreements.ts:201` is a Prisma `select` projection. **Nothing assigns it true.** |
+
+Two things the handover did not say: the flag **is** settable through the API
+(`inputs/installations.ts:37`), so flipping it is a route call and reversible
+in seconds rather than a deploy; and the gateway **fails closed** on the access
+gate when the verdict cannot be reached, which is why the abort condition
+includes "the API is unreachable".
+
+The ordered five-step sequence with an abort condition per step is in the note.
+**Designed and unexecuted — no live setting changed, no `updateChargerSettings`
+issued, no socket opened.**
+
+### A duplication caught inside the round itself
+
+`Evidence` was declared in both the agreements module and the resolution
+module, and the typecheck caught the collision. **That is the duplication
+Phase 5 exists to end, appearing while the round was being written.** Resolved
+to one definition in `resolution/validity.ts`, re-exported from the other.
+
+### Checks after Phases 2–3
+
+`npm run check` **all 14 passed** · `npx vitest run` **1059 passed** (+27).
