@@ -54,3 +54,7 @@ export * from "./money/lines";
 // ── onboarding (round 3) ──
 export * from "./onboarding/org-readiness";
 export * from "./onboarding/org-exposure";
+
+// ── agreements write surface (round 4) ──
+export * from "./agreements/write-ops";
+export * from "./agreements/writer";

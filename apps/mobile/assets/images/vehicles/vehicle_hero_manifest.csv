@@ -24,3 +24,8 @@ rank,type,subtype,subtype_in_traffic,asset_key,asset_path
 23,AUDI,E-TRON 55,363,audi_e_tron_55,assets/images/vehicles/audi_e_tron_55.png
 24,KIA,SOUL,353,kia_soul_ev,assets/images/vehicles/kia_soul_ev.png
 25,MG,MG4 ELECTRIC,347,mg4_electric,assets/images/vehicles/mg4_electric.png
+26,BYD,SEALION 7,335,byd_sealion_7,assets/images/vehicles/byd_sealion_7.png
+27,AUDI,Q4 45 E-TRON,312,audi_q4_45_e_tron,assets/images/vehicles/audi_q4_45_e_tron.png
+28,AUDI,E-TRON 50,309,audi_e_tron_50,assets/images/vehicles/audi_e_tron_50.png
+29,SUBARU,SOLTERRA,282,subaru_solterra,assets/images/vehicles/subaru_solterra.png
+30,MG,MG5 ELECTRIC,279,mg5_electric,assets/images/vehicles/mg5_electric.png

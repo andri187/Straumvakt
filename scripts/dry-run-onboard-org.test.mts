@@ -2,6 +2,11 @@
 //
 // The script itself is the artifact an operator runs; this is what keeps it
 // honest in CI, where nobody is reading the output.
+//
+// Round 4: the agreement step became genuinely async, because it now drives
+// the real AgreementWriter instead of fabricating a fact. Every helper that
+// builds a world is awaited — an earlier draft assumed a fixture store
+// settles synchronously, and the dry run caught that it does not.
 
 import { describe, expect, it } from "vitest";
 
@@ -20,6 +25,12 @@ import {
 import { isValidKennitala } from "../packages/contracts/src/invoice/kennitala.ts";
 import { assessOrgReadiness } from "../packages/contracts/src/onboarding/org-readiness.ts";
 
+/** The fully onboarded world, built through the real write surface. */
+const onboarded = () =>
+  stepSetFlatFeeAgreement(
+    stepAttachCharger(stepEnrolUser(stepCreateOrg(EMPTY, { kennitala: HOST_KENNITALA }))),
+  );
+
 describe("the case corpus", () => {
   it("has at least four cases", () => {
     expect(CASES.length).toBeGreaterThanOrEqual(4);
@@ -35,30 +46,52 @@ describe("the case corpus", () => {
     }
   });
 
-  it.each(CASES.map((c) => [c.name, c] as const))("case %s behaves as expected", (_n, c) => {
-    expect(runCase(c).ok).toBe(true);
+  it.each(CASES.map((c) => [c.name, c] as const))("case %s behaves as expected", async (_n, c) => {
+    expect((await runCase(c)).ok).toBe(true);
   });
 });
 
 describe("the happy path reaches the invoice contract, not just the checklist", () => {
-  const world = stepSetFlatFeeAgreement(
-    stepAttachCharger(stepEnrolUser(stepCreateOrg(EMPTY, { kennitala: HOST_KENNITALA }))),
-  );
-
-  it("readiness reports invoiceable with no holds", () => {
-    const r = assessOrgReadiness(factsOf(world));
+  it("readiness reports invoiceable with no holds", async () => {
+    const r = assessOrgReadiness(factsOf(await onboarded()));
     expect(r.invoiceable).toBe(true);
     expect(r.holds).toEqual([]);
   });
 
-  it("and the invoice document actually constructs", () => {
-    const proof = proveInvoiceAccepts(world);
+  it("and the invoice document actually constructs", async () => {
+    const proof = proveInvoiceAccepts(await onboarded());
     expect(proof.ok).toBe(true);
     expect(proof.header).toBeTruthy();
   });
 
-  it("the rendered header names the org as payer", () => {
-    expect(proveInvoiceAccepts(world).header).toContain("Dry Run Host ehf.");
+  it("the rendered header names the org as payer", async () => {
+    expect(proveInvoiceAccepts(await onboarded()).header).toContain("Dry Run Host ehf.");
+  });
+});
+
+describe("the agreement comes from the write surface, not from a fixture fact", () => {
+  it("the store actually holds an agreement and two clauses", async () => {
+    const w = await onboarded();
+    expect(w.agreementWriteStore).toBeTruthy();
+    const store = w.agreementWriteStore!;
+    expect(store.agreements.size).toBe(1);
+    const [agreement] = [...store.agreements.values()];
+    expect(store.clausesOf(agreement.id)).toHaveLength(2);
+  });
+
+  it("one of those clauses is the per-connector rate readiness requires", async () => {
+    const w = await onboarded();
+    const store = w.agreementWriteStore!;
+    const [agreement] = [...store.agreements.values()];
+    expect(
+      store.clausesOf(agreement.id).some((c) => c.factorCode === "per_connector"),
+    ).toBe(true);
+  });
+
+  it("every write produced a mutation receipt", async () => {
+    const w = await onboarded();
+    // create + two clauses.
+    expect(w.agreementWriteStore!.allReceipts()).toHaveLength(3);
   });
 });
 
@@ -73,9 +106,9 @@ describe("the synthetic host identity", () => {
     expect(HOST_KENNITALA[9]).toBe("0");
   });
 
-  it("appears in no case output", () => {
+  it("appears in no case output", async () => {
     for (const c of CASES) {
-      expect(runCase(c).lines.join("\n")).not.toContain(HOST_KENNITALA);
+      expect((await runCase(c)).lines.join("\n")).not.toContain(HOST_KENNITALA);
     }
   });
 });
@@ -83,33 +116,24 @@ describe("the synthetic host identity", () => {
 // ── fool-tests ──────────────────────────────────────────────────────────
 
 describe("FOOL 5 — let readiness stand in for the invoice contract", () => {
-  // The tempting shortcut: if the checklist passes, declare victory. It would
-  // pass an org whose legal name is blank, because readiness checks presence
-  // and the header checks renderability — related, not identical.
-  const world = stepSetFlatFeeAgreement(
-    stepAttachCharger(stepEnrolUser(stepCreateOrg(EMPTY, { kennitala: HOST_KENNITALA }))),
-  );
-  const blankLegalName = { ...world, org: { ...world.org!, legalName: "   " } };
-
-  it("readiness alone would... also catch this one", () => {
+  it("readiness catches a blank legal name", async () => {
+    const w = await onboarded();
+    const blankLegalName = { ...w, org: { ...w.org!, legalName: "   " } };
     // Stated honestly: for a BLANK name the two agree, because readiness
     // trims. The point of the fool-test is the next assertion.
     expect(assessOrgReadiness(factsOf(blankLegalName)).invoiceable).toBe(false);
   });
 
-  it("but readiness cannot know the invoice contract refuses a zero-connector document", () => {
-    // Connectors present per the asset chain, but the org has none billable.
-    const zeroConnectors = { ...world, connectorCount: 0 };
-    // Readiness holds — good.
+  it("but the invoice contract is the one that refuses a zero-connector document", async () => {
+    const w = await onboarded();
+    const zeroConnectors = { ...w, connectorCount: 0 };
     expect(assessOrgReadiness(factsOf(zeroConnectors)).invoiceable).toBe(false);
-    // And the invoice contract independently refuses, which is the belt the
-    // dry run wears in addition to the braces.
+    // And independently — the belt the dry run wears in addition to the braces.
     expect(proveInvoiceAccepts(zeroConnectors).ok).toBe(false);
   });
 });
 
 describe("FOOL 6 — accept the happy path without checking exit semantics", () => {
-  // A runner that always returned ok:true would make every case pass.
   const runFooled = (_c: unknown) => ({ ok: true, lines: [] as string[] });
 
   it("the fooled runner passes a case that should fail", () => {
@@ -117,12 +141,34 @@ describe("FOOL 6 — accept the happy path without checking exit semantics", () 
     expect(runFooled(broken).ok).toBe(true);
   });
 
-  it("the real runner distinguishes expected-fail from unexpected-pass", () => {
+  it("the real runner distinguishes expected-fail from unexpected-pass", async () => {
     const broken = CASES.find((c) => c.name === "no-agreement")!;
-    // It is "ok" in the sense that the case behaved as expected — and the
-    // readiness inside it is NOT invoiceable, which is the real assertion.
-    const world = broken.build();
+    const world = await broken.build();
     expect(assessOrgReadiness(factsOf(world)).invoiceable).toBe(false);
-    expect(runCase(broken).ok).toBe(true);
+    expect((await runCase(broken)).ok).toBe(true);
+  });
+});
+
+describe("FOOL D — fire the agreement writes without awaiting them", () => {
+  // The actual bug this round produced and the dry run caught: a floating
+  // promise chain looks like it wrote the clauses, and readiness then reads a
+  // store that has an agreement and no clauses yet.
+  it("an un-awaited world has no clauses, and readiness correctly holds", async () => {
+    const w = await onboarded();
+    const store = w.agreementWriteStore!;
+    const [agreement] = [...store.agreements.values()];
+    // Simulate the un-awaited state by reading the store before clauses land.
+    const emptyStoreWorld = {
+      ...w,
+      agreementWriteStore: Object.assign(Object.create(Object.getPrototypeOf(store)), store, {
+        clauses: new Map(),
+      }),
+    };
+    expect(assessOrgReadiness(factsOf(emptyStoreWorld)).holds.map((h) => h.reason)).toContain(
+      "agreement_has_no_connector_rate",
+    );
+    // And the awaited one does not.
+    expect(store.clausesOf(agreement.id).length).toBeGreaterThan(0);
+    expect(assessOrgReadiness(factsOf(w)).invoiceable).toBe(true);
   });
 });

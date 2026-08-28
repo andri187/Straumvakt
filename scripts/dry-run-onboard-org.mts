@@ -40,6 +40,12 @@ import { checkDigitFor, isValidKennitala } from "../packages/contracts/src/invoi
 import { createInvoiceDocument } from "../packages/contracts/src/invoice/document.ts";
 import type { InvoiceDraft, PartyIdentity } from "../packages/contracts/src/invoice/document.ts";
 import { renderHeaderText } from "../packages/contracts/src/invoice/header.ts";
+import { AgreementWriter } from "../packages/contracts/src/agreements/writer.ts";
+import {
+  FixtureAgreementStore,
+  FixtureSettledPeriod,
+  period as ivl,
+} from "../packages/contracts/src/agreements/fixture-store.ts";
 
 // ── the synthetic host identity ─────────────────────────────────────────
 //
@@ -71,6 +77,8 @@ interface World {
   attachedChargerCount: number;
   connectorCount: number;
   agreements: OrgReadinessFacts["agreements"];
+  /** Set by stepSetFlatFeeAgreement — the rows the write surface produced. */
+  agreementWriteStore?: FixtureAgreementStore;
 }
 
 const PERIOD = { from: "2026-07-01", to: "2026-07-31" };
@@ -101,13 +109,67 @@ const stepAttachCharger = (w: World): World => ({
   connectorCount: w.connectorCount + 2,
 });
 
-const stepSetFlatFeeAgreement = (w: World): World => ({
-  ...w,
-  agreements: [
-    ...w.agreements,
-    { effectiveFrom: "2026-01-01", effectiveTo: null, hasConnectorRate: true },
-  ],
-});
+/**
+ * Round 4: this step no longer fabricates an agreement fact. It drives the
+ * REAL write surface — AgreementWriter over the fixture store — and derives
+ * the readiness fact from the rows that surface actually produced.
+ *
+ * That is the difference between "the dry run asserts an agreement exists"
+ * and "the dry run proves an agreement can be created", which is the whole
+ * point of Phase 1: until this round there was no way to make one at all.
+ */
+const stepSetFlatFeeAgreement = async (w: World): Promise<World> => {
+  const store = new FixtureAgreementStore();
+  const writer = new AgreementWriter({
+    store,
+    settled: new FixtureSettledPeriod(null),
+    knownFactorCodes: ["per_connector", "per_driver"],
+  });
+  const orgScope = w.org?.id ?? "org-dryrun";
+  const at = "2026-08-01T00:00:00Z";
+
+  // Awaited, not fire-and-forget. An earlier draft used a floating promise
+  // chain on the assumption that a fixture store settles synchronously; it
+  // does not, and the readiness check read an agreement with no clauses yet.
+  // The dry run caught it, which is what a dry run is for.
+  const agreement = await writer.createAgreement({
+    orgScope, idempotencyKey: "dryrun-agreement", at,
+    agreementType: "installation", displayName: "Flat fee",
+    counterpartyOrgId: orgScope, installationId: "inst-dryrun",
+    period: ivl("2026-01-01T00:00:00Z"),
+  });
+  await writer.addClause({
+    orgScope, idempotencyKey: "dryrun-clause-connector", at,
+    agreementId: agreement.value.id, factorCode: "per_connector", bearerType: "org",
+    rateRefCode: "FLAT-200", period: ivl("2026-01-01T00:00:00Z"),
+  });
+  await writer.addClause({
+    orgScope, idempotencyKey: "dryrun-clause-driver", at,
+    agreementId: agreement.value.id, factorCode: "per_driver", bearerType: "org",
+    rateRefCode: "FLAT-50", period: ivl("2026-01-01T00:00:00Z"),
+  });
+
+  return { ...w, agreementWriteStore: store, agreements: [] };
+};
+
+/**
+ * Derive the readiness fact from what the write surface actually stored.
+ *
+ * Deliberately NOT from the input: if the writer refused a clause, this
+ * reports no billable clause and readiness holds, which is the behaviour the
+ * dry run exists to prove.
+ */
+function agreementsFromStore(w: World): World["agreements"] {
+  const store = w.agreementWriteStore;
+  if (!store) return [];
+  return [...store.agreements.values()].map((a) => ({
+    effectiveFrom: a.period.from.slice(0, 10),
+    effectiveTo: a.period.until ? a.period.until.slice(0, 10) : null,
+    hasConnectorRate: store
+      .clausesOf(a.id)
+      .some((c) => c.factorCode === "per_connector" && c.bearerType !== ""),
+  }));
+}
 
 const EMPTY: World = {
   org: null,
@@ -123,7 +185,7 @@ function factsOf(w: World): OrgReadinessFacts {
     enrolledUserCount: w.enrolledUserCount,
     attachedChargerCount: w.attachedChargerCount,
     connectorCount: w.connectorCount,
-    agreements: w.agreements,
+    agreements: w.agreementWriteStore ? agreementsFromStore(w) : w.agreements,
     period: PERIOD,
     kennitalaValid: w.org?.kennitala ? isValidKennitala(w.org.kennitala) : false,
   };
@@ -134,7 +196,7 @@ function factsOf(w: World): OrgReadinessFacts {
 export interface DryRunCase {
   name: string;
   what: string;
-  build: () => World;
+  build: () => World | Promise<World>;
   /** Expected to reach invoiceable. */
   expectInvoiceable: boolean;
   /** For non-happy cases: the hold that must be reported. */
@@ -272,9 +334,9 @@ export function proveInvoiceAccepts(w: World): InvoiceProof {
 
 // ── runner ──────────────────────────────────────────────────────────────
 
-export function runCase(c: DryRunCase): { ok: boolean; lines: string[] } {
+export async function runCase(c: DryRunCase): Promise<{ ok: boolean; lines: string[] }> {
   const lines: string[] = [];
-  const world = c.build();
+  const world = await c.build();
   const readiness = assessOrgReadiness(factsOf(world));
 
   lines.push(`Case: ${c.name} — ${c.what}`);
@@ -309,7 +371,7 @@ const argv = process.argv.slice(2);
 const out = (s: string) => process.stdout.write(s + "\n");
 const RUN_AS_CLI =
   process.argv[1] &&
-  import.meta.url.endsWith(process.argv[1].replace(/\\/g, "/").split("/").pop() ?? " ");
+  import.meta.url.endsWith(process.argv[1].replace(/\\/g, "/").split("/").pop() ?? "");
 
 if (RUN_AS_CLI) {
   if (argv.includes("--list")) {
@@ -320,7 +382,7 @@ if (RUN_AS_CLI) {
   if (argv.includes("--self-test") || argv.length === 0) {
     let failed = 0;
     for (const c of CASES) {
-      const r = runCase(c);
+      const r = await runCase(c);
       out(r.lines.join("\n"));
       out("");
       if (!r.ok) {
@@ -342,7 +404,7 @@ if (RUN_AS_CLI) {
     out(`unknown case ${name ?? "(none)"} — try --list`);
     process.exit(2);
   }
-  const r = runCase(chosen);
+  const r = await runCase(chosen);
   out(r.lines.join("\n"));
   // The happy path exits 0; every other case exits non-zero with its reason
   // already printed above.
