@@ -107,6 +107,26 @@ model ChargeSession {
   cdrStoppedAt    DateTime? @map("cdr_stopped_at")  @db.Timestamptz(6)
   ocmfBlobRef     String?   @map("ocmf_blob_ref")
 
+  // ── ADR 0054 decision 6 — a session is SEALED ───────────────────
+  // OCPI mod_cdrs: "sealed, preserving the information valid at the
+  // moment in time the underlying session was started". A session is
+  // never re-attributed when a device moves. All three NULLABLE and
+  // NOT backfilled: a session that predates the seal has no placement
+  // to point at, and inventing one is a claim about the past.
+  //
+  // No @relation to Placement. Declaring one would make Prisma emit a
+  // foreign key migration 0008 does not create, and the client would
+  // then promise cascade behaviour the database has never been told
+  // about. Same rule as the Placement model itself.
+  placementId        String?   @map("placement_id") @db.Uuid
+  /// The tariff AS APPLIED, copied in rather than referenced: rate
+  /// references are effective-dated and superseded, so re-resolving
+  /// against today's rows is the re-derivation FOCUS rule 4 forbids.
+  tariffSnapshotJson Json?     @map("tariff_snapshot_json") @db.JsonB
+  /// When the snapshot was taken. Almost always started_at, stored
+  /// separately because a gap between them is a bug worth seeing.
+  tariffSnapshotAt   DateTime? @map("tariff_snapshot_at") @db.Timestamptz(6)
+
   organization      Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
   site              Site             @relation(fields: [siteId], references: [id])
   chargingStation   ChargingStation  @relation(fields: [chargingStationId], references: [siteAssetId])
@@ -129,6 +149,9 @@ model ChargeSession {
   // vast majority of historical rows have ev_plc_mac NULL until AMQP
   // path lights up.
   @@index([evPlcMac])
+  // ADR 0054 - "which sessions ran on this placement" is the dispute
+  // query, and what Phase 5 needs to attribute a mid-month move.
+  @@index([placementId, startedAt])
   @@map("sessions")
   @@schema("charging")
 }

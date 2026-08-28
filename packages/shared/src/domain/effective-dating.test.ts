@@ -327,3 +327,71 @@ describe("decision 5 — billing counts placements OVERLAPPING the period", () =
     expect(Array.isArray(result)).toBe(true);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ADR 0054 item 5 / SR-2 — memberships take the same shape
+//
+// Uniqueness is on the INTERVAL, not on the (group, user) pair. Same
+// `checkTemporalKey`, a different key function, because it is the same
+// constraint: at most one live row per keyed slot at any instant.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe("driver_group_memberships — item 5", () => {
+  interface Membership extends DatedRow {
+    driverGroupId: string;
+    userId: string;
+  }
+  const samePair = (r: Membership) => r.driverGroupId === "grp-1" && r.userId === "usr-1";
+  const m = (id: string, period: Membership["period"]): Membership => ({
+    id,
+    driverGroupId: "grp-1",
+    userId: "usr-1",
+    period,
+  });
+
+  it("MOVE-OUT THEN MOVE-IN: one user, one group, two rows, both kept", () => {
+    // The capability that had no owner. Under `UNIQUE (group_id, user_id)` the
+    // second row collided with the first, so the only way to re-add a driver
+    // was to DELETE the record of their first stay — and a driver-count for
+    // last February, run afterwards, silently lost them.
+    const marchStay = m("m1", closed(JAN1, MAR1));
+    const julyReturn = m("m2", openEnded(at("2026-07-01T00:00:00Z")));
+
+    expect(checkTemporalKey([marchStay], julyReturn, samePair)).toEqual({ ok: true });
+
+    // Both rows survive, and each period answers for its own months.
+    const both = [marchStay, julyReturn];
+    expect(rowsOverlappingPeriod(both, FEBRUARY)).toHaveLength(1);
+    expect(rowsOverlappingPeriod(both, closed(at("2026-08-01T00:00:00Z"), at("2026-09-01T00:00:00Z"))))
+      .toHaveLength(1);
+    // And April, in the gap between the two stays, correctly has neither.
+    expect(rowsOverlappingPeriod(both, closed(at("2026-04-01T00:00:00Z"), at("2026-05-01T00:00:00Z"))))
+      .toEqual([]);
+  });
+
+  it("TWO OVERLAPPING MEMBERSHIPS are rejected", () => {
+    // The half the pair unique used to cover and the interval must not lose.
+    // Adding a driver twice without ending the first row is the membership
+    // version of the double-invoice: two live memberships, and any count that
+    // sums rows counts the person twice.
+    const first = m("m1", openEnded(JAN1));
+    const overlapping = m("m2", closed(FEB1, MAR1));
+    const result = checkTemporalKey([first], overlapping, samePair);
+    expect(result).toMatchObject({ ok: false, reason: "overlaps_existing" });
+    expect(result.ok === false && result.conflictsWith.id).toBe("m1");
+
+    // And the double-count it prevents, computed rather than asserted.
+    expect(rowsOverlappingPeriod([first, overlapping], FEBRUARY)).toHaveLength(2);
+    expect(rowsOverlappingPeriod([first], FEBRUARY)).toHaveLength(1);
+  });
+
+  it("the same user in a DIFFERENT group at the same time is fine", () => {
+    // The key is (group, user), not user. A driver may belong to a workplace
+    // group and a family group at once.
+    const inGroup1 = m("m1", openEnded(JAN1));
+    const inGroup2: Membership = { id: "m2", driverGroupId: "grp-2", userId: "usr-1", period: openEnded(JAN1) };
+    expect(checkTemporalKey([inGroup1], inGroup2, (r) => r.driverGroupId === "grp-2")).toEqual({
+      ok: true,
+    });
+  });
+});

@@ -1,0 +1,60 @@
+-- ADR 0054 item 6 — a session is sealed and carries its own context.
+--
+-- ADDITIVE ONLY. Three nullable columns and one index. VERB CENSUS: 3 ALTER
+-- TABLE (all ADD COLUMN, all nullable), 1 CREATE INDEX. No DROP, no UPDATE, no
+-- backfill, nothing removed, nothing made NOT NULL.
+--
+-- ── SESSIONS WERE ALREADY TENANT-SAFE, AND THIS WAS CHECKED FIRST ─────────
+--
+-- Before adding anything, the requirement was to confirm that
+-- `charging.sessions` already carries its own context. It does, and all four
+-- are NOT NULL:
+--
+--     org_id               uuid NOT NULL
+--     site_id              uuid NOT NULL
+--     charging_station_id  uuid NOT NULL
+--     evse_id              uuid NOT NULL
+--
+-- So a session already survives a device moving tenant: nothing about it is
+-- resolved through the charger row at read time. What it did NOT carry is the
+-- PLACEMENT and the TARIFF, and those are the two facts a dispute turns on.
+--
+-- ── WHY A REFERENCE FOR ONE AND A COPY FOR THE OTHER ──────────────────────
+--
+-- `placement_id` is a reference and that is safe, because a placement row is
+-- immutable in the ways that matter: `device_id`, `org_id` and
+-- `installation_id` never change, and only the period's upper bound closes. A
+-- session pointing at it cannot be re-attributed by anything that happens
+-- later.
+--
+-- `tariff_snapshot_json` is a COPY, because a rate reference is not immutable
+-- in that sense — rows are effective-dated and new ones supersede old ones, so
+-- resolving "what did this cost" against today's rows is the re-derivation
+-- FOCUS rule 4 forbids. OCPI `mod_cdrs` makes the same split: it copies the
+-- location in rather than referencing it.
+--
+-- `tariff_snapshot_at` is stored even though it will almost always equal
+-- `started_at`. "The tariff we sealed" and "the moment the session began" are
+-- different facts, and a gap between them is a bug worth being able to see —
+-- a snapshot taken at STOP time silently prices a session that straddles a
+-- rate change at the wrong rate.
+--
+-- ── NOT BACKFILLED, ON PURPOSE ────────────────────────────────────────────
+--
+-- Every existing session gets NULL in all three. Back-filling `placement_id`
+-- would mean deciding where each device was during a period nothing recorded;
+-- back-filling the tariff would mean re-running today's resolver against
+-- yesterday's sessions, which is the exact thing the column exists to prevent.
+-- NULL is `unavailable`, and it is the honest value for a session that
+-- predates the seal.
+--
+-- `charging.sessions` is NOT a partitioned table — `charging.meter_values`,
+-- `events.event_log` and `events.protocol_log` are, and this is none of them —
+-- so the ADD COLUMNs take a brief ACCESS EXCLUSIVE lock on one relation and do
+-- not rewrite it (a nullable column with no default is catalogue-only since
+-- PG 11).
+
+ALTER TABLE "charging"."sessions" ADD COLUMN "placement_id" uuid;--> statement-breakpoint
+ALTER TABLE "charging"."sessions" ADD COLUMN "tariff_snapshot_json" jsonb;--> statement-breakpoint
+ALTER TABLE "charging"."sessions" ADD COLUMN "tariff_snapshot_at" timestamp (6) with time zone;--> statement-breakpoint
+CREATE INDEX "sessions_placement_id_started_at_index" ON "charging"."sessions" USING btree ("placement_id","started_at");

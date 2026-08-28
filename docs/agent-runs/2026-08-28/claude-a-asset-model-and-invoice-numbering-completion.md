@@ -591,19 +591,152 @@ columns**.
 
 ---
 
+## Phase 4 — items 5 and 6: memberships and sessions
+
+### Item 5 — folded into migration `0006`, with the reason written down
+
+The prompt allowed `0006` or `0005` with a written reason. Neither happened
+exactly: **item 5 landed early, in `0006`, because B raised SR-2 asking for the
+same change at the Phase 2 boundary.** Doing it twice was not an option and
+doing it later would have left B blocked on a Drizzle adapter for two phases.
+So `0006` carries SR-1 and SR-2 together: one migration, one `btree_gist`
+dependency, one review.
+
+What Phase 4 owed beyond the schema is here: the tests, and the predicate.
+
+**The membership change was not additive and the honest census is in `0006`:**
+`UNIQUE (driver_group_id, user_id)` is dropped and replaced by a plain index
+plus the temporal key. Two `UPDATE`s backfill the interval from `added_at`. It
+is the only non-`CREATE`-only migration this round and it says so at the top.
+
+### Item 6 — migration `0008_worthless_mimic.sql`, additive only
+
+**Verb census:** 3 ALTER TABLE (all `ADD COLUMN`, all nullable), 1 CREATE
+INDEX. No DROP, no UPDATE, no backfill, nothing made NOT NULL.
+
+**Requirement 2 — sessions were already tenant-safe, checked before adding
+anything.** `charging.sessions` carries `org_id`, `site_id`,
+`charging_station_id` and `evse_id`, and **all four are NOT NULL**. So a
+session already survives a device moving tenant: nothing about it is resolved
+through the charger row at read time. What it did *not* carry is the placement
+and the tariff, which are the two facts a dispute turns on.
+
+Three columns added:
+
+| column | why |
+|---|---|
+| `placement_id` | the placement live at session start |
+| `tariff_snapshot_json` | the tariff **as applied**, copied in |
+| `tariff_snapshot_at` | when the snapshot was taken |
+
+**One is a reference and one is a copy, and the difference is the point.** A
+placement row is immutable in the ways that matter — `device_id`, `org_id` and
+`installation_id` never change, only the period's upper bound closes — so
+pointing at it cannot cause re-attribution. A rate reference is *not* immutable
+in that sense: rows are effective-dated and superseded, so resolving "what did
+this cost" against today's rows is the re-derivation FOCUS rule 4 forbids. OCPI
+`mod_cdrs` makes the same split, copying the location in rather than
+referencing it.
+
+`tariff_snapshot_at` exists even though it will almost always equal
+`started_at`. "The tariff we sealed" and "the moment the session began" are
+different facts, and a gap between them is a bug worth being able to see — a
+snapshot taken at **stop** time silently prices a session straddling a rate
+change at the wrong rate. That case is a test.
+
+**Not backfilled, on purpose.** Every existing session gets NULL in all three.
+Back-filling `placement_id` means deciding where each device was during a
+period nothing recorded; back-filling the tariff means running today's resolver
+over yesterday's sessions, which is the exact thing the column prevents. NULL
+is `unavailable`, and a test asserts it is **not a zero price**.
+
+`charging.sessions` is not a partitioned table — `charging.meter_values`,
+`events.event_log` and `events.protocol_log` are, and this is none of them — so
+the `ADD COLUMN`s are catalogue-only and take a brief lock on one relation.
+
+`JSONB` rather than columns for the tariff because a tariff is not one number:
+an org may be on per-kWh and per-minute at once, and flattening that into
+columns fixes an arity the agreement model deliberately leaves open.
+
+### Requirement 3 — the predicate for B's item 9, not implemented here
+
+`docs/notes/2026-08-28-membership-validity-predicate.md`. The schema serves it;
+A does not write the check.
+
+- **at an instant** — `m.period @> $at`, lower-inclusive, upper-exclusive.
+- **over a period** — `m.period && tstzrange($start, $end, '[)')`. **Overlap,
+  not currency**: a driver who joined on the 2nd and left on the 28th was a
+  member in March, and `period @> now()` run in April finds nobody.
+- **counting** — `count(DISTINCT m.user_id)`, and `DISTINCT` is still required:
+  the constraint forbids *overlapping* rows, not multiple rows, so a driver who
+  left in March and returned in July legitimately has two.
+
+Three things it must not do: read `added_at` (that is when the ROW was written,
+not when the membership was valid — a backdated membership has today's
+`added_at`); treat no rows as zero (ledger note 22 — reuse
+`activity-source.ts`, do not reinvent); or use `BETWEEN`, which makes the upper
+bound inclusive and double-counts the one instant a move-out and a move-in
+share.
+
+### Tests — 13 new, and a fool test that reaches across four files
+
+`session-seal.test.ts` 10 · `effective-dating.test.ts` +3 for item 5.
+
+The four cases the phase names, each present:
+
+1. **Move-out then move-in for one user in one group** — two rows, both kept,
+   each answering for its own months, and April in the gap correctly having
+   neither. Under the old pair unique the second row collided with the first,
+   so the only way to re-add a driver was to delete the record of their first
+   stay — and a driver count for last February, run afterwards, silently lost
+   them.
+2. **Two overlapping memberships rejected** — with the double-count it prevents
+   computed rather than asserted: two live rows make any summing count the
+   person twice. This is the membership version of the double-invoice.
+3. **A session sealed with a placement that later closes** — the placement is
+   closed, then the device moves to another org; the session still names the
+   original host, and the test also asserts what a *re-derivation* would have
+   returned, so the failure mode is visible rather than described.
+4. **A session whose tariff changed after it started** — keeps the sealed price
+   against a superseded rate, carries the whole applied rate rather than a
+   code, and the straddling-rate-change case shows why the snapshot is taken at
+   start.
+
+Plus the boundary case that makes the half-open interval earn its keep: a
+session at exactly midnight on move day belongs to the **new** host, because
+the old placement ends at that instant and does not contain it. **No instant is
+claimed by both and none by neither.**
+
+| fool | mutation | failed |
+|---|---|---|
+| 10 | `overlaps` upper bound made inclusive | **10, across 2 files** |
+
+Fool 10 was run against the whole domain suite rather than one file, because
+the seal, the memberships and the placements all rest on the same `overlaps`.
+Ten failures in two files is the evidence that they actually do.
+
+**Checks at Phase 4 close:** tsc 0, **1,784 passed / 1 skipped / 98 files**,
+`npm run check` **16 of 16**, `check:schema-consistency` at **85 tables / 1,038
+columns**.
+
+**SR channel at the Phase 4 boundary:** `dev/market-rails` still `d9a8b18`,
+still three SRs, diff over that path empty. No new request.
+
+---
+
 ## External state — running
 
 No push. No deploy. **No migration applied to any database — `0002`, `0003`,
-`0004`, `0005`, `0006` and `0007` all remain generated and unapplied.** No SQL
-against any environment, no socket opened, no database connected to. No
+`0004`, `0005`, `0006`, `0007` and `0008` all remain generated and unapplied.**
+No SQL against any environment, no socket opened, no database connected to. No
 Cloudflare, Neon or GitHub mutation — the Neon MCP tools are available to this
 session and **were not used**, because operating rule 3 forbids it. No charger
 or hardware action, no BLE/NFC. No branch or tag deleted, no `git clean`,
 reset, rebase, amend or force.
 Nothing under `packages/contracts/**` or any of B's paths edited.
-`dev/market-rails` was read at `ae99700` and never merged; its SR file was read
-with `git show` and answered in a file on this branch. **`zaptec-import.ts` was
-read and NOT edited** — the importer is B's. Every fixture value is synthetic;
+`dev/market-rails` was read at `ae99700` and `d9a8b18` and never merged; its SR
+file was read with `git show` and answered in a file on this branch.
+**`zaptec-import.ts` was read and NOT edited** — the importer is B's. Every fixture value is synthetic;
 no checksum-valid kennitala, no real idTag, no token value appears anywhere.
 The only branch written to is `dev/core-billing-integration`.
 
@@ -616,6 +749,7 @@ The only branch written to is `dev/core-billing-integration`.
 | Phase 0 | `7cc591e` | file absent | none |
 | Phase 2 | `ae99700` | SR-1, SR-2, SR-3 | all three answered |
 | Phase 3 | `d9a8b18` | unchanged — `git diff` between the two tips over that path is **empty** | none |
+| Phase 4 | `d9a8b18` | unchanged | none |
 
 The channel rule is that an earlier SR is never rewritten. Checked rather than
 assumed: the diff is empty, so nothing I answered has moved under me.
