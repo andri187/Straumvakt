@@ -227,6 +227,21 @@ export const evses = assetsSchema.table(
     id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
     orgId: uuid("org_id").notNull(),
     chargingStationId: uuid("charging_station_id").notNull(),
+    /**
+     * ADR 0054 item 4 — the EVSE's parent becomes the DEVICE.
+     *
+     * Nullable during the transition, and it stays nullable until
+     * `charging_stations` is retired. Both parents coexist deliberately:
+     * making this `NOT NULL` in migration 0007 would require a backfill in the
+     * same migration that adds the column, and there is no reconciled mapping
+     * yet — see the retirement plan.
+     *
+     * The hierarchy is device -> EVSE -> connector, which is OCPP's, not the
+     * 1:1:1 coincidence the Zaptec importer bakes in today. A Zaptec Pro
+     * genuinely has one EVSE and one connector; a DC unit does not, and the
+     * columns must be able to say so before an importer can.
+     */
+    deviceId: uuid("device_id"),
     evseIndex: integer("evse_index").notNull(),
     maxPowerKw: numeric("max_power_kw", { precision: 8, scale: 2 }),
     phaseCount: integer("phase_count"),
@@ -526,5 +541,49 @@ export const placements = assetsSchema.table(
     index().on(t.deviceId),
     index().on(t.orgId),
     index().on(t.installationId),
+  ],
+);
+
+/**
+ * assets.vendor_config_observations — ADR 0054 item 12.
+ *
+ * APPEND-ONLY. One row per CHANGE, not one per poll: an importer running every
+ * five minutes would otherwise write a row per poll and produce a history in
+ * which nothing ever happened. The dedup is `sameReading` in
+ * apps/api/src/lib/vendor-config/sink-port.ts and it deliberately ignores
+ * `observed_at`.
+ *
+ * Every column but the timestamps is NULLABLE, and that is the point rather
+ * than laxity: a field the vendor did not return is `null`, which reads as
+ * `unavailable` — never `false`. `charger_active = false` is a claim that
+ * Zaptec told us the charger is deactivated, and defaulting a missing
+ * observation to it would silently remove a live charger from a billing count.
+ *
+ * There is no update path and no delete path. A correction is a later
+ * observation, so the log stays answerable about what we believed and when.
+ */
+export const vendorConfigObservations = assetsSchema.table(
+  "vendor_config_observations",
+  {
+    id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    deviceId: uuid("device_id").notNull(),
+    /** When the VENDOR reported it, not when we wrote the row. */
+    observedAt: timestamp("observed_at", { withTimezone: true, precision: 6, mode: "date" }).notNull(),
+    /** Zaptec `Charger.Active`. Half (b) of the Dalvegur billing predicate. */
+    chargerActive: boolean("charger_active"),
+    /** Zaptec `AuthenticationType` — the INTEGRATION PATH (0=Native,
+     *  1=WebHooks, 2=Ocpp, 3=OcppNative), an installation property that reads
+     *  2 fleet-wide. It is NOT driver auth and never can be; two wrong
+     *  readings of it have already been committed here and corrected. */
+    authenticationType: integer("authentication_type"),
+    /** Zaptec `IsAuthorizationRequired`, StateId 120. THIS is driver auth. */
+    isAuthorizationRequired: boolean("is_authorization_required"),
+    /** `PropertyOcppDefaultIdTag`. A TOKEN, never a person — sessions bearing
+     *  it have no driver, and a driver count that includes them is wrong. */
+    ocppDefaultIdTag: text("ocpp_default_id_tag"),
+    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [
+    index().on(t.deviceId, t.observedAt),
   ],
 );

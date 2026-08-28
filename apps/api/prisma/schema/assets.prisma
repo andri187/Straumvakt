@@ -415,6 +415,9 @@ model EVSE {
   id                  String   @id @default(uuid()) @db.Uuid
   orgId               String   @map("org_id") @db.Uuid
   chargingStationId   String   @map("charging_station_id") @db.Uuid
+  /// ADR 0054 item 4 — the EVSE's parent becomes the device. Nullable during
+  /// the transition; both parents coexist until charging_stations retires.
+  deviceId            String?  @map("device_id") @db.Uuid
   evseIndex           Int      @map("evse_index")
   maxPowerKw          Decimal? @map("max_power_kw") @db.Decimal(8, 2)
   phaseCount          Int?     @map("phase_count")
@@ -648,5 +651,26 @@ model Placement {
   @@index([orgId])
   @@index([installationId])
   @@map("placements")
+  @@schema("assets")
+}
+
+/// ADR 0054 item 12 — the vendor-config observation log. Append-only, one row
+/// per CHANGE. Every field nullable: a value the vendor did not return is
+/// null, which reads as `unavailable` and never as `false`.
+model VendorConfigObservation {
+  id                       String    @id @default(uuid()) @db.Uuid
+  deviceId                 String    @map("device_id") @db.Uuid
+  observedAt               DateTime  @map("observed_at") @db.Timestamptz(6)
+  chargerActive            Boolean?  @map("charger_active")
+  /// INTEGRATION PATH (0=Native, 1=WebHooks, 2=Ocpp, 3=OcppNative), an
+  /// installation property. NOT driver auth — use isAuthorizationRequired.
+  authenticationType       Int?      @map("authentication_type")
+  isAuthorizationRequired  Boolean?  @map("is_authorization_required")
+  /// A token, never a person.
+  ocppDefaultIdTag         String?   @map("ocpp_default_id_tag")
+  createdAt                DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([deviceId, observedAt])
+  @@map("vendor_config_observations")
   @@schema("assets")
 }

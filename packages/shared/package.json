@@ -40,6 +40,7 @@
     "./domain/family-groups": "./src/domain/family-groups.ts",
     "./domain/vendor-user-groups": "./src/domain/vendor-user-groups.ts",
     "./domain/effective-dating": "./src/domain/effective-dating.ts",
+    "./domain/ocpp-connector-status": "./src/domain/ocpp-connector-status.ts",
     "./db/identity": "./src/db/identity.ts",
     "./db/assets": "./src/db/assets.ts",
     "./db/charging": "./src/db/charging.ts",

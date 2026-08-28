@@ -50,6 +50,13 @@
       "when": 1787942083115,
       "tag": "0006_heavy_cobalt_man",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1787942867507,
+      "tag": "0007_mean_overlord",
+      "breakpoints": true
     }
   ]
 }

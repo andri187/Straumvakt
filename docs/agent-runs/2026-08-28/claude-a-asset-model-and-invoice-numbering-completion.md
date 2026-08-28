@@ -412,14 +412,210 @@ columns** (from 81 / 982).
 
 ---
 
+## Phase 3 — items 4, 11, 12: the hierarchy, the vocabulary, the config
+
+### Migration `0007_mean_overlord.sql` — generated, hand-extended, UNAPPLIED
+
+**Verb census:** 1 CREATE TABLE, 1 CREATE INDEX, 3 ALTER TABLE — one ADD COLUMN
+(nullable) and two ADD CONSTRAINT. Zero DROP, TRUNCATE, INSERT, UPDATE, DELETE.
+
+### Item 4 — the hierarchy, expressible before an importer needs it
+
+`assets.evses` gains `device_id`, **nullable**, and it is not backfilled. Both
+parents coexist until `charging_stations` retires: a backfill in the same
+migration that adds the column would have to invent the device rows it points
+at, and there is no reconciled mapping yet.
+
+**I did not edit the importer.** The round-4 split is *the columns are mine,
+the importer is B's*, and `zaptec-import.ts` is B's to change. The three
+inventions are recorded for B in the responses file rather than fixed here:
+one EVSE at index 1, one connector typed `Type2`, and — different in kind —
+`warrantyExpires = installDate + 5 years`.
+
+**The warranty one is fabrication, not merely under-modelling.** It is a number
+no vendor supplied, stored in a column whose name asserts it came from
+somewhere. `devices.warranty_expires` is nullable precisely so that **no
+warranty date is available as an answer**, which is the difference between "we
+do not know" and a wrong date a claim gets denied against. For a Zaptec Pro the
+1:1:1 is genuinely true, and that is what makes it dangerous: a coincidence
+that reads as a model, until the first DC unit is imported.
+
+### Item 11 — the vocabulary, and a constraint shape that fits what is known
+
+The nine OCPP 1.6 §4.9 values live in
+`packages/shared/src/domain/ocpp-connector-status.ts`, verbatim and in the
+spec's order, with a **case-sensitive** parser: a charger sending `charging` is
+refused by name rather than absorbed, because absorbing it means the stored
+value is no longer the protocol's.
+
+`SuspendedEV` and `SuspendedEVSE` are kept apart with a test that says why —
+"the car stopped it" versus "we stopped it" is the distinction a driver support
+call turns on, and it is the first casualty of any house enum. OCPI's
+`EVSE.status` is a different vocabulary again, so OCPP → house → OCPI loses it
+permanently; OCPP → OCPI is a stated conversion.
+
+**`unknown` is kept as the not-observed sentinel and is deliberately NOT
+`Unavailable`.** This is the sharper version of ledger note 22: OCPP *has* a
+status called `Unavailable`, so writing it for a connector we have never heard
+from would look like reporting rather than inventing. It is a different claim —
+`Unavailable` means the charger told us it is out of service — and a connector
+that has never reported is not one an operator should be dispatched to.
+
+**The CHECK constraints are `NOT VALID`, which is a decision and not a hedge.**
+`NOT VALID` enforces on every INSERT and UPDATE from that moment and does not
+scan existing rows. Both are true and both matter: no database in this lane has
+been read, `status` has always been plain `text` with no constraint, so what is
+actually in those columns is unknown — a validating constraint would fail the
+whole migration on the first non-conforming row. And it stops the bleeding
+immediately regardless. The census query and the two `VALIDATE CONSTRAINT`
+statements that finish the job are written into the migration; `VALIDATE` takes
+only `SHARE UPDATE EXCLUSIVE`, so there is no reason to defer it past the
+census.
+
+`evses.status` gets the same constraint: OCPP 1.6 reports per connector and
+treats `connectorId 0` as the station, so an EVSE's status is the same alphabet
+read at a different level — not a second vocabulary that happens to look alike.
+
+**Connectors gain no `period`.** ADR 0054 decision 4 is explicit that a
+connector is not a dated membership; it is a child of the device and does not
+migrate between devices.
+
+### Item 12 — the four fields, behind the locked port
+
+`VendorConfigSinkPort` is **verbatim as specified**; no CR-3 was needed and
+nothing about it blocks B. `apps/api/src/lib/vendor-config/` holds the port,
+a fixture adapter, a Drizzle adapter (written, never executed) and the tests.
+
+`assets.vendor_config_observations` is an **append-only log, one row per
+CHANGE rather than one per poll**. An importer polling every five minutes would
+otherwise write a row per poll and produce a history in which nothing ever
+happened. The dedup ignores `observed_at` and the cost of that is stated at the
+function: the log answers "what did this charger last report" and "when did it
+change", but **not** "when did we last successfully poll it" — a different fact
+that wants its own column, not a duplicate row.
+
+**Why a log rather than four columns with four timestamps.** Item 12 asks for
+each field to carry a timestamp. Four columns give four timestamps that can
+disagree — one row claiming `charger_active` was read at 09:00 and
+`auth_required` at 09:05, from a single response. The log gives every field the
+timestamp of the observation it appeared in, which cannot disagree, and answers
+what four columns cannot: `fieldChangedAt` reports when each field last
+**changed**, as opposed to when it was last seen.
+
+**Dedup is against the LATEST observation only, never the whole log.** A
+charger going active → inactive → active must record three rows; matching
+anywhere in history would swallow the third and leave a log saying it was never
+reactivated. Tested.
+
+**`AuthenticationType` is not authentication.** It is the integration path —
+0=Native, 1=WebHooks, 2=Ocpp, 3=OcppNative — an *installation* property that
+reads 2 uniformly fleet-wide and can never indicate per-charger driver auth.
+Two different wrong readings of that field have already been committed to this
+repository and corrected; the warning is carried on the type, on the column and
+in the Prisma mirror so a third has to be written past three signs.
+`IsAuthorizationRequired` is the driver-auth flag. It is persisted anyway,
+because a field that reads 2 uniformly today is evidence, and the day one
+installation reads 3 is a day we want a record of.
+
+`PropertyOcppDefaultIdTag` is stored as **a token, never a person**. Sessions
+arriving under it have no driver, and a driver count that includes them is
+wrong — which is the same defect the active-driver work named in round 2.
+
+### The Dalvegur predicate — stated precisely, implemented in Phase 5
+
+    20  chargers ACTIVE at Dalvegur
+    15  chargers DEACTIVATED
+    35  in the Zaptec portal        (20 + 15)
+    30  rows in our database
+
+Two gaps, and they fail in opposite directions:
+
+**30 vs 20 — the one this phase closes.** Ten of our thirty rows are
+deactivated chargers. Per-connector billing over unfiltered rows **invoices 30
+where 20 exist** — at 200 kr per active connector, 6,000 kr against 4,000 kr of
+real estate, on one site, every month.
+
+**35 vs 30 — an IMPORT gap, and no predicate can see it.** Five portal chargers
+have no row here at all, and a row that does not exist cannot be filtered in.
+It under-bills, and it needs a reconciliation rather than a `WHERE` clause. It
+is named separately because the two have nothing in common but arithmetic.
+
+> **A connector is billable in period P when**
+> **(a)** its device had a **placement overlapping P** (decision 5) **and**
+> **(b)** the **latest vendor-config observation strictly before the end of P**
+> has `chargerActive === true`.
+
+Four things the predicate deliberately does not say:
+
+1. **Not `chargerActive` as of now.** Billing March in April must use what was
+   true in March, which is why `activeForBilling` takes the period end.
+2. **A missing observation is not "inactive".** That is the `false`-is-not-
+   `unavailable` trap: a device never polled would silently drop out of the
+   invoice. Missing is `unavailable`, and an unavailable count is a **hold**,
+   not a smaller number — round 3's rule, unchanged.
+3. **It does not consult connector STATUS.** A charger that was `Faulted` when
+   someone ran the query was still on site all month. `isServiceable` answers
+   the operations question and lives in the other module for that reason.
+4. **It does not filter on the portal count.** See the import gap above.
+
+### Tests — 30, and four fool tests
+
+Sink 10 · Dalvegur predicate 8 · `fieldChangedAt` 2 · status vocabulary 10.
+Including a device whose `Charger.Active` **flips mid-period** (and the same
+log billed for the *previous* period, which must not see it); an observation
+**byte-identical to the last** returning `unchanged` with no row written,
+asserted through a recorded `writes` list; an observation that exists only
+*after* the period, which is `unavailable` rather than evidence; and the whole
+estate executed — 30 rows in, 20 billable, 10 named, 0 unavailable.
+
+| fool | mutation | failed |
+|---|---|---|
+| 6 | `unavailable` collapsed into `not_billable` | **1** |
+| 7 | `null` and `false` conflated in `sameReading` | **1** |
+| 8 | the status parser made case-insensitive | **1** |
+| 9 | `STATUS_NOT_OBSERVED` set to `Unavailable` | **1** |
+
+Fools 6 and 9 are the pair worth reading together: both are the same mistake —
+turning an absence into a claim — at two different layers, and each is the
+change a reasonable person would make while tidying.
+
+**`check:unused-exports` baseline moved**, and the direction matters:
+`makeDrizzleVendorConfigSink` was added (deliberately ahead of its caller, like
+every Drizzle adapter in this lane) and **four entries were removed** because
+`halfUpDiv`, `multiplyMinorByDecimal`, `orgInScope`, `makeActivitySourcePort`
+and `runActivityAggregation` now have callers.
+
+**Checks at Phase 3 close:** tsc 0, **1,771 passed / 1 skipped / 97 files**,
+`npm run check` **16 of 16**, `check:schema-consistency` at **85 tables / 1,035
+columns**.
+
+---
+
 ## External state — running
 
 No push. No deploy. **No migration applied to any database — `0002`, `0003`,
-`0004`, `0005` and `0006` all remain generated and unapplied.** No SQL against
-any environment, no socket opened, no database connected to. No Cloudflare,
-Neon or GitHub mutation — the Neon MCP tools are available to this session and
-**were not used**, because operating rule 3 forbids it. No charger or hardware
-action, no BLE/NFC. No branch or tag deleted, no `git clean`, reset, rebase, amend or force.
+`0004`, `0005`, `0006` and `0007` all remain generated and unapplied.** No SQL
+against any environment, no socket opened, no database connected to. No
+Cloudflare, Neon or GitHub mutation — the Neon MCP tools are available to this
+session and **were not used**, because operating rule 3 forbids it. No charger
+or hardware action, no BLE/NFC. No branch or tag deleted, no `git clean`,
+reset, rebase, amend or force.
 Nothing under `packages/contracts/**` or any of B's paths edited.
-`dev/market-rails` was read and never merged. Every fixture value is synthetic.
+`dev/market-rails` was read at `ae99700` and never merged; its SR file was read
+with `git show` and answered in a file on this branch. **`zaptec-import.ts` was
+read and NOT edited** — the importer is B's. Every fixture value is synthetic;
+no checksum-valid kennitala, no real idTag, no token value appears anywhere.
 The only branch written to is `dev/core-billing-integration`.
+
+---
+
+## Phase boundary re-checks — B's SR channel
+
+| boundary | `dev/market-rails` | SRs | action |
+|---|---|---|---|
+| Phase 0 | `7cc591e` | file absent | none |
+| Phase 2 | `ae99700` | SR-1, SR-2, SR-3 | all three answered |
+| Phase 3 | `d9a8b18` | unchanged — `git diff` between the two tips over that path is **empty** | none |
+
+The channel rule is that an earlier SR is never rewritten. Checked rather than
+assumed: the diff is empty, so nothing I answered has moved under me.

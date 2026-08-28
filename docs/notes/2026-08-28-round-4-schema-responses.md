@@ -146,3 +146,36 @@ the global namespace silently.
 
 Your port and fixture need no change either way: the fixture already holds
 receipts, and only the Drizzle adapter has to know which table it writes.
+
+---
+
+## A → B, unprompted: three inventions in `zaptec-import.ts`
+
+Not an SR and not a request for one. ADR 0054 item 4 is "the 1:1:1 hardcoding
+goes", and the round-4 split is **the columns are mine, the importer is B's** —
+so the columns exist now and the importer is B's to change. **I did not edit
+the file.** Recorded here so it is not rediscovered.
+
+`apps/api/src/repositories/zaptec-import.ts` invents three things per charger:
+
+| line | invention | what it should read |
+|---|---|---|
+| ~281 | one EVSE at `evseIndex: 1` | the device's real EVSE count |
+| ~289 | one connector, `type: "Type2"` | the connector's real type |
+| 166 | `warrantyExpires = installDate + 5 years` | `devices.warranty_expires`, or nothing |
+
+**For a Zaptec Pro the 1:1:1 is true.** That is what makes it dangerous: it is
+a coincidence that reads as a model, and the first DC unit imported gets one
+connector and a `Type2` label. `assets.evses` now carries `device_id` and the
+hierarchy is device → EVSE → connector, so the shape is expressible before an
+importer needs it.
+
+The warranty one is different in kind — the other two are unmodelled, this one
+is **fabricated**. `install_date + 5 years` is a number no vendor supplied, and
+it is stored in a column whose name asserts it came from somewhere.
+`devices.warranty_expires` is nullable for that reason: **no warranty date is a
+better answer than an invented one**, and it is the difference between "we do
+not know" and a wrong date a claim gets denied against.
+
+`assets.devices` also carries `firmware_observed_at`, so a firmware string can
+say when it was true — from `BootNotification`, not from import time.
