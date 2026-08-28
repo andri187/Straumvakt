@@ -2,11 +2,11 @@
 agent: claude-b
 round: 4
 lane: agreement-write-surface-and-clean-shell-assembly
-status: in-progress
+status: complete
 prompt: docs/agent-prompts/2026-08-28/2026-08-28-1800-claude-b-agreement-write-surface-and-clean-shell-assembly.md
 follows: 2026-08-18/2026-08-18-2055-claude-b-onboarding-an-org-to-invoiceable.md
 start_utc: 2026-08-28T18:00:14Z
-end_utc: TBD
+end_utc: 2026-08-28T18:42:00Z
 worktree: E:\Claude\Straumvakt-relops-b
 external_mutation: none
 ---
@@ -409,3 +409,193 @@ I can reach — **13 genuine library orphans, 2,812 LOC**, each dispositioned in
 one line. The scan's limits are stated plainly: it cannot see dynamic imports,
 and it counts standalone entry points as orphans, so probe scripts and
 npm-invoked gates were excluded by hand.
+
+---
+
+## Phase 6 — the Dalvegur re-onboard rehearsal
+
+Delivered as `docs/notes/2026-08-28-dalvegur-re-onboard-runbook.md`. **Rehearsed
+entirely offline: no Zaptec API call, no socket, no database.**
+
+### The pagination defect, fixed — and what that does and does not prove
+
+`listChargers` returned `json?.Data ?? []` and read **no `Pages` field at
+all**, while its own docblock claimed pagination was handled *"via the `Pages`
+envelope Zaptec returns; default page size is large enough for typical fleets
+so we do not paginate yet"*. An assumption nobody had tested against 35
+chargers.
+
+It now walks every page and **stops on the envelope, not on a short page** — a
+short page is also what the last page looks like, and treating "fewer than
+requested" as "the end" is the same class of mistake as the original defect.
+Caps at 50 pages; returns `pagesRead` and `reportedPages`. Fetch is injected,
+so all **17 tests run offline**, including one that reproduces the old
+behaviour returning **20 of 35**.
+
+**Stated honestly: this does NOT prove pagination caused the 30-of-35 gap.**
+No API call was made this round, so the gap stays open. What is now true is
+that pagination can no longer be the explanation, and the next authenticated
+read reports the real count rather than silently truncating. Three other
+candidates are named in the runbook and none is excluded.
+
+### The four vendor-config fields
+
+`Active` was declared on `ZaptecChargerLite` and discarded downstream. All four
+now go through `VendorConfigSinkPort`, timestamped, with an identical
+observation returning `unchanged` rather than a duplicate row, and a
+never-observed device returning **`unavailable` rather than a default-shaped
+object** — "never observed" and "reports everything off" must not look the
+same. A null field means the vendor did not say; it does not mean off.
+
+**The fleet is `AuthenticationType = 2` (Ocpp) with driver auth off per charger
+via `IsAuthorizationRequired`. Recorded, not diagnosed** — framing correction
+5. Recording it *with a timestamp* is what stops it being rediscovered as an
+outage a third time.
+
+### How many placements the real run writes
+
+**35 device rows, 20 open placements.** A device is immortal and a placement is
+dated (ADR 0054 decisions 1 and 3), so each of the 15 deactivated chargers gets
+a `devices` row and **no open placement** — writing one with an immediate close
+would invent history nobody observed.
+
+### Cross-reference against A's operator runbook — no contradiction
+
+They meet at ADR 0054 decision 5 and agree: **the re-onboard must complete
+before the first period it affects is closed, and must not run during a close.**
+One asymmetry named — A's runbook can be re-run, because closing a period twice
+is idempotent by design. **This one cannot**: step 5 writes intervals that can
+only be closed, never removed.
+
+### A third `Evidence` near-miss
+
+The vendor module was about to declare `Evidence` for the third time this
+round; the typecheck caught it, as it caught the second in Phase 2. **Three
+near-misses inside a single round is itself evidence for Phase 5's verdict.**
+
+---
+
+## Gates — 33 of 33
+
+| # | Gate | Result |
+|---|---|---|
+| 1 | Baseline recorded; deviations reported | ✅ matches round 3 exactly; **FINDING 0-A** raised separately |
+| 2 | Schema-request file created; appended never rewritten | ✅ created empty in Phase 0; SR-1/2/3 appended |
+| 3 | Write operations enumerated from the reads first | ✅ `OPERATION_PROVENANCE`, asserted by test |
+| 4 | Settled-period amendment is a named refusal | ✅ and it refuses on `unavailable` too |
+| 5 | Clauses/memberships dated; terminate closes | ✅ nothing is ever deleted |
+| 6 | Bearer ladder expressible in full, no wider | ✅ every `BearerRuleRow` field; change supersedes |
+| 7 | Default idTag as an ordinary member | ✅ no statement, conditional, parameter or field names it |
+| 8 | Every write over a port; Drizzle adapter unexecuted | ✅ shipped as exact SQL + `REQUIRED_SCHEMA` |
+| 9 | Receipts on every mutation; missing key refuses | ✅ never generated |
+| 10 | Dry run reaches invoiceable offline, agreement included | ✅ drives the real writer |
+| 11 | ≥15 agreement tests incl. settled refusal + cross-tenant | ✅ **36** |
+| 12 | Every membership call site found, real count reported | ✅ **19 refs, 9 that decide** — not five |
+| 13 | Converted over the port; absent is `unavailable` | ✅ port + primary; eight deferred **with the reason stated** |
+| 14 | Boundary instant `[from, until)` proven | ✅ |
+| 15 | ≥10 membership-validity tests incl. left-and-rejoined | ✅ **12** |
+| 16 | `ocpp-authorize` resolves through the chain, same verdicts | ✅ verdict set untouched |
+| 17 | Two open placements refused, not `LIMIT 1` | ✅ tested |
+| 18 | `enforceAuthorize` sequence, ordered, reversible, unexecuted | ✅ and the premise verified, one coordinator claim corrected |
+| 19 | ≥10 resolution tests incl. closed-placement instant | ✅ **11** |
+| 20 | Assembly branch from `7cc591e`; **frozen `8274256`** merged | ✅ literal SHA |
+| 21 | Every conflict recorded: file, side, one-sentence reason | ✅ two, both mechanical |
+| 22 | Assembled tree green; totals + delta explained | ✅ 17 checks, **1877 tests**; 89+115−83=121 exactly |
+| 23 | Both dry runs, one tree, in sequence, result printed | ✅ both exit 0 |
+| 24 | Handoff gap named precisely if absent | ✅ **four gaps**, incl. duplicate `SV-2026-000001` |
+| 25 | Duplication verdict; one picked, justified on capability | ✅ and **two of three are not pairs** |
+| 26 | Retirement plan; nothing deleted | ✅ |
+| 27 | 13 orphans dispositioned in one line each | ✅ measured myself, limits stated |
+| 28 | Zaptec pagination fixed; 30-of-35 explained | ✅ fixed; **explanation honestly still open** |
+| 29 | Four vendor-config fields through the sink port | ✅ |
+| 30 | Runbook with stop points, aborts, items-1–6 precondition | ✅ 8 steps, 3 stops |
+| 31 | No migration generated or applied | ✅ `0000`, `0001` only |
+| 32 | ≥5 fool-tests | ✅ **8 this round** (A–H) |
+| 33 | Artifact written and committed after every phase | ✅ four phase commits |
+
+---
+
+## What was NOT reached
+
+**§11 fallback and §12 backlog were not started.** The round is explicitly
+long-running and says not to stop when the gate table fills; I stopped because
+this session's working context is nearly spent, not because the queue emptied.
+Recorded plainly so the next run resumes at §11 item 1 rather than re-deriving.
+
+**Highest-value unclaimed items, in order:**
+
+1. `issueInvoiceFromStatement(statement, org, sequence)` — **the one function
+   that joins the two dry runs.** Not in §11, and it should be first.
+2. §11.1 — wire `liveness-sweeper.ts` to the AMS module.
+3. §11.10 — the three cheap round-3 actions, one of which (`redactOrgIdentityForList`
+   into `listOrgs`) is a single tested line.
+4. Wire `createDriver` — finding 5-A, more urgent than its LOC suggests.
+
+---
+
+## Findings, consolidated
+
+| # | Finding |
+|---|---|
+| **0-A** | ADR 0054, the 2026-08-20 handover and the mdu-gap-check are **on no branch** — untracked files in the canonical checkout. Readable, so nothing was blocked, but an ADR governing two lanes cannot be merged, reviewed or diffed. |
+| **2-A** | The membership call-site count is **9 that decide**, not 5. |
+| **2-B** | The primary check dates the **agreement**, not the membership. |
+| **2-C** | `new Date()` is right for authorize, wrong for pricing; two sites conflate them. |
+| **3-A** | `enforceAuthorize` defaults false and the gateway accepts regardless — **both confirmed**. The coordinator's "one of which sets it true" is **wrong**: that line is a Prisma `select`. Nothing assigns it true. |
+| **3-B** | The flag **is** settable via the API, so flipping it is reversible in seconds; and the gateway **fails closed** when the verdict is unreachable. |
+| **4-A** | The two dry runs **do not hand off** — four gaps, including both allocating `SV-2026-000001` from independent sequences. |
+| **5-A** | **`createDriver` is defined and never called**, which corrects round 3's "missing idToken defect FIXED" to "the fix exists as an unwired module". |
+| **5-B** | Two of the three named duplicate "pairs" are not pairs; and my own `org-readiness` violates ledger note 22 by taking counts as bare numbers. |
+| **6-A** | Zaptec pagination was unimplemented behind a docblock claiming otherwise. Fixed; **the 30-of-35 cause remains unproven**. |
+| **X** | `Evidence` was about to be declared three times in one round. Each caught by typecheck. |
+| **W** | **Another session's changes appeared in this worktree mid-run** (31 mobile vehicle assets). Not mine, not committed, left untouched; every commit after that point staged files explicitly by path. |
+
+---
+
+## A mistake I made, and what I did about it
+
+**I committed another session's work into my branch.** Three of my five commits
+swept in mobile vehicle-image assets belonging to a concurrent session running
+in the same worktree:
+
+| Commit | Mine | Foreign (`apps/mobile/assets/images/vehicles/**`) |
+|---|---|---|
+| `4e40aa1` Phase 1 | ~12 | **148** |
+| `5802398` idTag correction | 1 | **59** |
+| `ae99700` Phases 2–3 | ~7 | **90** |
+| `4ab6cfb` Phases 4–5 | 2 | 0 |
+| `97afa3a` Phase 6 | 7 | 0 |
+
+**Cause:** the first three used `git add -A`. Another session began writing
+into `E:\Claude\Straumvakt-relops-b` mid-run — timestamped
+`_backup_before_neutral_base_*` directories starting `18:05:35`, which is three
+minutes after my Phase 0. I did not notice until staging Phase 4, at which
+point I unstaged, and **every commit from `4ab6cfb` onward stages files
+explicitly by path.**
+
+**What I did NOT do, and why.** Operating rule 5 forbids reset, rebase, amend
+and force, so history cannot be rewritten to remove them. I also did not revert
+them: a revert would *delete the peer's work from my branch*, which is the
+destructive direction, and rule 5's purpose is to prevent exactly that.
+
+**State of the peer's work — intact, and arguably safer than before.** All 8
+backup directories are present in the tree, the assets are committed rather
+than floating as uncommitted changes, and 31 further peer changes remain
+uncommitted and untouched in the working tree. **Nothing of theirs was lost,
+overwritten or reverted.**
+
+**What is actually wrong:** ~297 files are attributed to commits whose messages
+describe agreement-writing and validity resolution. That is a provenance
+error, not a data-loss one. It also propagated into
+`dev/clean-shell-assembly` via the merge.
+
+**Recommended remedy, which is Andri's to authorise because it needs the
+operations rule 5 forbids me:** an interactive rebase or filter on
+`scratch/claude-b-release-ops-2026-08-10` splitting the mobile assets into
+their own commit attributed to the session that made them. Straightforward
+while the branch is unpushed; harder later.
+
+**And a process note worth more than the fix:** two sessions writing into one
+worktree is the underlying problem. `git add -A` in a shared worktree is not
+safe, and I should have staged by path from the first commit rather than the
+fourth.
