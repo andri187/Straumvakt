@@ -1034,6 +1034,93 @@ Phase 5 gave it one.
 
 ---
 
+## §10 — the gate table, row by row
+
+| # | gate | | evidence |
+|---|---|---|---|
+| 1 | baseline recorded; deviation reported | **met** | 1,689 / 16-of-16 matched exactly; three Phase-0 findings recorded instead |
+| 2 | SR file read Phase 0 and every boundary; each serviced or refused in writing | **met** | absent at P0; three SRs at P2, all answered in `2026-08-28-round-4-schema-responses.md`; re-checked at P3–P6, diff empty |
+| 3 | numbering invariant stated, mechanism named, cost stated | **met** | unique vs gap-free; counter row over `SEQUENCE`; serialises per `(org, series, year)` |
+| 4 | `0004` generated, unapplied, `CREATE` only, natural-key unique | **met** | 2 tables, 4 unique indexes, 1 index, zero destructive verbs |
+| 5 | allocation transactional with issue; per-org per-year; crash semantics stated and tested | **met** | `SELECT … FOR UPDATE`; "a failed transaction consumes nothing" |
+| 6 | ≥8 numbering tests incl. concurrency, retry-same-key, retry-different-key rejected, rollover | **met** | **15** |
+| 7 | `devices` surrogate PK, `(vendor, serial)` unique nullable, lifetime counters, placement columns stripped | **met** | migration `0005` |
+| 8 | `device_identities` dated, temporal key | **met** | two keys — `(device, period)` and `(identity_string, period)` |
+| 9 | `placements` dated, temporal key, stable public id from day one | **met** | `public_id` = OCPI `EVSE.uid` |
+| 10 | both constraint forms emitted, with which to apply and what differs | **met** | Form A active, Form B commented, three differences named |
+| 11 | the double-invoice proven to fail at write time **and** to pass under the partial index | **met** | `"ADR 0054 double-invoice: the worked example"`, 4 tests |
+| 12 | Drizzle / raw-SQL divergence documented, not silent | **met** | banners in `assets.ts`, `commercial.ts`, `0005`, `0006` |
+| 13 | ≥15 placement/identity tests incl. adjacency, unbounded, move-out/move-in | **met** | **27** in `effective-dating.test.ts` |
+| 14 | EVSE/connector hierarchy from `BootNotification`; **the 1:1:1 invention removed**; connector not a membership | **PARTIAL — see below** | columns and hierarchy done; the invention is in B's importer and was not edited |
+| 15 | protocol status vocabulary verbatim; no house enum | **met** | nine values, case-sensitive parser, `NOT VALID` CHECK on both tables |
+| 16 | four vendor-config fields persisted with timestamps behind the port as specified | **met** | signature verbatim, no CR-3 needed |
+| 17 | billing predicate under `Charger.Active` stated, Dalvegur old vs new | **met** | 30 → 20, with the 35 − 30 import gap named separately |
+| 18 | membership interval added, pair unique dropped, temporal key in place | **met** | migration `0006` (early, via SR-2) |
+| 19 | sessions additively gain `placement_id` + tariff snapshot; existing context confirmed intact | **met** | four columns confirmed `NOT NULL` before anything was added |
+| 20 | membership-validity predicate recorded for B | **met** | `2026-08-28-membership-validity-predicate.md` |
+| 21 | `gatherConnectorEvidence` joins placements overlapping the period | **met** | fourth evidence tier, attributed by the placement's org |
+| 22 | proration decided and justified, or both branches behind a named switch with the fork documented | **met** | both; recommends proration, defaults to today's behaviour, and the cap consequence recorded |
+| 23 | dry run extended with a mid-month move; prior cases green and byte-identical | **met** | 9/9; lines 1–78 diff-identical |
+| 24 | ≥10 overlap tests incl. no-placements → `unavailable`, never zero | **met** | **19** |
+| 25 | attach/detach over ports; skipped detach fails at write time; move atomic | **met** | one transaction, `FOR UPDATE`, rollback on refusal |
+| 26 | `createCharger` left as a marked shim; call-site migration deferred | **met** | docblock + retirement plan |
+| 27 | `mutation_receipts` on every mutating device operation; missing key refuses | **met** | three scopes; refusal tested for each |
+| 28 | tenancy proven on every new read and every new write | **met — with a stated exception** | see below |
+| 29 | ≥6 fool tests, each proving a named real test fails | **met** | **13** |
+| 30 | no migration applied to any database | **met** | `0002`–`0008` all generated, none executed |
+| 31 | completion `.md` and `.json` written and committed after every phase | **met** | `.md` after each of six phases; `.json` with this commit |
+
+**29 met, 1 met with a stated exception, 1 partial.**
+
+### Gate 14 — partial, and why it was not closed
+
+The gate has three clauses. Two are met: the hierarchy is `device → EVSE →
+connector` with `evses.device_id` added and every field sourced from
+`BootNotification` given its own `observed_at`; and a connector gains no
+`period`, per decision 4.
+
+**The third — "the 1:1:1 invention removed" — is not done, and I chose not to
+do it.** The invention is in `apps/api/src/repositories/zaptec-import.ts`, and
+§6 of the prompt says *"the columns are yours; the importer is B's"*. Editing
+it would put the same change in two trees, which is the merge conflict this
+lane boundary exists to prevent.
+
+What was done instead: the columns now make the correct shape expressible, and
+the three inventions are written up for B in the responses file with line
+numbers — one EVSE at index 1, one connector typed `Type2`, and
+`warrantyExpires = installDate + 5 years`. **The warranty one is different in
+kind**: the first two are under-modelling, that one is fabrication.
+
+**This is a coordination item, not a technical one.** It closes when B changes
+the importer, or when a round explicitly assigns the file to A.
+
+### Gate 28 — tenancy, and the one place it deliberately is not a column
+
+Every new **read** and **write** on a tenanted table carries scope:
+`placements` (`restrictToOrgIds` on attach, detach, and *both* orgs on a move —
+tested), `driver_group_memberships`, `agreement_clauses`, and the placement
+overlap query in `gatherConnectorEvidence`.
+
+**`assets.devices` and `assets.vendor_config_observations` carry no `org_id`,
+on purpose.** A device is not tenanted — that is decision 1. If it were, a
+device moving between hosts would have to become a *different device*, which is
+precisely the conflation ADR 0054 exists to undo, and its lifetime counters
+would split across the two rows.
+
+Tenancy for those two is reached **through the placement**: "which devices are
+mine" is a join, not a column, and the scope check on the vendor-config port is
+therefore `restrictToDeviceIds` rather than `restrictToOrgIds` — and it returns
+`out_of_scope`, distinct from `never_observed`, so a caller is never told a
+charger has no configuration when it simply cannot see it. That distinction is
+tested.
+
+FOCUS rule 5 says tenancy in every row and every query. **The honest reading
+here is that the rule holds for every row that has a tenant**, and that a
+device does not have one — which is a claim worth making explicitly rather than
+quietly satisfying with a column that would be wrong.
+
+---
+
 ## External state — running
 
 No push. No deploy. **No migration applied to any database — `0002`, `0003`,

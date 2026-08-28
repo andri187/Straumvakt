@@ -1,0 +1,87 @@
+{
+  "agent": "claude-a",
+  "round": 4,
+  "status": "in_progress",
+  "start_utc": "2026-08-28T18:00:27Z",
+  "end_utc": "2026-08-28T19:28:36Z",
+  "wall_clock_seconds": 5289,
+  "target_met": null,
+  "worktree": "E:/Claude/Straumvakt-core-billing",
+  "branch": "dev/core-billing-integration",
+  "start_tip": "8274256",
+  "end_tip": "df5529f",
+  "dirty": 0,
+  "commits": [
+    { "sha": "7507bc7", "phase": 1, "subject": "Migration 0004: the invoice number sequence store" },
+    { "sha": "454802a", "phase": 2, "subject": "Migration 0005: devices, identities and placements (ADR 0054 items 1-3)" },
+    { "sha": "501b82e", "phase": 3, "subject": "Migration 0007: the hierarchy, the vocabulary, the vendor config" },
+    { "sha": "76dd7ee", "phase": 4, "subject": "Migration 0008: a session is sealed and carries its own context" },
+    { "sha": "64770cb", "phase": 5, "subject": "Item 7: billing counts placement overlap, not current rows" },
+    { "sha": "df5529f", "phase": 6, "subject": "Items 10 and 13: attachDevice, detachDevice, and closing as a state" }
+  ],
+  "files_changed": 56,
+  "tests": {
+    "baseline": { "passed": 1689, "skipped": 1, "failed": 0, "files": 92 },
+    "final": { "passed": 1839, "skipped": 1, "failed": 0, "files": 101 },
+    "added": 150,
+    "checks": "16 of 16",
+    "dry_run": "9 of 9 cases",
+    "schema_consistency": { "tables": 85, "columns": 1038 },
+    "fool_tests": 13
+  },
+  "gates_met": {
+    "total": 31,
+    "met": 29,
+    "met_with_stated_exception": 1,
+    "partial": 1,
+    "partial_detail": "gate 14 - the 1:1:1 invention lives in zaptec-import.ts, which the prompt assigns to Claude B. Columns and hierarchy done; the importer edit is a coordination item and is written up for B with line numbers.",
+    "exception_detail": "gate 28 - assets.devices and assets.vendor_config_observations carry no org_id on purpose. A device is not tenanted (decision 1); tenancy is reached through the placement, and the vendor-config port scopes on device ids, returning out_of_scope distinct from never_observed."
+  },
+  "migrations": {
+    "generated": ["0004_tough_reaper", "0005_supreme_psylocke", "0006_heavy_cobalt_man", "0007_mean_overlord", "0008_worthless_mimic"],
+    "applied": [],
+    "note": "Every migration in this branch, including 0002 and 0003 from earlier rounds, remains generated and unexecuted. No database was connected to."
+  },
+  "schema_requests": {
+    "channel": "docs/notes/2026-08-28-round-4-schema-requests.md on dev/market-rails",
+    "responses": "docs/notes/2026-08-28-round-4-schema-responses.md on dev/core-billing-integration",
+    "seen": ["SR-1", "SR-2", "SR-3"],
+    "serviced": ["SR-1", "SR-2"],
+    "refused_as_specified": ["SR-3"],
+    "market_rails_tips_read": ["7cc591e", "ae99700", "d9a8b18"]
+  },
+  "fallback_items_done": [],
+  "backlog_items_done": [],
+  "blockers": [
+    "ADR 0054 is committed on NO branch. It exists only as an untracked file in the canonical working tree at E:/Claude/Straumvakt/docs/adr/0054-devices-placements-and-effective-dating.md. One git clean destroys the specification for rounds 4 and 5. Coordinator action.",
+    "The PostgreSQL version Neon serves is unrecorded. Migrations 0005 and 0006 ship both constraint forms so this does not block, but it must be answered before either is applied.",
+    "Mid-month proration is Andri's commercial decision. Both branches are implemented; the default is today's behaviour so nothing changes silently.",
+    "The accountant's constraint on invoice numbering is still unanswered. Three things it could move are each a one-place change by construction.",
+    "Five Dalvegur chargers exist in the Zaptec portal with no row in our database. No predicate can see them; it under-bills and needs a reconciliation."
+  ],
+  "next_actions": [
+    "Fallback item 1 - the first-placement write path, which does not exist yet",
+    "Fallback item 10 - the OCPI mapping note (EVSE.uid -> placement id)",
+    "Fallback item 6 - the ocpp_identities retirement plan",
+    "Fallback item 9 - lifetime-counter maintenance, design only"
+  ],
+  "external_state": {
+    "push": false,
+    "deploy": false,
+    "migrations_applied": false,
+    "sql_against_any_environment": false,
+    "socket_opened": false,
+    "database_connected": false,
+    "cloudflare_neon_github_mutation": false,
+    "neon_mcp_tools_used": false,
+    "charger_or_hardware_action": false,
+    "ble_nfc": false,
+    "branch_or_tag_deleted": false,
+    "git_clean_reset_rebase_amend_force": false,
+    "contracts_or_b_paths_edited": false,
+    "zaptec_import_edited": false,
+    "branches_written_to": ["dev/core-billing-integration"],
+    "fixture_values": "all synthetic; no checksum-valid kennitala, no real idTag, no token value, no personal row"
+  },
+  "very_tldr": "Six phases, six commits, five migrations generated and none applied. The invoice sequence is now gap-free and unique; devices, identities and placements are effective-dated with the temporal key emitted in both PostgreSQL forms; the ADR's double-invoice is a named test that proves the constraint refuses it and the rejected partial index permits it. Billing now counts placement overlap rather than current rows, which is the fix for a mid-month move billing the wrong host - and for Dalvegur it takes the connector count from 30 to 20. Three of B's schema requests answered, two serviced and one refused for creating a cross-tenant idempotency namespace. Two real defects found while writing the dry run: a dropped sequence state that was indistinguishable from correct output, and proration losing an eyrir per move."
+}
