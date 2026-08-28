@@ -1,15 +1,15 @@
 {
   "agent": "claude-a",
   "round": 4,
-  "status": "in_progress",
+  "status": "complete",
   "start_utc": "2026-08-28T18:00:27Z",
-  "end_utc": "2026-08-28T19:28:36Z",
-  "wall_clock_seconds": 5289,
+  "end_utc": "2026-08-28T20:08:41Z",
+  "wall_clock_seconds": 7694,
   "target_met": null,
   "worktree": "E:/Claude/Straumvakt-core-billing",
   "branch": "dev/core-billing-integration",
   "start_tip": "8274256",
-  "end_tip": "df5529f",
+  "end_tip": "d832c4d",
   "dirty": 0,
   "commits": [
     {
@@ -41,9 +41,54 @@
       "sha": "df5529f",
       "phase": 6,
       "subject": "Items 10 and 13: attachDevice, detachDevice, and closing as a state"
+    },
+    {
+      "sha": "2235d85",
+      "phase": "gates",
+      "subject": "Round 4 gate table and the JSON sidecar"
+    },
+    {
+      "sha": "0298578",
+      "phase": "fallback 1",
+      "subject": "The first-placement write path, and a defect it found"
+    },
+    {
+      "sha": "c7e553b",
+      "phase": "fallback 2",
+      "subject": "Census row 104 - the cross-tenant enrichment view"
+    },
+    {
+      "sha": "b541409",
+      "phase": "fallback 3",
+      "subject": "Two orgIdParam gates paid, 31 named as remaining"
+    },
+    {
+      "sha": "49b7693",
+      "phase": "fallback 4-5",
+      "subject": "The conversion assessed, the scenarios written"
+    },
+    {
+      "sha": "d2ca93f",
+      "phase": "fallback 6-10",
+      "subject": "The retirement plan, the counters, OCPI, and the revised list"
+    },
+    {
+      "sha": "a121145",
+      "phase": "backlog 1",
+      "subject": "A CDR with no Energy is skipped, never priced at zero"
+    },
+    {
+      "sha": "515460a",
+      "phase": "backlog 2-3",
+      "subject": "The Active census, and the temporal key generated"
+    },
+    {
+      "sha": "d832c4d",
+      "phase": "backlog 4-5",
+      "subject": "Which of the six essentials shape the schema, and the audit trail"
     }
   ],
-  "files_changed": 56,
+  "files_changed": 77,
   "tests": {
     "baseline": {
       "passed": 1689,
@@ -193,10 +238,10 @@
     "Five Dalvegur chargers exist in the Zaptec portal with no row in our database. No predicate can see them; it under-bills and needs a reconciliation."
   ],
   "next_actions": [
-    "Standing backlog 1 - the z.Energy ?? 0 refusal in the ingest lane",
-    "Standing backlog 3 - property-based tests for the temporal key",
-    "Standing backlog 5 - an audit-trail design for the asset model",
-    "Fallback 3 continued - the 31 remaining orgIdParam gates"
+    "Standing backlog 6 - it points back at fallback 3's 31 remaining orgIdParam gates, worked down deliberately rather than swept",
+    "The remittance ledger's shape, once the vorslureikningur question is answered - it is the schema decision that should land first",
+    "The statement renderer - issueDocument now allocates a real number and refuses the render half by name",
+    "Convert billing-enrichment.ts to Drizzle once there is a database to run it against"
   ],
   "external_state": {
     "push": false,
@@ -218,5 +263,5 @@
     ],
     "fixture_values": "all synthetic; no checksum-valid kennitala, no real idTag, no token value, no personal row"
   },
-  "very_tldr": "Six phases, six commits, five migrations generated and none applied. The invoice sequence is now gap-free and unique; devices, identities and placements are effective-dated with the temporal key emitted in both PostgreSQL forms; the ADR's double-invoice is a named test that proves the constraint refuses it and the rejected partial index permits it. Billing now counts placement overlap rather than current rows, which is the fix for a mid-month move billing the wrong host - and for Dalvegur it takes the connector count from 30 to 20. Three of B's schema requests answered, two serviced and one refused for creating a cross-tenant idempotency namespace. Two real defects found while writing the dry run: a dropped sequence state that was indistinguishable from correct output, and proration losing an eyrir per move."
+  "very_tldr": "Six phases, five migrations generated and none applied, then the whole fallback queue and five of six standing-backlog items. The invoice sequence is gap-free and unique; devices, identities and placements are effective-dated with the temporal key emitted in both PostgreSQL forms; the ADR's double-invoice is a named test proving the constraint refuses it and the rejected partial index permits it, and a property test now generates that claim over eight seeds rather than working it once. Billing counts placement overlap rather than current rows - which for Dalvegur takes the connector count from 30 to 20, and stops a mid-month move billing the wrong host. Three of B's schema requests answered: two serviced, one refused for creating a cross-tenant idempotency namespace. Five real defects found and fixed along the way, four of them in code that was already live: a cross-tenant enrichment view, a driver-contracts view confined only by a caller-supplied query parameter, a createMembership that would have called a driver who left in March a current member, a removeMembership that hard-deleted, and a CDR with no Energy priced at zero and marked complete."
 }

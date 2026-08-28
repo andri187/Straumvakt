@@ -5,9 +5,10 @@
 
 Prompt: `docs/agent-prompts/2026-08-28/2026-08-28-1800-claude-a-asset-model-and-invoice-numbering.md`
 
-> **STATUS: IN PROGRESS.** Phases completed so far are recorded below with
-> their commits. If this run is interrupted, resume from the first unmet gate
-> in §10 — do not restart.
+> **STATUS: COMPLETE.** Six phases, the §10 gate table, the whole §11 fallback
+> queue and §12 items 1–5, each committed as it landed. **15 commits**,
+> `8274256` → `d832c4d`. §12 item 6 points back at fallback 3's 31 remaining
+> `orgIdParam` gates and is the natural next entry point.
 
 ---
 
@@ -1796,7 +1797,7 @@ Suite **1,882 passed / 1 skipped / 105 files**, `npm run check` **16 of 16**.
 
 ---
 
-## External state — running
+## External state — final
 
 No push. No deploy. **No migration applied to any database — `0002`, `0003`,
 `0004`, `0005`, `0006`, `0007` and `0008` all remain generated and unapplied.**
