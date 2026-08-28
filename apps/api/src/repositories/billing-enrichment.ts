@@ -6,15 +6,63 @@
 // ChargeSession (sessionId is a plain UUID column), so we use the same
 // two-pass pattern as session-ledger.ts.
 //
-// The ENRICH-1 columns (verifiedSource, enrichmentStatus on SessionLedger;
-// ocmfBlobRef, ocppEnergyKwh, cdrEnergyKwh on ChargeSession) are declared
-// in the Prisma schema but their migration may not have run yet — transient
-// tsc errors will resolve when ENRICH-1's migration lands.
+// ── TENANCY: CENSUS ROW 104, CLOSED ─────────────────────────────────────
+//
+// `listEnrichmentSessions` read `session_ledger` with NO tenant term, in
+// BOTH halves: the summary `groupBy` and the session list. It is mounted at
+// `GET /api/admin/billing/enrichment` behind `billing.read` — which
+// `requireAdmin` grants to any org member, not only to platform staff — so
+// any admin of any tenant could read every tenant's sessions, with charger
+// and site display names attached.
+//
+// **The summary was the worse half.** A list of 100 rows is visibly a list;
+// four counts across "the entire window, no row cap" read as *your* numbers,
+// and an operator has no reason to doubt them. That is why `tenantWhere` is
+// shared between the two rather than applied to each: a tile confined
+// differently from the list beneath it is worse than either being wrong
+// alone, because the total is the number an operator believes. Same argument
+// as fixes 1 and 2 in the burn-down note, and the same shape.
+//
+// `restrictToOrgIds` is a REQUIRED parameter. `null` means platform-wide and
+// is spelled out at the call site; an empty array means "may see nothing" and
+// must not fall into `{}`, which means everything. **The repository enforces**
+// — a route can omit a call, a required parameter cannot be omitted without
+// the build failing, and the route-side rule was written down once already
+// and still not followed for four months.
 //
 // Rule 7 — no Prisma types leak past this module. Caller receives
 // EnrichmentRow[].
 
 import type { PrismaClient } from "../generated/prisma/client";
+import type { OrgScope } from "../lib/auth/org-scope";
+
+/** `null` is platform-wide. An empty array is "may see nothing". */
+export type EnrichmentTenantScope = string[] | null;
+
+
+/**
+ * Map an `OrgScope` to this repository's tenant scope.
+ *
+ * It lives HERE rather than in the route, beside the type it produces. A route
+ * can omit a call; a required parameter cannot be omitted without the build
+ * failing, and the conversion into that parameter belongs on the same side as
+ * the enforcement. It also keeps the repository's tests from importing a
+ * route, which is an edge the dependency graph is right to refuse.
+ *
+ * `{ all: true }` — bootstrap sessions and `platform.tenant.read` — maps to
+ * `null`, which is platform-wide and unchanged. `{ all: false, orgIds: [] }`,
+ * which `resolveOrgScope` returns for an unknown user, maps to `[]` and denies
+ * everything. Those two must not be confused, and the test says so.
+ */
+export function scopeFrom(scope: OrgScope): EnrichmentTenantScope {
+  return scope.all ? null : scope.orgIds;
+}
+/** The session_ledger predicate for a tenant scope. Shared by the summary and
+ *  the list so the tile cannot be confined differently from the rows under it. */
+function tenantWhere(restrictToOrgIds: EnrichmentTenantScope): Record<string, unknown> {
+  if (restrictToOrgIds === null) return {};
+  return { orgId: { in: restrictToOrgIds } };
+}
 
 // ── Public types ─────────────────────────────────────────────────────
 
@@ -70,6 +118,8 @@ const MAX_LIMIT = 500;
 
 export async function listEnrichmentSessions(
   db: PrismaClient,
+  /** REQUIRED. `null` is platform-wide; an empty array is "may see nothing". */
+  restrictToOrgIds: EnrichmentTenantScope,
   filters: EnrichmentFilters = {},
 ): Promise<{ summary: EnrichmentSummary; sessions: EnrichmentRow[] }> {
   const days = Math.max(1, filters.days ?? 30);
@@ -80,7 +130,7 @@ export async function listEnrichmentSessions(
   // cap, no status filter — this is the aggregate, not the list).
   const summaryGroups = await db.sessionLedger.groupBy({
     by: ["enrichmentStatus"],
-    where: { startedAt: { gte: since } },
+    where: { startedAt: { gte: since }, ...tenantWhere(restrictToOrgIds) },
     _count: { sessionId: true },
   });
 
@@ -98,6 +148,7 @@ export async function listEnrichmentSessions(
   const ledgerRows = await db.sessionLedger.findMany({
     where: {
       startedAt: { gte: since },
+      ...tenantWhere(restrictToOrgIds),
       ...(filters.status && filters.status !== "all"
         ? { enrichmentStatus: filters.status }
         : {}),

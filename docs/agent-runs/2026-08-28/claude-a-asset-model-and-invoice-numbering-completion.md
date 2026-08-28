@@ -1209,6 +1209,55 @@ passed / 1 skipped / 102 files**, `npm run check` **16 of 16**.
 
 ---
 
+## §11 fallback — item 2: census row 104, the cross-tenant enrichment view
+
+`GET /api/admin/billing/enrichment`. `listEnrichmentSessions` read
+`reports.session_ledger` with **no tenant term in either half** — the summary
+`groupBy` and the session list — and is mounted behind `billing.read`, which
+`requireAdmin` grants to **any org member, not only platform staff**. Any
+tenant's admin could read every tenant's sessions, with charger and site
+display names attached.
+
+**The summary was the worse half.** A list of 100 rows is visibly a list; four
+counts computed across *"the entire window, no row cap, no status filter"* read
+as **your** numbers, and an operator has no reason to doubt them.
+
+Fixed the same way as burn-down fixes 1 and 2: a **required**
+`restrictToOrgIds` on the repository function, a shared `tenantWhere` used by
+both halves, and the route supplying identity and nothing else. The repository
+is the enforcement point for the reason the note already gave — a route can
+omit a call, a required parameter cannot be omitted without the build failing,
+and the route-side rule was written down once and still not followed for four
+months.
+
+**`scopeFrom` lives in the repository, beside the type it produces.** The first
+draft put it in the route, which made the repository's own test import a route
+— an edge `check:deps-graph` is right to refuse, and it caught it. The
+conversion belongs on the same side as the enforcement.
+
+`{ all: true }` maps to `null` (platform-wide, unchanged).
+`{ all: false, orgIds: [] }` — what `resolveOrgScope` returns for an unknown
+user — maps to `[]`, and **`[]` must not fall into `{}`**, which means
+everything. That case is spelled out and tested rather than fallen into.
+
+**Tests — 9**, including that both halves are confined *identically* (a tile
+confined differently from the rows beneath it is worse than either being wrong
+alone), and that the status filter is applied **on top of** the tenant term
+rather than instead of it.
+
+| fool | mutation | failed |
+|---|---|---|
+| 14 | an empty allow-list falls into "everything" | **1** |
+| 15 | the summary left unconfined while the list is confined | **4** |
+
+Fool 15's four failures are the point: the two halves are checked against each
+other, so confining only one is not a partial fix that passes most tests.
+
+Suite **1,863 passed / 1 skipped / 103 files**, `npm run check` **16 of 16**.
+`docs/architecture/dependency-graph.md` regenerated.
+
+---
+
 ## External state — running
 
 No push. No deploy. **No migration applied to any database — `0002`, `0003`,

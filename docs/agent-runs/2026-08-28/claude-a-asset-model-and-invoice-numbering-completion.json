@@ -52,19 +52,19 @@
       "files": 92
     },
     "final": {
-      "passed": 1854,
+      "passed": 1863,
       "skipped": 1,
       "failed": 0,
-      "files": 102
+      "files": 103
     },
-    "added": 165,
+    "added": 174,
     "checks": "16 of 16",
     "dry_run": "9 of 9 cases",
     "schema_consistency": {
       "tables": 85,
       "columns": 1038
     },
-    "fool_tests": 13
+    "fool_tests": 15
   },
   "gates_met": {
     "total": 31,
@@ -111,6 +111,11 @@
       "item": 1,
       "title": "the first-placement write path",
       "note": "design plus port; surfaced and fixed a live defect in placement-evidence.ts (a connectorless placement was a measured zero)"
+    },
+    {
+      "item": 2,
+      "title": "census row 104 - the cross-tenant enrichment view",
+      "note": "both halves were unconfined; the summary was the worse one. Required restrictToOrgIds, shared tenantWhere, 9 tests, 2 fool tests."
     }
   ],
   "backlog_items_done": [],

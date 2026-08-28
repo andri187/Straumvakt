@@ -13,8 +13,10 @@
 import { Hono } from "hono";
 import { makePrisma } from "../../lib/prisma";
 import { requirePermission } from "../../lib/auth/require-permission";
+import { resolveOrgScope } from "../../lib/auth/org-scope";
 import {
   listEnrichmentSessions,
+  scopeFrom,
   type EnrichmentStatusFilter,
 } from "../../repositories/billing-enrichment";
 import type { Env } from "../../bindings";
@@ -55,7 +57,8 @@ enrichmentRouter.get(
     const limit = intParam(c.req.query("limit"), 100);
 
     const db = makePrisma(c.env);
-    const { summary, sessions } = await listEnrichmentSessions(db, {
+    const restrictToOrgIds = scopeFrom(await resolveOrgScope(c.env, c.get("session")));
+    const { summary, sessions } = await listEnrichmentSessions(db, restrictToOrgIds, {
       status,
       days,
       limit,
