@@ -10,10 +10,11 @@
   "lib/ocpp-internal-auth.ts#constantTimeEquals",
   "lib/tap-intent/random-uid.ts#randomUidLabel",
   "lib/vendor-config/drizzle-sink.ts#makeDrizzleVendorConfigSink",
-  "repositories/activity-month.ts#gatherConnectorEvidence",
   "repositories/activity-month.ts#gatherDriverEvidence",
   "repositories/billing-cost-factors.ts#getCostFactor",
   "repositories/create-driver.ts#createDriver",
+  "repositories/devices.ts#makeDrizzleDevices",
   "repositories/driver-sessions.ts#getDriverProfile",
+  "repositories/placements.ts#makeDrizzlePlacements",
   "repositories/tap-intents.ts#purgeStaleTapIntents"
 ]

@@ -899,6 +899,141 @@ for one; eight is the shape of a regression that could not hide.
 
 ---
 
+## Phase 6 — items 10 and 13: attach, detach, and closing as a state
+
+### What the constraint does, and what the port adds
+
+The temporal key on `assets.placements` is the enforcement. **A move that skips
+the detach fails at write time**, in the database, on a write made by anything
+at all — this code, a script, psql, a service written next year. That is item
+10's requirement and it is not satisfiable by an application check, because an
+application check is only as good as the set of applications that run it.
+
+What the port adds is **a refusal a caller can read**. Surfacing SQLSTATE
+`23P01` to an operator who attached a device to the wrong site tells them
+nothing; `device_already_placed_elsewhere` with the conflicting placement named
+tells them what to do. The pre-check loses every race and that is fine — the
+constraint has the last word, and **both paths refuse under the same name**.
+
+**Two names for one constraint violation**, because the operator's next move
+differs: an OPEN placement elsewhere means "detach first, or use `moveDevice`";
+a CLOSED one overlapping means the history is wrong, which is a different
+conversation. Both are refused; a partial unique index would have permitted the
+second.
+
+**The SQLSTATE fork is closed in code.** Migration 0005 ships Form A (`EXCLUDE`,
+`23P01`) active and Form B (`UNIQUE … WITHOUT OVERLAPS`, `23505`, PG 18+)
+commented. `isOverlapError` treats both identically, so switching forms is a
+migration and not a code change — and the failure it prevents would have been
+silent, because an unhandled error surfaces as a 500 rather than a named
+refusal. There is a test for exactly that.
+
+### Item 10 — attach, detach, move
+
+`repositories/placements-port.ts` (the port and the shared decisions),
+`fixture-placements.ts`, `placements.ts` (Drizzle, **written and never
+executed**), `devices.ts`, `fixture-devices.ts`.
+
+**`attachDevice` is idempotent**: attaching a device already open at that
+installation returns the existing placement — never a duplicate, never an error
+that would hide a real one. Attaching to a *different* installation while open
+is a **refusal with a named reason**, not an implicit move: an implicit move
+silently re-tenants a device.
+
+**An explicit move is atomic.** `moveDevice` closes and opens **in one
+transaction**, with `SELECT … FOR UPDATE` on the open placement. Two separate
+calls can be interrupted between them, and the state in between — a device
+placed nowhere — is one a billing run can observe: the period shows a gap and
+the new host is under-billed for it. The two intervals **touch and do not
+overlap**, `[x, at)` and `[at, )` — which is the whole reason the interval is
+half-open. Under a closed upper bound every move would be a constraint
+violation.
+
+The fixture rolls back on a refused move, so a refused move leaves the old
+placement **open**. A partial move is the one outcome worse than a refused one.
+
+**`mutation_receipts` on every mutating operation**, scoped
+`placement.attach` / `placement.detach` / `placement.move`, and **a missing
+idempotency key is a refusal, never a generated one** — round 1's rule,
+unchanged. Tenancy is checked on every call, including both orgs on a move.
+
+### Item 13 — closing is a state
+
+`detachDevice` sets the period's upper bound and **keeps the row**. OCPI
+requires `status: REMOVED` rather than removal, and a deleted row takes the
+session history's context with it. The `UPDATE` is bounded to `upper_inf`, so a
+second detach cannot move an end date already recorded.
+
+`not_placed` is **not an error**: "never attached" and "already detached" are
+both the state the caller asked for, and turning that into a failure makes a
+retried teardown script noisy for no fact.
+
+A detach **at or before** the attach is refused. Closing there makes the range
+empty, which the CHECK constraint refuses — and an empty placement is a claim
+the device was never there, which is not what a detach means.
+
+**`devices.ts` has no delete and will not get one**, asserted structurally
+rather than described: a test enumerates the port's keys, because a port that
+grew a `delete` later would pass every other test in the file. Retirement is a
+state, for the same reason.
+
+### `createCharger` — left in place, marked, and scheduled
+
+Not changed, and that is a decision rather than an omission. B's onboarding
+path reaches it through `onboarding-chains.ts`, which is **B's file**; changing
+both sides in two trees is the merge conflict this boundary exists to prevent.
+Its docblock now says what replaces it, where, and why. The call-site migration
+is in the retirement plan for round 5, with the ordering constraint spelled
+out: **retiring it before the backfill would leave two paths writing to
+different tables for one physical charger.**
+
+### One thing the schema cannot do, reported rather than hidden
+
+`(vendor, serial_number)` is UNIQUE and both columns are NULLABLE — because
+OCPP 2.0.1 makes `serialNumber` optional and 1.6 offers three competing serial
+fields. **Postgres treats NULLs as distinct in a unique index**, so two
+unserialised devices do not collide, which is correct — and it also means an
+unserialised device **cannot be deduplicated**. Registering the same one twice
+makes two rows and no constraint can prevent it.
+
+`checkRegister` returns `dedupable: false` for that case rather than papering
+over it, so an importer can refuse, ask, or accept the duplicate knowingly.
+What it must not do is pretend the second row is the first. A serial with no
+vendor is refused outright: serials are vendor-scoped, and storing one without
+its vendor makes the unique index meaningless for that row without saying so.
+
+### Tests — 31, and two fool tests
+
+`placements.test.ts` 21 · `devices.test.ts` 10. All six named cases present:
+
+| case | test |
+|---|---|
+| the atomic move | *"closes and opens at the SAME instant, and the intervals touch"* |
+| the skipped detach fails at write time | *"a MOVE THAT SKIPS THE DETACH fails at WRITE time"* — asserts **both** the readable refusal and, reaching past the port, that the write-time predicate refuses independently |
+| cross-installation attach refused | *"REFUSES a cross-installation attach — never an implicit move"* |
+| detach of a device never attached | *"…is not_placed, not an error"* |
+| detach twice | *"does not move the end date that was already recorded"* |
+| cross-tenant attach refused | *"refuses a cross-TENANT attach — FOCUS rule 5"* |
+
+Plus the ADR's double-invoice reached through the repository: a **backfilled
+closed row** overlapping an existing one is refused, which is the case a partial
+unique index would have permitted.
+
+| fool | mutation | failed |
+|---|---|---|
+| 12 | only Form A's SQLSTATE handled | **1** |
+| 13 | `classifyAttachConflict` ignores closed rows (the partial-index behaviour) | **1** |
+
+**`check:unused-exports` baseline moved**: `makeDrizzleDevices` and
+`makeDrizzlePlacements` added, deliberately ahead of their callers like every
+Drizzle adapter in this lane, and `gatherConnectorEvidence` **removed** because
+Phase 5 gave it one.
+
+**Checks at Phase 6 close:** tsc 0, **1,839 passed / 1 skipped / 101 files**,
+`npm run check` **16 of 16**.
+
+---
+
 ## External state — running
 
 No push. No deploy. **No migration applied to any database — `0002`, `0003`,
@@ -926,6 +1061,7 @@ The only branch written to is `dev/core-billing-integration`.
 | Phase 3 | `d9a8b18` | unchanged — `git diff` between the two tips over that path is **empty** | none |
 | Phase 4 | `d9a8b18` | unchanged | none |
 | Phase 5 | `d9a8b18` | unchanged | none |
+| Phase 6 | `d9a8b18` | unchanged | none |
 
 The channel rule is that an earlier SR is never rewritten. Checked rather than
 assumed: the diff is empty, so nothing I answered has moved under me.

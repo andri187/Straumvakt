@@ -61,3 +61,35 @@ writer in the same deploy has a window where a charger cannot connect.
 
 Nothing past row 1 is in this round's scope, and nothing past row 1 has been
 started.
+
+---
+
+## `createCharger` — the call-site migration, for round 5
+
+ADR 0054 item 10 replaces `createCharger` with `attachDevice` / `detachDevice`.
+**Round 4 left it in place on purpose** and marked it in its own docblock;
+`repositories/devices.ts` and `repositories/placements.ts` land beside it.
+
+**Why not now.** B's onboarding path reaches it through
+`onboarding-chains.ts`, which is B's file. Changing both sides in two trees is
+the merge conflict this lane boundary exists to prevent.
+
+| call site | owner | replacement |
+|---|---|---|
+| `routes/admin/chargers.ts:68` | A | `devices.register()` then `placements.attachDevice()` |
+| `repositories/onboarding-chains.ts:163` | **B** | coordinate before either side moves |
+
+**What `createCharger` cannot express, which is why it goes.** It bakes the
+1:1:1 hierarchy in, writes the placement-shaped columns onto the hardware row,
+and **has no way to represent a device moving** — the only thing it can do with
+a relocated charger is create a second one, which is a second device row for
+one physical unit and a lifetime counter split across both.
+
+**The order.** `createCharger` writes five rows in one transaction (site asset,
+charging station, EVSE, connector, OCPP identity). The replacement writes a
+device, a placement and a device identity. Those are not the same set, so the
+migration is not a rename: it needs the backfill above to have run, so that the
+device rows the new path attaches to already exist. **Retiring `createCharger`
+before the backfill would leave the two paths writing to different tables for
+the same physical charger**, which is the divergence this whole plan exists to
+avoid.
