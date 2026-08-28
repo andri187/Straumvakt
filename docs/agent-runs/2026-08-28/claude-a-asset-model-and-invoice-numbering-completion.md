@@ -1700,6 +1700,102 @@ Suite **1,882 passed / 1 skipped / 105 files**, `npm run check` **16 of 16**.
 
 ---
 
+## §12 standing backlog — items 4 and 5
+
+### Item 4 — the schema consequences of the six unaccounted essentials
+
+`docs/notes/2026-08-28-schema-consequences-of-the-six.md`. The question is
+narrower than "should we build them": **which of the six constrain the SHAPE of
+the schema, and therefore want deciding while it is still young.** The test
+applied to each — *if we build this in six months, is the extra cost
+structural?* A missing table is cheap later; a missing column on a table that
+already has rows is not; a missing **identity** is worst.
+
+| | essential | schema consequence |
+|---|---|---|
+| 2.1 | organisation never read | **none** — a join, the cheapest item on the list |
+| 2.2 | no remittance ledger | **large, and it is money** |
+| 2.3 | cannot receive money | **already paid for** |
+| 2.4 | no audit trail | **none — the column exists** |
+| 2.5 | nothing watches anything | **none** — wiring |
+| 2.6 | retention has no owner | **medium, and it worsens with rows** |
+
+**2.2 is the one that should land first, and it is a schema decision rather
+than a feature.** A remittance ledger is not derivable from invoices: an
+invoice says what was *billed*; remittance needs *collected*, *remitted* and
+*when*, and no current table records any of the three. Four things its shape
+must get right on day one — a movement is an **entry, never a mutable
+balance**; every entry carries **the org whose money it is**, which is not
+always the org being invoiced; aurar as `bigint`; and an entry references the
+document that caused it. The `vörslureikningur` question decides whether
+collected money is one balance or two, **and it has to be answered before the
+table exists.**
+
+**2.3 turns out to be already paid for.** The rail is deferrable — the
+do-nothing baseline is a bank transfer against an emailed PDF. The **payment
+reference** is not, and it already exists: the document number, unique per org
+and gap-free since migration `0004`. What would have been expensive later is
+discovering that the number an operator matches against is not the one printed.
+It provably is.
+
+**A correction I made to myself while writing it.** The draft recommended
+adding an `org_id` column to `audit.actions`. **It already has one** — along
+with `actor_user_id`, `actor_kind`, `action`, `target_type`, `target_id`,
+`metadata` and `occurred_at`. Checked rather than assumed, and the
+recommendation became "nothing; it needs a writer, which is code". The
+structural point survives as a rule about *use*: `org_id` must record the
+tenant the target belonged to **at the time**, which is free provided nothing
+ever back-fills it.
+
+**2.6's boundary is already half drawn**, and ADR 0054 should be read as having
+drawn it: decision 7 makes lifetime device statistics permanent *because they
+are facts about hardware rather than about a person*, and explicitly leaves
+per-driver session retention undecided. The classification is what cannot wait —
+you cannot tell, later, which of a million session rows belonged to a resident
+who has since left.
+
+### Item 5 — an audit trail for the asset model
+
+`docs/notes/2026-08-28-asset-audit-trail.md`.
+
+**The rule that keeps the two stores from drifting: the row answers "who", the
+audit answers "what happened".** The asset model already carries actor columns
+— `attached_by_user_id`, `detached_by_user_id`, `asserted_by_user_id`,
+`assigned_by_user_id` — and a row can only remember its last state. What makes
+both necessary: **a refused attach writes no row.** An operator who tried the
+wrong site three times before succeeding leaves one placement and three audit
+rows, and the three are what they are asking about.
+
+Six event shapes, and **the refusal is the one that must not be dropped** —
+every other has a surviving artefact and it has none.
+
+Three rules for the writer: `org_id` at the time and never back-filled; the
+audit write **in the same transaction as its effect**, with the refusal row as
+the deliberate exception because the transaction it would join is the one that
+rolled back; and **no personal data in `metadata`**, which would otherwise put
+an idTag in the one table least able to delete it.
+
+**What an operator sees is two surfaces and only one is new.** A device
+timeline is `placements` read in order — `historyFor` already returns it, and
+needs no audit table at all. **That is the point of closing rather than
+deleting.** The org activity log is the one that does not exist.
+
+**Nothing was built, and the second reason is the interesting one.** The first
+is ordinary: the write paths go through a Drizzle adapter that has never
+executed. The second is that **the refusal that matters most cannot be audited
+where it happens.** A skipped detach caught by the exclusion constraint
+surfaces as a SQLSTATE inside a transaction that just died; the writer that
+would record it is the one that died with it. It has to be written by the
+caller, after the rollback, from the refusal the port returns — **which is
+exactly why `attachDevice` returns a named reason rather than throwing.** That
+decision was made in Phase 6 for a different purpose and turns out to be what
+makes the audit trail possible at all. Recorded so nobody simplifies it back
+into a throw.
+
+Suite **1,882 passed / 1 skipped / 105 files**, `npm run check` **16 of 16**.
+
+---
+
 ## External state — running
 
 No push. No deploy. **No migration applied to any database — `0002`, `0003`,

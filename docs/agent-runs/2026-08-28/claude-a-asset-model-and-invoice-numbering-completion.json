@@ -173,6 +173,16 @@
       "item": 3,
       "title": "property-based tests for the temporal key",
       "note": "5 tests over 8 seeds, deterministic PRNG, no new dependency. Both directions: accepted sets hold the invariant, and every rejection genuinely collides. The ADR claim about the partial index is generated rather than worked once."
+    },
+    {
+      "item": 4,
+      "title": "schema consequences of the six unaccounted essentials",
+      "note": "2 of 6 have a real schema consequence. The remittance ledger should land first and is a schema decision, not a feature - it is not derivable from invoices. 2.3 turns out to be already paid for by migration 0004. A draft recommendation to add org_id to audit.actions was WRONG and was corrected: it already has one."
+    },
+    {
+      "item": 5,
+      "title": "an audit trail for the asset model",
+      "note": "the row answers who, the audit answers what happened - and a refused attach writes no row, which is why both are needed. Nothing built: the write paths go through an adapter that has never run, AND the refusal that matters most cannot be audited where it happens, which is why attachDevice returns a named reason rather than throwing."
     }
   ],
   "blockers": [
