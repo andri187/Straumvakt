@@ -1121,6 +1121,94 @@ quietly satisfying with a column that would be wrong.
 
 ---
 
+## §11 fallback — item 1: the first-placement write path
+
+**It did not exist.** ADR 0054 says the re-onboard creates the first
+placements; nothing said what a *correct* first onboarding writes, and
+`createCharger` writes the old shape and is marked for retirement. Design and
+port only — no vendor call, no database, no HTTP.
+`apps/api/src/repositories/onboard-device-port.ts`.
+
+### What it writes, in order
+
+| | table | note |
+|---|---|---|
+| 1 | `assets.devices` | idempotent on `(vendor, serial)` |
+| 2 | `assets.device_identities` | the credential, dated |
+| 3 | `assets.placements` | where it is, dated and **tenanted** |
+| 4 | `assets.evses` | **only** from a `BootNotification` |
+| 5 | `assets.connectors` | children of those EVSEs |
+
+**One transaction**, and the half-states are named because each is a specific
+operational failure rather than untidiness:
+
+- **device + identity, no placement** — the charger connects and authenticates
+  and bills **nobody**. Free electricity with a working audit trail.
+- **device + placement, no identity** — the host is billed for a charger that
+  cannot connect. Wrong in the direction nobody forgives.
+- **placement, no connectors** — the flat fee counts connectors, so the host is
+  billed for zero. This one had a defect of its own; see below.
+
+A retry after a partial failure is worse than the failure: the device row is
+idempotent but the identity and placement are not, so the second attempt
+collides with the first half and the operator sees a constraint error naming a
+row they never knowingly created.
+
+**The order is not arbitrary.** Device first because everything references it.
+**Identity second, before the placement**, because its uniqueness is the one
+most likely to collide — an operator reusing an identity string from a unit
+decommissioned last month — and failing early costs less work than failing
+late. Placement third because it is the tenanted row and the one billing reads.
+Children last because they are the only part that may legitimately be empty.
+
+### The decision worth arguing, and what it broke
+
+**A first onboarding with no `BootNotification` writes no EVSE and no
+connector**, and reports `refusedToInvent: true`. Not an error: a charger is
+often registered before it first connects, and refusing would make an operator
+wait for hardware to phone home before they can record where they put it. What
+it must never do is write one EVSE at index 1 with one `Type2` connector.
+
+**A boot reporting ZERO EVSEs is refused, and that is a different case.** The
+charger spoke and said it has nothing — a protocol bug, or a unit we should not
+be billing for. **Silence and "I have nothing" are not the same claim**, and
+this is the same distinction as `never_reported` versus `Unavailable` on
+connector status.
+
+**And it surfaced a live defect in Phase 5's code.** A placement whose device
+has no connectors would have contributed nothing to `connectorSharesForPeriod`
+— a **measured zero for a device we have never heard from**. That is ledger
+note 22's exact failure reached from a direction nobody was watching: not an
+absent row, but a present row with an empty list. The period now holds with
+`unavailable: placement_without_connectors`, and it holds for the **whole**
+period rather than skipping that device, because an invoice short by one
+charger looks complete. A vendor-deactivated connectorless placement is skipped
+*before* the check, so a decommissioned charger cannot block an invoice.
+
+### The duplicate no constraint can catch
+
+`acceptPossibleDuplicate` must be passed explicitly when `(vendor, serial)`
+cannot deduplicate. **Defaulting it to `true` would make a double-onboarding
+silent, which is how one physical charger ends up with two lifetime-energy
+counters** — and decision 7 says those follow the asset and are never erased,
+so the split would be permanent.
+
+### What a partial failure leaves behind
+
+Recorded as a value, `PARTIAL_FAILURE_CONTRACT`, so it cannot drift from the
+adapter that has to honour it. Two cases and no others: **inside the
+transaction, nothing is written**; **after commit but before the receipt
+write**, the rows exist and the receipt does not, so a retry finds the device
+already known, the placement already open, and either returns it or refuses by
+name. That is recoverable and not silent — the most that can be promised
+without the receipt write being inside the same transaction, which is where it
+belongs and where the Drizzle adapter puts it.
+
+**Tests — 15** (12 for the port, 3 for the defect it found). Suite **1,854
+passed / 1 skipped / 102 files**, `npm run check` **16 of 16**.
+
+---
+
 ## External state — running
 
 No push. No deploy. **No migration applied to any database — `0002`, `0003`,

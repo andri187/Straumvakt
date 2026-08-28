@@ -167,7 +167,24 @@ export interface ConnectorPlacementShare {
 
 export type ConnectorShareOutcome =
   | { kind: "counted"; shares: ConnectorPlacementShare[] }
-  | { kind: "unavailable"; reason: "no_placements_for_period" | "vendor_config_unavailable" };
+  | {
+      kind: "unavailable";
+      reason:
+        | "no_placements_for_period"
+        | "vendor_config_unavailable"
+        /**
+         * A placement whose device has NO connectors.
+         *
+         * Found by writing the first-placement path (fallback item 1), not by
+         * this file: a first onboarding with no BootNotification deliberately
+         * writes no EVSE and no connector rather than inventing one at index
+         * 1. Such a placement would have contributed nothing here — a
+         * MEASURED zero for a device we have simply never heard from, which
+         * is ledger note 22's exact failure reached from a direction nobody
+         * was watching. The period holds instead.
+         */
+        | "placement_without_connectors";
+    };
 
 /**
  * Decision 5, executed.
@@ -215,6 +232,13 @@ export function connectorSharesForPeriod(
       return { kind: "unavailable", reason: "vendor_config_unavailable" };
     }
     if (verdict.kind === "not_billable") continue;
+
+    // NOT a silent omission. See the reason's docblock: a placement with no
+    // connectors is a device we have never heard from, and skipping it would
+    // produce an invoice that looks complete and is short by one charger.
+    if (p.connectorIds.length === 0) {
+      return { kind: "unavailable", reason: "placement_without_connectors" };
+    }
 
     const held = overlapDays(p.period, window);
     for (const connectorId of p.connectorIds) {

@@ -12,21 +12,58 @@
   "end_tip": "df5529f",
   "dirty": 0,
   "commits": [
-    { "sha": "7507bc7", "phase": 1, "subject": "Migration 0004: the invoice number sequence store" },
-    { "sha": "454802a", "phase": 2, "subject": "Migration 0005: devices, identities and placements (ADR 0054 items 1-3)" },
-    { "sha": "501b82e", "phase": 3, "subject": "Migration 0007: the hierarchy, the vocabulary, the vendor config" },
-    { "sha": "76dd7ee", "phase": 4, "subject": "Migration 0008: a session is sealed and carries its own context" },
-    { "sha": "64770cb", "phase": 5, "subject": "Item 7: billing counts placement overlap, not current rows" },
-    { "sha": "df5529f", "phase": 6, "subject": "Items 10 and 13: attachDevice, detachDevice, and closing as a state" }
+    {
+      "sha": "7507bc7",
+      "phase": 1,
+      "subject": "Migration 0004: the invoice number sequence store"
+    },
+    {
+      "sha": "454802a",
+      "phase": 2,
+      "subject": "Migration 0005: devices, identities and placements (ADR 0054 items 1-3)"
+    },
+    {
+      "sha": "501b82e",
+      "phase": 3,
+      "subject": "Migration 0007: the hierarchy, the vocabulary, the vendor config"
+    },
+    {
+      "sha": "76dd7ee",
+      "phase": 4,
+      "subject": "Migration 0008: a session is sealed and carries its own context"
+    },
+    {
+      "sha": "64770cb",
+      "phase": 5,
+      "subject": "Item 7: billing counts placement overlap, not current rows"
+    },
+    {
+      "sha": "df5529f",
+      "phase": 6,
+      "subject": "Items 10 and 13: attachDevice, detachDevice, and closing as a state"
+    }
   ],
   "files_changed": 56,
   "tests": {
-    "baseline": { "passed": 1689, "skipped": 1, "failed": 0, "files": 92 },
-    "final": { "passed": 1839, "skipped": 1, "failed": 0, "files": 101 },
-    "added": 150,
+    "baseline": {
+      "passed": 1689,
+      "skipped": 1,
+      "failed": 0,
+      "files": 92
+    },
+    "final": {
+      "passed": 1854,
+      "skipped": 1,
+      "failed": 0,
+      "files": 102
+    },
+    "added": 165,
     "checks": "16 of 16",
     "dry_run": "9 of 9 cases",
-    "schema_consistency": { "tables": 85, "columns": 1038 },
+    "schema_consistency": {
+      "tables": 85,
+      "columns": 1038
+    },
     "fool_tests": 13
   },
   "gates_met": {
@@ -38,19 +75,44 @@
     "exception_detail": "gate 28 - assets.devices and assets.vendor_config_observations carry no org_id on purpose. A device is not tenanted (decision 1); tenancy is reached through the placement, and the vendor-config port scopes on device ids, returning out_of_scope distinct from never_observed."
   },
   "migrations": {
-    "generated": ["0004_tough_reaper", "0005_supreme_psylocke", "0006_heavy_cobalt_man", "0007_mean_overlord", "0008_worthless_mimic"],
+    "generated": [
+      "0004_tough_reaper",
+      "0005_supreme_psylocke",
+      "0006_heavy_cobalt_man",
+      "0007_mean_overlord",
+      "0008_worthless_mimic"
+    ],
     "applied": [],
     "note": "Every migration in this branch, including 0002 and 0003 from earlier rounds, remains generated and unexecuted. No database was connected to."
   },
   "schema_requests": {
     "channel": "docs/notes/2026-08-28-round-4-schema-requests.md on dev/market-rails",
     "responses": "docs/notes/2026-08-28-round-4-schema-responses.md on dev/core-billing-integration",
-    "seen": ["SR-1", "SR-2", "SR-3"],
-    "serviced": ["SR-1", "SR-2"],
-    "refused_as_specified": ["SR-3"],
-    "market_rails_tips_read": ["7cc591e", "ae99700", "d9a8b18"]
+    "seen": [
+      "SR-1",
+      "SR-2",
+      "SR-3"
+    ],
+    "serviced": [
+      "SR-1",
+      "SR-2"
+    ],
+    "refused_as_specified": [
+      "SR-3"
+    ],
+    "market_rails_tips_read": [
+      "7cc591e",
+      "ae99700",
+      "d9a8b18"
+    ]
   },
-  "fallback_items_done": [],
+  "fallback_items_done": [
+    {
+      "item": 1,
+      "title": "the first-placement write path",
+      "note": "design plus port; surfaced and fixed a live defect in placement-evidence.ts (a connectorless placement was a measured zero)"
+    }
+  ],
   "backlog_items_done": [],
   "blockers": [
     "ADR 0054 is committed on NO branch. It exists only as an untracked file in the canonical working tree at E:/Claude/Straumvakt/docs/adr/0054-devices-placements-and-effective-dating.md. One git clean destroys the specification for rounds 4 and 5. Coordinator action.",
@@ -60,10 +122,10 @@
     "Five Dalvegur chargers exist in the Zaptec portal with no row in our database. No predicate can see them; it under-bills and needs a reconciliation."
   ],
   "next_actions": [
-    "Fallback item 1 - the first-placement write path, which does not exist yet",
     "Fallback item 10 - the OCPI mapping note (EVSE.uid -> placement id)",
     "Fallback item 6 - the ocpp_identities retirement plan",
-    "Fallback item 9 - lifetime-counter maintenance, design only"
+    "Fallback item 9 - lifetime-counter maintenance, design only",
+    "Fallback item 8 - the round-4 revision of what stands between here and a real invoice"
   ],
   "external_state": {
     "push": false,
@@ -80,7 +142,9 @@
     "git_clean_reset_rebase_amend_force": false,
     "contracts_or_b_paths_edited": false,
     "zaptec_import_edited": false,
-    "branches_written_to": ["dev/core-billing-integration"],
+    "branches_written_to": [
+      "dev/core-billing-integration"
+    ],
     "fixture_values": "all synthetic; no checksum-valid kennitala, no real idTag, no token value, no personal row"
   },
   "very_tldr": "Six phases, six commits, five migrations generated and none applied. The invoice sequence is now gap-free and unique; devices, identities and placements are effective-dated with the temporal key emitted in both PostgreSQL forms; the ADR's double-invoice is a named test that proves the constraint refuses it and the rejected partial index permits it. Billing now counts placement overlap rather than current rows, which is the fix for a mid-month move billing the wrong host - and for Dalvegur it takes the connector count from 30 to 20. Three of B's schema requests answered, two serviced and one refused for creating a cross-tenant idempotency namespace. Two real defects found while writing the dry run: a dropped sequence state that was indistinguishable from correct output, and proration losing an eyrir per move."

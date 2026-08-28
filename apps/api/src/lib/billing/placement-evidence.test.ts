@@ -252,3 +252,44 @@ describe("the proration fork", () => {
     }
   });
 });
+
+describe("a placement with NO connectors — found by fallback item 1", () => {
+  it("holds the period rather than contributing a silent zero", () => {
+    // A first onboarding with no BootNotification deliberately writes no EVSE
+    // and no connector rather than inventing one at index 1. Before this, such
+    // a placement contributed nothing to the shares — a MEASURED zero for a
+    // device we have never heard from, which is ledger note 22's exact failure
+    // reached from a direction nobody was watching.
+    const p = place({ id: "p1", period: openEnded(at("2026-01-01T00:00:00Z")), connectorIds: [] });
+    expect(connectorSharesForPeriod([p], MARCH, ACTIVE)).toEqual({
+      kind: "unavailable",
+      reason: "placement_without_connectors",
+    });
+  });
+
+  it("holds even when OTHER placements in the same period are fine", () => {
+    // Skipping just the connectorless one would produce an invoice that looks
+    // complete and is short by one charger. The whole period holds.
+    const good = place({ id: "p-good", period: openEnded(at("2026-01-01T00:00:00Z")) });
+    const bare = place({
+      id: "p-bare",
+      deviceId: "device-2",
+      period: openEnded(at("2026-01-01T00:00:00Z")),
+      connectorIds: [],
+    });
+    const log = new Map([activeLog("device-1"), activeLog("device-2")]);
+    expect(connectorSharesForPeriod([good, bare], MARCH, log)).toMatchObject({
+      kind: "unavailable",
+      reason: "placement_without_connectors",
+    });
+  });
+
+  it("a vendor-DEACTIVATED connectorless placement is skipped before the check", () => {
+    // Order matters: a deactivated device is not billable at all, so its
+    // missing connectors are not a gap in anything. Holding on it would make a
+    // decommissioned charger block a whole invoice.
+    const bare = place({ id: "p1", period: openEnded(at("2026-01-01T00:00:00Z")), connectorIds: [] });
+    const log = new Map([activeLog(DEVICE, false)]);
+    expect(connectorSharesForPeriod([bare], MARCH, log)).toEqual({ kind: "counted", shares: [] });
+  });
+});
