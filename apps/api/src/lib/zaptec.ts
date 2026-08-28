@@ -237,20 +237,93 @@ export interface ZaptecChargerLite {
    */
   OperatingMode?: number;
 }
+/** The paged envelope Zaptec returns from /api/chargers. */
+export interface ZaptecPagedEnvelope<T> {
+  Data?: T[];
+  /** TOTAL number of pages. Zero or absent means a single page. */
+  Pages?: number;
+}
+
+/** Injected so pagination is testable without a socket. */
+export type FetchLike = (
+  url: string,
+  init?: { headers?: Record<string, string> },
+) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>;
+
+/**
+ * Zaptec page size. Comfortably above any single estate we operate.
+ */
+export const ZAPTEC_PAGE_SIZE = 100;
+
+/** Refuses to loop forever if the API reports a nonsense page count. */
+export const ZAPTEC_MAX_PAGES = 50;
+
+/**
+ * GET /api/chargers — every page.
+ *
+ * ── WHY THIS CHANGED, 2026-08-28 ────────────────────────────────────────
+ *
+ * This used to be one request returning `json?.Data ?? []`, and its own
+ * docblock said pagination was "via the `Pages` envelope Zaptec returns;
+ * default page size is large enough for typical fleets so we do not paginate
+ * yet".
+ *
+ * That was an assumption nobody had tested. The Dalvegur estate is 35 chargers
+ * in the portal against 30 rows in our database, and an unpaginated read is
+ * the first thing that would produce exactly that shape: a short page,
+ * silently truncated, with no error anywhere.
+ *
+ * **It is not proven to be the cause.** This round changes no live setting and
+ * calls no API, so the 30-of-35 gap stays open. What is now true is that
+ * pagination can no longer be the explanation, and `pagesRead` /
+ * `reportedPages` make the real count visible instead of inferred.
+ *
+ * ── THE SUBTLE PART ─────────────────────────────────────────────────────
+ *
+ * It stops on the ENVELOPE, not on a short page. A short page is also what the
+ * last page looks like, and treating "fewer than requested" as "the end" is
+ * the same class of mistake as the original defect.
+ */
 export async function listChargers(
   accessToken: string,
-): Promise<ZaptecResult<ZaptecChargerLite[]>> {
-  const res = await fetch(`${ZAPTEC_BASE}/api/chargers`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  }).catch(() => null);
-  if (!res) return { ok: false, error: { kind: "unreachable" } };
-  if (!res.ok) return { ok: false, error: { kind: "list", status: res.status } };
-  const json = (await res.json().catch(() => null)) as
-    | { Data?: ZaptecChargerLite[] }
-    | ZaptecChargerLite[]
-    | null;
-  if (Array.isArray(json)) return { ok: true, value: json };
-  return { ok: true, value: json?.Data ?? [] };
+  fetchImpl: FetchLike = fetch as unknown as FetchLike,
+): Promise<
+  ZaptecResult<ZaptecChargerLite[]> & { pagesRead?: number; reportedPages?: number }
+> {
+  const all: ZaptecChargerLite[] = [];
+  let pageIndex = 0;
+  let reportedPages: number | undefined;
+
+  for (;;) {
+    const url = `${ZAPTEC_BASE}/api/chargers?PageSize=${ZAPTEC_PAGE_SIZE}&PageIndex=${pageIndex}`;
+    const res = await fetchImpl(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    }).catch(() => null);
+    if (!res) return { ok: false, error: { kind: "unreachable" } };
+    if (!res.ok) return { ok: false, error: { kind: "list", status: res.status } };
+
+    const json = (await res.json().catch(() => null)) as
+      | ZaptecPagedEnvelope<ZaptecChargerLite>
+      | ZaptecChargerLite[]
+      | null;
+
+    // A bare array means an unpaged response; take it and stop.
+    if (Array.isArray(json)) {
+      all.push(...json);
+      return { ok: true, value: all, pagesRead: 1, reportedPages: 1 };
+    }
+
+    const page = json?.Data ?? [];
+    all.push(...page);
+    if (reportedPages === undefined) reportedPages = json?.Pages ?? 1;
+
+    pageIndex += 1;
+    if (pageIndex >= (reportedPages || 1)) break;
+    if (pageIndex >= ZAPTEC_MAX_PAGES) break;
+    if (page.length === 0) break;
+  }
+
+  return { ok: true, value: all, pagesRead: pageIndex, reportedPages };
 }
 
 /**

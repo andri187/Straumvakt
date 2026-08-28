@@ -61,3 +61,4 @@ export * from "./agreements/writer";
 
 // ── validity resolution (round 4) ──
 export * from "./resolution/validity";
+export * from "./vendor/config-observation";
