@@ -42,7 +42,21 @@ export const commandStatusEnum = ocppSchema.enum("CommandStatus", ["pending", "s
 export const hubKindEnum = roamingSchema.enum("HubKind", ["hubject", "gireve", "direct"]);
 export const cdrDirectionEnum = roamingSchema.enum("CdrDirection", ["inbound", "outbound"]);
 
-/** Prisma model `OcppIdentity` — ocpp.ocpp_identities */
+/**
+ * Prisma model `OcppIdentity` — ocpp.ocpp_identities
+ *
+ * ── MARKED FOR RETIREMENT (ADR 0054). NOT DELETED, NOT ALTERED. ───────────
+ *
+ * Superseded by `assets.device_identities`, which dates the identity instead
+ * of pinning it. The identity on the wire is a CREDENTIAL — it doubles as the
+ * HTTP Basic auth username and is a settable variable in OCPP 2.0.1 — so an
+ * operator keeping it across a unit swap, or changing it when a device moves
+ * tenant, must not be a data-model violation. Here it is one.
+ *
+ * Migration 0005 adds the successor and touches nothing here. Retirement is a
+ * separate, separately-approved migration after a reconciled backfill. Until
+ * then this table is live and the gateway is correct to resolve against it.
+ */
 export const ocppIdentities = ocppSchema.table(
   "ocpp_identities",
   {

@@ -18,7 +18,8 @@
 // explicit joins, and a wrong FK declaration would be a silent lie about
 // cascade behaviour.
 
-import { boolean, date, index, integer, jsonb, numeric, pgSchema, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { boolean, customType, date, index, integer, jsonb, numeric, pgSchema, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 export const assetsSchema = pgSchema("assets");
 export const energySchema = pgSchema("energy");
@@ -145,7 +146,27 @@ export const installations = propertiesSchema.table(
   ],
 );
 
-/** Prisma model `ChargingStation` — assets.charging_stations */
+/**
+ * Prisma model `ChargingStation` — assets.charging_stations
+ *
+ * ── MARKED FOR RETIREMENT (ADR 0054). NOT DELETED, NOT ALTERED. ───────────
+ *
+ * Superseded by `assets.devices` (the hardware, immortal) plus
+ * `assets.placements` (where it is, dated). This row conflates the two: it
+ * carries `org_id`, `installation_id`, `circuit_id` and the `site_assets`
+ * link ON THE HARDWARE, so a device that moves tenant has to become a
+ * different device, and `serial_number @unique` makes a warranty replacement
+ * at the same site a constraint violation.
+ *
+ * Migration 0005 adds the successors and touches nothing here. The retirement
+ * is a SEPARATE, separately-approved migration that runs only after a
+ * backfill has been written, reviewed and reconciled — adding a successor and
+ * dropping a predecessor in one migration cannot be rolled back without
+ * losing every row written in between.
+ *
+ * Until then this table is live and every existing reader is correct to use
+ * it. Do not add columns here; add them to `devices` or `placements`.
+ */
 export const chargingStations = assetsSchema.table(
   "charging_stations",
   {
@@ -326,3 +347,184 @@ export const circuits = propertiesSchema.table(
 /** Prisma model `SiteEnergyDaily` — reports.site_energy_daily */
 
 /** Prisma model `ChargerUptimeDaily` — reports.charger_uptime_daily */
+
+// ═════════════════════════════════════════════════════════════════════════
+// ADR 0054 — a device is immortal, a placement is dated
+//
+// Migration 0005. CREATE-only: nothing below replaces `charging_stations` or
+// `ocpp_identities`. Both are MARKED FOR RETIREMENT and removed in a later,
+// separately-approved step — see the retirement plan in the completion
+// artifact. A model that adds the successor and drops the predecessor in one
+// migration cannot be rolled back without losing the rows written in between.
+// ═════════════════════════════════════════════════════════════════════════
+
+/**
+ * A half-open UTC interval, `[from, until)`.
+ *
+ * ── THE DRIZZLE / RAW-SQL DIVERGENCE, DECLARED RATHER THAN SILENT ───────
+ *
+ * Drizzle has no range type and cannot express `WITHOUT OVERLAPS` or
+ * `EXCLUDE USING GIST` at all. So the split is:
+ *
+ *   this file       declares the COLUMN, so the type is real to every reader
+ *                   and every query, and the generated migration creates it;
+ *   migration 0005  carries the CONSTRAINT, hand-appended below the generated
+ *                   section under a banner saying so.
+ *
+ * The consequence is stated plainly rather than discovered later: the
+ * drizzle-kit snapshot does not know the constraint exists. A future
+ * `drizzle-kit generate` will not drop it — snapshots only diff what they can
+ * see — but it will also never recreate it, so the hand-written block is the
+ * only definition and must travel with the table. FOCUS rule 7 still holds:
+ * Drizzle owns the schema, the migration is generated, nothing is pushed.
+ *
+ * Open-ended is the unbounded range `[from,)`, never a NULL column. ADR 0054
+ * asked why not the simpler constraint: a nullable `until` forces
+ * COALESCE(until, 'infinity') into every billing predicate, indexes poorly,
+ * and makes "still there" and "we do not know" the same value.
+ */
+const tstzrange = customType<{ data: string }>({ dataType: () => "tstzrange" });
+
+/**
+ * assets.devices — the physical unit, and it is immortal.
+ *
+ * ADR 0054 decision 1. One row per physical charger, never deleted. It carries
+ * everything true of the HARDWARE irrespective of where it sits — lifetime
+ * energy, lifetime session count, firmware, warranty — and those follow the
+ * asset, never the site, and are never erased on transfer.
+ *
+ * Keyed by a surrogate id, not by the serial. The serial is a strong natural
+ * key and an unreliable one: OCPP 2.0.1 makes serialNumber optional,
+ * vendor-specific and capped at 25 characters, and OCPP 1.6 offers two
+ * competing serial fields plus a third for the meter. So (vendor, serial) is
+ * unique and NULLABLE — a device with no serial is a device we have, not a
+ * device we refuse. Postgres treats NULLs as distinct in a unique index, so
+ * unserialised devices do not collide with each other.
+ *
+ * The placement-shaped columns `charging_stations` carried — org_id,
+ * installation_id, circuit_id, the site_assets link — are deliberately ABSENT.
+ * They are facts about where a device is, and a device outlives every one of
+ * them.
+ */
+export const devices = assetsSchema.table(
+  "devices",
+  {
+    id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    vendor: text("vendor"),
+    model: text("model"),
+    /** Nullable by protocol reality, not by laxity. See the note above. */
+    serialNumber: text("serial_number"),
+    chargeBoxSerialNumber: text("charge_box_serial_number"),
+    meterType: text("meter_type"),
+    meterSerialNumber: text("meter_serial_number"),
+    firmwareVersion: text("firmware_version"),
+    /** From BootNotification, not invented at import time. */
+    firmwareObservedAt: timestamp("firmware_observed_at", { withTimezone: true, precision: 6, mode: "date" }),
+    hardwareVersion: text("hardware_version"),
+    iccid: text("iccid"),
+    imsi: text("imsi"),
+    /** Lifetime counters. They follow the asset, never the site. Absent is
+     *  unavailable, never zero — ledger note 22 — which is why every one of
+     *  these is nullable and paired with its own observed-at. */
+    lifetimeKwh: numeric("lifetime_kwh", { precision: 14, scale: 3 }),
+    lifetimeKwhObservedAt: timestamp("lifetime_kwh_observed_at", { withTimezone: true, precision: 6, mode: "date" }),
+    lifetimeSessionCount: integer("lifetime_session_count"),
+    lifetimeSessionCountObservedAt: timestamp("lifetime_session_count_observed_at", { withTimezone: true, precision: 6, mode: "date" }),
+    /** Warranty follows the hardware, and is a real date rather than
+     *  install-plus-five-years invented by an importer. */
+    warrantyExpires: date("warranty_expires", { mode: "date" }),
+    manufacturedAt: date("manufactured_at", { mode: "date" }),
+    retiredAt: timestamp("retired_at", { withTimezone: true, precision: 6, mode: "date" }),
+    retiredReason: text("retired_reason"),
+    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().$defaultFn(() => new Date()).$onUpdateFn(() => new Date()),
+  },
+  (t) => [
+    uniqueIndex().on(t.vendor, t.serialNumber),
+    index().on(t.serialNumber),
+  ],
+);
+
+/**
+ * assets.device_identities — the OCPP identity, dated.
+ *
+ * ADR 0054 decision 2. device x identity_string x [from, until).
+ *
+ * The identity on the wire is a CREDENTIAL, not a hardware fact: it doubles as
+ * the HTTP Basic auth username, and in OCPP 2.0.1 it is a settable
+ * SecurityCtrlr Identity variable. Operators keep it when swapping a faulty
+ * unit at one site, and must change it when a device moves tenant. Neither
+ * operation may be a data-model violation — which is exactly what a globally
+ * unique identity column on the device row made them.
+ *
+ * Two temporal constraints, both in 0005's hand-written block:
+ *   (device_id, period)        one identity per device at a time
+ *   (identity_string, period)  one device per identity at a time, which is
+ *                              the half that matters on the wire, since the
+ *                              gateway resolves an inbound connection by it
+ */
+export const deviceIdentities = assetsSchema.table(
+  "device_identities",
+  {
+    id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    deviceId: uuid("device_id").notNull(),
+    identityString: text("identity_string").notNull(),
+    /** `[from, until)`. Open-ended is `[from,)`, never NULL. */
+    period: tstzrange("period").notNull(),
+    /** Who set it and why, so a change is answerable afterwards. */
+    assignedByUserId: uuid("assigned_by_user_id"),
+    note: text("note"),
+    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [
+    index().on(t.deviceId),
+    index().on(t.identityString),
+  ],
+);
+
+/**
+ * assets.placements — where a device is, and when it was there.
+ *
+ * ADR 0054 decision 3. device x installation x [from, until), carrying what
+ * the device row used to: org, installation, circuit, site.
+ *
+ * public_id is the stable public identifier and it exists FROM DAY ONE. That
+ * is the OCPI EVSE.uid, which the specification says can never be changed,
+ * modified or renamed — and OCPI explicitly warns against using a physical
+ * hardware identifier for it, because redeploying the same unit at another
+ * Location then breaks uniqueness. OCPI's EVSE is our placement, not our
+ * device. Free now; impossible to retrofit once anything external holds a
+ * reference to it.
+ *
+ * Closing a placement is a STATE, not a delete: OCPI requires status REMOVED
+ * rather than removal. The period's upper bound is what closes; the row stays,
+ * and the billing predicate reads the interval.
+ */
+export const placements = assetsSchema.table(
+  "placements",
+  {
+    id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    /** The OCPI EVSE.uid. Issued once, never changed. */
+    publicId: uuid("public_id").notNull().$defaultFn(() => crypto.randomUUID()),
+    deviceId: uuid("device_id").notNull(),
+    /** Tenancy on the row — FOCUS rule 5. The device row has no org, because
+     *  a device that moves tenant would otherwise have to be two devices. */
+    orgId: uuid("org_id").notNull(),
+    installationId: uuid("installation_id").notNull(),
+    siteId: uuid("site_id"),
+    circuitId: uuid("circuit_id"),
+    /** `[from, until)`. Open-ended is `[from,)`, never NULL. */
+    period: tstzrange("period").notNull(),
+    attachedByUserId: uuid("attached_by_user_id"),
+    detachedByUserId: uuid("detached_by_user_id"),
+    detachReason: text("detach_reason"),
+    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().$defaultFn(() => new Date()).$onUpdateFn(() => new Date()),
+  },
+  (t) => [
+    uniqueIndex().on(t.publicId),
+    index().on(t.deviceId),
+    index().on(t.orgId),
+    index().on(t.installationId),
+  ],
+);

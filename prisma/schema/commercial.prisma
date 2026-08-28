@@ -524,13 +524,19 @@ model AgreementClause {
   defaultBearerRef    String?             @map("default_bearer_ref") @db.Uuid // required when defaultBearerType=trd
   defaultRateRefCode  String?             @map("default_rate_ref_code")       // null when factor has no rate (rare)
   allocationJson      Json                @map("allocation_json") @db.JsonB
+  /// SR-1 / ADR 0054. `[from, until)`. Prisma cannot read or write a range;
+  /// migration 0006 gives the column a DEFAULT so `create()` still works, and
+  /// every path that needs the interval is Drizzle or raw SQL by design.
+  period              Unsupported("tstzrange")
   createdAt           DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt           DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   agreement           Agreement           @relation(fields: [agreementId], references: [id], onDelete: Cascade)
   costFactor          AgreementCostFactor @relation(fields: [costFactorId], references: [id])
 
-  @@unique([agreementId, costFactorId])
+  // Uniqueness moved onto the interval (migration 0006); Prisma cannot
+  // express a temporal key, so this is an index here and a constraint there.
+  @@index([agreementId, costFactorId])
   @@map("agreement_clauses")
   @@schema("agreements")
 }
@@ -568,11 +574,14 @@ model DriverGroupMembership {
   driverGroupId   String              @map("driver_group_id") @db.Uuid
   userId          String              @map("user_id") @db.Uuid
   addedAt         DateTime            @default(now()) @map("added_at") @db.Timestamptz(6)
+  /// SR-2 / ADR 0054 decision 4. `[from, until)`. See AgreementClause.period.
+  period          Unsupported("tstzrange")
 
   driverGroup     DriverGroup         @relation(fields: [driverGroupId], references: [id], onDelete: Cascade)
   user            User                @relation("DriverGroupMembershipUser", fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([driverGroupId, userId])
+  // Uniqueness moved onto the interval (migration 0006).
+  @@index([driverGroupId, userId])
   @@index([userId])
   @@map("driver_group_memberships")
   @@schema("agreements")

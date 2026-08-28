@@ -21,7 +21,8 @@
 // explicit joins, and a wrong FK declaration would be a silent lie about
 // cascade behaviour.
 
-import { bigint, boolean, date, index, integer, jsonb, numeric, pgSchema, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { bigint, boolean, customType, date, index, integer, jsonb, numeric, pgSchema, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 export const agreementsSchema = pgSchema("agreements");
 export const billingSchema = pgSchema("billing");
@@ -315,6 +316,22 @@ export const agreements = agreementsSchema.table(
   ],
 );
 
+/**
+ * A half-open UTC interval, `[from, until)`. ADR 0054's temporal column.
+ *
+ * DUPLICATED, ON PURPOSE, from packages/shared/src/db/assets.ts. The files in
+ * this directory are deliberately independent — the deps-graph gate keeps them
+ * that way, and one db file importing another would create the first edge.
+ * Drizzle's `customType` is a declaration, not state: two of them describe the
+ * same Postgres type and cannot drift into disagreeing about it, because the
+ * only thing either says is the string "tstzrange".
+ *
+ * The CONSTRAINT is not here. Drizzle cannot express `WITHOUT OVERLAPS` or
+ * `EXCLUDE`; migration 0006 carries it, hand-written, and the snapshot does not
+ * know it exists. Same divergence as 0005, declared the same way.
+ */
+const tstzrange = customType<{ data: string }>({ dataType: () => "tstzrange" });
+
 /** Prisma model `AgreementClause` — agreements.agreement_clauses */
 export const agreementClauses = agreementsSchema.table(
   "agreement_clauses",
@@ -326,11 +343,17 @@ export const agreementClauses = agreementsSchema.table(
     defaultBearerRef: uuid("default_bearer_ref"),
     defaultRateRefCode: text("default_rate_ref_code"),
     allocationJson: jsonb("allocation_json").notNull(),
+    /** `[from, until)`. SR-1. Open-ended is `[from,)`, never NULL. */
+    period: tstzrange("period").notNull().default(sql`tstzrange(now(), NULL, '[)')`),
     createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().$defaultFn(() => new Date()).$onUpdateFn(() => new Date()),
   },
   (t) => [
-    uniqueIndex().on(t.agreementId, t.costFactorId),
+    // The pair unique is GONE — see migration 0006. It said "one clause per
+    // factor, ever", which is exactly what SR-1 needs to stop being true: a
+    // rate that changed in July is two clauses for one factor. Uniqueness
+    // moved onto the INTERVAL, and Drizzle cannot declare that.
+    index().on(t.agreementId, t.costFactorId),
   ],
 );
 
@@ -360,9 +383,23 @@ export const driverGroupMemberships = agreementsSchema.table(
     driverGroupId: uuid("driver_group_id").notNull(),
     userId: uuid("user_id").notNull(),
     addedAt: timestamp("added_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
+    /**
+     * `[from, until)`. SR-2 / ADR 0054 decision 4.
+     *
+     * `added_at` stays: it is when the ROW was written, which is an audit
+     * fact and not always the same instant as when the membership became
+     * valid. `period` is the validity, and it is what every access check and
+     * every driver-count reads.
+     */
+    period: tstzrange("period").notNull().default(sql`tstzrange(now(), NULL, '[)')`),
   },
   (t) => [
-    uniqueIndex().on(t.driverGroupId, t.userId),
+    // UNIQUE (driver_group_id, user_id) is GONE — migration 0006. It made
+    // move-out-then-move-in inexpressible: the second row collided with the
+    // first, so the only way to re-add a driver was to DELETE the history of
+    // their first stay. Uniqueness is on the interval now, which Drizzle
+    // cannot declare, so the plain index is what remains here.
+    index().on(t.driverGroupId, t.userId),
     index().on(t.userId),
   ],
 );
