@@ -7,6 +7,8 @@
 
 import { describe, expect, it, vi } from "vitest";
 import {
+  gatherConnectorEvidence,
+  gatherDriverEvidence,
   readConnectorActivityCount,
   readDriverActivityCount,
   writeConnectorActivity,
@@ -315,4 +317,62 @@ it("the fake implements the surface the repository actually calls", () => {
   expect(typeof (f.db as unknown as { insert: unknown }).insert).toBe("function");
   expect(typeof (f.db as unknown as { select: unknown }).select).toBe("function");
   vi.resetAllMocks();
+});
+
+describe("attribution keys on started_at, and only on started_at", () => {
+  // Gap 1 in docs/specs/flat-fee-billing-coverage.md, closed.
+  //
+  // A session that starts on 31 March at 22:00 and stops on 1 April at 02:00
+  // belongs to March, once. Counted in both months it is double-billed;
+  // counted in neither it is lost. That is true today BY CONSTRUCTION — every
+  // window predicate reads `started_at` — and "true by construction" is a
+  // claim about code nobody has asserted against. A future writer keying on
+  // `stopped_at`, or adding a `stopped_at` term "for completeness", would
+  // break it and every other test in this file would stay green.
+
+  function captureSql() {
+    const statements: string[] = [];
+    const db = {
+      execute: async (node: unknown) => {
+        statements.push(sqlLiterals(node));
+        return { rows: [] };
+      },
+      select: () => ({ from: () => ({ where: async () => [] }) }),
+    } as unknown as Db;
+    return { db, statements };
+  }
+
+  it("the connector session window reads started_at and never stopped_at", async () => {
+    const { db, statements } = captureSql();
+    await gatherConnectorEvidence(db, PERIOD, PLATFORM);
+    const sessionSql = statements.find((s) => s.includes("charging.sessions"));
+    expect(sessionSql).toBeDefined();
+    expect(sessionSql).toContain("s.started_at >=");
+    expect(sessionSql).toContain("s.started_at <");
+    // The assertion that matters: no stopped_at term anywhere in the window.
+    expect(sessionSql).not.toContain("stopped_at");
+    expect(sessionSql).not.toContain("ended_at");
+  });
+
+  it("the driver window reads started_at too, so the two cannot disagree", async () => {
+    // A driver counted in April for a session the connector counted in March
+    // would make one session bill two months on two different lines.
+    const { db, statements } = captureSql();
+    await gatherDriverEvidence(db, PERIOD, PLATFORM);
+    const sql = statements.join("\n");
+    expect(sql).toContain("l.started_at >=");
+    expect(sql).not.toContain("stopped_at");
+  });
+
+  it("the placement window uses OVERLAP, which is a different rule on purpose", async () => {
+    // Sessions attribute by a point in time; placements by overlap of an
+    // interval. Both are correct and they are not the same rule — a placement
+    // keyed on its start would lose every device installed before the month.
+    const { db, statements } = captureSql();
+    await gatherConnectorEvidence(db, PERIOD, PLATFORM);
+    const placementSql = statements.find((s) => s.includes("assets.placements"));
+    expect(placementSql).toBeDefined();
+    expect(placementSql).toContain("p.period &&");
+    expect(placementSql).toContain("tstzrange(");
+  });
 });

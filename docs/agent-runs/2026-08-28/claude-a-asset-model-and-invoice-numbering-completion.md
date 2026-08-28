@@ -1331,6 +1331,89 @@ Suite **1,869 passed / 1 skipped / 104 files**, `npm run check` **16 of 16**.
 
 ---
 
+## §11 fallback — item 4: Prisma → Drizzle in the billing tree
+
+**Assessed and deliberately not done, with the reason stated rather than
+skipped.**
+
+FOCUS rule 1's exception is *touch it, convert it*, and I touched two Prisma
+files this round: `billing-enrichment.ts` and `billing-driver-contracts.ts`.
+Both were touched to fix a **cross-tenant leak**.
+
+`billing-enrichment.ts` is the tractable one — five flat call sites, **zero
+`include:`**, already using the two-pass batch-lookup pattern.
+`billing-driver-contracts.ts` is not: nested `include` three levels deep
+through `user`, `driverGroup` and `agreement`.
+
+**Neither was converted, and the argument is the same one that made every
+Drizzle adapter in this round "written and never executed" — read the other
+way round.**
+
+A NEW path that has never run costs nothing by being unexecuted: nothing
+depended on it yesterday. Converting a **working** read path to Drizzle on a
+branch with no database means replacing code that demonstrably works with code
+that cannot be run at all — and doing it in the same commit as a security fix,
+so the tenancy change becomes unreviewable inside the rewrite.
+
+**What would make it safe:** a database to run the converted query against, or
+a parity harness that runs both and compares. Neither exists in this lane, and
+both are larger than the conversion.
+
+**Recorded as owed**, not waived: `billing-enrichment.ts` is the one to take
+first, and it is small.
+
+---
+
+## §11 fallback — item 5: the flat-fee scenarios
+
+`docs/specs/flat-fee-billing.feature` — **34 scenarios**, and
+`docs/specs/flat-fee-billing-coverage.md` mapping each one to a test or to a
+named gap.
+
+**Not executable, on purpose.** There is no Cucumber runner here and adding one
+is a build change nobody asked for. What these are is the **acceptance
+language**: the sentences an operator, an accountant and a host would each
+recognise, written down before a UI exists to argue about them in.
+
+Every case §11 names is present — month boundary, org with no connectors, org
+added mid-period, **device moved mid-period**, cap edge, disputed line, a
+period that holds, a re-run after correction, an asserted connector, and a
+deactivated charger still in the vendor portal.
+
+**The coverage map is what keeps the feature file honest: 24 covered, 10 gaps.**
+A scenario with no test is a finding, and the gaps have a shape:
+
+- **Eight of the ten are one gap wearing different clothes** — the fixture
+  proves the decision and the SQL has never run, because no database has these
+  migrations applied. That is this lane's deliberate shape, and it means the
+  acceptance language is, for those rows, a promise rather than a fact.
+- **Gap 3** — the cap applying to a prorated total — is unbuilt work with
+  Andri's decision attached.
+- **Gap 4** — five portal chargers with no row here — is **not a software gap
+  at all**. No amount of testing reaches it; it needs a reconciliation against
+  the vendor.
+
+### Gap 1 was closed while writing the map
+
+Which is the argument for writing it. *"A session that straddles the month
+boundary counts once, in March"* was **true by construction and asserted
+nowhere** — every window predicate reads `started_at`, and a future writer
+keying on `stopped_at`, or adding a `stopped_at` term "for completeness", would
+break it while every other test stayed green.
+
+Three tests now pin it: the session window and the driver window each read
+`started_at` and contain **no** `stopped_at` term, and — the one worth having —
+the **placement** window uses `&&` instead, because sessions attribute by a
+point in time and placements by overlap of an interval. **Both are correct and
+they are not the same rule**, and a placement keyed on its start would lose
+every device installed before the month began.
+
+Fool test 17: the session window keyed on `stopped_at` → **1 failed**.
+
+Suite **1,872 passed / 1 skipped / 104 files**, `npm run check` **16 of 16**.
+
+---
+
 ## External state — running
 
 No push. No deploy. **No migration applied to any database — `0002`, `0003`,

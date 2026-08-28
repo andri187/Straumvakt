@@ -52,19 +52,19 @@
       "files": 92
     },
     "final": {
-      "passed": 1869,
+      "passed": 1872,
       "skipped": 1,
       "failed": 0,
       "files": 104
     },
-    "added": 180,
+    "added": 183,
     "checks": "16 of 16",
     "dry_run": "9 of 9 cases",
     "schema_consistency": {
       "tables": 85,
       "columns": 1038
     },
-    "fool_tests": 16
+    "fool_tests": 17
   },
   "gates_met": {
     "total": 31,
@@ -121,6 +121,16 @@
       "item": 3,
       "title": "the missing-orgIdParam gates",
       "note": "2 of 33 paid: billing-enrichment (stale reason corrected) and billing-driver-contracts (?orgId= was the only confinement and it is caller-supplied; rows carry email, displayName and phone). 31 remain, listed by name. Not swept."
+    },
+    {
+      "item": 4,
+      "title": "Prisma to Drizzle in the billing tree",
+      "note": "ASSESSED AND NOT DONE, with the reason recorded. Converting a working read path to code that cannot be run, in the same commit as a security fix, is the inverse of the argument that makes the new Drizzle adapters safe to leave unexecuted. billing-enrichment.ts is the tractable one and is recorded as owed."
+    },
+    {
+      "item": 5,
+      "title": "the flat-fee scenarios",
+      "note": "34 scenarios plus a coverage map: 24 covered, 10 gaps. Eight of the ten are one gap - the SQL has never run. Gap 1 was closed while writing the map."
     }
   ],
   "backlog_items_done": [],
