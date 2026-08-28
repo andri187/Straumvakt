@@ -274,3 +274,138 @@ to one definition in `resolution/validity.ts`, re-exported from the other.
 ### Checks after Phases 2–3
 
 `npm run check` **all 14 passed** · `npx vitest run` **1059 passed** (+27).
+
+---
+
+## Phase 4 — assembly: the clean shell in one tree
+
+**`dev/clean-shell-assembly` created from `7cc591e`** exactly as gated, then
+`dev/market-rails` (round 4 work) merged, then **the frozen commit `8274256`** —
+the literal SHA, never A's branch head.
+
+**A worktree note, because rule 1 forbids re-pointing this one and rule 2
+forbids a new folder under `E:\Claude`:** the assembly worktree lives in the
+session scratchpad, outside both constraints.
+
+### Conflicts — two, both mechanical
+
+| File | Side taken | Why, in one sentence |
+|---|---|---|
+| `package.json` | **union of both** | Both lanes added npm scripts to the same object; keeping either alone would silently drop the other's gates. |
+| `docs/architecture/dependency-graph.md` | `--ours`, then **regenerated** | It is generated output, so merging two generated forms is meaningless; regenerated from the assembled tree instead. |
+
+`scripts/check-all.mjs` **auto-merged cleanly**, carrying both lanes' gates —
+16 named checks plus typecheck.
+
+### The assembled tree is green
+
+| | Result |
+|---|---|
+| `npm run check` | **all 17 passed** |
+| `npx vitest run` | **1860 passed, 1 skipped, 98 files** |
+| gateway suite | **176 passed** |
+| `tsc --noEmit` | **0 errors** |
+
+### The delta, and why it is not the sum
+
+| | Test files |
+|---|---|
+| `dev/market-rails` (mine) | 89 |
+| `8274256` (A's) | 115 |
+| common ancestor `a81860b` | 83 |
+| **assembled** | **121** |
+
+**89 + 115 − 83 = 121, exactly.** The shared round-2 baseline is counted once
+rather than twice. 1860 assembled against my 1059 puts A's non-shared
+contribution at 801 — and the totals add cleanly because neither lane edited
+the other's test files, which is the boundary working.
+
+### GATE 23 — both dry runs, one tree, in sequence
+
+Both executed. **Both exit 0.** `dry-run-onboard-org.mts --case happy` reaches
+INVOICEABLE and constructs `SV-2026-000001`; `dry-run-first-invoice.mts` issues
+`SV-2026-000001` for 30 connectors and 2 drivers at **7.564,00 kr**.
+
+### GATE 24 — THEY DO NOT HAND OFF, and that is the finding
+
+Running in one tree is not the same as handing off.
+
+| | onboard run | invoice run |
+|---|---|---|
+| Org | `org-dryrun`, "Dry Run Host ehf." | hardcoded `ORG_ID`, "Hysill A ehf.", Dalvegur |
+| Period | 2026-07-01 … 07-31 | `{ year: 2026, month: 3 }`, a module constant |
+| Document number | `SV-2026-000001` | **`SV-2026-000001`** |
+| Input surface | `--case` | `--case`, `--all`, `--json` — **no org input at all** |
+
+**Four distinct gaps:**
+
+1. **No shared org.** The invoice run's host is a module-level constant
+   (`scripts/dry-run-first-invoice.mts:108-113`), not an argument.
+2. **No shared period.** July against March.
+3. **No shared sequence — and this one is not cosmetic.** Both allocate
+   `SV-2026-000001` from independent sequence state. In production that is two
+   documents carrying one number, which is the single thing gap-free numbering
+   exists to prevent.
+4. **No handoff artifact.** The onboard run's output is a printed report; the
+   invoice run's input is a literal. Nothing passes between them.
+
+**What they DO share, and it is real:** the invoice run imports my invoice
+contracts — the header renderer, the document model, the delivery log. So the
+*contract* is genuinely integrated; the *data* is not.
+
+**The fix is one function**, and Phase 5 names it:
+`issueInvoiceFromStatement(statement, org, sequence)`. The invoice run needs to
+accept an org and a period rather than declaring them, and `assessOrgReadiness`
+is exactly the precondition its generator already assumes. **That is one
+function wide, and it is the most valuable thing a round 5 could start with.**
+
+---
+
+## Phase 5 — the duplication verdict
+
+Delivered as `docs/notes/2026-08-28-duplication-verdict.md`.
+
+**Two of the three named "pairs" are not pairs**, and saying so is the useful
+part:
+
+- **Delivery state machines — a real pair.** Verdict: **keep A's** (307 LOC,
+  35 tests, wired, rich provider taxonomy) and port three things from mine: a
+  terminal `unknown` that never auto-retries, `delivered` distinct from `sent`
+  (A's `sent` is a provider ack, not a receipt), and the multi-channel roll-up.
+  Picked on capability, not authorship. Five-step retirement plan; **nothing
+  deleted**.
+- **Document models — not a pair.** `StatementDocument` is what a period cost;
+  `InvoiceDocument` is what gets issued. A pipeline with a missing function
+  between them — the same function Phase 4's gap needs.
+- **Active-connector derivations — not a pair, and I had it wrong.** A's
+  `activity-source.ts` derives; my `org-readiness.ts` only checks a supplied
+  number. The action is on **my** module: it should take `Evidence<number>` so
+  an unanswerable source is distinguishable from a genuine zero. **Ledger note
+  22 applied to my own code** — it currently expresses "found nothing" and
+  "could not look" identically, which is the exact defect I have been finding
+  elsewhere.
+
+### FINDING 5-A — `createDriver` is defined and never called
+
+`create-driver.ts:143` exports `createDriver` — its own docblock calls it *"the
+single source of truth for what a driver IS"* — and it is the module that
+inserts the `virtual_rfid` idToken described as *"the invariant the other four
+paths were missing"*.
+
+**Nothing calls it.** The only other `createDriver*` hits in the assembled tree
+are `createDriverInvite`, a different function in a different file.
+
+**This corrects my own round-3 conclusion.** I recorded the 2026-08-08
+missing-idToken defect as FIXED, citing this code. The accurate statement is
+that **the fix exists as an unwired module** — the code that would insert the
+idToken is not on any live path. Round 3's other two invite conclusions are
+unaffected: the ADR 0053 hijack fix and the claim-then-redeem flow are both in
+live route files with callers.
+
+### The 13 orphans
+
+Measured myself, because the handover's list is not enumerated in any document
+I can reach — **13 genuine library orphans, 2,812 LOC**, each dispositioned in
+one line. The scan's limits are stated plainly: it cannot see dynamic imports,
+and it counts standalone entry points as orphans, so probe scripts and
+npm-invoked gates were excluded by hand.
