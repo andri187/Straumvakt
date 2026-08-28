@@ -52,19 +52,19 @@
       "files": 92
     },
     "final": {
-      "passed": 1863,
+      "passed": 1869,
       "skipped": 1,
       "failed": 0,
-      "files": 103
+      "files": 104
     },
-    "added": 174,
+    "added": 180,
     "checks": "16 of 16",
     "dry_run": "9 of 9 cases",
     "schema_consistency": {
       "tables": 85,
       "columns": 1038
     },
-    "fool_tests": 15
+    "fool_tests": 16
   },
   "gates_met": {
     "total": 31,
@@ -116,6 +116,11 @@
       "item": 2,
       "title": "census row 104 - the cross-tenant enrichment view",
       "note": "both halves were unconfined; the summary was the worse one. Required restrictToOrgIds, shared tenantWhere, 9 tests, 2 fool tests."
+    },
+    {
+      "item": 3,
+      "title": "the missing-orgIdParam gates",
+      "note": "2 of 33 paid: billing-enrichment (stale reason corrected) and billing-driver-contracts (?orgId= was the only confinement and it is caller-supplied; rows carry email, displayName and phone). 31 remain, listed by name. Not swept."
     }
   ],
   "backlog_items_done": [],

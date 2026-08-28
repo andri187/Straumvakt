@@ -1258,6 +1258,79 @@ Suite **1,863 passed / 1 skipped / 103 files**, `npm run check` **16 of 16**.
 
 ---
 
+## §11 fallback — item 3: the `missing-orgIdParam` gates
+
+The allowlist held **36 file:verb pairs across 75 gate occurrences**, of which
+33 still read *"unscoped when this guard was introduced, 2026-08-11"*. The
+note's own rule is that these are *"worked down deliberately rather than in a
+sweep nobody can review"*, so this is a slice, not a pass.
+
+**Two entries paid in this round**, both in the billing tree, both with the
+enforcement in the repository and a test that fails when it is removed.
+
+### `billing-enrichment.ts` — the entry I made stale, corrected
+
+Fallback item 2 scoped it and left the allowlist saying it was unscoped. That
+line now reads what the other two scoped entries read: **the gate has no
+`orgIdParam` and that is deliberate**, because the tenant comes from the
+caller's memberships and not from a path parameter, with the enforcement named.
+An allowlist whose reasons have gone stale is worse than a shorter one — it
+records debt that has been paid as debt that is outstanding.
+
+### `billing-driver-contracts.ts` — worse in kind than row 104
+
+`listDriverMemberships` and `getDriverContractsTiles` both took an **optional
+`orgId` read straight from the query string**, and `null` meant every row.
+Mounted behind `billing.read`, which `requireAdmin` grants to any org member.
+
+**A caller-supplied filter is not a tenancy control.** It confines the query
+only for callers who choose to send it — which is exactly the set of callers
+who were not the threat.
+
+And this leak is different in kind from the enrichment one: those rows carry
+`email`, `displayName` and `phone`. **Operational data versus personal data
+about people who are not the caller's drivers.**
+
+Fixed by reusing `decideLedgerAccess` — the same decision function the session
+ledger uses — rather than writing a third variant of it. That buys the two
+answers the old code could not give:
+
+- naming **someone else's** org is a **403**, not a quiet narrowing to your own
+  rows. Asking for something you may not have is a different act from omitting
+  the parameter, and it deserves its own answer.
+- a caller with **no memberships** is denied outright rather than handed the
+  table. `resolveOrgScope` returns `{ all: false, orgIds: [] }` for that
+  caller, and `[]` and `null` both look falsy and mean opposite things — which
+  is asserted directly as its own test.
+
+Both functions take a **required** `restrictToOrgIds` through one shared
+`ownerOrgWhere`, so the tile strip cannot be confined differently from the list
+beneath it. The requested `?orgId=` **intersects** with the allow-list rather
+than replacing it, so a bug in the route cannot widen the answer in the
+repository.
+
+**Tests — 6.** Fool test 16: the empty allow-list falling into `{}` → **2
+failed**.
+
+### What remains, and it is not a small number
+
+**31 file:verb pairs still carry the 2026-08-11 reason.** They are listed in
+`scripts/check-orgid-param.mjs`, each is a debt rather than an approval, and
+the `vanished` failure mode means paying one and forgetting to delete its entry
+is itself a build failure. The remaining billing-tree entries are
+`billing-contracts`, `billing-cost-centers`, `billing-cost-factors` (read and
+write), `billing-dso`, `billing-electricity`, `billing-rate-references` (read
+and write), `billing-tariff-detail` and `billing-tariff-mgmt`. The rest are
+chargers, circuits, installations and sites, which are outside this lane.
+
+**Not started rather than half-done**, deliberately: each needs its repository
+scoped and a test, and a sweep of nine surfaces in one commit is the thing the
+allowlist exists to prevent.
+
+Suite **1,869 passed / 1 skipped / 104 files**, `npm run check` **16 of 16**.
+
+---
+
 ## External state — running
 
 No push. No deploy. **No migration applied to any database — `0002`, `0003`,
