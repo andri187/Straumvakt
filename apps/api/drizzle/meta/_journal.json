@@ -29,6 +29,13 @@
       "when": 1787166621806,
       "tag": "0003_handy_stranger",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1787940364011,
+      "tag": "0004_tough_reaper",
+      "breakpoints": true
     }
   ]
 }

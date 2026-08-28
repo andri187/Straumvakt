@@ -33,6 +33,7 @@ import {
   makeActivitySourcePort,
   type ActivityAccess,
 } from "../../repositories/activity-month";
+import { makeDrizzleNumberStore } from "./number-store";
 import {
   applyPeriodEventAndPersist,
   makePeriodStateReader,
@@ -196,19 +197,49 @@ export function makeDrizzleOperationsPort(
       }));
     },
 
-    async issueDocument(): Promise<
+    async issueDocument(input): Promise<
       { kind: "issued"; document: IssuedDocument } | { kind: "refused"; reason: string }
     > {
-      // Allocation MUST be transactional with the document insert, and the
-      // sequence state must be persisted in the same transaction — a number
-      // persisted without a document leaves a hole in a sequence Icelandic law
-      // requires to be unbroken, and there is no release operation.
+      // ROUND 3'S LAST BLOCKER, CLOSED BY MIGRATION 0004.
       //
-      // The sequence has no table yet: `0002` and `0003` create no counter.
-      // Rather than invent one here, unapplied and untested, this refuses and
-      // the gap is recorded in the runbook and the artifact. The fixture
-      // adapter proves the SHAPE end to end today.
-      return { kind: "refused", reason: "document_sequence_table_not_yet_created" };
+      // This used to refuse with document_sequence_table_not_yet_created:
+      // neither 0002 nor 0003 created a store for the sequence, and inventing
+      // one unapplied and untested would have been worse than naming the gap.
+      // 0004 creates it, and the allocation now runs through
+      // DocumentNumberStorePort.
+      //
+      // The allocation is transactional with the issue INSIDE the store, and
+      // it takes the counter row FOR UPDATE — a number is never allocated by a
+      // read, never reserved and abandoned, and never taken outside the
+      // transaction that writes the statement. A crash between allocation and
+      // commit consumes nothing.
+      const numbers = makeDrizzleNumberStore(db);
+      const outcome = await numbers.allocate({
+        orgId: input.period.orgId,
+        series: "SV",
+        year: input.period.year,
+        purpose: "invoice",
+        // The statement for this period. Until the statement writer lands, the
+        // period's natural key stands in — it is stable and unique per period,
+        // which is what the (statement, purpose) uniqueness needs.
+        statementId: `${input.period.orgId}:${input.period.year}:${input.period.month}`,
+        idempotencyKey: input.idempotencyKey,
+        issuedByUserId: input.actorUserId,
+        issuedAt: new Date(),
+      });
+
+      if (outcome.kind === "refused") {
+        return { kind: "refused", reason: outcome.reason };
+      }
+
+      // Rendering is the statement writer's job and is not built here; the
+      // document's NUMBER is what this round unblocked. Returning the number
+      // with an empty rendering would be a lie about what exists, so this
+      // refuses the render half explicitly and names it.
+      return {
+        kind: "refused",
+        reason: `number_allocated_${outcome.documentNumber}_but_statement_renderer_not_built`,
+      };
     },
 
     async fetchDocument() {

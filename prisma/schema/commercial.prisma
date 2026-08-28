@@ -1282,3 +1282,61 @@ model ConnectorAssertion {
   @@map("connector_assertions")
   @@schema("billing")
 }
+
+/// The counter behind an invoice number — migration 0004.
+/// A counter ROW rather than a Postgres SEQUENCE: nextval is
+/// non-transactional, so a rolled-back issue burns its value permanently.
+/// Icelandic law wants unique AND gap-free; only the row gives both, at the
+/// cost of serialising allocation per (org, series, year).
+model DocumentNumberSeries {
+  id          String   @id @default(uuid()) @db.Uuid
+  orgId       String   @map("org_id") @db.Uuid
+  series      String
+  periodYear  Int      @map("period_year")
+  nextOrdinal Int      @default(1) @map("next_ordinal")
+  padWidth    Int      @default(6) @map("pad_width")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([orgId, series, periodYear])
+  @@map("document_number_series")
+  @@schema("billing")
+}
+
+/// Every number ever spent, and what it was spent on — migration 0004.
+/// There is deliberately no release operation: a released number leaves a hole
+/// the documents around it have already closed over. A number spent without a
+/// live document is recorded `voided`, in place, and the sequence still
+/// accounts for every ordinal.
+model DocumentNumber {
+  id             String    @id @default(uuid()) @db.Uuid
+  orgId          String    @map("org_id") @db.Uuid
+  series         String
+  periodYear     Int       @map("period_year")
+  ordinal        Int
+  documentNumber String    @map("document_number")
+  // invoice | credit_note | correction. Text, not an enum: the accountant's
+  // constraint is unanswered and ALTER TYPE cannot run in a transaction.
+  purpose        String
+  // issued | voided. Never deleted.
+  status         String    @default("issued")
+  statementId    String?   @map("statement_id") @db.Uuid
+  // Never generated. A generated key makes every retry a fresh allocation.
+  idempotencyKey String    @map("idempotency_key")
+  issuedByUserId String?   @map("issued_by_user_id") @db.Uuid
+  issuedAt       DateTime  @map("issued_at") @db.Timestamptz(6)
+  voidedAt       DateTime? @map("voided_at") @db.Timestamptz(6)
+  voidReason     String?   @map("void_reason")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  // Two documents cannot share a number.
+  @@unique([orgId, series, periodYear, ordinal])
+  // A retry gets the same number back rather than consuming another.
+  @@unique([orgId, series, periodYear, idempotencyKey])
+  // A second issue for one statement is refused at write time, so a caller
+  // retrying under a DIFFERENT key collides here instead of spending a number.
+  @@unique([statementId, purpose])
+  @@index([orgId, issuedAt])
+  @@map("document_numbers")
+  @@schema("billing")
+}

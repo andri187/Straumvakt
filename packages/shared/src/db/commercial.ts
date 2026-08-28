@@ -1085,3 +1085,109 @@ export const connectorAssertions = billingSchema.table(
     index().on(t.orgId, t.periodYear, t.periodMonth),
   ],
 );
+
+/**
+ * billing.document_number_series — the counter behind an invoice number.
+ *
+ * ROUND 3 LEFT THIS AS THE LAST ENGINEERING BLOCKER. `SV-2026-000001` was
+ * issued from a dry run and nothing persisted the sequence, so a second
+ * operator, a retry, or a second process would allocate the same number.
+ *
+ * ── WHY A COUNTER ROW AND NOT A POSTGRES SEQUENCE ───────────────────────
+ *
+ * Icelandic law requires sales invoices "fyrirfram tölusett með áprentuð númer
+ * í samfelldri töluröð" — pre-numbered, in an UNBROKEN sequence. That is two
+ * requirements at once: **unique** and **gap-free**.
+ *
+ * A `SEQUENCE` gives unique and NOT gap-free: `nextval` is non-transactional
+ * by design, so a rolled-back transaction burns the value permanently and the
+ * sequence is full of holes. That is the correct trade for surrogate keys and
+ * the wrong one for a legal document number.
+ *
+ * A counter row incremented inside the issuing transaction gives BOTH: the
+ * increment rolls back with everything else, so a failed issue consumes
+ * nothing. The cost is real and is stated rather than hidden — allocation
+ * SERIALISES per (org, series, year), because concurrent issuers contend on
+ * one row. At one invoice per org per month that contention is nil, and
+ * correctness is not tradeable here.
+ *
+ * One row per (org, series, year). Per-org because each host's sequence is its
+ * own; per-year because `SV-2026-000001` restarts at 1 each January, which is
+ * standard Icelandic practice and keeps each year's series unbroken.
+ */
+export const documentNumberSeries = billingSchema.table(
+  "document_number_series",
+  {
+    id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    orgId: uuid("org_id").notNull(),
+    /** Human-facing prefix, e.g. "SV". */
+    series: text("series").notNull(),
+    periodYear: integer("period_year").notNull(),
+    /** The next unissued ordinal. Incremented in the issuing transaction. */
+    nextOrdinal: integer("next_ordinal").notNull().default(1),
+    /** Zero-padding width for the numeric part. */
+    padWidth: integer("pad_width").notNull().default(6),
+    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().$defaultFn(() => new Date()).$onUpdateFn(() => new Date()),
+  },
+  (t) => [uniqueIndex().on(t.orgId, t.series, t.periodYear)],
+);
+
+/**
+ * billing.document_numbers — every number ever spent, and what it was spent on.
+ *
+ * The counter alone cannot answer "is the sequence unbroken?" — only a record
+ * of what each ordinal became can. This table is that record, and it is what
+ * makes a VOID expressible: there is deliberately no release operation,
+ * because a released number leaves a hole the documents around it have already
+ * closed over. A number spent without producing a live document is recorded
+ * `voided`, in place, and the sequence still accounts for every ordinal.
+ *
+ * Three uniques, each preventing a different failure:
+ *
+ *   (org, series, year, ordinal)          two documents cannot share a number
+ *   (org, series, year, idempotency_key)  a RETRY gets the same number back
+ *                                         rather than consuming another
+ *   (statement_id, purpose)               a second issue for one statement is
+ *                                         refused at write time, so a caller
+ *                                         who retries under a DIFFERENT key
+ *                                         collides here instead of quietly
+ *                                         spending a second number
+ *
+ * `purpose` exists because the accountant's constraint is unanswered and a
+ * credit note and a correction each need a number from a STATED series. It is
+ * text rather than an enum so that answer can widen the vocabulary without an
+ * ALTER TYPE, which cannot run in a transaction and cannot be undone.
+ */
+export const documentNumbers = billingSchema.table(
+  "document_numbers",
+  {
+    id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    orgId: uuid("org_id").notNull(),
+    series: text("series").notNull(),
+    periodYear: integer("period_year").notNull(),
+    ordinal: integer("ordinal").notNull(),
+    /** The rendered number, e.g. "SV-2026-000001". Stored, not recomputed. */
+    documentNumber: text("document_number").notNull(),
+    /** invoice | credit_note | correction. See the note above on why text. */
+    purpose: text("purpose").notNull(),
+    /** issued | voided. Never deleted. */
+    status: text("status").notNull().default("issued"),
+    /** What the number was spent on. Null only on a number voided before use. */
+    statementId: uuid("statement_id"),
+    /** The caller's key. Never generated — a generated key makes every retry a
+     *  fresh allocation, which is the defect the mechanism exists to prevent. */
+    idempotencyKey: text("idempotency_key").notNull(),
+    issuedByUserId: uuid("issued_by_user_id"),
+    issuedAt: timestamp("issued_at", { withTimezone: true, precision: 6, mode: "date" }).notNull(),
+    voidedAt: timestamp("voided_at", { withTimezone: true, precision: 6, mode: "date" }),
+    voidReason: text("void_reason"),
+    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex().on(t.orgId, t.series, t.periodYear, t.ordinal),
+    uniqueIndex().on(t.orgId, t.series, t.periodYear, t.idempotencyKey),
+    uniqueIndex().on(t.statementId, t.purpose),
+    index().on(t.orgId, t.issuedAt),
+  ],
+);
