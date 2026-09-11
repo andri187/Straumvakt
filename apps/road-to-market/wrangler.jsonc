@@ -1,0 +1,22 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "straumvakt-test",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-01",
+  // NEW hostname only — does not touch apex/www/api workers.
+  "routes": [{ "pattern": "test.straumvakt.org", "custom_domain": true }],
+  "workers_dev": true,
+  // Static frontend served from ./public; the worker owns /api/* only.
+  // No queues, no service bindings, no cron, no R2, no email — external
+  // effects are impossible in this test worker by construction.
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "observability": { "enabled": true }
+  // Secrets (set with `wrangler secret put`, never committed):
+  //   AUTH_SECRET   - HMAC key for the host-only test session cookie
+  //   DATABASE_URL  - pooled Neon connection string for straumvakt_test
+}
