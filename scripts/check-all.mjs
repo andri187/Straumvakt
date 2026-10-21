@@ -32,12 +32,6 @@ const CHECKS = [
   ["deps-graph", "npm run check:deps-graph"],
   ["api-endpoints", "npm run check:api-endpoints"],
   ["unused-exports", "npm run check:unused-exports"],
-  // check:work-view was built to gate in CI ("caught in CI rather than by a
-  // reader", per gen-work-view.mjs) but was never wired in here, so the
-  // generated admin work page could drift silently — the same failure shape
-  // as api-endpoints and schema-parity. It regenerates from WORKSPACE.md +
-  // TASKS.md and byte-compares the committed page; needs no DB or network.
-  ["work-view", "npm run check:work-view"],
   // Pricing single source of truth. Four call sites price a session today
   // and they can disagree about what a driver owes; this fails when a
   // fifth appears, so the next one is a decision rather than an accident.

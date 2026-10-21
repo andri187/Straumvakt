@@ -7,12 +7,11 @@
 // drifts silently and then lies confidently — which is the failure this whole
 // market-focus pivot exists to stop.
 //
-// Regenerate with `npm run work-view`. `--check` fails if the committed page
-// is stale, so a canon edit that forgets the page is caught in CI rather than
-// by a reader.
+// Retained as a local historical/status-preview tool. It is deliberately not
+// part of the release check pipeline and its generated route is not committed.
 //
-// The output is a Next.js page under an ADMIN-GATED route. It is NOT public
-// and it is NOT deployed by this script.
+// The output is a Next.js page under the former admin route. Running this
+// command creates a local-only file; do not commit or deploy that output.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -86,8 +85,8 @@ const total = allItems.length;
 const esc = (s) => s.replace(/[&<>{}]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "{": "&#123;", "}": "&#125;" })[c]);
 
 const page = `// GENERATED — do not edit.
-// Source: WORKSPACE.md + TASKS.md. Regenerate: \`npm run work-view\`.
-// \`npm run check:work-view\` fails if this file is stale.
+// Local preview generated from WORKSPACE.md + TASKS.md.
+// Do not commit or deploy this route.
 //
 // ADMIN-GATED. It sits under /admin, which the console's admin session
 // already guards; it is not a public page.
@@ -177,7 +176,7 @@ export default function WorkViewPage() {
 if (check) {
   const existing = fs.existsSync(OUT) ? fs.readFileSync(OUT, "utf8") : "";
   if (existing.replace(/\r\n/g, "\n") !== page) {
-    console.error("src/app/(app)/admin/work/page.tsx is stale.\nRun `npm run work-view` and commit the result.");
+    console.error("Local work-view preview is absent or stale.\nRun `npm run work-view` only when a local preview is needed; do not commit it.");
     process.exit(1);
   }
   console.log(`work view is up to date (${done}/${total} tasks, ${Object.keys(health).length} health metrics).`);

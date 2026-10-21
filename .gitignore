@@ -103,3 +103,6 @@ apps/api/prisma/generated/
 # be restricted by HTTP referrer and never committed. Match at any depth so
 # both the app copy and a standalone deployment bundle remain protected.
 dso-lookup-config.js
+
+# Local repository-health preview. This is not a product route or release gate.
+src/app/(app)/admin/work/page.tsx
