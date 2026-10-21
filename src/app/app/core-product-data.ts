@@ -1,5 +1,5 @@
 import type { Tone, VisualScreen } from "../visual/visual-data";
-import type { PostLoginRouteId } from "./post-login-data";
+import type { PostLoginRouteId } from "./post-login-types";
 import { backendContractScreensByPersona } from "./core-backend-contract-data";
 import { integrationScreensByPersona } from "./core-integration-quality-data";
 

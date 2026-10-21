@@ -1,5 +1,5 @@
 import type { VisualScreen } from "../visual/visual-data";
-import type { PostLoginRouteId } from "./post-login-data";
+import type { PostLoginRouteId } from "./post-login-types";
 
 export type MarketClassification = "core" | "readiness" | "evidence" | "future";
 export type MarketHonestyRisk =

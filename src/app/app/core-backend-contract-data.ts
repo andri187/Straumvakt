@@ -1,5 +1,5 @@
 import type { Tone, VisualScreen } from "../visual/visual-data";
-import type { PostLoginRouteId } from "./post-login-data";
+import type { PostLoginRouteId } from "./post-login-types";
 
 export type BillingTrustState =
   | "Statement final" | "Statement draft" | "Meter verification held"

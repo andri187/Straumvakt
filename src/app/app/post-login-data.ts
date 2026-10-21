@@ -4,8 +4,9 @@ import {
   type VisualScreen,
 } from "../visual/visual-data";
 import { coreScreensByPersona } from "./core-product-data";
+import type { PostLoginRouteId } from "./post-login-types";
 
-export type PostLoginRouteId = "admin" | "org" | "driver";
+export type { PostLoginRouteId } from "./post-login-types";
 
 export type PostLoginPersona = {
   routeId: PostLoginRouteId;

@@ -95,8 +95,11 @@ I-->F
 I-->K
 I-->Q
 J-->I
+M-->F
+M-->K
 M-->O
 M-->N
+M-->Q
 N-->O
 O-->E
 P-->O

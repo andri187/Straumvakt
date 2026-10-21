@@ -234,7 +234,7 @@ for (const d of DOMAIN_ORDER) {
   L.push("");
 }
 
-const content = L.join("\n") + "\n";
+const content = `${L.join("\n").replace(/\n+$/, "")}\n`;
 const norm = (s) => s.replace(/\r\n/g, "\n");
 const current = fs.existsSync(OUT) ? fs.readFileSync(OUT, "utf8") : null;
 

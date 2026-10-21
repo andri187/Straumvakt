@@ -1,5 +1,5 @@
 import type { Tone, VisualScreen } from "../visual/visual-data";
-import type { PostLoginRouteId } from "./post-login-data";
+import type { PostLoginRouteId } from "./post-login-types";
 
 export type IntegrationBillingState =
   | "Final statement" | "CDR pending" | "CDR mismatch" | "Provenance unlabelled"
