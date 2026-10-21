@@ -1,0 +1,58 @@
+﻿[
+    {
+        "FileName":  "OCPP-1.6-all-files-and-errata.zip",
+        "Url":  "https://openchargealliance.org/download/7b06ab293c68fb6b4f4ae0960e502579c1c5516aa2b7acf0fdcedba585b9ea7f",
+        "Bytes":  924666,
+        "Sha256":  "2A1D80284CA60449E85951FC55BC0538B5D45BD6F97C6D9228745ACACB52C11B",
+        "DownloadedUtc":  "2026-08-09T12:06:46Z"
+    },
+    {
+        "FileName":  "OCPP-1.6-security-whitepaper-edition-4.zip",
+        "Url":  "https://openchargealliance.org/download/cd0eabc67e9b6ef5b6df2367f94bb3dd88b4898c5a2b90de5a1f794e077eaac9",
+        "Bytes":  797656,
+        "Sha256":  "158B883E8EE712FD80FAD3610B69FAD355F7831D7A0CCDD996CE6B5452CE6859",
+        "DownloadedUtc":  "2026-08-09T12:06:47Z"
+    },
+    {
+        "FileName":  "OCPP-2.0.1-edition-4-all-files.zip",
+        "Url":  "https://openchargealliance.org/download/caaab79c63336ff203104d9940c8eba29adb7d324c384e0578f7f3b7265e03ac",
+        "Bytes":  10332310,
+        "Sha256":  "192482C82A5E27A2319D2142BE2D8C074B68A22851FF5A12D0541EFC1EDA775A",
+        "DownloadedUtc":  "2026-08-09T12:06:52Z"
+    },
+    {
+        "FileName":  "OCPP-2.0.1-edition-4-errata-2026-06.zip",
+        "Url":  "https://openchargealliance.org/download/46b1a248048c0221159baf9f5947af523110728e8666795a4c757bb868dd38ac",
+        "Bytes":  699211,
+        "Sha256":  "3693766DF31C3BCF0AECC91276FCC0B11773B471566BB3F72E256C7F6207AFC1",
+        "DownloadedUtc":  "2026-08-09T12:06:53Z"
+    },
+    {
+        "FileName":  "OCPP-2.0.1-edition-4-part-2-appendices-v1.5.zip",
+        "Url":  "https://openchargealliance.org/download/cdb814eddc8bfe738b80cb1a49fbea4fe491bb8a752611ec0974d28a9416db9d",
+        "Bytes":  884989,
+        "Sha256":  "2A2F49B6138BC09D7467580639656BD738BE0693E572D4C6A96313053DF90780",
+        "DownloadedUtc":  "2026-08-09T12:06:54Z"
+    },
+    {
+        "FileName":  "OCPP-2.1-edition-2-all-files.zip",
+        "Url":  "https://openchargealliance.org/download/f6531d9fc45e3603186edb68e78b11c281b260f71af967330aaa611bda4888da",
+        "Bytes":  13738100,
+        "Sha256":  "A306DDCCA06936BA9DE3C1C436D728FC74289367AA1C393F73B0DEB2180C217E",
+        "DownloadedUtc":  "2026-08-09T12:07:01Z"
+    },
+    {
+        "FileName":  "OCPP-2.1-edition-2-errata-2026-06.zip",
+        "Url":  "https://openchargealliance.org/download/a164930cec4d71ccc0801617091a291fd833fdebfb682ec65c659b23e085d749",
+        "Bytes":  1014133,
+        "Sha256":  "5A9F5F7587FEAA7B12BD17EDA4A8867D4DCFB0986357FAF94996B9D715D087CB",
+        "DownloadedUtc":  "2026-08-09T12:07:03Z"
+    },
+    {
+        "FileName":  "OCPP-2.1-edition-2-part-2-appendices-v2.1.zip",
+        "Url":  "https://openchargealliance.org/download/df7ff6282fb8223aac2ecddf479ec3f5e10008a409c19bfed88d760ce562462a",
+        "Bytes":  918643,
+        "Sha256":  "3C14586D3DA83A238587D6B45997A06C374675854EBF6B6F2603B0CF2883E681",
+        "DownloadedUtc":  "2026-08-09T12:07:04Z"
+    }
+]
