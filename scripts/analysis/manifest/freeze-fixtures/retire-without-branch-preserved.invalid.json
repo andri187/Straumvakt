@@ -1,0 +1,111 @@
+{
+  "manifestVersion": 1,
+  "generatedAt": "2026-08-09T22:30:00Z",
+  "root": "E:\\Claude",
+  "canonicalRepo": "E:\\Claude\\Straumvakt",
+  "releaseCandidate": "4b69d0f",
+  "forbiddenCommits": [
+    "4fe0a95",
+    "30fa407",
+    "5311cbd"
+  ],
+  "totals": {
+    "registered": 3,
+    "onDisk": 3,
+    "staleRegistrations": 0,
+    "localBranches": 43,
+    "remoteBranches": 16,
+    "localBranchesWithoutRemote": 29
+  },
+  "worktrees": [
+    {
+      "path": "E:\\Claude\\Straumvakt",
+      "existsOnDisk": true,
+      "branch": "dev/straumvakt-org-relaunch",
+      "detached": false,
+      "head": "10c292b",
+      "dirtyFiles": 24,
+      "untrackedFiles": 3,
+      "untrackedPreservationMaterial": false,
+      "upstream": null,
+      "upstreamExistsOnRemote": null,
+      "branchExistsOnRemote": true,
+      "uniqueVsCandidate": 0,
+      "headIsForbidden": null,
+      "forbiddenAncestors": [],
+      "owner": "shared",
+      "suggestedAction": "keep",
+      "actionRationale": "The canonical checkout. Never a cleanup candidate.",
+      "branchPreserved": true,
+      "archiveDestination": null
+    },
+    {
+      "path": "E:\\Claude\\Straumvakt-beta-production",
+      "existsOnDisk": true,
+      "branch": "docs/beta-production-release-architecture",
+      "detached": false,
+      "head": "606ceae",
+      "dirtyFiles": 0,
+      "untrackedFiles": 0,
+      "untrackedPreservationMaterial": false,
+      "upstream": null,
+      "upstreamExistsOnRemote": null,
+      "branchExistsOnRemote": false,
+      "uniqueVsCandidate": 25,
+      "headIsForbidden": null,
+      "forbiddenAncestors": [],
+      "owner": "release-ops",
+      "suggestedAction": "keep",
+      "actionRationale": "25 unique commits against the release candidate.",
+      "branchPreserved": true,
+      "archiveDestination": null
+    },
+    {
+      "path": "E:\\Claude\\Straumvakt-n1",
+      "existsOnDisk": true,
+      "branch": "dev/n1-org-landing",
+      "detached": false,
+      "head": "52e3b32",
+      "dirtyFiles": 0,
+      "untrackedFiles": 0,
+      "untrackedPreservationMaterial": false,
+      "upstream": null,
+      "upstreamExistsOnRemote": null,
+      "branchExistsOnRemote": false,
+      "uniqueVsCandidate": 0,
+      "headIsForbidden": null,
+      "forbiddenAncestors": [],
+      "owner": "release-ops",
+      "suggestedAction": "retire",
+      "actionRationale": "Zero unique commits and zero dirty files. The branch exists on no remote, so the branch itself must be preserved even though the working copy need not be.",
+      "branchPreserved": false,
+      "archiveDestination": null
+    }
+  ],
+  "unregistered": [
+    {
+      "path": "E:\\Claude\\Straumvakt-parked",
+      "kind": "non-git-directory",
+      "totalFiles": 38,
+      "contentFiles": 38,
+      "straumvaktContent": true,
+      "coveredByPreservationRecord": "P-01",
+      "credentialShapedFiles": [],
+      "suggestedAction": "keep",
+      "actionRationale": "Covered by preservation record P-01."
+    },
+    {
+      "path": "E:\\Claude\\CPMS",
+      "kind": "separate-git-repo",
+      "totalFiles": 221,
+      "contentFiles": 221,
+      "straumvaktContent": true,
+      "coveredByPreservationRecord": "P-15",
+      "credentialShapedFiles": [],
+      "suggestedAction": "keep",
+      "actionRationale": "Covered by preservation record P-15 as provenance for the shared Worker names."
+    }
+  ],
+  "archiveDestination": "C:\\Users\\Andri\\Archive\\straumvakt-2026-08-09",
+  "notes": "FZ5. Retiring the working copy AND the branch. The branch is the cheap part."
+}

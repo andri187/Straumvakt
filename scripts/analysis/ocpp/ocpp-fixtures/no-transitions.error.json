@@ -1,0 +1,104 @@
+{
+  "profileVersion": 1,
+  "collectedAt": "2026-08-10T02:30:00Z",
+  "repo": "E:/Claude/Straumvakt-beta-production",
+  "heartbeat": {
+    "idleIntervalSeconds": 3600,
+    "idleIntervalSource": "product frame: idle heartbeat stays at 1 hour",
+    "activeSessionIntervalSeconds": null,
+    "activeSessionIntervalSource": "TBD from real charger data",
+    "retentionClassFunctionAt": "gateway/src/identity-do.ts:232",
+    "heartbeatClassifiedRawProtocolAt": "gateway/src/identity-do.ts:238",
+    "everyFrameEnqueuedAt": "gateway/src/identity-do.ts:615",
+    "heartbeatSkipsQueue": true,
+    "retentionClassCarriedOnEvent": true
+  },
+  "retentionDefault": "operational",
+  "storage": {
+    "rawFramesPersistedPermanently": false,
+    "rawFrameTtlDays": 7
+  },
+  "liveness": {
+    "lastSeenAt": true,
+    "onlineOfflineTransitions": false,
+    "hourlyRollup": true
+  },
+  "limits": {
+    "perConnectorFramesPerHourCap": 120
+  },
+  "durableObject": {
+    "usesHibernationApi": true,
+    "acceptWebSocketAt": "gateway/src/identity-do.ts:404",
+    "usesAutoResponse": true,
+    "inMemoryStateAcrossWake": true,
+    "authorizeCacheTtlMs": 60000
+  },
+  "queues": {
+    "gateway": [
+      {
+        "env": "env.staging",
+        "name": "straumvakt-ocpp-staging",
+        "producers": [
+          {
+            "binding": "OCPP_EVENTS_QUEUE",
+            "queue": "straumvakt-ocpp-events-staging"
+          }
+        ],
+        "consumers": []
+      }
+    ],
+    "api": [
+      {
+        "env": "env.staging",
+        "name": "hlada-api-staging",
+        "producers": [],
+        "consumers": [
+          {
+            "queue": "straumvakt-ocpp-events-staging",
+            "maxBatchSize": 25,
+            "maxRetries": 3,
+            "deadLetterQueue": "straumvakt-ocpp-events-dlq-staging"
+          }
+        ]
+      }
+    ],
+    "fallbackPath": true,
+    "fallbackWarnsAt": "gateway/src/identity-do.ts:617",
+    "rejectLogsAt": "gateway/src/identity-do.ts:623"
+  },
+  "workersDev": [
+    {
+      "file": "apps/api/wrangler.jsonc",
+      "environments": [
+        {
+          "env": "env.staging",
+          "name": "hlada-api-staging",
+          "declaresWorkersDev": true,
+          "workersDev": true,
+          "hasRoutes": false
+        }
+      ]
+    }
+  ],
+  "pinnedHosts": [
+    {
+      "client": "flutter-mobile",
+      "host": "hlada-api-staging.straumvakt.workers.dev",
+      "file": "apps/mobile/lib/api/client.dart",
+      "line": 25,
+      "overridable": true
+    }
+  ],
+  "neon": {
+    "branchPerOrg": false
+  },
+  "pricing": {
+    "perConnectorPerMonthIsk": 200,
+    "perActiveDriverPerMonthIsk": 50,
+    "capPerConnectorPerMonthIsk": 450
+  },
+  "derived": {
+    "idleHeartbeatsPerConnectorPerMonth": 720
+  },
+  "notes": "OC9. No online/offline transition event, so downtime cannot be derived."
+}

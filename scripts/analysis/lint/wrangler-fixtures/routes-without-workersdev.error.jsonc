@@ -1,0 +1,12 @@
+{
+  // The foot-gun, in its exact shape: someone adds a custom domain route and the
+  // *.workers.dev hostname disappears with it. The diff looks like an improvement.
+  "name": "example-api",
+  "main": "src/index.ts",
+  "env": {
+    "staging": {
+      "name": "example-api-staging",
+      "routes": [{ "pattern": "api.example.org", "custom_domain": true }]
+    }
+  }
+}

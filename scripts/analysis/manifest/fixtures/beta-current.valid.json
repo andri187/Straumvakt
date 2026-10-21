@@ -1,0 +1,31 @@
+{
+  "manifestVersion": 1,
+  "environment": "beta",
+  "status": "deployed",
+  "git": { "branch": "staging", "updatePolicy": "fast-forward-only", "protected": false, "requiredApprovals": 0 },
+  "workers": [
+    { "role": "web", "name": "hlada-staging", "deployed": true, "versionId": null,
+      "customDomains": ["straumvakt.org", "www.straumvakt.org"], "workersDev": true,
+      "serviceBindings": [{ "binding": "OCPP_GATEWAY", "target": "straumvakt-ocpp-staging" }],
+      "secretNames": ["AUTH_SECRET", "ADMIN_EMAIL", "ADMIN_PASSWORD"],
+      "compatibilityDate": "2026-04-18", "compatibilityFlags": ["nodejs_compat", "global_fetch_strictly_public"],
+      "cpuMs": 50, "pinnedByExternalClient": false },
+    { "role": "api", "name": "hlada-api-staging", "deployed": true, "versionId": null,
+      "customDomains": ["api.straumvakt.org"], "workersDev": true,
+      "serviceBindings": [{ "binding": "OCPP_GATEWAY", "target": "straumvakt-ocpp-staging" }],
+      "secretNames": ["AUTH_SECRET", "ADMIN_EMAIL", "ADMIN_PASSWORD", "OCPP_INGEST_SECRET", "OCPP_CRED_KEK"],
+      "queues": ["straumvakt-outbound-staging", "straumvakt-ocpp-events-staging", "straumvakt-archive-events-staging"],
+      "r2Buckets": ["straumvakt-evidence-staging"],
+      "pinnedByExternalClient": true },
+    { "role": "ocpp", "name": "straumvakt-ocpp-staging", "deployed": true, "versionId": null,
+      "workersDev": true,
+      "serviceBindings": [{ "binding": "MAIN_APP", "target": "hlada-api-staging" }],
+      "durableObjects": ["IDENTITY_DO"], "pinnedByExternalClient": true }
+  ],
+  "data": { "classification": "beta-test", "neonProject": "spring-leaf-73019190", "neonBranch": "staging",
+            "neonBranchId": "br-tiny-river-abgpqq37", "hyperdriveId": "d2d56ab1ffe241bbb64946ba78a52be5",
+            "allowedTestIdentities": true, "retentionPolicyRef": null },
+  "observability": { "alertRoute": "engineering", "dashboards": [] },
+  "rollback": { "unit": "worker-version", "targetRecorded": false },
+  "notes": "versionId null everywhere = UNKNOWN, not none. Closes with dashboard verification A3."
+}

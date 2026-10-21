@@ -1,0 +1,22 @@
+{
+  // A Durable Object namespace owned by a DIFFERENT script. Renaming or deleting
+  // that script orphans the namespace. In this project the equivalent namespace
+  // holds charger identity, so an orphan means every charger is treated as new.
+  "name": "example-api",
+  "main": "src/index.ts",
+  "workers_dev": true,
+  "compatibility_date": "2026-01-01",
+  "durable_objects": {
+    "bindings": [{ "name": "IDENTITY_DO", "class_name": "IdentityDurableObject", "script_name": "example-gateway" }]
+  },
+  "env": {
+    "staging": {
+      "name": "example-api-staging",
+      "workers_dev": true,
+      "compatibility_date": "2026-01-01",
+      "durable_objects": {
+        "bindings": [{ "name": "IDENTITY_DO", "class_name": "IdentityDurableObject", "script_name": "example-gateway-staging" }]
+      }
+    }
+  }
+}

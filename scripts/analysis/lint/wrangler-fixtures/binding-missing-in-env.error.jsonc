@@ -1,0 +1,17 @@
+{
+  // The trap: wrangler does NOT inherit binding-shaped keys into a named
+  // environment. This config declares a database and a service binding at the top
+  // level and forgets them in staging, so staging deploys cleanly and then fails
+  // at the first request that needs either.
+  "name": "example-api",
+  "main": "src/index.ts",
+  "workers_dev": true,
+  "vars": { "LOG_LEVEL": "info" },
+  "services": [{ "binding": "GATEWAY", "service": "example-gateway" }],
+  "env": {
+    "staging": {
+      "name": "example-api-staging",
+      "workers_dev": true
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  // The false-negative the old model could not see. Routes are declared at the top
+  // level and env.staging declares NEITHER key, so staging INHERITS the routes and
+  // the workers_dev=false inference fires for staging TODAY — not at some future
+  // change. The old model called this "latent" and exited 0.
+  "name": "example-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-01-01",
+  "routes": [{ "pattern": "api.example.org", "custom_domain": true }],
+  "env": {
+    "staging": {
+      "name": "example-api-staging",
+      "compatibility_date": "2026-01-01"
+    }
+  }
+}

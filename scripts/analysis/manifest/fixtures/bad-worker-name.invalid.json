@@ -1,0 +1,6 @@
+{
+  "manifestVersion": 1, "environment": "beta", "status": "proposed",
+  "git": { "branch": "staging", "updatePolicy": "fast-forward-only" },
+  "workers": [ { "role": "web", "name": "Straumvakt_Web", "deployed": false } ],
+  "data": { "classification": "beta-test" }
+}

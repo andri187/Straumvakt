@@ -1,0 +1,12 @@
+{
+  "_comment": "Known Worker names, and the Neon branch ids that belong to beta. A typo in a Worker name produces a manifest that validates perfectly and describes nothing that exists; a new name is allowed, but only with a written justification (see newWorkerJustification).",
+  "workers": [
+    "hlada-staging",
+    "hlada-api-staging",
+    "straumvakt-ocpp-staging",
+    "straumvakt-web",
+    "straumvakt-api",
+    "straumvakt-ocpp"
+  ],
+  "betaNeonBranchIds": ["br-tiny-river-abgpqq37"]
+}

@@ -1,0 +1,15 @@
+{
+  // The same change as routes-without-workersdev, made safely: workers_dev is
+  // declared in EVERY block that names a deployable Worker, so the inference
+  // cannot fire and the pinned hostname survives the routing change.
+  "name": "example-api",
+  "main": "src/index.ts",
+  "workers_dev": true,
+  "env": {
+    "staging": {
+      "name": "example-api-staging",
+      "routes": [{ "pattern": "api.example.org", "custom_domain": true }],
+      "workers_dev": true
+    }
+  }
+}

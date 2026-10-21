@@ -1,0 +1,645 @@
+{
+  "snapshotVersion": 1,
+  "repo": "E:\\Claude\\Straumvakt",
+  "collectedFrom": [
+    "E:/Claude/Straumvakt",
+    "E:/Claude/Straumvakt-audit-checks",
+    "E:/Claude/Straumvakt-beta-production",
+    "E:/Claude/Straumvakt-catchup-runbook",
+    "E:/Claude/Straumvakt-diag-drizzle",
+    "E:/Claude/Straumvakt-diag-p4c",
+    "E:/Claude/Straumvakt-docs-ci",
+    "E:/Claude/Straumvakt-driver-access-ui",
+    "E:/Claude/Straumvakt-driver-parity",
+    "E:/Claude/Straumvakt-employee-landing",
+    "E:/Claude/Straumvakt-housekeeping",
+    "E:/Claude/Straumvakt-infra-verify",
+    "E:/Claude/Straumvakt-migrations-config",
+    "E:/Claude/Straumvakt-mobile-hardening",
+    "E:/Claude/Straumvakt-mobile-product",
+    "E:/Claude/Straumvakt-n1",
+    "E:/Claude/Straumvakt-onboarding-domain",
+    "E:/Claude/Straumvakt-onboarding-web",
+    "E:/Claude/Straumvakt-overnight-readiness",
+    "E:/Claude/Straumvakt-parity-fix",
+    "E:/Claude/Straumvakt-relaunch-integration",
+    "E:/Claude/Straumvakt-release-candidate",
+    "E:/Claude/Straumvakt-remediation-architecture",
+    "E:/Claude/Straumvakt-rename-worker",
+    "E:/Claude/Straumvakt-secret-hygiene",
+    "E:/Claude/Straumvakt-secret-hygiene-v2",
+    "E:/Claude/Straumvakt-trunk-proposal",
+    "E:/Claude/Straumvakt-w1-checkaudit"
+  ],
+  "worktrees": [
+    {
+      "path": "E:/Claude/Straumvakt",
+      "branch": "dev/straumvakt-org-relaunch",
+      "tip": "10c292b",
+      "dirtyFiles": 24,
+      "uniqueVsCandidate": 0,
+      "exists": true
+    },
+    {
+      "path": "/sessions/rcw-01fyf9w4byh1mrs6p2npr9my/mnt/Straumvakt-docs-log",
+      "branch": "docs/relaunch-session-log-2026-08-08",
+      "tip": "5311cbd",
+      "dirtyFiles": 0,
+      "exists": false
+    },
+    {
+      "path": "E:/Claude/Straumvakt-audit-checks",
+      "branch": "HEAD",
+      "tip": "2b7ebf6",
+      "dirtyFiles": 0,
+      "uniqueVsCandidate": 0,
+      "exists": true
+    },
+    {
+      "path": "E:/Claude/Straumvakt-beta-production",
+      "branch": "docs/beta-production-release-architecture",
+      "tip": "56af65d",
+      "dirtyFiles": 9,
+      "uniqueVsCandidate": 23,
+      "exists": true
+    },
+    {
+      "path": "E:/Claude/Straumvakt-catchup-runbook",
+      "branch": "docs/staging-catchup-runbook",
+      "tip": "30fa407",
+      "dirtyFiles": 0,
+      "uniqueVsCandidate": 2,
+      "exists": true
+    },
+    {
+      "path": "E:/Claude/Straumvakt-diag-drizzle",
+      "branch": "diag/fix-api-endpoints-drift",
+      "tip": "0a2943c",
+      "dirtyFiles": 0,
+      "uniqueVsCandidate": 1,
+      "exists": true
+    },
+    {
+      "path": "E:/Claude/Straumvakt-diag-p4c",
+      "branch": "HEAD",
+      "tip": "09b1333",
+      "dirtyFiles": 1,
+      "uniqueVsCandidate": 0,
+      "exists": true
+    },
+    {
+      "path": "E:/Claude/Straumvakt-docs-ci",
+      "branch": "docs/ci-and-custom-domain",
+      "tip": "d4e2e07",
+      "dirtyFiles": 0,
+      "uniqueVsCandidate": 1,
+      "exists": true
+    },
+    {
+      "path": "E:/Claude/Straumvakt-driver-access-ui",
+      "branch": "codex/unaffiliated-driver-experience",
+      "tip": "77b7e75",
+      "dirtyFiles": 0,
+      "uniqueVsCandidate": 14,
+      "exists": true
+    },
+    {
+      "path": "E:/Claude/Straumvakt-driver-parity",
+      "branch": "dev/drizzle-ownership-and-market-harvest",
+      "tip": "2b7ebf6",
+      "dirtyFiles": 0,
+      "uniqueVsCandidate": 0,
+      "exists": true
+    },
+    {
+      "path": "E:/Claude/Straumvakt-employee-landing",
+      "branch": "dev/employee-landing",
+      "tip": "9a6c6f5",
+      "dirtyFiles": 0,
+      "uniqueVsCandidate": 0,
+      "exists": true
+    },
+    {
+      "path": "E:/Claude/Straumvakt-housekeeping",
+      "branch": "dev/housekeeping",
+      "tip": "185e6da",
+      "dirtyFiles": 0,
+      "uniqueVsCandidate": 1,
+      "exists": true
+    },
+    {
+      "path": "E:/Claude/Straumvakt-infra-verify",
+      "branch": "docs/infra-release-safety-packet",
+      "tip": "856ebe2",
+      "dirtyFiles": 0,
+      "uniqueVsCandidate": 4,
+      "exists": true
+    },
+    {
+      "path": "E:/Claude/Straumvakt-migrations-config",
+      "branch": "fix/prisma-migrations-path",
+      "tip": "6b9246e",
+      "dirtyFiles": 0,
+      "uniqueVsCandidate": 1,
+      "exists": true
+    },
+    {
+      "path": "E:/Claude/Straumvakt-mobile-hardening",
+      "branch": "dev/mobile-product-hardening",
+      "tip": "4757f5c",
+      "dirtyFiles": 0,
+      "uniqueVsCandidate": 10,
+      "exists": true
+    },
+    {
+      "path": "E:/Claude/Straumvakt-mobile-product",
+      "branch": "dev/mobile-product-to-market",
+      "tip": "ae5db26",
+      "dirtyFiles": 0,
+      "uniqueVsCandidate": 3,
+      "exists": true
+    },
+    {
+      "path": "E:/Claude/Straumvakt-n1",
+      "branch": "dev/n1-org-landing",
+      "tip": "52e3b32",
+      "dirtyFiles": 0,
+      "uniqueVsCandidate": 0,
+      "exists": true
+    },
+    {
+      "path": "E:/Claude/Straumvakt-onboarding-domain",
+      "branch": "scratch/claude-a-backend-verification-2026-08-09",
+      "tip": "850bfbc",
+      "dirtyFiles": 1,
+      "uniqueVsCandidate": 33,
+      "exists": true
+    },
+    {
+      "path": "E:/Claude/Straumvakt-onboarding-web",
+      "branch": "codex/onboarding-web-experience",
+      "tip": "8d39b1c",
+      "dirtyFiles": 0,
+      "uniqueVsCandidate": 11,
+      "exists": true
+    },
+    {
+      "path": "E:/Claude/Straumvakt-overnight-readiness",
+      "branch": "docs/overnight-readiness-audit",
+      "tip": "ed6dc4e",
+      "dirtyFiles": 0,
+      "uniqueVsCandidate": 4,
+      "exists": true
+    },
+    {
+      "path": "E:/Claude/Straumvakt-parity-fix",
+      "branch": "dev/verify-invite-parity-tests",
+      "tip": "185e6da",
+      "dirtyFiles": 0,
+      "uniqueVsCandidate": 1,
+      "exists": true
+    },
+    {
+      "path": "E:/Claude/Straumvakt-relaunch-integration",
+      "branch": "dev/relaunch-integration",
+      "tip": "14c1ce2",
+      "dirtyFiles": 0,
+      "uniqueVsCandidate": 0,
+      "exists": true
+    },
+    {
+      "path": "E:/Claude/Straumvakt-release-candidate",
+      "branch": "dev/relaunch-release-candidate",
+      "tip": "4b69d0f",
+      "dirtyFiles": 0,
+      "uniqueVsCandidate": 0,
+      "exists": true
+    },
+    {
+      "path": "E:/Claude/Straumvakt-remediation-architecture",
+      "branch": "docs/remediation-architecture-packet",
+      "tip": "fabc56f",
+      "dirtyFiles": 0,
+      "uniqueVsCandidate": 11,
+      "exists": true
+    },
+    {
+      "path": "E:/Claude/Straumvakt-rename-worker",
+      "branch": "dev/rename-prod-worker",
+      "tip": "4fe0a95",
+      "dirtyFiles": 0,
+      "uniqueVsCandidate": 1,
+      "exists": true
+    },
+    {
+      "path": "E:/Claude/Straumvakt-secret-hygiene",
+      "branch": "dev/secret-hygiene",
+      "tip": "776552f",
+      "dirtyFiles": 0,
+      "uniqueVsCandidate": 1,
+      "exists": true
+    },
+    {
+      "path": "E:/Claude/Straumvakt-secret-hygiene-v2",
+      "branch": "dev/secret-hygiene-v2",
+      "tip": "174475f",
+      "dirtyFiles": 0,
+      "uniqueVsCandidate": 1,
+      "exists": true
+    },
+    {
+      "path": "E:/Claude/Straumvakt-trunk-proposal",
+      "branch": "docs/repo-trunk-proposal",
+      "tip": "5324241",
+      "dirtyFiles": 0,
+      "uniqueVsCandidate": 1,
+      "exists": true
+    },
+    {
+      "path": "E:/Claude/Straumvakt-w1-checkaudit",
+      "branch": "fix/wire-work-view-check",
+      "tip": "b2250e5",
+      "dirtyFiles": 0,
+      "uniqueVsCandidate": 1,
+      "exists": true
+    }
+  ],
+  "branches": [
+    {
+      "name": "codex/onboarding-web-experience",
+      "upstream": null,
+      "sha": "8d39b1c",
+      "worktree": "E:/Claude/Straumvakt"
+    },
+    {
+      "name": "codex/unaffiliated-driver-experience",
+      "upstream": null,
+      "sha": "77b7e75",
+      "worktree": "E:/Claude/Straumvakt"
+    },
+    {
+      "name": "dev/commercial-harvest",
+      "upstream": null,
+      "sha": "32a93b4",
+      "worktree": "E:/Claude/Straumvakt"
+    },
+    {
+      "name": "dev/drizzle-ownership-and-market-harvest",
+      "upstream": null,
+      "sha": "2b7ebf6",
+      "worktree": "E:/Claude/Straumvakt"
+    },
+    {
+      "name": "dev/employee-landing",
+      "upstream": null,
+      "sha": "9a6c6f5",
+      "worktree": "E:/Claude/Straumvakt"
+    },
+    {
+      "name": "dev/housekeeping",
+      "upstream": null,
+      "sha": "185e6da",
+      "worktree": "E:/Claude/Straumvakt"
+    },
+    {
+      "name": "dev/market-focus",
+      "upstream": null,
+      "sha": "32a93b4",
+      "worktree": "E:/Claude/Straumvakt"
+    },
+    {
+      "name": "dev/mobile-product-hardening",
+      "upstream": null,
+      "sha": "4757f5c",
+      "worktree": "E:/Claude/Straumvakt"
+    },
+    {
+      "name": "dev/mobile-product-to-market",
+      "upstream": null,
+      "sha": "ae5db26",
+      "worktree": "E:/Claude/Straumvakt"
+    },
+    {
+      "name": "dev/monorepo-foundation",
+      "upstream": null,
+      "sha": "6bbb0ee",
+      "worktree": "E:/Claude/Straumvakt"
+    },
+    {
+      "name": "dev/n1-org-landing",
+      "upstream": null,
+      "sha": "52e3b32",
+      "worktree": "E:/Claude/Straumvakt"
+    },
+    {
+      "name": "dev/p4-c-ingest-integrity",
+      "upstream": "origin/dev/p4-c-ingest-integrity",
+      "sha": "32a93b4",
+      "worktree": "E:/Claude/Straumvakt"
+    },
+    {
+      "name": "dev/relaunch-integration",
+      "upstream": null,
+      "sha": "14c1ce2",
+      "worktree": "E:/Claude/Straumvakt"
+    },
+    {
+      "name": "dev/relaunch-release-candidate",
+      "upstream": null,
+      "sha": "4b69d0f",
+      "worktree": "E:/Claude/Straumvakt"
+    },
+    {
+      "name": "dev/rename-prod-worker",
+      "upstream": "origin/staging",
+      "sha": "4fe0a95",
+      "worktree": "E:/Claude/Straumvakt"
+    },
+    {
+      "name": "dev/secret-hygiene",
+      "upstream": null,
+      "sha": "776552f",
+      "worktree": "E:/Claude/Straumvakt"
+    },
+    {
+      "name": "dev/secret-hygiene-v2",
+      "upstream": "origin/staging",
+      "sha": "174475f",
+      "worktree": "E:/Claude/Straumvakt"
+    },
+    {
+      "name": "dev/sprint-00-foundation",
+      "upstream": "origin/dev/sprint-00-foundation",
+      "sha": "4ddc1d0",
+      "worktree": "E:/Claude/Straumvakt"
+    },
+    {
+      "name": "dev/sprint-01-ocpp-foundation",
+      "upstream": "origin/dev/sprint-01-ocpp-foundation",
+      "sha": "21247f9",
+      "worktree": "E:/Claude/Straumvakt"
+    },
+    {
+      "name": "dev/sprint-01-ui-detour",
+      "upstream": "origin/dev/sprint-01-ui-detour",
+      "sha": "bc99514",
+      "worktree": "E:/Claude/Straumvakt"
+    },
+    {
+      "name": "dev/sprint-05-queue-and-invite",
+      "upstream": "origin/dev/sprint-05-queue-and-invite",
+      "sha": "50bb0ec",
+      "worktree": "E:/Claude/Straumvakt"
+    },
+    {
+      "name": "dev/sprint-06-data-platform-adr",
+      "upstream": "origin/dev/sprint-06-data-platform-adr",
+      "sha": "8926710",
+      "worktree": "E:/Claude/Straumvakt"
+    },
+    {
+      "name": "dev/sprint-07-hot-ingest",
+      "upstream": "origin/dev/sprint-07-hot-ingest",
+      "sha": "7d64ba5",
+      "worktree": "E:/Claude/Straumvakt"
+    },
+    {
+      "name": "dev/sprint-08-tariff-and-billing",
+      "upstream": "origin/dev/sprint-08-tariff-and-billing",
+      "sha": "7917654",
+      "worktree": "E:/Claude/Straumvakt"
+    },
+    {
+      "name": "dev/straumvakt-org-relaunch",
+      "upstream": null,
+      "sha": "10c292b",
+      "worktree": "E:/Claude/Straumvakt"
+    },
+    {
+      "name": "dev/verify-invite-parity-tests",
+      "upstream": null,
+      "sha": "185e6da",
+      "worktree": "E:/Claude/Straumvakt"
+    },
+    {
+      "name": "dev/zaptec-consumer-fly",
+      "upstream": "origin/dev/zaptec-consumer-fly",
+      "sha": "0c20a90",
+      "worktree": "E:/Claude/Straumvakt"
+    },
+    {
+      "name": "diag/fix-api-endpoints-drift",
+      "upstream": null,
+      "sha": "0a2943c",
+      "worktree": "E:/Claude/Straumvakt"
+    },
+    {
+      "name": "docs/beta-production-release-architecture",
+      "upstream": null,
+      "sha": "56af65d",
+      "worktree": "E:/Claude/Straumvakt"
+    },
+    {
+      "name": "docs/ci-and-custom-domain",
+      "upstream": "origin/dev/drizzle-ownership-and-market-harvest",
+      "sha": "d4e2e07",
+      "worktree": "E:/Claude/Straumvakt"
+    },
+    {
+      "name": "docs/infra-release-safety-packet",
+      "upstream": null,
+      "sha": "856ebe2",
+      "worktree": "E:/Claude/Straumvakt"
+    },
+    {
+      "name": "docs/overnight-readiness-audit",
+      "upstream": null,
+      "sha": "ed6dc4e",
+      "worktree": "E:/Claude/Straumvakt"
+    },
+    {
+      "name": "docs/relaunch-session-log-2026-08-08",
+      "upstream": null,
+      "sha": "5311cbd",
+      "worktree": "E:/Claude/Straumvakt"
+    },
+    {
+      "name": "docs/remediation-architecture-packet",
+      "upstream": null,
+      "sha": "fabc56f",
+      "worktree": "E:/Claude/Straumvakt"
+    },
+    {
+      "name": "docs/repo-trunk-proposal",
+      "upstream": null,
+      "sha": "5324241",
+      "worktree": "E:/Claude/Straumvakt"
+    },
+    {
+      "name": "docs/singular-onboarding-domain-packet",
+      "upstream": null,
+      "sha": "e66a10c",
+      "worktree": "E:/Claude/Straumvakt"
+    },
+    {
+      "name": "docs/staging-catchup-runbook",
+      "upstream": null,
+      "sha": "30fa407",
+      "worktree": "E:/Claude/Straumvakt"
+    },
+    {
+      "name": "feat/agreement-architecture",
+      "upstream": "origin/feat/agreement-architecture",
+      "sha": "82e0a60",
+      "worktree": "E:/Claude/Straumvakt"
+    },
+    {
+      "name": "fix/installation-ocpp-password",
+      "upstream": "origin/fix/installation-ocpp-password",
+      "sha": "aa75020",
+      "worktree": "E:/Claude/Straumvakt"
+    },
+    {
+      "name": "fix/prisma-migrations-path",
+      "upstream": "origin/dev/drizzle-ownership-and-market-harvest",
+      "sha": "6b9246e",
+      "worktree": "E:/Claude/Straumvakt"
+    },
+    {
+      "name": "fix/wire-work-view-check",
+      "upstream": null,
+      "sha": "b2250e5",
+      "worktree": "E:/Claude/Straumvakt"
+    },
+    {
+      "name": "scratch/claude-a-backend-verification-2026-08-09",
+      "upstream": null,
+      "sha": "850bfbc",
+      "worktree": "E:/Claude/Straumvakt"
+    },
+    {
+      "name": "staging",
+      "upstream": "origin/staging",
+      "sha": "2bb6b3f",
+      "worktree": "E:/Claude/Straumvakt"
+    }
+  ],
+  "remoteRefs": [
+    {
+      "ref": "dev/drizzle-ownership-and-market-harvest",
+      "sha": "2b7ebf6ef845"
+    },
+    {
+      "ref": "dev/monorepo-foundation",
+      "sha": "6bbb0ee0531d"
+    },
+    {
+      "ref": "dev/p4-c-ingest-integrity",
+      "sha": "e9cdbfd20e4a"
+    },
+    {
+      "ref": "dev/prisma-cf-externalize",
+      "sha": "1790e416d85b"
+    },
+    {
+      "ref": "dev/prisma-client-generator",
+      "sha": "75cfeb381c31"
+    },
+    {
+      "ref": "dev/sprint-00-foundation",
+      "sha": "4ddc1d0ea7a5"
+    },
+    {
+      "ref": "dev/sprint-01-ocpp-foundation",
+      "sha": "21247f9218cc"
+    },
+    {
+      "ref": "dev/sprint-01-ui-detour",
+      "sha": "bc99514c62e3"
+    },
+    {
+      "ref": "dev/sprint-05-queue-and-invite",
+      "sha": "50bb0ec20ba1"
+    },
+    {
+      "ref": "dev/sprint-06-data-platform-adr",
+      "sha": "8926710d7add"
+    },
+    {
+      "ref": "dev/sprint-07-hot-ingest",
+      "sha": "7d64ba5f1c9f"
+    },
+    {
+      "ref": "dev/sprint-08-tariff-and-billing",
+      "sha": "791765470d54"
+    },
+    {
+      "ref": "dev/zaptec-consumer-fly",
+      "sha": "0c20a90d4751"
+    },
+    {
+      "ref": "feat/agreement-architecture",
+      "sha": "9a9e724e0691"
+    },
+    {
+      "ref": "fix/installation-ocpp-password",
+      "sha": "aa75020edf87"
+    },
+    {
+      "ref": "staging",
+      "sha": "f53fb55e1229"
+    }
+  ],
+  "forbiddenCommits": [
+    {
+      "sha": "4fe0a95",
+      "ref": "4b69d0f",
+      "resolved": true,
+      "present": false
+    },
+    {
+      "sha": "4fe0a95",
+      "ref": "origin/staging",
+      "resolved": true,
+      "present": false
+    },
+    {
+      "sha": "30fa407",
+      "ref": "4b69d0f",
+      "resolved": true,
+      "present": false
+    },
+    {
+      "sha": "30fa407",
+      "ref": "origin/staging",
+      "resolved": true,
+      "present": false
+    },
+    {
+      "sha": "5311cbd",
+      "ref": "4b69d0f",
+      "resolved": true,
+      "present": false
+    },
+    {
+      "sha": "5311cbd",
+      "ref": "origin/staging",
+      "resolved": true,
+      "present": false
+    }
+  ],
+  "fastForward": {
+    "from": "origin/staging",
+    "to": "4b69d0f",
+    "leftOnly": 0,
+    "rightOnly": 166
+  },
+  "config": {
+    "push.default": null,
+    "core.hooksPath": "E:\\Claude\\Straumvakt\\.git\\hooks",
+    "receive.denyNonFastForwards": null
+  },
+  "hooks": {
+    "prePush": false
+  }
+}

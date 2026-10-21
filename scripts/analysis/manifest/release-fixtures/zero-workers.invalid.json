@@ -1,0 +1,49 @@
+{
+  "manifestVersion": 1,
+  "releaseId": "release-2026-08-15",
+  "environment": "beta",
+  "commit": {
+    "sha": "4b69d0fe44ab52fe6a4f2cdc246d742d4e29638d",
+    "tag": "release-2026-08-15",
+    "verifiedFastForward": true,
+    "betaTestedSince": null
+  },
+  "sourceBranch": "main",
+  "workers": [],
+  "data": {
+    "neonProject": "spring-leaf-73019190",
+    "neonBranchId": "br-tiny-river-abgpqq37",
+    "neonComputeId": "ep-quiet-bird-abxartp8",
+    "hyperdriveId": "d2d56ab1ffe241bbb64946ba78a52be5",
+    "migrationsRecorded": 47,
+    "backupBranchId": "br-holy-glade-abxq36he"
+  },
+  "ocpp": {
+    "endpointUnchanged": true
+  },
+  "mobile": {
+    "minSupported": "0.1.0",
+    "pinnedHostPreserved": true
+  },
+  "rollback": {
+    "unit": "worker-version",
+    "workerVersionsBefore": {},
+    "minimumSafeVersion": null,
+    "restoreTimeMeasuredSec": 420
+  },
+  "approval": {
+    "approver": "Andri",
+    "checksPassed": [
+      "check",
+      "fast-forward",
+      "identity"
+    ],
+    "excludedCommitsVerifiedAbsent": [
+      "4fe0a95",
+      "30fa407",
+      "5311cbd"
+    ]
+  },
+  "notes": "Schema minItems. A release that releases nothing.",
+  "releasedAt": "2026-08-15T10:00:00Z"
+}

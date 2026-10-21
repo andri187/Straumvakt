@@ -1,0 +1,17 @@
+{
+  "_comment": "Targets that MUST appear in any preservation manifest for this estate, with the counts established by read-only inspection on 2026-08-09. Rule P5 fails a manifest that omits one, records it as missing, or records a count that disagrees. These are the artifacts with no recovery path other than a copy that does not yet exist.",
+  "requiredRecords": {
+    "docs/OCPP": {
+      "fileCount": 128,
+      "why": "official OCPP 1.6 / 2.0.1 / 2.1 specifications, UNTRACKED in a git repository - one `git clean -fdx` from gone, and re-acquisition depends on the standards body"
+    },
+    "Straumvakt-parked": {
+      "fileCount": 38,
+      "why": "OpenADR and dynamic-grid research; not a git worktree, so there is no remote, no branch and no reflog - it exists in exactly one place"
+    },
+    "Documents/New project": {
+      "fileCount": null,
+      "why": "the prompts, coordinator ledger and evidence driving all three agents; has a .git directory with ZERO commits, which is worse than no version control because it invites the assumption that it is safe"
+    }
+  }
+}

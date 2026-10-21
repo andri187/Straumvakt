@@ -1,0 +1,14 @@
+{
+  // workers_dev deliberately off. Explicit is fine — the linter objects to
+  // silence, not to the value.
+  "name": "example-internal",
+  "main": "src/index.ts",
+  "workers_dev": false,
+  "env": {
+    "staging": {
+      "name": "example-internal-staging",
+      "routes": [{ "pattern": "internal.example.org", "custom_domain": true }],
+      "workers_dev": false
+    }
+  }
+}

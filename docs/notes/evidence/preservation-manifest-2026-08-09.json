@@ -1,0 +1,406 @@
+{
+  "manifestVersion": 1,
+  "generatedAt": "2026-08-09T16:15:27Z",
+  "root": "E:\\Claude",
+  "measurement": {
+    "totalGB": 45.2,
+    "regenerableGB": 42.92,
+    "contentGB": 2.28,
+    "reparsePointsExcluded": true,
+    "regenerationProven": false
+  },
+  "archive": {
+    "destination": "NOT YET CHOSEN - see AD-11",
+    "checksumAlgorithm": "sha256",
+    "verificationMethod": "none",
+    "verified": false,
+    "verifiedAt": null,
+    "independentFailureDomain": null
+  },
+  "records": [
+    {
+      "id": "P-01",
+      "path": "E:\\Claude\\Straumvakt-parked",
+      "kind": "research",
+      "expectedFileCount": 38,
+      "verifiedFileCount": 38,
+      "status": "verified",
+      "verifiedAt": "2026-08-09T16:15:27Z",
+      "recoveryPath": "none",
+      "recoveryNote": "Not a git worktree: no remote, no branch, no reflog. Until an archive exists there is no recovery path at all, so this says none rather than archive.",
+      "containsPersonalData": false,
+      "thirdPartyLicensed": false,
+      "deletable": false,
+      "archiveVerified": false,
+      "approval": "andri",
+      "safeDeletePrerequisite": "a verified archive, plus a decision on whether it should be committed somewhere"
+    },
+    {
+      "id": "P-02",
+      "path": "E:\\Claude\\Straumvakt\\docs\\OCPP",
+      "kind": "specification",
+      "expectedFileCount": 128,
+      "verifiedFileCount": 128,
+      "status": "verified",
+      "verifiedAt": "2026-08-09T16:15:27Z",
+      "recoveryPath": "none",
+      "recoveryNote": "Untracked in a git repository, so one `git clean -fdx` removes it. Re-download depends on the standards body still publishing these exact versions.",
+      "containsPersonalData": false,
+      "thirdPartyLicensed": true,
+      "deletable": false,
+      "archiveVerified": false,
+      "approval": "andri",
+      "safeDeletePrerequisite": "AD-14 decided (committed or archived); the current state, untracked and unbacked, is not one of the options"
+    },
+    {
+      "id": "P-04",
+      "path": "C:\\Users\\Andri\\Documents\\New project",
+      "kind": "prompts",
+      "expectedFileCount": null,
+      "verifiedFileCount": 22888,
+      "status": "present-unverified",
+      "verifiedAt": null,
+      "recoveryPath": "none",
+      "recoveryNote": "A .git directory with zero commits is not a backup. Largest unmitigated preservation risk in the project.",
+      "vcs": {
+        "hasGitDir": true,
+        "commitCount": 0,
+        "trackedFileCount": 0,
+        "untrackedTopLevel": 169
+      },
+      "containsPersonalData": false,
+      "thirdPartyLicensed": false,
+      "deletable": false,
+      "archiveVerified": false,
+      "approval": "andri",
+      "safeDeletePrerequisite": "nothing here is a deletion candidate; the tool caches are, but only after the documents are committed"
+    },
+    {
+      "id": "P-15",
+      "path": "E:\\Claude\\CPMS",
+      "kind": "provenance",
+      "expectedFileCount": null,
+      "verifiedFileCount": null,
+      "status": "present-unverified",
+      "verifiedAt": null,
+      "recoveryPath": "git-remote",
+      "recoveryNote": "Its own repository. Preserved as the provenance for the hlada name and the shared Worker names, not as a cleanup target.",
+      "containsPersonalData": false,
+      "thirdPartyLicensed": false,
+      "deletable": false,
+      "archiveVerified": false,
+      "approval": "not-ours",
+      "safeDeletePrerequisite": "never, from this track"
+    },
+    {
+      "id": "P-14",
+      "path": "E:\\Claude\\**\\node_modules",
+      "kind": "build-output",
+      "expectedFileCount": null,
+      "verifiedFileCount": null,
+      "status": "not-applicable",
+      "verifiedAt": null,
+      "recoveryPath": "reinstall",
+      "recoveryNote": "Reinstall IF regeneration is demonstrated. Regenerable assumes lockfiles resolve and pinned versions are still published.",
+      "containsPersonalData": false,
+      "thirdPartyLicensed": false,
+      "deletable": false,
+      "archiveVerified": false,
+      "approval": "andri",
+      "safeDeletePrerequisite": "npm ci and flutter pub get demonstrated into a temporary copy, per ecosystem, not assumed from one"
+    }
+  ],
+  "worktrees": [
+    {
+      "path": "E:/Claude/Straumvakt",
+      "branch": "dev/straumvakt-org-relaunch",
+      "tip": "10c292b",
+      "uniqueCommits": 0,
+      "dirtyFiles": 24,
+      "retirable": false,
+      "branchPreserved": true,
+      "owner": "shared"
+    },
+    {
+      "path": "/sessions/rcw-01fyf9w4byh1mrs6p2npr9my/mnt/Straumvakt-docs-log",
+      "branch": "docs/relaunch-session-log-2026-08-08",
+      "tip": "5311cbd",
+      "uniqueCommits": 0,
+      "dirtyFiles": 0,
+      "retirable": false,
+      "branchPreserved": true,
+      "owner": "unknown"
+    },
+    {
+      "path": "E:/Claude/Straumvakt-audit-checks",
+      "branch": "detached",
+      "tip": "2b7ebf6",
+      "uniqueCommits": 0,
+      "dirtyFiles": 0,
+      "retirable": true,
+      "branchPreserved": true,
+      "owner": "unknown"
+    },
+    {
+      "path": "E:/Claude/Straumvakt-beta-production",
+      "branch": "docs/beta-production-release-architecture",
+      "tip": "56af65d",
+      "uniqueCommits": 23,
+      "dirtyFiles": 16,
+      "retirable": false,
+      "branchPreserved": true,
+      "owner": "release-ops"
+    },
+    {
+      "path": "E:/Claude/Straumvakt-catchup-runbook",
+      "branch": "docs/staging-catchup-runbook",
+      "tip": "30fa407",
+      "uniqueCommits": 2,
+      "dirtyFiles": 0,
+      "retirable": false,
+      "branchPreserved": true,
+      "owner": "unknown"
+    },
+    {
+      "path": "E:/Claude/Straumvakt-diag-drizzle",
+      "branch": "diag/fix-api-endpoints-drift",
+      "tip": "0a2943c",
+      "uniqueCommits": 1,
+      "dirtyFiles": 0,
+      "retirable": false,
+      "branchPreserved": true,
+      "owner": "unknown"
+    },
+    {
+      "path": "E:/Claude/Straumvakt-diag-p4c",
+      "branch": "detached",
+      "tip": "09b1333",
+      "uniqueCommits": 0,
+      "dirtyFiles": 1,
+      "retirable": false,
+      "branchPreserved": true,
+      "owner": "unknown"
+    },
+    {
+      "path": "E:/Claude/Straumvakt-docs-ci",
+      "branch": "docs/ci-and-custom-domain",
+      "tip": "d4e2e07",
+      "uniqueCommits": 1,
+      "dirtyFiles": 0,
+      "retirable": false,
+      "branchPreserved": true,
+      "owner": "unknown"
+    },
+    {
+      "path": "E:/Claude/Straumvakt-driver-access-ui",
+      "branch": "codex/unaffiliated-driver-experience",
+      "tip": "77b7e75",
+      "uniqueCommits": 14,
+      "dirtyFiles": 0,
+      "retirable": false,
+      "branchPreserved": true,
+      "owner": "codex"
+    },
+    {
+      "path": "E:/Claude/Straumvakt-driver-parity",
+      "branch": "dev/drizzle-ownership-and-market-harvest",
+      "tip": "2b7ebf6",
+      "uniqueCommits": 0,
+      "dirtyFiles": 0,
+      "retirable": true,
+      "branchPreserved": true,
+      "owner": "unknown"
+    },
+    {
+      "path": "E:/Claude/Straumvakt-employee-landing",
+      "branch": "dev/employee-landing",
+      "tip": "9a6c6f5",
+      "uniqueCommits": 0,
+      "dirtyFiles": 0,
+      "retirable": true,
+      "branchPreserved": true,
+      "owner": "unknown"
+    },
+    {
+      "path": "E:/Claude/Straumvakt-housekeeping",
+      "branch": "dev/housekeeping",
+      "tip": "185e6da",
+      "uniqueCommits": 1,
+      "dirtyFiles": 0,
+      "retirable": false,
+      "branchPreserved": true,
+      "owner": "unknown"
+    },
+    {
+      "path": "E:/Claude/Straumvakt-infra-verify",
+      "branch": "docs/infra-release-safety-packet",
+      "tip": "856ebe2",
+      "uniqueCommits": 4,
+      "dirtyFiles": 0,
+      "retirable": false,
+      "branchPreserved": true,
+      "owner": "unknown"
+    },
+    {
+      "path": "E:/Claude/Straumvakt-migrations-config",
+      "branch": "fix/prisma-migrations-path",
+      "tip": "6b9246e",
+      "uniqueCommits": 1,
+      "dirtyFiles": 0,
+      "retirable": false,
+      "branchPreserved": true,
+      "owner": "unknown"
+    },
+    {
+      "path": "E:/Claude/Straumvakt-mobile-hardening",
+      "branch": "dev/mobile-product-hardening",
+      "tip": "4757f5c",
+      "uniqueCommits": 10,
+      "dirtyFiles": 0,
+      "retirable": false,
+      "branchPreserved": true,
+      "owner": "unknown"
+    },
+    {
+      "path": "E:/Claude/Straumvakt-mobile-product",
+      "branch": "dev/mobile-product-to-market",
+      "tip": "ae5db26",
+      "uniqueCommits": 3,
+      "dirtyFiles": 0,
+      "retirable": false,
+      "branchPreserved": true,
+      "owner": "unknown"
+    },
+    {
+      "path": "E:/Claude/Straumvakt-n1",
+      "branch": "dev/n1-org-landing",
+      "tip": "52e3b32",
+      "uniqueCommits": 0,
+      "dirtyFiles": 0,
+      "retirable": true,
+      "branchPreserved": true,
+      "owner": "release-ops"
+    },
+    {
+      "path": "E:/Claude/Straumvakt-onboarding-domain",
+      "branch": "scratch/claude-a-backend-verification-2026-08-09",
+      "tip": "b1ab0c3",
+      "uniqueCommits": 34,
+      "dirtyFiles": 2,
+      "retirable": false,
+      "branchPreserved": true,
+      "owner": "claude-a"
+    },
+    {
+      "path": "E:/Claude/Straumvakt-onboarding-web",
+      "branch": "codex/onboarding-web-experience",
+      "tip": "8d39b1c",
+      "uniqueCommits": 11,
+      "dirtyFiles": 0,
+      "retirable": false,
+      "branchPreserved": true,
+      "owner": "codex"
+    },
+    {
+      "path": "E:/Claude/Straumvakt-overnight-readiness",
+      "branch": "docs/overnight-readiness-audit",
+      "tip": "ed6dc4e",
+      "uniqueCommits": 4,
+      "dirtyFiles": 0,
+      "retirable": false,
+      "branchPreserved": true,
+      "owner": "unknown"
+    },
+    {
+      "path": "E:/Claude/Straumvakt-parity-fix",
+      "branch": "dev/verify-invite-parity-tests",
+      "tip": "185e6da",
+      "uniqueCommits": 1,
+      "dirtyFiles": 0,
+      "retirable": false,
+      "branchPreserved": true,
+      "owner": "unknown"
+    },
+    {
+      "path": "E:/Claude/Straumvakt-relaunch-integration",
+      "branch": "dev/relaunch-integration",
+      "tip": "14c1ce2",
+      "uniqueCommits": 0,
+      "dirtyFiles": 0,
+      "retirable": true,
+      "branchPreserved": true,
+      "owner": "unknown"
+    },
+    {
+      "path": "E:/Claude/Straumvakt-release-candidate",
+      "branch": "dev/relaunch-release-candidate",
+      "tip": "4b69d0f",
+      "uniqueCommits": 0,
+      "dirtyFiles": 0,
+      "retirable": true,
+      "branchPreserved": true,
+      "owner": "release-ops"
+    },
+    {
+      "path": "E:/Claude/Straumvakt-remediation-architecture",
+      "branch": "docs/remediation-architecture-packet",
+      "tip": "fabc56f",
+      "uniqueCommits": 11,
+      "dirtyFiles": 0,
+      "retirable": false,
+      "branchPreserved": true,
+      "owner": "unknown"
+    },
+    {
+      "path": "E:/Claude/Straumvakt-rename-worker",
+      "branch": "dev/rename-prod-worker",
+      "tip": "4fe0a95",
+      "uniqueCommits": 1,
+      "dirtyFiles": 0,
+      "retirable": false,
+      "branchPreserved": true,
+      "owner": "unknown"
+    },
+    {
+      "path": "E:/Claude/Straumvakt-secret-hygiene",
+      "branch": "dev/secret-hygiene",
+      "tip": "776552f",
+      "uniqueCommits": 1,
+      "dirtyFiles": 0,
+      "retirable": false,
+      "branchPreserved": true,
+      "owner": "unknown"
+    },
+    {
+      "path": "E:/Claude/Straumvakt-secret-hygiene-v2",
+      "branch": "dev/secret-hygiene-v2",
+      "tip": "174475f",
+      "uniqueCommits": 1,
+      "dirtyFiles": 0,
+      "retirable": false,
+      "branchPreserved": true,
+      "owner": "unknown"
+    },
+    {
+      "path": "E:/Claude/Straumvakt-trunk-proposal",
+      "branch": "docs/repo-trunk-proposal",
+      "tip": "5324241",
+      "uniqueCommits": 1,
+      "dirtyFiles": 0,
+      "retirable": false,
+      "branchPreserved": true,
+      "owner": "unknown"
+    },
+    {
+      "path": "E:/Claude/Straumvakt-w1-checkaudit",
+      "branch": "fix/wire-work-view-check",
+      "tip": "b2250e5",
+      "uniqueCommits": 1,
+      "dirtyFiles": 0,
+      "retirable": false,
+      "branchPreserved": true,
+      "owner": "unknown"
+    }
+  ],
+  "notes": "Generated by read-only observation. Nothing was deleted, moved or modified. No record is marked deletable, because no archive exists yet — that is the honest state, not an omission. Worktrees: 29 registered, 6 retirable."
+}

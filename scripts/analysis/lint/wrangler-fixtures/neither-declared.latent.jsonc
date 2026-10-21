@@ -1,0 +1,10 @@
+{
+  // The current state of apps/api and gateway: no routes, no workers_dev. Nothing
+  // is broken today, but the live hostname state is inferred rather than declared,
+  // so the next routing change is the one that breaks it.
+  "name": "example-gateway",
+  "main": "src/index.ts",
+  "env": {
+    "staging": { "name": "example-gateway-staging" }
+  }
+}

@@ -1,0 +1,73 @@
+{
+  "manifestVersion": 1,
+  "generatedAt": "2026-08-09T15:00:00Z",
+  "root": "E:\\Claude",
+  "archive": {
+    "destination": "C:\\Users\\Andri\\Archive\\min",
+    "checksumAlgorithm": "sha512",
+    "verificationMethod": "extract-and-compare",
+    "verified": true,
+    "verifiedAt": "2026-08-09T15:00:00Z",
+    "independentFailureDomain": true
+  },
+  "records": [
+    {
+      "id": "P-01",
+      "path": "E:\\Claude\\Straumvakt-parked",
+      "kind": "research",
+      "expectedFileCount": 38,
+      "verifiedFileCount": 38,
+      "status": "verified",
+      "verifiedAt": "2026-08-09T15:00:00Z",
+      "recoveryPath": "archive",
+      "recoveryNote": "Not a git worktree. No remote, no branch, no reflog. It exists in exactly one place.",
+      "containsPersonalData": false,
+      "thirdPartyLicensed": false,
+      "deletable": false,
+      "archiveVerified": true,
+      "approval": "andri",
+      "safeDeletePrerequisite": "verified archive extraction, plus a decision on whether it should be committed somewhere"
+    },
+    {
+      "id": "P-02",
+      "path": "E:\\Claude\\Straumvakt\\docs\\OCPP",
+      "kind": "specification",
+      "expectedFileCount": 128,
+      "verifiedFileCount": 128,
+      "status": "verified",
+      "verifiedAt": "2026-08-09T15:00:00Z",
+      "recoveryPath": "archive",
+      "recoveryNote": "Untracked in a git repository. Re-download depends on the standards body still publishing these versions.",
+      "containsPersonalData": false,
+      "thirdPartyLicensed": true,
+      "deletable": false,
+      "archiveVerified": true,
+      "approval": "andri",
+      "safeDeletePrerequisite": "AD-14 decided: committed or archived. The current state, untracked and unbacked, is not one of the options."
+    },
+    {
+      "id": "P-04",
+      "path": "C:\\Users\\Andri\\Documents\\New project",
+      "kind": "prompts",
+      "expectedFileCount": null,
+      "verifiedFileCount": 22887,
+      "status": "present-unverified",
+      "verifiedAt": null,
+      "recoveryPath": "none",
+      "recoveryNote": "A .git directory with zero commits is not a backup. This is the single largest unmitigated preservation risk in the project.",
+      "vcs": {
+        "hasGitDir": true,
+        "commitCount": 0,
+        "trackedFileCount": 0,
+        "untrackedTopLevel": 160
+      },
+      "containsPersonalData": false,
+      "thirdPartyLicensed": false,
+      "deletable": false,
+      "archiveVerified": false,
+      "approval": "andri",
+      "safeDeletePrerequisite": "nothing here is a deletion candidate; the tool caches are, but only after the documents are committed"
+    }
+  ],
+  "notes": "Smallest manifest that satisfies every rule for this estate: the three targets with no recovery path other than a copy, a verified archive, nothing deletable."
+}

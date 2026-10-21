@@ -1,0 +1,168 @@
+{
+  "profileVersion": 1,
+  "collectedAt": "2026-08-10T02:34:36Z",
+  "repo": "E:\\Claude\\Straumvakt-beta-production",
+  "note": "Collected from source and config only. Nothing here was observed from a live charger, a live Queue, or a live database. Phase 3 exists because these two can disagree.",
+  "heartbeat": {
+    "idleIntervalSeconds": 3600,
+    "idleIntervalSource": "product frame: idle heartbeat stays at 1 hour",
+    "activeSessionIntervalSeconds": null,
+    "activeSessionIntervalSource": "TBD from real charger data — deliberately null, not guessed",
+    "retentionClassFunctionAt": "gateway/src/identity-do.ts:232",
+    "heartbeatClassifiedRawProtocolAt": "gateway/src/identity-do.ts:238",
+    "everyFrameEnqueuedAt": "gateway/src/identity-do.ts:615",
+    "heartbeatSkipsQueue": false,
+    "retentionClassCarriedOnEvent": true
+  },
+  "durableObject": {
+    "usesHibernationApi": true,
+    "acceptWebSocketAt": "gateway/src/identity-do.ts:404",
+    "usesAutoResponse": false,
+    "inMemoryStateAcrossWake": true,
+    "authorizeCacheTtlMs": 60000
+  },
+  "queues": {
+    "gateway": [
+      {
+        "env": "top-level",
+        "name": "straumvakt-ocpp",
+        "producers": [],
+        "consumers": []
+      },
+      {
+        "env": "env.staging",
+        "name": "straumvakt-ocpp-staging",
+        "producers": [
+          {
+            "binding": "OCPP_EVENTS_QUEUE",
+            "queue": "straumvakt-ocpp-events-staging"
+          }
+        ],
+        "consumers": []
+      }
+    ],
+    "api": [
+      {
+        "env": "top-level",
+        "name": "hlada-api",
+        "producers": [],
+        "consumers": []
+      },
+      {
+        "env": "env.staging",
+        "name": "hlada-api-staging",
+        "producers": [
+          {
+            "binding": "OUTBOUND_QUEUE",
+            "queue": "straumvakt-outbound-staging"
+          },
+          {
+            "binding": "ARCHIVE_QUEUE",
+            "queue": "straumvakt-archive-events-staging"
+          }
+        ],
+        "consumers": [
+          {
+            "queue": "straumvakt-outbound-staging",
+            "maxBatchSize": 5,
+            "maxRetries": 5,
+            "deadLetterQueue": "straumvakt-outbound-dlq-staging"
+          },
+          {
+            "queue": "straumvakt-ocpp-events-staging",
+            "maxBatchSize": 100,
+            "maxRetries": 3,
+            "deadLetterQueue": "straumvakt-ocpp-events-dlq-staging"
+          },
+          {
+            "queue": "straumvakt-archive-events-staging",
+            "maxBatchSize": 50,
+            "maxRetries": 5,
+            "deadLetterQueue": "straumvakt-archive-events-dlq-staging"
+          }
+        ]
+      }
+    ],
+    "fallbackPath": true,
+    "fallbackWarnsAt": "gateway/src/identity-do.ts:617",
+    "rejectLogsAt": "gateway/src/identity-do.ts:623"
+  },
+  "workersDev": [
+    {
+      "file": "wrangler.jsonc",
+      "environments": [
+        {
+          "env": "top-level",
+          "name": "hlada",
+          "declaresWorkersDev": false,
+          "workersDev": null,
+          "hasRoutes": false
+        },
+        {
+          "env": "env.staging",
+          "name": "hlada-staging",
+          "declaresWorkersDev": true,
+          "workersDev": true,
+          "hasRoutes": true
+        }
+      ]
+    },
+    {
+      "file": "apps/api/wrangler.jsonc",
+      "environments": [
+        {
+          "env": "top-level",
+          "name": "hlada-api",
+          "declaresWorkersDev": false,
+          "workersDev": null,
+          "hasRoutes": false
+        },
+        {
+          "env": "env.staging",
+          "name": "hlada-api-staging",
+          "declaresWorkersDev": false,
+          "workersDev": null,
+          "hasRoutes": false
+        }
+      ]
+    },
+    {
+      "file": "gateway/wrangler.jsonc",
+      "environments": [
+        {
+          "env": "top-level",
+          "name": "straumvakt-ocpp",
+          "declaresWorkersDev": false,
+          "workersDev": null,
+          "hasRoutes": false
+        },
+        {
+          "env": "env.staging",
+          "name": "straumvakt-ocpp-staging",
+          "declaresWorkersDev": false,
+          "workersDev": null,
+          "hasRoutes": false
+        }
+      ]
+    }
+  ],
+  "pinnedHosts": [
+    {
+      "client": "flutter-mobile",
+      "host": "hlada-api-staging.straumvakt.workers.dev",
+      "file": "apps/mobile/lib/api/client.dart",
+      "line": 25,
+      "overridable": false
+    }
+  ],
+  "pricing": {
+    "perConnectorPerMonthIsk": 200,
+    "perActiveDriverPerMonthIsk": 50,
+    "capPerConnectorPerMonthIsk": 450,
+    "source": "product frame, locked"
+  },
+  "derived": {
+    "idleHeartbeatsPerConnectorPerMonth": 720,
+    "note": "One frame per hour per connector while idle. Active-session frames are unknown and deliberately excluded rather than guessed."
+  }
+}

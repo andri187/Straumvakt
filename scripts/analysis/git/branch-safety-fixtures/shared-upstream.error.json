@@ -1,0 +1,168 @@
+{
+  "snapshotVersion": 1,
+  "repo": "E:\\Claude\\Straumvakt",
+  "collectedFrom": [
+    "E:\\Claude\\Straumvakt"
+  ],
+  "worktrees": [
+    {
+      "path": "E:\\Claude\\Straumvakt",
+      "branch": "dev/straumvakt-org-relaunch",
+      "tip": "10c292b",
+      "dirtyFiles": 24,
+      "exists": true
+    },
+    {
+      "path": "E:\\Claude\\Straumvakt-beta-production",
+      "branch": "docs/beta-production-release-architecture",
+      "tip": "56af65d",
+      "dirtyFiles": 0,
+      "exists": true
+    }
+  ],
+  "branches": [
+    {
+      "name": "staging",
+      "upstream": "origin/staging",
+      "sha": "f53fb55",
+      "worktree": "E:\\Claude\\Straumvakt"
+    },
+    {
+      "name": "dev/rename-prod-worker",
+      "upstream": "origin/shared-target",
+      "sha": "aaa1111",
+      "worktree": "E:\\Claude\\Straumvakt"
+    },
+    {
+      "name": "dev/secret-hygiene-v2",
+      "upstream": "origin/shared-target",
+      "sha": "bbb2222",
+      "worktree": "E:\\Claude\\Straumvakt"
+    },
+    {
+      "name": "docs/beta-production-release-architecture",
+      "upstream": null,
+      "sha": "56af65d",
+      "worktree": "E:\\Claude\\Straumvakt-beta-production"
+    }
+  ],
+  "remoteRefs": [
+    {
+      "ref": "staging",
+      "sha": "f53fb55e1229"
+    },
+    {
+      "ref": "dev/branch-1",
+      "sha": "000000000001"
+    },
+    {
+      "ref": "dev/branch-2",
+      "sha": "000000000002"
+    },
+    {
+      "ref": "dev/branch-3",
+      "sha": "000000000003"
+    },
+    {
+      "ref": "dev/branch-4",
+      "sha": "000000000004"
+    },
+    {
+      "ref": "dev/branch-5",
+      "sha": "000000000005"
+    },
+    {
+      "ref": "dev/branch-6",
+      "sha": "000000000006"
+    },
+    {
+      "ref": "dev/branch-7",
+      "sha": "000000000007"
+    },
+    {
+      "ref": "dev/branch-8",
+      "sha": "000000000008"
+    },
+    {
+      "ref": "dev/branch-9",
+      "sha": "000000000009"
+    },
+    {
+      "ref": "dev/branch-10",
+      "sha": "000000000010"
+    },
+    {
+      "ref": "dev/branch-11",
+      "sha": "000000000011"
+    },
+    {
+      "ref": "dev/branch-12",
+      "sha": "000000000012"
+    },
+    {
+      "ref": "dev/branch-13",
+      "sha": "000000000013"
+    },
+    {
+      "ref": "dev/branch-14",
+      "sha": "000000000014"
+    },
+    {
+      "ref": "dev/branch-15",
+      "sha": "000000000015"
+    }
+  ],
+  "forbiddenCommits": [
+    {
+      "sha": "4fe0a95",
+      "ref": "4b69d0f",
+      "resolved": true,
+      "present": false
+    },
+    {
+      "sha": "4fe0a95",
+      "ref": "origin/staging",
+      "resolved": true,
+      "present": false
+    },
+    {
+      "sha": "30fa407",
+      "ref": "4b69d0f",
+      "resolved": true,
+      "present": false
+    },
+    {
+      "sha": "30fa407",
+      "ref": "origin/staging",
+      "resolved": true,
+      "present": false
+    },
+    {
+      "sha": "5311cbd",
+      "ref": "4b69d0f",
+      "resolved": true,
+      "present": false
+    },
+    {
+      "sha": "5311cbd",
+      "ref": "origin/staging",
+      "resolved": true,
+      "present": false
+    }
+  ],
+  "fastForward": {
+    "from": "origin/staging",
+    "to": "4b69d0f",
+    "leftOnly": 0,
+    "rightOnly": 166
+  },
+  "config": {
+    "push.default": "simple",
+    "core.hooksPath": ".githooks",
+    "receive.denyNonFastForwards": null
+  },
+  "hooks": {
+    "prePush": true
+  },
+  "notes": "G3. Two branches share one upstream, so each silently overwrites the other."
+}
