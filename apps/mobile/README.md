@@ -100,3 +100,16 @@ yet (or shouldn't ship until backed by real data):
 
 Anything we want back is a small re-import once the backing endpoint
 ships.
+
+## My Vehicle concept status
+
+The current My Vehicle screen began as an August 2026 visual concept. Its
+vehicle selection, registration, nickname, paint, finish, primary-vehicle,
+and Autocharge values are local presentation state rather than a persisted
+driver vehicle record. Battery, range, year, charging-power, recent-session,
+cost, and EVCCID values must not be treated as source-backed product data.
+
+The current colour treatment hue-rotates a transparent source image. A
+production renderer needs separate paint, lighting, detail, registration
+plate, and material layers to represent white, black, metallic, pearlescent,
+matte, and satin finishes truthfully.

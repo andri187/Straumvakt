@@ -36,6 +36,15 @@ Everything below is measured, not inferred.
 
 ## Five findings
 
+> **Read before treating the 0.5% as a fault (added 2026-08-08).** For an
+> earlier period OCPP Authorize was disabled at the Zaptec portal and the
+> installation did not require authorization. Sessions from that period could
+> not carry driver attribution — a known historical operating configuration,
+> not a defect. A label distinguishing "structurally impossible" from "broken"
+> is pending a confirmed cutover date; the discovery pass found no reliable
+> date source in this database. See
+> [`../notes/2026-08-08-auth-enforcement-period-discovery.md`](../notes/2026-08-08-auth-enforcement-period-discovery.md).
+
 ### F1. The three energy feeds are one fact measured three ways, and they disagree
 
 `ocpp_*`, `cdr_*` and `amqp_*` each carry exactly energy + stop-time. Nothing

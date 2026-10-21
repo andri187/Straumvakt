@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Straumvakt — Work Status</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c232c; --line:#2a323c;
+    --tx:#e6e8eb; --mut:#8b949e; --dim:#6e7681;
+    --live:#3fb950; --prog:#d29922; --stop:#f85149; --acc:#58a6ff; --parked:#7d8590;
+    --r:12px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--tx);
+    font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;padding:32px 20px 64px}
+  .wrap{max-width:960px;margin:0 auto}
+  header{display:flex;flex-wrap:wrap;align-items:baseline;gap:12px;margin-bottom:6px}
+  h1{font-size:22px;margin:0;letter-spacing:.2px}
+  .phase{font-size:12px;color:var(--live);border:1px solid var(--live);
+    border-radius:999px;padding:2px 10px;font-weight:600}
+  .upd{color:var(--dim);font-size:12px;margin-left:auto}
+  .north{background:linear-gradient(180deg,var(--panel2),var(--panel));
+    border:1px solid var(--line);border-left:3px solid var(--acc);
+    border-radius:var(--r);padding:14px 18px;margin:18px 0 16px}
+  .north b{color:var(--acc)}
+  .now{background:linear-gradient(180deg,#2a2213,#1c232c);
+    border:1px solid #4d3c16;border-left:3px solid var(--prog);
+    border-radius:var(--r);padding:14px 18px;margin:0 0 26px}
+  .now .k{font-size:11.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--prog);font-weight:700;margin-bottom:5px}
+  .now p{margin:0;font-size:13.7px;color:var(--tx)}
+  .now p+p{margin-top:6px;color:var(--mut)}
+  h2{font-size:12px;text-transform:uppercase;letter-spacing:.09em;color:var(--mut);
+    margin:30px 0 12px;font-weight:700}
+  .stack{display:grid;gap:10px}
+  .p{display:grid;grid-template-columns:34px 1fr auto;gap:14px;align-items:start;
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:13px 16px}
+  .n{font-size:20px;font-weight:700;color:var(--acc);text-align:center;line-height:1.2}
+  .p h3{margin:0 0 3px;font-size:15px}
+  .p p{margin:0;color:var(--mut);font-size:13px}
+  .badge{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;
+    padding:3px 8px;border-radius:999px;white-space:nowrap;align-self:center}
+  .b-not{background:#20262e;color:var(--dim);border:1px solid var(--line)}
+  .b-prog{background:#2a2213;color:var(--prog);border:1px solid #4d3c16}
+  .b-done{background:#12261a;color:var(--live);border:1px solid #1f4a2e}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+  .tile{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:12px 15px}
+  .tile .lab{font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.05em}
+  .tile .val{font-size:21px;font-weight:700;margin-top:4px;font-variant-numeric:tabular-nums}
+  .tile .sub{font-size:11.5px;color:var(--dim);margin-top:2px}
+  .val.prog{color:var(--prog)} .val.live{color:var(--live)} .val.stop{color:var(--stop)}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  @media(max-width:640px){.two{grid-template-columns:1fr}.p{grid-template-columns:28px 1fr}.badge{grid-column:2;justify-self:start;margin-top:4px}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px 17px}
+  .card h3{margin:0 0 8px;font-size:13.5px}
+  ul{margin:6px 0 0;padding-left:18px} li{margin:5px 0;color:var(--mut);font-size:13.3px}
+  li b{color:var(--tx);font-weight:600}
+  .parked li{color:var(--parked)} .parked b{color:var(--mut)}
+  .first{color:var(--prog)!important;font-weight:600}
+  .dec li{color:var(--tx)} .dec li span{color:var(--mut)}
+  footer{margin-top:34px;padding-top:16px;border-top:1px solid var(--line);
+    color:var(--dim);font-size:12px;display:flex;flex-wrap:wrap;gap:8px}
+  footer .sep{color:var(--line)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Straumvakt — Work Status</h1>
+    <span class="phase">Market focus</span>
+    <span class="upd">Snapshot · 2026-08-08</span>
+  </header>
+
+  <div class="north">
+    North star: <b>one real organisation to a correct invoice, from a clean production environment.</b>
+  </div>
+
+  <div class="now">
+    <div class="k">⏸ Right now — paused at a decision</div>
+    <p>Housekeeping is committed locally (<code>ee0ced5</code> on <code>dev/housekeeping</code>) — 8/8 checks, tsc clean, 623 tests. Nothing pushed, nothing deployed.</p>
+    <p>Stopped before promoting to staging: that branch carries <b>131 unmerged commits — the whole Drizzle port</b> — and staging is still on pre-port code, so "deploy housekeeping" would silently land the entire port on the live system. Awaiting your call on the promotion shape.</p>
+  </div>
+
+  <h2>Priorities</h2>
+  <div class="stack">
+    <div class="p"><div class="n">1</div>
+      <div><h3>Money pipeline → first invoice</h3>
+        <p>Task 3 (commercial design note) is written but uncommitted — needs your design approval, incl. the <code>per_connector</code> question. Nothing built yet.</p></div>
+      <span class="badge b-not">Not started</span></div>
+    <div class="p"><div class="n">2</div>
+      <div><h3>Clean environment to ship from</h3>
+        <p>WS2. Prod still the stale April copy; straumvakt.org repoint + clean-prod build deferred to task 10.</p></div>
+      <span class="badge b-not">Not started</span></div>
+    <div class="p"><div class="n">3</div>
+      <div><h3>Self-serve onboarding</h3>
+        <p>Scale investment; after the invoice is proven on customer one.</p></div>
+      <span class="badge b-not">Not started</span></div>
+  </div>
+
+  <h2>Health — the diffable heartbeat</h2>
+  <div class="grid">
+    <div class="tile"><div class="lab">Drizzle port</div><div class="val prog">~21%</div><div class="sub">131 done · 481 Prisma left</div></div>
+    <div class="tile"><div class="lab">Vendor leaks</div><div class="val prog">24 → 0</div><div class="sub">22 vendor · baseline</div></div>
+    <div class="tile"><div class="lab">Packages</div><div class="val live">3</div><div class="sub">shared · contracts · commercial</div></div>
+    <div class="tile"><div class="lab">ADRs</div><div class="val">51</div><div class="sub">→ legacy reference</div></div>
+    <div class="tile"><div class="lab">Tests / checks</div><div class="val live">623 ✓</div><div class="sub">8/8 · tsc clean</div></div>
+    <div class="tile"><div class="lab">Staging</div><div class="val prog">pre-port</div><div class="sub">port unmerged</div></div>
+    <div class="tile"><div class="lab">Production</div><div class="val stop">STALE</div><div class="sub">rebuild from migrations</div></div>
+    <div class="tile"><div class="lab">Branch</div><div class="val" style="font-size:15px">ee0ced5</div><div class="sub">committed, not pushed</div></div>
+  </div>
+
+  <h2>Foundation — done or in flight</h2>
+  <div class="two">
+    <div class="card">
+      <h3>Landed</h3>
+      <ul>
+        <li><b>Canon pivot</b> — FOCUS · DECISIONS · WORKSPACE · SERVICES; 51 ADRs bannered legacy</li>
+        <li><b>Clean-shell spine</b> — contracts harvested behind a re-export shim</li>
+        <li><b>Housekeeping</b> — /admin/work built + gated; .env.example blanked (committed, not pushed)</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>In flight (by-product)</h3>
+      <ul>
+        <li><b>Drizzle port</b> — ~21%, converting on touched files; not a scheduled sprint</li>
+        <li><b>commercial</b> — package created, empty home; fills in WS1</li>
+        <li><b>Vendor ratchet</b> — holding at 24; trends to 0</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>Decisions waiting on you</h2>
+  <div class="card dec">
+    <ul>
+      <li><b>Promotion shape</b> <span>— land the 131-commit port on staging (its own validated event) vs housekeeping-only vs leave as-is</span></li>
+      <li><b>Task 3 — commercial design</b> <span>+ the <code>per_connector</code> question</span></li>
+      <li><b>Invoice rail</b> <span>— PDF vs PEPPOL for launch; which bank for kröfuhafi</span></li>
+      <li><b>Dev-tier cost inputs</b> <span>— Neon plan; Dev always-hot or scale-to-zero</span></li>
+      <li><b>Admin password</b> <span>— rotation deferred by choice (un-defer before customer data / launch / repo handoff)</span></li>
+    </ul>
+  </div>
+
+  <h2>Flags — data safety + WS1</h2>
+  <div class="card">
+    <ul>
+      <li style="color:var(--stop)"><b style="color:var(--stop)">Back out the OCMF envelopes first</b> — 1,497 signed envelopes sit behind an ON DELETE CASCADE the authorised schema drop would erase. The one item an already-approved step destroys; everything else waits at no cost.</li>
+      <li><b>Email fails open</b> — fine for a notice, wrong for an invoice; delivery must fail closed + be tracked</li>
+      <li><b>No observability</b> — nothing beyond <code>wrangler tail</code></li>
+    </ul>
+  </div>
+
+  <h2>Parked — not now</h2>
+  <div class="card parked">
+    <ul>
+      <li class="first">Attribution / createDriver — <b>first to un-park</b>, right after first invoice</li>
+      <li>Team-scale split · Service vertical · Flex / DER · Issues Engine</li>
+      <li>Full cost-center (DSO-by-address · retailer choice · home reimbursement · contractor 10% · card/premium)</li>
+      <li>Installation dissolution · roaming · OCPP 2.0.1 · BLE · NFC · MFA · RLS</li>
+    </ul>
+  </div>
+
+  <footer>
+    <span>Source: WORKSPACE.md + reported state</span><span class="sep">·</span>
+    <span>Internal work view — point-in-time</span><span class="sep">·</span>
+    <span>Active canon: FOCUS.md</span>
+  </footer>
+</div>
+</body>
+</html>

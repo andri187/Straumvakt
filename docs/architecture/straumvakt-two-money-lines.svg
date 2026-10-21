@@ -1,0 +1,140 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="940" viewBox="0 0 1400 940" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#5C6B77"/>
+    </marker>
+    <style>
+      .h1  { font-size:23px; font-weight:700; fill:#101820 }
+      .h2  { font-size:12.5px; fill:#66757F }
+      .t   { font-size:16px; font-weight:600; fill:#101820 }
+      .s   { font-size:12px; fill:#5C6B77 }
+      .m   { font-size:11.5px; fill:#5C6B77; font-family:'IBM Plex Mono',ui-monospace,monospace }
+      .band{ font-size:11.5px; font-weight:600; letter-spacing:.14em }
+      .k   { font-size:11.5px; fill:#66757F; letter-spacing:.04em }
+      .v   { font-size:13.5px; fill:#101820 }
+      .vb  { font-size:13.5px; fill:#101820; font-weight:600 }
+      .doc { font-size:15px; font-weight:600; font-family:'IBM Plex Mono',ui-monospace,monospace }
+    </style>
+  </defs>
+
+  <rect width="1400" height="940" fill="#FBFCFD"/>
+
+  <text x="40" y="42" class="h1">Two money lines, one engine</text>
+  <text x="40" y="64" class="h2">Straumvakt is a party to one of them and not the other. That single fact decides the header, the VAT, the bank account and the retention duty.</text>
+  <line x1="40" y1="80" x2="1360" y2="80" stroke="#D3DBE3"/>
+
+  <!-- shared engine -->
+  <rect x="40" y="100" width="1320" height="76" rx="3" fill="#EDF1F4" stroke="#4A5A66" stroke-width="1.5"/>
+  <text x="60" y="128" class="t">One money engine · one period · one set of settlement components</text>
+  <text x="60" y="152" class="s">The same sessions, the same rates, the same period lifecycle feed both lines. What differs is who owns each factor — and therefore whose document it lands on.</text>
+  <text x="60" y="168" class="m">packages/commercial/src/core-billing</text>
+
+  <line x1="360" y1="176" x2="360" y2="216" stroke="#5C6B77" stroke-width="1.5" marker-end="url(#a)"/>
+  <line x1="1040" y1="176" x2="1040" y2="216" stroke="#5C6B77" stroke-width="1.5" marker-end="url(#a)"/>
+
+  <!-- ============ LINE 1 : PRINCIPAL ============ -->
+  <rect x="40" y="220" width="640" height="46" rx="3" fill="#0B5D8A"/>
+  <text x="60" y="242" class="band" fill="#FFFFFF">LINE 1 · PRINCIPAL</text>
+  <text x="60" y="259" class="s" fill="#CFE4F0">Straumvakt sells to the host</text>
+  <text x="520" y="249" class="s" fill="#CFE4F0" font-weight="600">ours</text>
+
+  <rect x="40" y="278" width="640" height="86" rx="3" fill="#FFFFFF" stroke="#0B5D8A" stroke-width="1.5"/>
+  <text x="60" y="304" class="m">THE DOCUMENT HEADER</text>
+  <text x="60" y="332" class="doc" fill="#0B5D8A">Straumvakt ehf.</text>
+  <text x="60" y="352" class="s">own name · own kennitala · own VAT number</text>
+
+  <g>
+    <line x1="40" y1="386" x2="680" y2="386" stroke="#E4EAF0"/>
+    <text x="40" y="408" class="k">PARTIES</text>
+    <text x="260" y="408" class="v">Straumvakt ehf. ↔ the host org</text>
+
+    <line x1="40" y1="424" x2="680" y2="424" stroke="#E4EAF0"/>
+    <text x="40" y="446" class="k">STRAUMVAKT'S ROLE</text>
+    <text x="260" y="446" class="vb">the seller — a party to it</text>
+
+    <line x1="40" y1="462" x2="680" y2="462" stroke="#E4EAF0"/>
+    <text x="40" y="484" class="k">PRICED ON</text>
+    <text x="260" y="484" class="v">connectors × month · active drivers × month</text>
+    <text x="260" y="502" class="s">headcount and hardware — never consumption</text>
+
+    <line x1="40" y1="518" x2="680" y2="518" stroke="#E4EAF0"/>
+    <text x="40" y="540" class="k">MONEY LANDS</text>
+    <text x="260" y="540" class="vb">Straumvakt's account</text>
+
+    <line x1="40" y1="556" x2="680" y2="556" stroke="#E4EAF0"/>
+    <text x="40" y="578" class="k">VAT</text>
+    <text x="260" y="578" class="v">Straumvakt's own</text>
+
+    <line x1="40" y1="594" x2="680" y2="594" stroke="#E4EAF0"/>
+    <text x="40" y="616" class="k">RETENTION</text>
+    <text x="260" y="616" class="v">Straumvakt's duty</text>
+
+    <line x1="40" y1="632" x2="680" y2="632" stroke="#E4EAF0"/>
+    <text x="40" y="654" class="k">NUMBERING</text>
+    <text x="260" y="654" class="v">Straumvakt's own series</text>
+
+    <line x1="40" y1="670" x2="680" y2="670" stroke="#E4EAF0"/>
+    <text x="40" y="692" class="k">STATUS</text>
+    <text x="260" y="692" class="vb" fill="#2C7565">built and proven</text>
+    <text x="260" y="710" class="m">SV-2026-000001 · 30 connectors · 2 drivers · 7.564,00 kr</text>
+  </g>
+
+  <!-- ============ LINE 2 : AGENT ============ -->
+  <rect x="720" y="220" width="640" height="46" rx="3" fill="#A5680C"/>
+  <text x="740" y="242" class="band" fill="#FFFFFF">LINE 2 · AGENT</text>
+  <text x="740" y="259" class="s" fill="#F7E4C4">the host claims from a driver, or another company</text>
+  <text x="1180" y="249" class="s" fill="#F7E4C4" font-weight="600">never ours</text>
+
+  <rect x="720" y="278" width="640" height="86" rx="3" fill="#FFFFFF" stroke="#A5680C" stroke-width="1.5"/>
+  <text x="740" y="304" class="m">THE DOCUMENT HEADER</text>
+  <text x="740" y="332" class="doc" fill="#A5680C">Straumvakt f.h. Hýsill A ehf.</text>
+  <text x="740" y="352" class="s">the host's name · a committed golden test</text>
+
+  <g>
+    <line x1="720" y1="386" x2="1360" y2="386" stroke="#E4EAF0"/>
+    <text x="720" y="408" class="k">PARTIES</text>
+    <text x="940" y="408" class="v">the host org ↔ a driver, or another company</text>
+
+    <line x1="720" y1="424" x2="1360" y2="424" stroke="#E4EAF0"/>
+    <text x="720" y="446" class="k">STRAUMVAKT'S ROLE</text>
+    <text x="940" y="446" class="vb">not a party — it operates the claim</text>
+
+    <line x1="720" y1="462" x2="1360" y2="462" stroke="#E4EAF0"/>
+    <text x="720" y="484" class="k">PRICED ON</text>
+    <text x="940" y="484" class="v">energy · uplift · idle · rental</text>
+    <text x="940" y="502" class="s">consumption, per session</text>
+
+    <line x1="720" y1="518" x2="1360" y2="518" stroke="#E4EAF0"/>
+    <text x="720" y="540" class="k">MONEY LANDS</text>
+    <text x="940" y="540" class="vb">the host's account — never Straumvakt's</text>
+
+    <line x1="720" y1="556" x2="1360" y2="556" stroke="#E4EAF0"/>
+    <text x="720" y="578" class="k">VAT</text>
+    <text x="940" y="578" class="v">the host's status</text>
+    <text x="1180" y="578" class="s" fill="#9C3A2D">a húsfélag may not be registered — open</text>
+
+    <line x1="720" y1="594" x2="1360" y2="594" stroke="#E4EAF0"/>
+    <text x="720" y="616" class="k">RETENTION</text>
+    <text x="940" y="616" class="v">the host's duty</text>
+
+    <line x1="720" y1="632" x2="1360" y2="632" stroke="#E4EAF0"/>
+    <text x="720" y="654" class="k">NUMBERING</text>
+    <text x="940" y="654" class="v">Straumvakt holds the counter, series per host</text>
+
+    <line x1="720" y1="670" x2="1360" y2="670" stroke="#E4EAF0"/>
+    <text x="720" y="692" class="k">STATUS</text>
+    <text x="940" y="692" class="vb" fill="#A5680C">document shape built</text>
+    <text x="940" y="710" class="m">no derivation to an org that is not the tenant</text>
+  </g>
+
+  <!-- invariant -->
+  <rect x="40" y="742" width="1320" height="70" rx="3" fill="#DFEEE9" stroke="#2C7565" stroke-width="1.5"/>
+  <text x="60" y="770" class="t">The invariant, and it is enforced at construction</text>
+  <text x="60" y="794" class="s">A document carries exactly ONE posture. A mixed document cannot be built — `mixed_posture` is a named refusal before anything renders, so no downstream code ever has to ask whose money is on the page.</text>
+
+  <!-- the gap -->
+  <rect x="40" y="828" width="1320" height="82" rx="3" fill="#F4DFDB" stroke="#9C3A2D" stroke-width="1.5"/>
+  <text x="60" y="856" class="t">The gap that opens the day Company B exists</text>
+  <text x="60" y="880" class="s">Both lines arrive as `recipientKind: "organisation"`. Today that is unambiguous, because the only org ever addressed is the tenant — so an org statement is always Line 1. Add a second company and it could be either.</text>
+  <text x="60" y="900" class="s">The rule to encode: <tspan font-weight="600" fill="#101820">when the owner is an org that is not the host, the document is AGENT posture with the host as issuer</tspan> — not a second principal invoice.</text>
+</svg>

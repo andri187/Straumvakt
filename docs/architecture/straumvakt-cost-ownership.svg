@@ -1,0 +1,154 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="920" viewBox="0 0 1400 920" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#5C6B77"/>
+    </marker>
+    <marker id="ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#2C7565"/>
+    </marker>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#9C3A2D"/>
+    </marker>
+    <style>
+      .t   { font-size:15px; font-weight:600; fill:#101820 }
+      .s   { font-size:11.5px; fill:#5C6B77 }
+      .m   { font-size:11px; fill:#5C6B77; font-family:'IBM Plex Mono',ui-monospace,monospace }
+      .band{ font-size:12px; font-weight:600; letter-spacing:.14em; fill:#5C6B77 }
+      .h1  { font-size:23px; font-weight:700; fill:#101820 }
+      .h2  { font-size:12.5px; fill:#66757F }
+      .row { font-size:12.5px; fill:#101820 }
+      .own { font-size:12px; fill:#A5680C; font-weight:600 }
+      .bad { font-size:12px; fill:#9C3A2D; font-weight:600 }
+      .ok  { font-size:12px; fill:#2C7565; font-weight:600 }
+    </style>
+  </defs>
+
+  <rect width="1400" height="920" fill="#FBFCFD"/>
+
+  <text x="40" y="42" class="h1">Who pays — the engine as built, and the one change</text>
+  <text x="40" y="64" class="h2">Ownership is not a property of a line today. It is inferred when the statement is assembled, from a clause that only knows org or driver.</text>
+  <line x1="40" y1="80" x2="1360" y2="80" stroke="#D3DBE3"/>
+
+  <!-- ================= TODAY ================= -->
+  <text x="40" y="112" class="band">TODAY — VERIFIED IN THE CODE</text>
+
+  <rect x="40" y="190" width="200" height="86" rx="3" fill="#EDF1F4" stroke="#4A5A66" stroke-width="1.5"/>
+  <text x="58" y="218" class="t">Session · CDR</text>
+  <text x="58" y="240" class="s">sealed with placement,</text>
+  <text x="58" y="256" class="s">site, tariff version</text>
+  <text x="58" y="271" class="bad">no owner sealed</text>
+
+  <line x1="240" y1="233" x2="294" y2="233" stroke="#5C6B77" stroke-width="1.5" marker-end="url(#a)"/>
+
+  <rect x="300" y="130" width="300" height="206" rx="3" fill="#F7EDDA" stroke="#A5680C" stroke-width="1.5"/>
+  <text x="318" y="157" class="t">settlement_components</text>
+  <text x="318" y="176" class="m">keyed (session_id, kind)</text>
+  <line x1="318" y1="186" x2="582" y2="186" stroke="#E4C58A"/>
+  <text x="318" y="208" class="row">dso</text>
+  <text x="318" y="230" class="row">retailer</text>
+  <text x="318" y="252" class="row">cpo_addon</text>
+  <text x="318" y="274" class="row">plug_time</text>
+  <text x="460" y="208" class="m">unit price · rate version</text>
+  <text x="460" y="230" class="m">unit price · rate version</text>
+  <text x="460" y="252" class="m">unit price · rate version</text>
+  <text x="460" y="274" class="m">per minute after grace</text>
+  <line x1="318" y1="290" x2="582" y2="290" stroke="#E4C58A"/>
+  <text x="318" y="312" class="bad">no owner column — org_id is the tenant, not the payer</text>
+
+  <line x1="600" y1="233" x2="654" y2="233" stroke="#5C6B77" stroke-width="1.5" marker-end="url(#a)"/>
+
+  <rect x="660" y="180" width="240" height="106" rx="3" fill="#9C3A2D" stroke="#9C3A2D" stroke-width="1.5"/>
+  <text x="678" y="208" class="t" fill="#FFFFFF">Assembly</text>
+  <text x="678" y="230" class="s" fill="#F4DFDB">ownership is inferred HERE,</text>
+  <text x="678" y="246" class="s" fill="#F4DFDB">from the clause bearer</text>
+  <text x="678" y="270" class="m" fill="#F4DFDB">bearer ∈ { org , driver }</text>
+
+  <path d="M900 215 L935 215 L935 152 L954 152" fill="none" stroke="#2C7565" stroke-width="1.5" marker-end="url(#ag)"/>
+  <path d="M900 240 L954 240" fill="none" stroke="#2C7565" stroke-width="1.5" marker-end="url(#ag)"/>
+  <path d="M900 262 L935 262 L935 330 L954 330" fill="none" stroke="#9C3A2D" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#ar)"/>
+
+  <rect x="960" y="118" width="300" height="70" rx="3" fill="#DFEEE9" stroke="#2C7565" stroke-width="1.5"/>
+  <text x="978" y="144" class="t">Driver statement</text>
+  <text x="978" y="164" class="m">recipientKind "driver" · recipientId driverId</text>
+  <text x="978" y="180" class="ok">works</text>
+
+  <rect x="960" y="206" width="300" height="70" rx="3" fill="#DFEEE9" stroke="#2C7565" stroke-width="1.5"/>
+  <text x="978" y="232" class="t">Host statement</text>
+  <text x="978" y="252" class="m">recipientId = period.orgId — hardcoded</text>
+  <text x="978" y="268" class="ok">works, for the tenant only</text>
+
+  <rect x="960" y="296" width="300" height="70" rx="3" fill="#F4DFDB" stroke="#9C3A2D" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <text x="978" y="322" class="t">Company B statement</text>
+  <text x="978" y="342" class="m">the schema would accept it —</text>
+  <text x="978" y="358" class="bad">nothing can derive it</text>
+
+  <text x="1280" y="150" class="bad" font-size="26">✓</text>
+  <text x="1280" y="238" class="bad" font-size="26" fill="#2C7565">✓</text>
+  <text x="1280" y="328" class="bad" font-size="26">✕</text>
+
+  <text x="40" y="380" class="s">The kind is unique per session — one dso row, one retailer row — so a session cannot express two payers for two parts of itself.</text>
+  <text x="40" y="400" class="s">A per-driver override inside one group fails for the same reason as Company B: the question "which owner" is asked once, at the end, from a group-level clause.</text>
+
+  <line x1="40" y1="428" x2="1360" y2="428" stroke="#D3DBE3"/>
+
+  <!-- ================= THE CHANGE ================= -->
+  <text x="40" y="462" class="band">THE CHANGE — ONE STRUCTURAL MOVE</text>
+
+  <rect x="40" y="546" width="200" height="96" rx="3" fill="#EDF1F4" stroke="#4A5A66" stroke-width="1.5"/>
+  <text x="58" y="574" class="t">Session · CDR</text>
+  <text x="58" y="596" class="s">sealed with placement,</text>
+  <text x="58" y="612" class="s">site, tariff version</text>
+  <text x="58" y="634" class="own">+ owner per factor, sealed</text>
+
+  <line x1="240" y1="594" x2="294" y2="594" stroke="#5C6B77" stroke-width="1.5" marker-end="url(#a)"/>
+
+  <rect x="300" y="490" width="300" height="206" rx="3" fill="#F7EDDA" stroke="#A5680C" stroke-width="2"/>
+  <text x="318" y="517" class="t">settlement_components</text>
+  <text x="318" y="536" class="m">keyed (session_id, kind) + owner</text>
+  <line x1="318" y1="546" x2="582" y2="546" stroke="#E4C58A"/>
+  <text x="318" y="568" class="row">dso</text>
+  <text x="318" y="590" class="row">retailer</text>
+  <text x="318" y="612" class="row">cpo_addon</text>
+  <text x="318" y="634" class="row">plug_time</text>
+  <text x="470" y="568" class="own">host</text>
+  <text x="470" y="590" class="own">host</text>
+  <text x="470" y="612" class="own">Company B</text>
+  <text x="470" y="634" class="own">the driver</text>
+  <line x1="318" y1="650" x2="582" y2="650" stroke="#E4C58A"/>
+  <text x="318" y="672" class="own">one factor, one owner — resolved at seal, never later</text>
+
+  <line x1="600" y1="594" x2="654" y2="594" stroke="#5C6B77" stroke-width="1.5" marker-end="url(#a)"/>
+
+  <rect x="660" y="544" width="240" height="100" rx="3" fill="#2C7565" stroke="#2C7565" stroke-width="1.5"/>
+  <text x="678" y="572" class="t" fill="#FFFFFF">Assembly</text>
+  <text x="678" y="594" class="s" fill="#DFEEE9">group by owner.</text>
+  <text x="678" y="610" class="s" fill="#DFEEE9">nothing is inferred —</text>
+  <text x="678" y="628" class="s" fill="#DFEEE9">an unresolvable owner refused</text>
+
+  <path d="M900 576 L935 576 L935 522 L954 522" fill="none" stroke="#2C7565" stroke-width="1.5" marker-end="url(#ag)"/>
+  <path d="M900 600 L954 600" fill="none" stroke="#2C7565" stroke-width="1.5" marker-end="url(#ag)"/>
+  <path d="M900 622 L935 622 L935 700 L954 700" fill="none" stroke="#2C7565" stroke-width="1.5" marker-end="url(#ag)"/>
+
+  <rect x="960" y="488" width="300" height="68" rx="3" fill="#DFEEE9" stroke="#2C7565" stroke-width="1.5"/>
+  <text x="978" y="514" class="t">Driver statement</text>
+  <text x="978" y="536" class="m">their own factors, and only those</text>
+
+  <rect x="960" y="576" width="300" height="68" rx="3" fill="#DFEEE9" stroke="#2C7565" stroke-width="1.5"/>
+  <text x="978" y="602" class="t">Host statement</text>
+  <text x="978" y="624" class="m">recipientId = any org, not just the tenant</text>
+
+  <rect x="960" y="666" width="300" height="68" rx="3" fill="#DFEEE9" stroke="#2C7565" stroke-width="1.5"/>
+  <text x="978" y="692" class="t">Company B statement</text>
+  <text x="978" y="714" class="m">same mechanism, different owner</text>
+
+  <text x="1280" y="522" class="ok" font-size="26">✓</text>
+  <text x="1280" y="610" class="ok" font-size="26">✓</text>
+  <text x="1280" y="700" class="ok" font-size="26">✓</text>
+
+  <rect x="40" y="762" width="1320" height="76" rx="3" fill="#EDF1F4" stroke="#D3DBE3"/>
+  <text x="60" y="790" class="t" font-size="14">Two edits, and three capabilities arrive together</text>
+  <text x="60" y="814" class="s">Carry the owner on the component, resolved when the session is sealed · let an organisation statement address any org rather than the period's own. That unlocks the multi-company workplace, the per-driver override inside one group, and workplace-pays-for-home — none of which needs a new factor.</text>
+
+  <text x="40" y="874" class="m">Verified 2026-08-28 · statement.ts:217 driver · statement.ts:300 recipientId = period.orgId · settlement_components keyed (session_id, kind), org_id is the tenant · bearer vocabulary org | driver</text>
+  <text x="40" y="896" class="m">The cost split dso · retailer · cpo_addon already exists per session with unit price and rate version — the transparency line is built. What is missing on the cost side is everything monthly.</text>
+</svg>

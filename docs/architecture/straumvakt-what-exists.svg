@@ -1,0 +1,170 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="1010" viewBox="0 0 1400 1010" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#5C6B77"/>
+    </marker>
+    <style>
+      .h1 { font-size:23px; font-weight:700; fill:#101820 }
+      .h2 { font-size:12.5px; fill:#66757F }
+      .band{ font-size:11.5px; font-weight:600; letter-spacing:.14em; fill:#5C6B77 }
+      .t  { font-size:14.5px; font-weight:600; fill:#101820 }
+      .s  { font-size:11.5px; fill:#5C6B77 }
+      .m  { font-size:11px; fill:#5C6B77; font-family:'IBM Plex Mono',ui-monospace,monospace }
+      .it { font-size:12.5px; fill:#101820 }
+      .itm{ font-size:11px; fill:#66757F }
+      .lg { font-size:11.5px; fill:#3D4A57 }
+    </style>
+  </defs>
+
+  <rect width="1400" height="1010" fill="#FBFCFD"/>
+
+  <text x="40" y="42" class="h1">What exists today</text>
+  <text x="40" y="64" class="h2">After round 4, 28 August 2026. Everything below is real code with real tests — the colour says whether it has ever run against production.</text>
+
+  <!-- legend -->
+  <g>
+    <circle cx="906" cy="38" r="5" fill="#2C7565"/><text x="918" y="42" class="lg">live in production</text>
+    <circle cx="1042" cy="38" r="5" fill="#A5680C"/><text x="1054" y="42" class="lg">built, never switched on</text>
+    <circle cx="1216" cy="38" r="5" fill="#9C3A2D"/><text x="1228" y="42" class="lg">stubbed or defective</text>
+    <circle cx="906" cy="60" r="5" fill="#93A1AD"/><text x="918" y="64" class="lg">absent</text>
+  </g>
+
+  <line x1="40" y1="82" x2="1360" y2="82" stroke="#D3DBE3"/>
+
+  <!-- ============ PIPELINE ============ -->
+  <text x="40" y="112" class="band">THE LIVE PATH — RUNNING RIGHT NOW</text>
+
+  <g>
+    <rect x="40" y="128" width="170" height="92" rx="3" fill="#DFEEE9" stroke="#2C7565" stroke-width="1.5"/>
+    <circle cx="58" cy="148" r="5" fill="#2C7565"/>
+    <text x="72" y="152" class="t">Chargers</text>
+    <text x="58" y="176" class="s">20 active at Dalvegur</text>
+    <text x="58" y="192" class="s">15 deactivated · 35 in</text>
+    <text x="58" y="208" class="s">the portal · 30 known</text>
+
+    <line x1="210" y1="174" x2="244" y2="174" stroke="#5C6B77" stroke-width="1.4" marker-end="url(#a)"/>
+
+    <rect x="250" y="128" width="180" height="92" rx="3" fill="#DFEEE9" stroke="#2C7565" stroke-width="1.5"/>
+    <circle cx="268" cy="148" r="5" fill="#2C7565"/>
+    <text x="282" y="152" class="t">Zaptec Cloud</text>
+    <text x="268" y="176" class="s">OCPP 1.6 · the socket</text>
+    <text x="268" y="192" class="s">originates here, not at</text>
+    <text x="268" y="208" class="s">the charger</text>
+
+    <line x1="430" y1="174" x2="464" y2="174" stroke="#5C6B77" stroke-width="1.4" marker-end="url(#a)"/>
+
+    <rect x="470" y="128" width="210" height="92" rx="3" fill="#DFEEE9" stroke="#2C7565" stroke-width="1.5"/>
+    <circle cx="488" cy="148" r="5" fill="#2C7565"/>
+    <text x="502" y="152" class="t">Gateway Worker</text>
+    <text x="488" y="176" class="s">a Durable Object per identity,</text>
+    <text x="488" y="192" class="s">WebSocket hibernation</text>
+    <text x="488" y="208" class="m">21 live sockets</text>
+
+    <line x1="680" y1="174" x2="714" y2="174" stroke="#5C6B77" stroke-width="1.4" marker-end="url(#a)"/>
+
+    <rect x="720" y="128" width="150" height="92" rx="3" fill="#DFEEE9" stroke="#2C7565" stroke-width="1.5"/>
+    <circle cx="738" cy="148" r="5" fill="#2C7565"/>
+    <text x="752" y="152" class="t">Queue</text>
+    <text x="738" y="176" class="s">event envelope,</text>
+    <text x="738" y="192" class="s">idempotency key</text>
+
+    <line x1="870" y1="174" x2="904" y2="174" stroke="#5C6B77" stroke-width="1.4" marker-end="url(#a)"/>
+
+    <rect x="910" y="128" width="200" height="92" rx="3" fill="#DFEEE9" stroke="#2C7565" stroke-width="1.5"/>
+    <circle cx="928" cy="148" r="5" fill="#2C7565"/>
+    <text x="942" y="152" class="t">API Worker</text>
+    <text x="928" y="176" class="s">projections · repositories</text>
+    <text x="928" y="192" class="s">187 documented endpoints</text>
+
+    <line x1="1110" y1="174" x2="1144" y2="174" stroke="#5C6B77" stroke-width="1.4" marker-end="url(#a)"/>
+
+    <rect x="1150" y="128" width="210" height="92" rx="3" fill="#DFEEE9" stroke="#2C7565" stroke-width="1.5"/>
+    <circle cx="1168" cy="148" r="5" fill="#2C7565"/>
+    <text x="1182" y="152" class="t">Legacy Postgres</text>
+    <text x="1168" y="176" class="s">66 tables · the only</text>
+    <text x="1168" y="192" class="s">database with rows in it</text>
+    <text x="1168" y="208" class="m">to be retired, not emptied</text>
+  </g>
+
+  <text x="40" y="248" class="s">Sessions land, are projected and are stored. <tspan font-weight="600" fill="#101820">Nothing prices them.</tspan> Driver authorisation runs in shadow mode — a verdict is computed and logged for every Authorize, and the reply is Accepted regardless.</text>
+
+  <line x1="40" y1="272" x2="1360" y2="272" stroke="#E4EAF0"/>
+
+  <!-- ============ MONEY ENGINE ============ -->
+  <text x="40" y="304" class="band">THE MONEY ENGINE — BUILT, PROVEN OFFLINE, NEVER RUN AGAINST A DATABASE</text>
+
+  <rect x="40" y="320" width="640" height="286" rx="3" fill="#FFFFFF" stroke="#A5680C" stroke-width="1.5"/>
+  <text x="60" y="346" class="t">packages/commercial · core-billing</text>
+  <line x1="60" y1="356" x2="660" y2="356" stroke="#F0E0C4"/>
+
+  <circle cx="66" cy="376" r="4.5" fill="#A5680C"/><text x="82" y="380" class="it">money · rate-window · settlement</text><text x="420" y="380" class="itm">rounding, minor units, rate versions</text>
+  <circle cx="66" cy="400" r="4.5" fill="#A5680C"/><text x="82" y="404" class="it">meter-energy · plug-time</text><text x="420" y="404" class="itm">per kWh, per minute after grace</text>
+  <circle cx="66" cy="424" r="4.5" fill="#A5680C"/><text x="82" y="428" class="it">flat-fee · subscription</text><text x="420" y="428" class="itm">200 kr/connector · 50 kr/driver</text>
+  <circle cx="66" cy="448" r="4.5" fill="#A5680C"/><text x="82" y="452" class="it">period-lifecycle · period-close</text><text x="420" y="452" class="itm">a closed period cannot be re-priced</text>
+  <circle cx="66" cy="472" r="4.5" fill="#A5680C"/><text x="82" y="476" class="it">activity-source · activity-month</text><text x="420" y="476" class="itm">counts placements overlapping the period</text>
+  <circle cx="66" cy="496" r="4.5" fill="#A5680C"/><text x="82" y="500" class="it">cdr-provenance · provenance-state</text><text x="420" y="500" class="itm">estimated → confirmed → mismatch</text>
+  <circle cx="66" cy="520" r="4.5" fill="#A5680C"/><text x="82" y="524" class="it">statement · delivery-log</text><text x="420" y="524" class="itm">one posture per document, enforced</text>
+  <circle cx="66" cy="544" r="4.5" fill="#9C3A2D"/><text x="82" y="548" class="it">ownership of a line</text><text x="420" y="548" class="itm" fill="#9C3A2D">inferred at assembly — org or driver only</text>
+  <circle cx="66" cy="568" r="4.5" fill="#93A1AD"/><text x="82" y="572" class="it">monthly cost factors</text><text x="420" y="572" class="itm">no fastagjald, no capacity, no retail fixed</text>
+  <text x="60" y="596" class="m">1.882 tests · 19 fool tests · one invoice produced offline, twice, byte-identical</text>
+
+  <!-- DOCUMENTS -->
+  <rect x="720" y="320" width="640" height="286" rx="3" fill="#FFFFFF" stroke="#A5680C" stroke-width="1.5"/>
+  <text x="740" y="346" class="t">packages/contracts · the document and its delivery</text>
+  <line x1="740" y1="356" x2="1340" y2="356" stroke="#F0E0C4"/>
+
+  <circle cx="746" cy="376" r="4.5" fill="#A5680C"/><text x="762" y="380" class="it">invoice document</text><text x="1060" y="380" class="itm">mixed posture cannot be constructed</text>
+  <circle cx="746" cy="400" r="4.5" fill="#A5680C"/><text x="762" y="404" class="it">PDF renderer · golden files</text><text x="1060" y="404" class="itm">Straumvakt f.h. &lt;host&gt;</text>
+  <circle cx="746" cy="424" r="4.5" fill="#A5680C"/><text x="762" y="428" class="it">delivery log</text><text x="1060" y="428" class="itm">attempts, idempotency, outcomes</text>
+  <circle cx="746" cy="448" r="4.5" fill="#A5680C"/><text x="762" y="452" class="it">agreements — write surface</text><text x="1060" y="452" class="itm">13 operations, dated, idempotent</text>
+  <circle cx="746" cy="472" r="4.5" fill="#A5680C"/><text x="762" y="476" class="it">org readiness · kennitala validation</text><text x="1060" y="476" class="itm">invoiceable or not, with the reason</text>
+  <circle cx="746" cy="496" r="4.5" fill="#9C3A2D"/><text x="762" y="500" class="it">onboarding → invoicing handoff</text><text x="1060" y="500" class="itm" fill="#9C3A2D">no shared org, period or sequence</text>
+  <circle cx="746" cy="520" r="4.5" fill="#93A1AD"/><text x="762" y="524" class="it">reimbursement direction</text><text x="1060" y="524" class="itm">money can only flow one way</text>
+  <circle cx="746" cy="544" r="4.5" fill="#93A1AD"/><text x="762" y="548" class="it">payment status feed</text><text x="1060" y="548" class="itm">nothing knows who has paid</text>
+  <circle cx="746" cy="568" r="4.5" fill="#93A1AD"/><text x="762" y="572" class="it">audit trail</text><text x="1060" y="572" class="itm">pattern exists on assertions only</text>
+  <text x="740" y="596" class="m">SV-2026-000001 · 30 connectors · 2 drivers · 7.564,00 kr · rendered with no database and no socket</text>
+
+  <line x1="40" y1="632" x2="1360" y2="632" stroke="#E4EAF0"/>
+
+  <!-- ============ SURFACES ============ -->
+  <text x="40" y="664" class="band">THE SURFACES — WHERE A PERSON ACTUALLY TOUCHES IT</text>
+
+  <rect x="40" y="680" width="425" height="196" rx="3" fill="#FFFFFF" stroke="#9C3A2D" stroke-width="1.5"/>
+  <circle cx="60" cy="706" r="5" fill="#9C3A2D"/>
+  <text x="76" y="710" class="t">Admin &amp; CPO web</text>
+  <text x="60" y="736" class="s">79 classified routes across three personas,</text>
+  <text x="60" y="752" class="s">with honesty labels and disabled commands.</text>
+  <text x="60" y="776" class="s" fill="#9C3A2D">Fixture-driven. On a branch unmerged since</text>
+  <text x="60" y="792" class="s" fill="#9C3A2D">11 August. Nine billing endpoints became real</text>
+  <text x="60" y="808" class="s" fill="#9C3A2D">on the 19th and are still labelled gated.</text>
+  <text x="60" y="836" class="m">no screen creates an org, attaches a charger,</text>
+  <text x="60" y="852" class="m">sets a tariff or moves a driver out</text>
+
+  <rect x="487" y="680" width="426" height="196" rx="3" fill="#FFFFFF" stroke="#9C3A2D" stroke-width="1.5"/>
+  <circle cx="507" cy="706" r="5" fill="#9C3A2D"/>
+  <text x="523" y="710" class="t">Driver app</text>
+  <text x="507" y="736" class="s">Flutter. Real screens, real API client,</text>
+  <text x="507" y="752" class="s">accessibility hardened.</text>
+  <text x="507" y="776" class="s" fill="#9C3A2D">Four competing versions of itself. The active</text>
+  <text x="507" y="792" class="s" fill="#9C3A2D">session renders cost 100× too large — the fix</text>
+  <text x="507" y="808" class="s" fill="#9C3A2D">has sat unmerged on a branch since 9 August.</text>
+  <text x="507" y="836" class="m">no money surface at all: a driver cannot see</text>
+  <text x="507" y="852" class="m">what they owe, or to whom</text>
+
+  <rect x="935" y="680" width="425" height="196" rx="3" fill="#FFFFFF" stroke="#A5680C" stroke-width="1.5"/>
+  <circle cx="955" cy="706" r="5" fill="#A5680C"/>
+  <text x="971" y="710" class="t">Operator API</text>
+  <text x="955" y="736" class="s">Nine billing endpoints over ports — open a</text>
+  <text x="955" y="752" class="s">period, record activity, assert a connector,</text>
+  <text x="955" y="768" class="s">price, list, issue, fetch the document.</text>
+  <text x="955" y="792" class="s">Idempotent, tenant-scoped, refusing by name.</text>
+  <text x="955" y="820" class="m">plus a 13-step operator runbook —</text>
+  <text x="955" y="836" class="m">which is the only path to an invoice today,</text>
+  <text x="955" y="852" class="m">and it runs at a terminal, not on a screen</text>
+
+  <!-- ============ DATA ============ -->
+  <rect x="40" y="906" width="1320" height="80" rx="3" fill="#EDF1F4" stroke="#D3DBE3"/>
+  <text x="60" y="932" class="t">The data layer, in one line</text>
+  <text x="60" y="956" class="s">The legacy database is live and holds every row. Five migrations are generated and <tspan font-weight="600" fill="#101820">not one has been applied to any database</tspan> — so the new schema exists only as files. A scheduled job still writes billing lines into the old tables through Prisma, which survives in eight production files.</text>
+  <text x="60" y="976" class="s">The clean shell writes to zero of the 66 legacy tables and reads three. It has never had a database of its own.</text>
+</svg>

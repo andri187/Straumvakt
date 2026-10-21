@@ -1,0 +1,68 @@
+{
+  "version": 1,
+  "note": "Maps Samgongustofa Orkugjafi labels to drivetrain groups. Labels were DISCOVERED from the live report, not assumed: the real forms use a slash and an abbreviation (Bensin /Raf.tengill), not the spaced forms in the original brief. The commercially load-bearing distinction is PLUGIN vs not — Bensin /Rafmagn is a self-charging hybrid that never plugs in, so grouping it with PHEV would inflate every addressable-market figure. Velarlaus means engineless: those rows are trailers, not vehicles, and are excluded from motorised totals.",
+  "groups": {
+    "BEV": "Battery electric — plugs in, no combustion engine",
+    "PHEV": "Plug-in hybrid — plugs in, also has a combustion engine",
+    "HYBRID_NON_PLUGIN": "Self-charging hybrid — does NOT plug in, is not addressable charging demand",
+    "ICE": "Internal combustion only",
+    "OTHER": "Known but outside the four groups (hydrogen, methane, and similar)",
+    "UNKNOWN": "Label not present in this map. Counted, reported, never guessed.",
+    "NON_MOTORISED": "Engineless (Velarlaus) — trailers and similar. Not a vehicle for market sizing."
+  },
+  "plugin_groups": [
+    "BEV",
+    "PHEV"
+  ],
+  "map": {
+    "rafmagn": "BEV",
+    "bensín /raf.tengill": "PHEV",
+    "dísel /raf.tengill": "PHEV",
+    "bensin /raf.tengill": "PHEV",
+    "disel /raf.tengill": "PHEV",
+    "bensín /rafmagn": "HYBRID_NON_PLUGIN",
+    "dísel /rafmagn": "HYBRID_NON_PLUGIN",
+    "bensin /rafmagn": "HYBRID_NON_PLUGIN",
+    "disel /rafmagn": "HYBRID_NON_PLUGIN",
+    "bensín": "ICE",
+    "dísel": "ICE",
+    "bensin": "ICE",
+    "disel": "ICE",
+    "bensín /metan": "OTHER",
+    "dísel /metan": "OTHER",
+    "metan": "OTHER",
+    "bensín /própan": "OTHER",
+    "metanól /bensín": "OTHER",
+    "vetni": "OTHER",
+    "vetni /rafmagn": "OTHER",
+    "vélarlaus": "NON_MOTORISED",
+    "velarlaus": "NON_MOTORISED",
+    "óþekkt": "UNKNOWN",
+    "othekkt": "UNKNOWN"
+  },
+  "formulas": {
+    "plugin_count": "BEV + PHEV",
+    "plugin_share": "(BEV + PHEV) / (BEV + PHEV + ICE)",
+    "plugin_share_note": "HYBRID_NON_PLUGIN, OTHER and UNKNOWN are excluded from BOTH numerator and denominator by default. Including non-plug hybrids in the denominator would understate plug-in share; including them in the numerator would overstate addressable charging demand. Either is a real error, so neither is the default.",
+    "unknown_handling": "UNKNOWN is excluded from the denominator unless includeUnknownInDenominator is set. A share computed over an unknown-heavy month is reported with its unknown count so the reader can judge it."
+  },
+  "discovered_label_counts_full_dataset": {
+    "Bensín": 90842,
+    "Dísel": 105353,
+    "Rafmagn": 45117,
+    "Bensín /Raf.tengill": 28965,
+    "Bensín /Rafmagn": 20970,
+    "Vélarlaus": 17631,
+    "Óþekkt": 3502,
+    "Dísel /Rafmagn": 2178,
+    "Bensín /Metan": 1484,
+    "Dísel /Raf.tengill": 1360,
+    "Metan": 433,
+    "Vetni /Rafmagn": 28,
+    "Vetni": 11,
+    "Bensín /Própan": 5,
+    "Dísel /Metan": 4,
+    "Metanól /Bensín": 1,
+    "(null)": 17
+  }
+}
