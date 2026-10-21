@@ -350,6 +350,62 @@ class StraumvaktApi {
   // backed offered a "Request access" button that lodged nothing. Access
   // is granted operator-side; the app only reads the answer.
 
+  /// Completed sessions, newest first. Backs the Charge history screen.
+  Future<List<DriverHistorySession>> getSessionHistory(
+      String accessToken) async {
+    return _sessionList(accessToken, '/api/driver/sessions/history');
+  }
+
+  /// Invoiceable sessions. Same DTO as history — the API distinguishes
+  /// them by source (ledger-costed vs raw), not by shape.
+  Future<List<DriverHistorySession>> getInvoices(String accessToken) async {
+    return _sessionList(accessToken, '/api/driver/invoices');
+  }
+
+  Future<List<DriverHistorySession>> _sessionList(
+      String accessToken, String path) async {
+    final res = await http.get(
+      Uri.parse('$baseUrl$path'),
+      headers: _authHeaders(accessToken),
+    );
+    final body = _decode(res);
+    if (res.statusCode != 200) {
+      throw ApiException(
+        res.statusCode,
+        (body is Map && body['message'] is String)
+            ? body['message'] as String
+            : 'Failed to load sessions',
+      );
+    }
+    final list = (body is Map ? body['sessions'] as List? : null) ?? const [];
+    return list
+        .map((e) => DriverHistorySession.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Update the driver's display name. The endpoint accepts displayName
+  /// and locale ONLY — email and password are not editable through it.
+  Future<DriverProfile> updateDisplayName({
+    required String accessToken,
+    required String displayName,
+  }) async {
+    final res = await http.patch(
+      Uri.parse('$baseUrl/api/driver/me'),
+      headers: _authHeaders(accessToken),
+      body: jsonEncode({'displayName': displayName}),
+    );
+    final body = _decode(res);
+    if (res.statusCode != 200) {
+      throw ApiException(
+        res.statusCode,
+        (body is Map && body['message'] is String)
+            ? body['message'] as String
+            : 'Failed to update profile',
+      );
+    }
+    return DriverProfile.fromJson(body as Map<String, dynamic>);
+  }
+
   Map<String, String> _authHeaders(String token) => {
         'authorization': 'Bearer $token',
         'content-type': 'application/json',

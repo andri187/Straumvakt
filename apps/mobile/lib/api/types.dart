@@ -321,3 +321,67 @@ class TapIntentResult {
     );
   }
 }
+
+/// One completed charge, as the driver sees it.
+///
+/// Mirrors the API's `DriverHistorySession`. `costIsk` is VAT-inclusive
+/// **aurar** (1/100 króna) and is NULL when the session was never costed
+/// — a real state, not a zero. Rendering an uncosted session as "0 kr"
+/// would be a lie about money, so callers must handle null explicitly.
+class DriverHistorySession {
+  const DriverHistorySession({
+    required this.sessionId,
+    required this.startedAt,
+    required this.energyKwh,
+    this.stoppedAt,
+    this.durationSec,
+    this.costIsk,
+    this.chargerName,
+    this.siteName,
+    this.billingHomeName,
+  });
+
+  final String sessionId;
+  final DateTime startedAt;
+  final DateTime? stoppedAt;
+  final int? durationSec;
+  final double energyKwh;
+  final int? costIsk;
+  final String? chargerName;
+  final String? siteName;
+
+  /// Which operator or host the session was billed under.
+  final String? billingHomeName;
+
+  factory DriverHistorySession.fromJson(Map<String, dynamic> j) {
+    return DriverHistorySession(
+      sessionId: j['sessionId'] as String,
+      startedAt: DateTime.parse(j['startedAt'] as String).toLocal(),
+      stoppedAt: j['stoppedAt'] == null
+          ? null
+          : DateTime.parse(j['stoppedAt'] as String).toLocal(),
+      durationSec: (j['durationSec'] as num?)?.toInt(),
+      energyKwh: (j['energyKwh'] as num?)?.toDouble() ?? 0,
+      costIsk: (j['costIsk'] as num?)?.toInt(),
+      chargerName: j['chargerName'] as String?,
+      siteName: j['siteName'] as String?,
+      billingHomeName: j['billingHomeName'] as String?,
+    );
+  }
+
+  /// Króna, formatted. Null cost stays null — see the class comment.
+  String? get costLabel {
+    final c = costIsk;
+    if (c == null) return null;
+    final kr = (c / 100).round();
+    return '$kr kr';
+  }
+
+  String get durationLabel {
+    final s = durationSec;
+    if (s == null) return '—';
+    final h = s ~/ 3600;
+    final m = (s % 3600) ~/ 60;
+    return h > 0 ? '${h}h ${m}m' : '${m}m';
+  }
+}

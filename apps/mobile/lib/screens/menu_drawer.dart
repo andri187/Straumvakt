@@ -14,6 +14,9 @@ import '../i18n/strings.dart';
 import '../theme/palette.dart';
 import 'login.dart';
 import '../zaptec_ble_settings/settings_screen.dart';
+import 'charge_history.dart';
+import 'my_vehicle.dart';
+import 'profile.dart';
 
 class MenuDrawer extends StatelessWidget {
   const MenuDrawer({super.key, required this.driver, this.plate = 'N1 742'});
@@ -93,20 +96,20 @@ class MenuDrawer extends StatelessWidget {
                     subtitle: 'Name, email, password',
                     onTap: () {
                       Navigator.of(context).pop();
-                      _showSnack(context, 'Profile editing — Phase 2');
+                      Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => ProfileScreen(driver: driver),
+                      ));
                     },
                   ),
                   _MenuTile(
                     icon: Icons.directions_car_outlined,
                     label: 'My vehicle',
                     subtitle: '$plate · plate + EV identity',
-                    trailing: const _SoonBadge(),
                     onTap: () {
                       Navigator.of(context).pop();
-                      _showSnack(
-                        context,
-                        'Vehicle details — Phase 2 (Autocharge)',
-                      );
+                      Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => const MyVehicleScreen(),
+                      ));
                     },
                   ),
                   const _SectionLabel('Charging'),
@@ -134,20 +137,23 @@ class MenuDrawer extends StatelessWidget {
                     icon: Icons.history_rounded,
                     label: 'Charge history',
                     subtitle: 'Past sessions, kWh, cost',
-                    trailing: const _SoonBadge(),
                     onTap: () {
                       Navigator.of(context).pop();
-                      _showSnack(context, 'Session history — Phase 2');
+                      Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => const ChargeHistoryScreen(),
+                      ));
                     },
                   ),
                   _MenuTile(
                     icon: Icons.receipt_long_outlined,
                     label: 'Receipts & invoices',
-                    subtitle: 'Monthly statements',
-                    trailing: const _SoonBadge(),
+                    subtitle: 'Billed charges',
                     onTap: () {
                       Navigator.of(context).pop();
-                      _showSnack(context, 'Invoices — Phase 4');
+                      Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => const ChargeHistoryScreen(
+                            mode: HistoryMode.invoices),
+                      ));
                     },
                   ),
                   const _SectionLabel('Settings'),
