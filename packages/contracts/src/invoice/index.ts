@@ -14,3 +14,5 @@ export * from "./dunning";
 export * from "./reconciliation";
 export * from "./header";
 export * from "./kennitala";
+export * from "./pdf";
+export * from "./deliver-pdf";

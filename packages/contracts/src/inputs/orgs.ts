@@ -1,7 +1,40 @@
 import { z } from "zod";
 
+import { kennitalaProblems } from "../invoice/kennitala";
+
 const COUNTRY_RE = /^[A-Z]{2}$/;
 const KENNITALA_RE = /^\d{6}-?\d{4}$/;
+
+/**
+ * The kennitala field, validated properly.
+ *
+ * ── WHAT CHANGED, 2026-08-19 ────────────────────────────────────────────
+ *
+ * This field previously carried `KENNITALA_RE` alone — `/^\d{6}-?\d{4}$/` —
+ * which accepts ANY ten digits. So a transposed pair, the single most common
+ * typing error on a kennitala, was stored without complaint and surfaced
+ * months later as an invoice header naming nobody.
+ *
+ * `kennitalaProblems` adds the mod-11 checksum and a date-plausibility check.
+ * The regex is kept as the SHAPE check because it produces a better message
+ * for the common "typed it wrong" case; the checksum then catches what shape
+ * cannot.
+ *
+ * ── WHY THE MESSAGES ARE CODES ──────────────────────────────────────────
+ *
+ * Each issue is `kennitala_<problem>` and never echoes the input. A validation
+ * error is a thing that gets logged, and a validation error carrying the
+ * rejected kennitala is a logged kennitala.
+ */
+const kennitalaField = z
+  .string()
+  .regex(KENNITALA_RE, { message: "format: DDMMYY-XXXX" })
+  .transform((v) => v.replace(/[\s-]/g, ""))
+  .superRefine((v, ctx) => {
+    for (const problem of kennitalaProblems(v)) {
+      ctx.addIssue({ code: "custom", message: `kennitala_${problem}` });
+    }
+  });
 // Hagstofa Íslands sveitarfélagskóðar are 4-digit numerics ("1000",
 // "0000" etc.). Accept any 4-digit string; future iteration could
 // validate against the live catalogue.
@@ -90,11 +123,7 @@ export const OrgCreateInput = z.object({
     message: "ISO-3166-1 alpha-2 (e.g. IS, NO, SE)",
   }),
   kind: OrganizationKindEnum.optional().nullable(),
-  kennitala: z
-    .string()
-    .regex(KENNITALA_RE, { message: "format: DDMMYY-XXXX" })
-    .optional()
-    .transform((v) => (v ? v.replace(/-/g, "") : undefined)),
+  kennitala: kennitalaField.optional(),
   legalName: optionalString(200),
   legalForm: optionalString(120),
   legalFormCode: optionalString(20),
@@ -122,11 +151,7 @@ export const OrgUpdateInput = z.object({
   displayName: z.string().min(1).max(120).optional(),
   countryCode: z.string().regex(COUNTRY_RE).optional(),
   kind: OrganizationKindEnum.optional().nullable(),
-  kennitala: z
-    .string()
-    .regex(KENNITALA_RE)
-    .optional()
-    .transform((v) => (v ? v.replace(/-/g, "") : undefined)),
+  kennitala: kennitalaField.optional(),
   legalName: optionalString(200),
   legalForm: optionalString(120),
   legalFormCode: optionalString(20),

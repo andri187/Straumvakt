@@ -50,3 +50,15 @@ export type * from "./vendor/adapter";
 
 // ── money lines ──
 export * from "./money/lines";
+
+// ── onboarding (round 3) ──
+export * from "./onboarding/org-readiness";
+export * from "./onboarding/org-exposure";
+
+// ── agreements write surface (round 4) ──
+export * from "./agreements/write-ops";
+export * from "./agreements/writer";
+
+// ── validity resolution (round 4) ──
+export * from "./resolution/validity";
+export * from "./vendor/config-observation";
