@@ -1,0 +1,166 @@
+{
+  "agent": "claude-a",
+  "chunk": "A2c of 3",
+  "status": "complete",
+  "prompt_file": "docs/agent-prompts/2026-08-18/2026-08-18-1805-claude-a2c-feeder-wiring-and-first-invoice-dry-run.md",
+  "previous_chunk_artifacts": [
+    "docs/agent-runs/2026-08-18/claude-a2a-connector-activity-writer-completion.md",
+    "docs/agent-runs/2026-08-18/claude-a2b-driver-activity-and-active-driver-decision-completion.md"
+  ],
+  "start_utc": "2026-08-18T18:31:18Z",
+  "end_utc": "2026-08-18T18:46:00Z",
+  "wall_clock_seconds": 882,
+  "target_met": null,
+  "target_note": "No wall-clock target. Deliverable-gated; 15 of 15 gates met.",
+  "worktree": "E:\\Claude\\Straumvakt-core-billing",
+  "branch": "dev/core-billing-integration",
+  "start_tip": "1b9df38",
+  "end_tip": "5795ac8",
+  "dirty": 0,
+  "commits": [
+    { "sha": "d54c0c5", "subject": "Wire the flat-fee feeder to the activity source through a port" },
+    { "sha": "5795ac8", "subject": "The first invoice, as a dry run" }
+  ],
+  "files_changed": {
+    "created": [
+      "packages/commercial/src/core-billing/activity-source.ts",
+      "packages/commercial/src/core-billing/activity-source.test.ts",
+      "scripts/dry-run-first-invoice.mts",
+      "scripts/dry-run-first-invoice.test.mts"
+    ],
+    "modified": [
+      "apps/api/src/repositories/activity-month.ts",
+      "packages/commercial/src/index.ts",
+      ".unused-exports-known.json"
+    ]
+  },
+  "tests": {
+    "start_passed": 1590,
+    "final_files": 89,
+    "final_passed": 1630,
+    "final_failed": 0,
+    "final_skipped": 1,
+    "added_this_chunk": 40,
+    "tsc_apps_api": "pass",
+    "npm_run_check": "all 16 pass",
+    "fool_tests_run": 3,
+    "fool_tests_caught": 3,
+    "fool_test_detail": [
+      "countFromRows returns measured(0) for an empty table -> 5 of 20 failed",
+      "the market line given agent posture (host_to_driver) -> 12 of 20 failed",
+      "the delivery record made to claim 'delivered' -> 1 failed"
+    ]
+  },
+  "the_invoice": {
+    "document_number": "SV-2026-000001",
+    "period": "2026-03-01 to 2026-03-31",
+    "connectors": 30,
+    "drivers": 2,
+    "cap_applied": false,
+    "net_isk": "6.100,00",
+    "vat_isk": "1.464,00",
+    "gross_isk": "7.564,00",
+    "delivery_state": "unknown",
+    "posture": "principal",
+    "money_line": "platform_to_host",
+    "connector_count_provenance": "DERIVED - 30 activity rows, 3 session_observed + 27 status_available",
+    "driver_count_provenance": "SUPPLIED BY THE FIXTURE, stated on the document's face. The locked definition is not computable.",
+    "note": "Only 3 of 30 connectors saw a session all month. A derivation reading 'active' as 'used' would have billed 3 connectors - 600 kr instead of 6.000 kr, under-charging by 5.400 kr on a 6.100 kr invoice with no error anywhere."
+  },
+  "gates_met": {
+    "total": 15,
+    "met": 15,
+    "unmet": 0,
+    "detail": {
+      "0_prior_chunks_confirmed": "met",
+      "1_repository_interface": "met - ActivitySourcePort, not Drizzle",
+      "2_empty_source_holds": "met - 5 tests",
+      "3_cap_from_activity_rows": "met - 7 cases",
+      "4_rate_lock_in": "met - including pricing at period start",
+      "5_offline_exit_zero": "met - no database, no network, no clock",
+      "6_passes_check_invoice": "met",
+      "7_invoice_printed_in_full": "met",
+      "8_principal_only": "met - mixed posture rejected at construction",
+      "9_numbering_gap_free_crash_safe": "met",
+      "10_delivery_unknown": "met",
+      "11_determinism": "met - byte-identical, 2782 bytes; issueDate and dueDate named as the only real-run time-dependent fields",
+      "12_broken_fixtures_nonzero": "met - 4, gate asked for 3",
+      "13_fool_tests": "met - 3",
+      "14_artifact_committed": "met"
+    }
+  },
+  "fallback_items_done": {
+    "count": 0,
+    "of": 7,
+    "note": "The gate table consumed the chunk. All seven items remain unchanged. Item 7, the operator runbook, is now the most valuable of them because the dry run has proven what it would describe."
+  },
+  "blockers": [
+    {
+      "id": "active-driver-definition-unanswered",
+      "severity": "blocks every real period",
+      "critical_path": true,
+      "detail": "deriveActiveDrivers still refuses. The dry run's holds-on-real-driver-definition case shows exactly what a live run does today. Answer docs/notes/2026-08-18-active-driver-definition.md - option A takes minutes."
+    },
+    {
+      "id": "migration-0002-not-applied",
+      "severity": "blocks a real invoice",
+      "critical_path": true,
+      "detail": "48 objects, all CREATE, no ALTER, no DROP, no lock on any populated table. docs/notes/2026-08-18-migration-0002-preflight.md. The rollback window closes at the first generation run."
+    },
+    {
+      "id": "no-manual-assertion-table",
+      "severity": "a connector with no in-period evidence holds",
+      "critical_path": false,
+      "detail": "Preflight delta 9.7. No table behind manually_asserted. At 21 chargers unlikely, not impossible."
+    },
+    {
+      "id": "activity-job-run-not-recorded",
+      "severity": "callers must pass activityJobHasRun",
+      "critical_path": false,
+      "detail": "Preflight delta 9.8. Nothing writes a billing_periods row, so the honest default is false."
+    },
+    {
+      "id": "mobile-money-unit-patch",
+      "severity": "blocks that branch's API deploy, unrelated to the invoice",
+      "critical_path": false,
+      "detail": "docs/notes/2026-08-18-money-unit-boundary.md sections 5.2-5.4, outstanding since round 1."
+    }
+  ],
+  "next_actions": [
+    "Andri answers the active-driver decision packet.",
+    "Andri authorises migration 0002 using the preflight pack.",
+    "Then: point the parity harness at the new ledger, and write the operator runbook for customer 1's real invoice (fallback items 1 and 7)."
+  ],
+  "external_state": {
+    "push": false,
+    "deploy": false,
+    "migration_applied": false,
+    "sql_executed_against_any_environment": false,
+    "database_connected": false,
+    "network_used_by_dry_run": false,
+    "cloudflare_mutation": false,
+    "neon_mutation": false,
+    "github_mutation": false,
+    "third_party_contacted": false,
+    "charger_or_hardware_action": false,
+    "ble_nfc": false,
+    "branch_or_tag_deleted": false,
+    "git_clean_reset_rebase_amend_or_force": false,
+    "gitattributes_added_or_proposed": false,
+    "contracts_invoice_edited": false,
+    "cr_filed_this_chunk": "none - B's contracts covered everything this chunk required",
+    "branches_written_to": ["dev/core-billing-integration"],
+    "note": "Every fixture value is synthetic, including the host's registered identity. No kennitala-shaped value appears, following B's fixtures.ts convention."
+  },
+  "round_summary": {
+    "chunks": [
+      { "chunk": "A2a", "delivered": "connector activity writer; zero-session connector is active; salvage of the interrupted run", "gates": "12/12" },
+      { "chunk": "A2b", "delivered": "driver activity writer; the refusal kept and sharpened; the costed active-driver decision packet", "gates": "14/14" },
+      { "chunk": "A2c", "delivered": "the port; the first invoice, printed", "gates": "15/15" }
+    ],
+    "total_gates": "41/41",
+    "tests": "1630 passing, 1 skipped, 0 failing",
+    "checks": "16/16"
+  },
+  "very_tldr": "The invoice exists and is printed in full in the artifact - customer 1, March 2026, 30 connectors, 2 drivers, 7.564,00 kr - produced with no database and no network, so every correctness question was answered offline where being wrong is free. It refuses to pretend: the driver count is fixture-supplied and the document says so on its own face, because the locked definition is not computable. Only 3 of 30 connectors saw a session all month, so reading 'active' as 'used' would have under-charged by 5.400 kr on a 6.100 kr invoice with no error anywhere. Two things now stand between here and a real invoice: answer the active-driver packet, and authorise migration 0002."
+}

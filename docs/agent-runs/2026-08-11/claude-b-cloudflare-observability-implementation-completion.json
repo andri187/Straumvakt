@@ -1,0 +1,126 @@
+{
+  "agent": "claude-b",
+  "lane": "cloudflare-observability-implementation",
+  "status": "complete",
+  "prompt": "docs/agent-prompts/2026-08-11/2026-08-11-0005-claude-b-cloudflare-observability-implementation.md",
+  "start_utc": "2026-08-11T03:12:00Z",
+  "end_utc": "2026-08-11T03:28:40Z",
+  "wall_clock_seconds": 1000,
+  "target_wall_clock_hours": 4,
+  "target_met": false,
+  "external_mutation": "none",
+  "worktrees": {
+    "primary": {
+      "path": "E:\\Claude\\Straumvakt-relops-b",
+      "branch": "scratch/claude-b-release-ops-2026-08-10",
+      "start_tip": "21f6d20",
+      "end_tip": "10f873d",
+      "dirty_start": 0,
+      "dirty_end": 0
+    },
+    "read_only": {
+      "Straumvakt-beta-production": { "tip": "44230c9", "dirty": 0, "changed": false },
+      "Straumvakt-release-candidate": { "tip": "4b69d0f", "changed": false }
+    }
+  },
+  "commits": [
+    {
+      "sha": "10f873d",
+      "subject": "gateway: observability slice — interval, metrics, Sentry scrubbing, gates",
+      "files_changed": 11,
+      "insertions": 1528,
+      "deletions": 2
+    }
+  ],
+  "files_changed": [
+    "gateway/src/heartbeat-fastpath.ts",
+    "gateway/src/identity-do.ts",
+    "gateway/src/auth.ts",
+    "gateway/src/metrics.ts",
+    "gateway/src/sentry-scrub.ts",
+    "gateway/src/observability.selftest.mjs",
+    "gateway/wrangler.jsonc",
+    "scripts/analysis/observability/check-observability.mjs",
+    "docs/notes/2026-08-11-cloudflare-observability-implementation.md",
+    "docs/notes/2026-08-11-ocpp-heartbeat-interval-and-cost-gate.md",
+    "docs/notes/2026-08-11-sentry-analytics-engine-setup-runbook.md"
+  ],
+  "checks": [
+    { "name": "observability gate self-test", "result": "20/20", "pass": true },
+    { "name": "gateway observability selftest", "result": "32/32", "pass": true },
+    { "name": "gateway heartbeat fast-path selftest", "result": "35/35", "pass": true },
+    { "name": "existing checker suite (beta-production)", "result": "168/168 across 7 checkers", "pass": true },
+    { "name": "OCPP cost gate (relops-b)", "result": "3 errors, all OC20 — baseline unchanged", "pass": false },
+    { "name": "observability gate (relops-b)", "result": "2 errors (OB14, OB15)", "pass": false },
+    { "name": "observability gate (beta-production)", "result": "8 errors", "pass": false },
+    { "name": "staged DSN literal scan", "result": "0", "pass": true }
+  ],
+  "implemented": {
+    "boot_interval": {
+      "before": "literal interval: 60",
+      "after": "derived from idleHeartbeatIntervalMs (3600), range-guarded env override 60..86400",
+      "override_env": "OCPP_HEARTBEAT_INTERVAL_SECONDS",
+      "out_of_range_behaviour": "rejected and logged, not clamped",
+      "hardware_verified": false
+    },
+    "metrics": {
+      "file": "gateway/src/metrics.ts",
+      "metric_names": [
+        "heartbeats_received",
+        "heartbeats_suppressed",
+        "missed_heartbeats",
+        "queue_messages_by_type",
+        "noisy_charger_events",
+        "gateway_errors_by_type",
+        "billing_job_started",
+        "billing_job_completed",
+        "billing_job_failed"
+      ],
+      "noop_safe": true,
+      "identity_pseudonymised": true,
+      "hash": "salted FNV-1a, sync; pseudonymisation not anonymisation",
+      "wired_into_hot_path": false
+    },
+    "sentry": {
+      "file": "gateway/src/sentry-scrub.ts",
+      "sdk_installed": false,
+      "strategy": "denylist of keys plus allowlist of OCPP payload fields",
+      "dsn_committed": false,
+      "dsn_source": "Worker secret SENTRY_DSN"
+    },
+    "gate": {
+      "file": "scripts/analysis/observability/check-observability.mjs",
+      "rules": "OB1..OB15",
+      "fixtures": 20
+    }
+  },
+  "remaining_cloudflare_setup": [
+    { "step": 1, "item": "version_metadata -> CF_VERSION_METADATA", "gate": "OB15", "note": "produces the first Worker version id; closes blocking gap C1" },
+    { "step": 2, "item": "analytics_engine_datasets -> OCPP_METRICS (dataset straumvakt_ocpp_metrics)", "gate": "OB14", "note": "dataset created on first write; must also be declared in env.staging, bindings are not inheritable" },
+    { "step": 3, "item": "call metrics writer from the OCPP hot path", "gate": null, "note": "deliberately deferred until a binding exists to observe" },
+    { "step": 4, "item": "npm i @sentry/cloudflare, wire beforeSend, wrangler secret put SENTRY_DSN", "gate": "OB11/OB12", "note": "no production DSN until a real staging payload is confirmed scrubbed (M-8)" }
+  ],
+  "limitations": [
+    "metrics writer is not called from the hot path",
+    "no verification against a real charger; M-2 (does Zaptec honour the interval) remains open",
+    "Sentry SDK not installed; beforeSend proven in isolation, not in situ",
+    "no cloud state read or changed — Cloudflare MCP servers unauthenticated in this session"
+  ],
+  "external_state_confirmation": {
+    "push": false,
+    "deploy": false,
+    "cloudflare_mutation": false,
+    "cloudflare_read": false,
+    "neon_mutation": false,
+    "sql": false,
+    "github_remote_mutation": false,
+    "hardware_or_ocpp_command": false,
+    "delete_move_archive": false,
+    "new_top_level_folder": false,
+    "dependencies_installed": false
+  },
+  "cleanup_candidates": [
+    { "path": "E:\\Claude\\Straumvakt-core-security", "reason": "worktree for a superseded task, 0 dirty", "action": "retirable" }
+  ],
+  "next_recommended_action": "Merge relops-b (carries fast path, frame cap, interval fix and observability slice — no cloud access required), then uncomment version_metadata, deploy staging and record the version id to close C1."
+}

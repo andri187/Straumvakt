@@ -1,0 +1,139 @@
+{
+  "agent": "claude-b",
+  "lane": "production-definition-and-environment-path",
+  "status": "complete",
+  "prompt": "docs/agent-prompts/2026-08-18/2026-08-18-1540-claude-b-production-definition-and-environment-path.md",
+  "follows": "2026-08-18/2026-08-18-1415-claude-b-market-rails-invoice-delivery-and-collection.md",
+  "start_utc": "2026-08-18T15:42:59Z",
+  "end_utc": "2026-08-18T16:15:44Z",
+  "wall_clock_seconds": 1965,
+  "target_met": null,
+  "target_wall_clock": "none — deliverable-gated",
+  "worktree": "E:\\Claude\\Straumvakt-relops-b",
+  "branch": "scratch/claude-b-release-ops-2026-08-10",
+  "integration_branch": "dev/market-rails",
+  "start_tip": "608749f8684f3c283cadfad2c674dc3964ba1987",
+  "end_tip": "a81860b",
+  "dirty": 0,
+  "commits": [
+    { "sha": "5a65fee", "subject": "feat(release): close the S0 question, declare the live hostnames, add the binding-existence and version-id gates" },
+    { "sha": "28cdbf8", "subject": "docs(track-b): tasks 9, 10 and 11 as executable plans; fool-tests for the new release gates" },
+    { "sha": "a81860b", "subject": "feat(contracts): kennitala capture; service A's CR-1; round-2 release-ops queue" }
+  ],
+  "files_changed": {
+    "total": 21,
+    "insertions": 2881,
+    "deletions": 7,
+    "created_docs": [
+      "docs/notes/2026-08-18-what-production-means.md",
+      "docs/notes/2026-08-18-dead-paths-and-deploy-runbook.md",
+      "docs/notes/2026-08-18-track-b-plans.md",
+      "docs/notes/2026-08-18-release-ops-queue-round2.md",
+      "docs/notes/2026-08-18-invoice-contract-change-responses.md",
+      "docs/reference/cloudflare-account-snapshot.json"
+    ],
+    "created_code": [
+      "gateway/src/version.ts",
+      "gateway/src/version.test.ts",
+      "packages/contracts/src/invoice/kennitala.ts",
+      "packages/contracts/src/invoice/kennitala.test.ts",
+      "scripts/analysis/bindings/check-bindings.mjs",
+      "scripts/analysis/release/check-version-id.mjs",
+      "scripts/analysis/release/gates.test.mjs"
+    ],
+    "modified": [
+      "gateway/wrangler.jsonc",
+      "apps/api/wrangler.jsonc",
+      "gateway/src/index.ts",
+      "scripts/check-all.mjs",
+      "package.json",
+      "packages/contracts/package.json",
+      "packages/contracts/src/invoice/index.ts",
+      "packages/contracts/src/invoice/header.test.ts"
+    ]
+  },
+  "checks": {
+    "npm_run_check": { "passed": 13, "failed": 0, "was": 12, "note": "bindings gate added this round" },
+    "vitest_root": { "files": "60/60", "passed": 888, "skipped": 1, "failed": 0, "baseline": 846 },
+    "vitest_gateway": { "files": "8/8", "passed": 176, "failed": 0, "baseline": 157 },
+    "typecheck": { "errors": 0 },
+    "check_bindings_self_test": { "passed": 15, "failed": 0 },
+    "check_version_id_self_test": { "passed": 12, "failed": 0 },
+    "check_version_id_live_probe": { "result": "FAIL, exit 1", "expected": true, "note": "/version is undeployed — the gate correctly reports the live environment cannot identify itself" },
+    "observability_self_test": { "passed": 83, "failed": 0 },
+    "observability_vs_tree": { "errors": 9, "warnings": 3, "was": "11 errors, 3 warnings", "note": "the two resolved are the S0-adjacent OB19s, fixed by declaring the live hostnames" }
+  },
+  "gates_met": { "of": 26, "met": 26 },
+  "fallback_queue": { "of": 7, "worked": 7 },
+  "fool_tests": { "this_round": 7, "lane_total": 16 },
+  "findings": [
+    "Production already exists and is called staging: straumvakt.org, api.straumvakt.org and ws.straumvakt.org all serve traffic and all three are bound to -staging Workers",
+    "S0 PROVEN: ws.straumvakt.org is served by straumvakt-ocpp-staging, demonstrated by tailing that Worker while requesting /health?probe= and watching the probe arrive. Same method proved api.straumvakt.org → hlada-api-staging",
+    "The dispatch's premise that top-level straumvakt-ocpp is the live charger gateway is WRONG — it returns 404/error-1042 on workers.dev and produced zero tail events in 25s while the staging gateway showed live traffic within seconds",
+    "There is no safe place to test: `wrangler deploy --env staging` on the gateway or API IS the production deploy",
+    "Two of the three production hostnames existed only in the Cloudflare dashboard and in no committed config — now declared, with workers_dev EXPLICIT because declaring routes without it infers false and would remove the workers.dev host with chargers behind it",
+    "The fleet may be split across two hostnames — both ws.straumvakt.org and the workers.dev host serve the live gateway, and ADR 0035 records chargers configured against the latter, so both must be preserved until device configs are audited",
+    "CORRECTION: the 'one-way door' claim carried since 2026-08-11 is wrong. `wrangler versions list` returns a full history and the live deployment has a prior version to roll back to. What is missing is runtime self-identification and a Sentry release id, not the ability to roll back",
+    "Option (c) rename is a trap and should be struck: changing `name` deploys a NEW Worker and leaves the old one running; secrets and Durable Object namespaces do not follow. Already why commit 4fe0a95 is on the RC exclusion list",
+    "A different Worker script means a different Durable Object namespace, so any cutover loses every charger's liveness, frame-cap and pending-command state",
+    "The dead-code comment in gateway/wrangler.jsonc was stale: the three UI-side OCPP paths are already deleted and OCPP_WEBHOOK_SECRET appears in no source file. Only the secret survives, on the unreachable top-level hlada",
+    "My own golden-file tests carried a latent cross-platform defect (A's CR-1) that passed here for exactly the reason it would fail on any fresh Windows clone",
+    "Straumvakt-core-security holds no unique work: 0 dirty, 0 commits ahead, 0 unmerged"
+  ],
+  "blockers": [
+    "Q1 — does anything outside engineering inspect infrastructure resource names? It is the only condition that flips the recommendation from option (a) to (b)",
+    "Q2 — can a Worker bind to a Durable Object namespace declared by a different script via script_name? Decides whether any future rename costs one reconnect or every charger's durable state",
+    "Q3 — does the gateway still authenticate chargers with CHARGER_BASIC_AUTH? Only blocks options (b)/(c), where dropping it would stop all 21 chargers reconnecting",
+    "Release-checklist item 4 remains undone: the invoice validator has still not run against a GENERATED invoice, because A's branch carries none",
+    "Neon point-in-time-restore window is unknown — it is what makes A's 0002 rollback window real"
+  ],
+  "next_actions": [
+    "Answer Q1. One question; if no, take option (a) and the production question is closed",
+    "Do not rename anything until Q2 is proven in a lower environment",
+    "Audit the 21 chargers' device configs to learn which hostname each uses",
+    "Write down the three current version ids — sixty seconds, and the rollback capability already exists",
+    "Create the dev tier (task 9) — there is currently nowhere to test",
+    "Answer the Neon point-in-time-restore question"
+  ],
+  "cross_lane": {
+    "request_file_at_phase_0": "absent from B's worktree and recorded as such",
+    "request_file_actual_location": "docs/notes/2026-08-18-invoice-contract-change-requests.md on dev/core-billing-integration (A's branch)",
+    "cr1_status": "serviced — golden-file tests fixed for CRLF checkouts, verified against a simulated CRLF checkout, header.test.ts 21 → 23 tests",
+    "cr1_response_file": "docs/notes/2026-08-18-invoice-contract-change-responses.md (separate file, so it cannot conflict with A's on merge)",
+    "protocol_note": "a cross-lane request needs a location both lanes can see before a merge; the dispatch pointed at B's worktree and the file only ever existed in A's"
+  },
+  "external_state": {
+    "push": false,
+    "deploy": false,
+    "dns_or_domain_binding": false,
+    "cloudflare_mutation": false,
+    "cloudflare_read_only_verbs_used": ["whoami", "queues list", "r2 bucket list", "deployments list", "versions list", "secret list", "tail"],
+    "cloudflare_mutating_verbs_used": [],
+    "neon_mutation": false,
+    "migration_applied": false,
+    "sql_against_any_environment": false,
+    "github_remote_mutation": false,
+    "charger_or_hardware_action": false,
+    "ble_or_nfc": false,
+    "account_registered": false,
+    "form_submitted": false,
+    "application_filed": false,
+    "third_party_contacted": false,
+    "branch_or_tag_deleted": false,
+    "worktree_retired": false,
+    "file_deleted_or_moved": false,
+    "new_top_level_folder": false,
+    "branches_written_to": ["scratch/claude-b-release-ops-2026-08-10", "dev/market-rails"],
+    "branches_pushed": [],
+    "gitattributes_added": false,
+    "network_reads": "unauthenticated HTTPS GETs to public hostnames for /health and /version; two carried a ?probe= query string so they could be identified in a tail",
+    "secrets_printed_or_committed": false,
+    "real_kennitala_anywhere": false,
+    "dependencies_installed": "none this round — node_modules carried from round 1"
+  },
+  "cleanup_candidates": [
+    "E:\\Claude\\Straumvakt-core-security — 0 dirty, 0 ahead, 0 unmerged; retirable with no loss; NOT retired per operating rule 6",
+    "E:\\Claude\\Straumvakt-relops-b\\node_modules and src/generated/prisma — gitignored, carried from round 1"
+  ],
+  "very_tldr": "Production already exists and is called staging. All three public hostnames serve traffic from -staging Workers, and S0 — ws.straumvakt.org → straumvakt-ocpp-staging — is now PROVEN by tail-and-probe rather than inferred, refuting the dispatch's premise that top-level is the live gateway. Take option (a): it is the only one whose first step does not touch 21 live WebSockets, and option (c) rename is a trap that should be struck. The 'one-way door' claim carried since 2026-08-11 is wrong — Cloudflare has been recording every version all along and rollback works today. 26 of 26 gates met, all 7 fallback items worked, A's CR-1 serviced and verified against a simulated CRLF checkout. npm run check all 13 green, 888 + 176 tests, observability 11 errors → 9."
+}

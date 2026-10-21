@@ -1,0 +1,147 @@
+{
+  "agent": "claude-b",
+  "lane": "market-rails-invoice-delivery-and-collection",
+  "status": "complete",
+  "prompt": "docs/agent-prompts/2026-08-18/2026-08-18-1415-claude-b-market-rails-invoice-delivery-and-collection.md",
+  "start_utc": "2026-08-18T14:27:49Z",
+  "end_utc": "2026-08-18T15:13:45Z",
+  "wall_clock_seconds": 2756,
+  "target_met": null,
+  "target_wall_clock": "none — deliverable-gated this round",
+  "worktree": "E:\\Claude\\Straumvakt-relops-b",
+  "branch": "scratch/claude-b-release-ops-2026-08-10",
+  "integration_branch": "dev/market-rails",
+  "start_tip": "815425ad2626d5e29b04deb9388c8c75c1ca123e",
+  "end_tip": "608749f",
+  "dirty": 0,
+  "commits": [
+    { "sha": "4b688c6", "subject": "docs(market-rails): invoice delivery and kröfuhafi collection decision packets" },
+    { "sha": "3aace15", "subject": "feat(invoice): format-agnostic rail — document model, numbering, delivery, dunning, reconciliation, header contract" },
+    { "sha": "084c0dd", "subject": "feat(gateway): missed-heartbeat liveness sweeper; fix OB18's false pass" },
+    { "sha": "b1d333c", "subject": "docs(release-ops): work the absorbed fallback queue; close six of seven Cloudflare facts" },
+    { "sha": "91f7760", "subject": "chore(deps-graph): regenerate after the invoice module" },
+    { "sha": "608749f", "subject": "chore(work-view): commit the generated admin work page" }
+  ],
+  "files_changed": {
+    "total": 29,
+    "insertions": 6011,
+    "deletions": 24,
+    "created_docs": [
+      "docs/notes/2026-08-18-invoice-delivery-decision.md",
+      "docs/notes/2026-08-18-collection-krofuhafi-decision.md",
+      "docs/notes/2026-08-18-release-ops-queue.md"
+    ],
+    "created_code": [
+      "packages/contracts/src/invoice/document.ts",
+      "packages/contracts/src/invoice/number.ts",
+      "packages/contracts/src/invoice/delivery.ts",
+      "packages/contracts/src/invoice/dunning.ts",
+      "packages/contracts/src/invoice/reconciliation.ts",
+      "packages/contracts/src/invoice/header.ts",
+      "packages/contracts/src/invoice/index.ts",
+      "packages/contracts/src/invoice/fixtures.ts",
+      "packages/contracts/src/invoice/document.test.ts",
+      "packages/contracts/src/invoice/number.test.ts",
+      "packages/contracts/src/invoice/delivery.test.ts",
+      "packages/contracts/src/invoice/dunning.test.ts",
+      "packages/contracts/src/invoice/reconciliation.test.ts",
+      "packages/contracts/src/invoice/header.test.ts",
+      "packages/contracts/src/invoice/fool.test.ts",
+      "packages/contracts/src/invoice/__golden__/header-principal.txt",
+      "packages/contracts/src/invoice/__golden__/header-agent.txt",
+      "scripts/validate-invoice.mts",
+      "gateway/src/liveness-sweeper.ts",
+      "gateway/src/liveness-sweeper.test.ts",
+      "src/app/(app)/admin/work/page.tsx"
+    ],
+    "modified": [
+      "package.json",
+      "packages/contracts/package.json",
+      "scripts/check-all.mjs",
+      "scripts/analysis/observability/check-observability.mjs",
+      "docs/architecture/dependency-graph.md"
+    ]
+  },
+  "checks": {
+    "npm_run_check": { "passed": 12, "failed": 0, "result": "all 12 checks passed" },
+    "vitest_root": { "files": "58/58", "passed": 846, "skipped": 1, "failed": 0 },
+    "vitest_gateway": { "files": "7/7", "passed": 157, "failed": 0 },
+    "typecheck": { "errors": 0, "scope": "root + workspaces + gateway" },
+    "check_invoice_self_test": { "document_fixtures_passed": 35, "failed": 0, "fixture_corpus": 65 },
+    "observability_self_test": { "passed": 83, "failed": 0, "was": 81 },
+    "observability_vs_tree": { "errors": 11, "warnings": 3, "was": "10 errors, 3 warnings" },
+    "baseline_before_edits": {
+      "vitest": "641 passed, 1 skipped, 1 suite failing (missing generated Prisma client)",
+      "typecheck": "clean at root; workspace errors were the same missing client",
+      "note": "both cleared by `npm run db:generate` — local codegen, no database contacted"
+    }
+  },
+  "gates_met": {
+    "of": 21,
+    "met": 21,
+    "detail": "all §9 gates met; see the .md for the row-by-row table"
+  },
+  "fallback_queue": { "of": 7, "worked": 7 },
+  "fixtures": { "total": 65, "floor": 40, "document": 35, "delivery": 11, "settlement": 15, "numbering": 4 },
+  "fool_tests": 8,
+  "findings": [
+    "hlada-api has NEVER existed on the Cloudflare account (API code 10007) — the 2026-08-11 census assumed it was production 'conservatively', which was the wrong direction",
+    "The top-level gateway binds MAIN_APP to that non-existent Worker, so top-level config as committed cannot deploy into a working state",
+    "No production queues or R2 buckets exist in the account at all — all six queues and the single bucket are -staging; the prior finding that top-level DECLARES none understated it",
+    "Top-level console last deployed 2026-04-23 and top-level gateway 2026-04-19; their secret sets are the pre-Sprint-4.5 architecture frozen in April",
+    "OB18 was giving a FALSE PASS — a 3000-character window after `async alarm(` matched a `liveness` reference in a different method ~100 lines below; fourth instance in that file of a rule matching text NEAR the thing, and the first that hid a gap rather than raising a false alarm",
+    "The dispatch's CRLF premise does not reproduce: 4 modified files not 580, none whitespace-only, and core.autocrlf is `true` at SYSTEM level rather than unset",
+    "Gap-free numbering is settled by Icelandic law ('fyrirfram tölusett … í samfelldri töluröð'), not by preference — so there is no release operation, only void-in-place",
+    "TS-236 is not an alternative to PEPPOL; it IS the Icelandic national extension of PEPPOL BIS Billing 3.0 — this removes a decision option rather than adding one",
+    "No delivery format is disqualified for the agent posture: EN 16931 BG-10 Payee (BT-59/BT-60) expresses it. PDF PERMITS the correct header; PEPPOL REQUIRES it",
+    "Per-claim bank fees may change the billing period — a single-connector host is a 200 kr invoice and the fee taxonomy charges per claim, slip, change, payment and escalation",
+    "The bank rail duns on its own (sjálfvirkar ítrekanir, framhaldsinnheimta), so Straumvakt must not also dun — hence the externally_managed dunning mode",
+    "Electronic bookkeeping requires a 'yfirlýsing seljanda eða hönnuðar hugbúnaðarins' — a signature, not code, and nobody has it on a list",
+    "Golden files caught a real header defect on their first render: 'Hýsill A ehf..' — Icelandic company names end in a full stop"
+  ],
+  "blockers": [
+    "Which gateway the 21 live chargers hold WebSockets against is NOT closed — a ~30s read-only tail of both gateways was empty, which at a 3600s heartbeat proves nothing. Closes with a >60min tail or the DO/WebSocket panel in the dashboard",
+    "Migration 0002 remains Andri's to approve",
+    "No version_metadata binding anywhere — still the single blocking release fact, unchanged since 2026-08-11",
+    "Access-point pricing, bank per-claim fees, and the bank onboarding lead time are all unknown and were NOT guessed; each is a written blocking question"
+  ],
+  "next_actions": [
+    "Ask customer 1: do you need a krafa, or will you pay a transfer against a PDF? It re-prioritises the whole collection track",
+    "Ask one bank blocking questions Q4–Q7 (exact Icelandic wording is written out in the collection packet)",
+    "Capture host kennitala at onboarding — the only remaining zero-dependency task, and it cannot be added retroactively",
+    "Decide what 'production' means: promote staging, build top-level fresh, or rename",
+    "Record a version id",
+    "Ask the accountant the four [confirm: accountant] questions, one of which touches the first invoice"
+  ],
+  "external_state": {
+    "push": false,
+    "deploy": false,
+    "dns_or_domain_binding": false,
+    "cloudflare_mutation": false,
+    "cloudflare_read_only_commands": ["whoami", "queues list", "r2 bucket list", "deployments list", "secret list", "tail"],
+    "neon_mutation": false,
+    "migration_applied": false,
+    "sql_against_any_environment": false,
+    "github_remote_mutation": false,
+    "charger_or_hardware_action": false,
+    "ble_or_nfc": false,
+    "account_registered": false,
+    "form_submitted": false,
+    "application_filed": false,
+    "third_party_contacted": false,
+    "branch_or_tag_deleted": false,
+    "worktree_retired": false,
+    "file_deleted_or_moved": false,
+    "new_top_level_folder": false,
+    "branches_created": ["dev/market-rails"],
+    "branches_pushed": [],
+    "secrets_printed_or_committed": false,
+    "dependencies_installed": "945 packages into the relops-b worktree; no lockfile written (repo tracks none); `prisma generate` run as local codegen with no database contacted",
+    "read_only_worktrees_modified": false
+  },
+  "cleanup_candidates": [
+    "E:\\Claude\\Straumvakt-relops-b\\node_modules — 945 packages installed this run, gitignored",
+    "E:\\Claude\\Straumvakt-relops-b\\src\\generated\\prisma — locally generated client, gitignored"
+  ],
+  "very_tldr": "TASKS.md task 8 is now decidable: two basis-labelled packets with a 194-word answer page and eight ordered blocking questions. Ship emailed PDF — the reversible half is the format; the permanent half is gap-free numbering and header semantics, and both are now built strictly. The whole format-agnostic rail shipped with 65 fixtures, 8 fool-tests and an offline validator in `npm run check` (all 12 green, 846 tests). A read-only Cloudflare session closed six of seven blocked facts and found that hlada-api has never existed, that no production queues or buckets exist at all, and that OB18 was giving a false pass."
+}

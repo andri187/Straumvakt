@@ -1,0 +1,27 @@
+{
+  "agent": "codex-work",
+  "lane": "market-core-ui-productization",
+  "status": "complete",
+  "start_utc": "2026-08-10T23:59:59Z",
+  "end_utc": "2026-08-11T00:14:49Z",
+  "duration_minutes_approx": 15,
+  "estimated_hours": "4-8",
+  "estimate_met": false,
+  "worktree": "E:\\Claude\\Straumvakt-onboarding-web",
+  "branch": "codex/core-ui-real-product-polish-2026-08-10",
+  "start_tip": "db9443c86c5e6732478ab422f46a4803edf78f45",
+  "end_tip": "6e7076e687d240b206c38447e40574801c3efa7e",
+  "commit": "6e7076e",
+  "routes_classified": 79,
+  "focused_tests": {
+    "files_passed": 7,
+    "tests_passed": 1383
+  },
+  "root_typecheck": "passed",
+  "build": "passed",
+  "preview_url": "http://localhost:3012/login-demo",
+  "external_mutation": false,
+  "untracked_preserved": [
+    "poc/"
+  ]
+}

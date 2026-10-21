@@ -1,0 +1,132 @@
+{
+  "agent": "claude-b",
+  "round": 4,
+  "lane": "agreement-write-surface-and-clean-shell-assembly",
+  "status": "complete",
+  "prompt": "docs/agent-prompts/2026-08-28/2026-08-28-1800-claude-b-agreement-write-surface-and-clean-shell-assembly.md",
+  "follows": "2026-08-18/2026-08-18-2055-claude-b-onboarding-an-org-to-invoiceable.md",
+  "start_utc": "2026-08-28T18:00:14Z",
+  "end_utc": "2026-08-28T18:44:00Z",
+  "wall_clock_seconds": 2626,
+  "target_met": null,
+  "target_wall_clock": "none — deliverable-gated, explicitly long-running",
+  "worktree": "E:\\Claude\\Straumvakt-relops-b",
+  "branches": {
+    "lane": "scratch/claude-b-release-ops-2026-08-10",
+    "integration": "dev/market-rails",
+    "assembly": "dev/clean-shell-assembly"
+  },
+  "start_tip": "7cc591e982985200c5e19b98fb318bdde5357e85",
+  "end_tips": {
+    "scratch/claude-b-release-ops-2026-08-10": "6714170",
+    "dev/market-rails": "6714170",
+    "dev/clean-shell-assembly": "71101e3"
+  },
+  "dirty": "31 files — another session's uncommitted mobile-asset changes, left untouched",
+  "commits": [
+    { "sha": "4e40aa1", "subject": "feat(agreements): the write surface that has never existed" },
+    { "sha": "5802398", "subject": "docs: correct the idTag grep claim" },
+    { "sha": "ae99700", "subject": "feat(resolution): validity replaces existence, and the authorize switch verified" },
+    { "sha": "4ab6cfb", "subject": "docs: the assembly result and the duplication verdict" },
+    { "sha": "97afa3a", "subject": "feat(zaptec): honour the Pages envelope; record the four vendor-config fields" },
+    { "sha": "6714170", "subject": "docs(artifact): finalise round 4, and record a mistake" }
+  ],
+  "files_changed": {
+    "mine": "~29 across six commits",
+    "foreign_swept_in": "~297 mobile vehicle-image files from a concurrent session, in commits 4e40aa1, 5802398 and ae99700",
+    "created_code": [
+      "packages/contracts/src/agreements/write-ops.ts",
+      "packages/contracts/src/agreements/writer.ts",
+      "packages/contracts/src/agreements/fixture-store.ts",
+      "packages/contracts/src/agreements/writer.test.ts",
+      "packages/contracts/src/resolution/validity.ts",
+      "packages/contracts/src/resolution/validity.test.ts",
+      "packages/contracts/src/vendor/config-observation.ts",
+      "apps/api/src/repositories/agreements-write.ts",
+      "apps/api/src/lib/zaptec-pagination.test.ts"
+    ],
+    "created_docs": [
+      "docs/notes/2026-08-28-round-4-schema-requests.md",
+      "docs/notes/2026-08-28-validity-census-and-authorize-switch.md",
+      "docs/notes/2026-08-28-duplication-verdict.md",
+      "docs/notes/2026-08-28-dalvegur-re-onboard-runbook.md"
+    ],
+    "modified": [
+      "apps/api/src/lib/zaptec.ts",
+      "scripts/dry-run-onboard-org.mts",
+      "scripts/dry-run-onboard-org.test.mts",
+      "packages/contracts/src/index.ts",
+      "packages/contracts/package.json"
+    ]
+  },
+  "tests": {
+    "lane_branch": { "root": 1076, "gateway": 176, "baseline_root": 992 },
+    "assembled": { "root": 1877, "skipped": 1, "files": 98, "gateway": 176 },
+    "assembled_checks": { "passed": 17, "failed": 0 },
+    "lane_checks": { "passed": 14, "failed": 0 },
+    "test_file_delta": "mine 89 + A's 115 − shared ancestor 83 = 121 assembled, exactly"
+  },
+  "gates_met": { "of": 33, "met": 33 },
+  "fallback_items_done": { "of": 11, "done": 0, "reason": "session context spent, not an empty queue; next run resumes at §11 item 1" },
+  "backlog_items_done": { "of": 6, "done": 0 },
+  "schema_requests_filed": ["SR-1 clause interval", "SR-2 membership interval", "SR-3 mutation_receipts"],
+  "findings": [
+    "0-A: ADR 0054, the 2026-08-20 handover and the mdu-gap-check are committed on NO branch — untracked files in the canonical checkout. Readable so nothing was blocked, but an ADR governing two lanes cannot be merged, reviewed or diffed",
+    "2-A: the membership call-site count is 9 that decide, not 5 — 19 references across 14 files, classified",
+    "2-B: the primary check dates the AGREEMENT, not the membership, so a driver who moved out in March still authorises in July",
+    "2-C: new Date() is right for authorize and wrong for pricing; two of the nine sites conflate them",
+    "3-A: enforceAuthorize defaults false and the gateway accepts regardless — both CONFIRMED. The coordinator's claim that one path sets it true is WRONG: that line is a Prisma select projection, and nothing assigns it true",
+    "3-B: the flag IS settable via the API so flipping it is reversible in seconds, and the gateway FAILS CLOSED when the verdict is unreachable",
+    "4-A: the two dry runs DO NOT hand off — no shared org, period, sequence or artifact; both allocate SV-2026-000001 from independent state, which in production is two documents with one number",
+    "5-A: createDriver is defined and never called, which corrects round 3's 'missing idToken defect FIXED' to 'the fix exists as an unwired module'",
+    "5-B: two of the three named duplicate pairs are not pairs; and my own org-readiness violates ledger note 22 by taking counts as bare numbers rather than Evidence",
+    "6-A: Zaptec pagination was unimplemented behind a docblock claiming it was handled. Fixed, but the 30-of-35 cause remains UNPROVEN because no API call was made",
+    "X: Evidence was about to be declared three separate times in one round; the typecheck caught each — evidence for Phase 5's own verdict",
+    "W: another session wrote into this worktree mid-run; three of my commits swept in ~297 of its files before I noticed"
+  ],
+  "blockers": [
+    "SR-1, SR-2 and SR-3 are unserviced, so the Drizzle agreement adapter cannot be implemented — the fixture carries every rule meanwhile",
+    "The eight non-primary membership call sites cannot be converted until SR-2 lands; converting them now would fall back to existence and look done without changing the answer",
+    "The two dry runs need issueInvoiceFromStatement(statement, org, sequence) before there is a real end-to-end path",
+    "The 30-of-35 Zaptec gap is unexplained; step 1 of the Dalvegur runbook is what settles it",
+    "~297 foreign files are attributed to three of my commits; the remedy needs reset/rebase, which operating rule 5 forbids me"
+  ],
+  "next_actions": [
+    "Write issueInvoiceFromStatement — the one function that joins the two dry runs, and the highest-value thing available",
+    "Service SR-1, SR-2, SR-3",
+    "Wire createDriver — finding 5-A, more urgent than its LOC suggests",
+    "Wire liveness-sweeper.ts to the AMS module (§11 item 1)",
+    "Wire redactOrgIdentityForList into listOrgs — one tested line",
+    "Commit ADR 0054 and the handover to a branch",
+    "Split the foreign mobile assets out of my commits — needs operations rule 5 forbids me"
+  ],
+  "external_state": {
+    "push": false,
+    "deploy": false,
+    "migration_generated_on_this_branch": false,
+    "migration_applied_anywhere": false,
+    "drizzle_migrations_on_branch": ["0000_baseline.sql", "0001_regular_talos.sql"],
+    "sql_against_any_environment": false,
+    "socket_opened": false,
+    "zaptec_api_call": false,
+    "update_charger_settings_called": false,
+    "cloudflare_mutation": false,
+    "cloudflare_read_only_verbs_used": [],
+    "neon_mutation": false,
+    "github_mutation": false,
+    "third_party_registered_submitted_or_contacted": false,
+    "charger_or_hardware_action": false,
+    "branch_or_tag_deleted": false,
+    "worktree_retired": false,
+    "a_owned_paths_edited": false,
+    "real_or_checksum_valid_kennitala_written": false,
+    "branches_written_to": [
+      "scratch/claude-b-release-ops-2026-08-10",
+      "dev/market-rails",
+      "dev/clean-shell-assembly"
+    ],
+    "branches_pushed": [],
+    "worktrees_added": "one, in the session scratchpad outside E:\\Claude, for the assembly merge"
+  },
+  "very_tldr": "The agreement write surface that has never existed now exists — thirteen operations enumerated from the existing reads, effective-dated, idempotent, tenant-scoped, and refusing rather than amending a settled period. Validity replaced existence over the locked ports, and the membership call-site count is nine that decide, not five. The clean shell exists in one tree for the first time: 17 checks and 1877 tests green, with both dry runs executing in sequence — but they DO NOT hand off, and naming that gap precisely (no shared org, period or sequence; both allocating SV-2026-000001) is the round's most valuable finding. Two of the three named duplication pairs turned out not to be pairs, createDriver is defined and never called which corrects a round-3 conclusion of mine, and Zaptec pagination was unimplemented behind a docblock claiming otherwise. 33 of 33 gates; §11 and §12 not started because this session's context ran out, not because the queue emptied. And I committed ~297 files of a concurrent session's work into three of my commits before noticing — recorded, not papered over."
+}

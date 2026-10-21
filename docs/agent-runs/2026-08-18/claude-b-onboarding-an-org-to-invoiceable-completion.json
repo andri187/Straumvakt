@@ -1,0 +1,171 @@
+{
+  "agent": "claude-b",
+  "round": 3,
+  "lane": "onboarding-an-org-to-invoiceable",
+  "status": "complete",
+  "prompt": "docs/agent-prompts/2026-08-18/2026-08-18-2055-claude-b-onboarding-an-org-to-invoiceable.md",
+  "follows": "2026-08-18/2026-08-18-1540-claude-b-production-definition-and-environment-path.md",
+  "start_utc": "2026-08-19T19:02:52Z",
+  "end_utc": "2026-08-19T19:30:26Z",
+  "wall_clock_seconds": 1654,
+  "target_met": null,
+  "target_wall_clock": "none — deliverable-gated",
+  "worktree": "E:\\Claude\\Straumvakt-relops-b",
+  "branch": "scratch/claude-b-release-ops-2026-08-10",
+  "integration_branch": "dev/market-rails",
+  "start_tip": "a81860b756c601e82956da6286ea4f865a6a4a8f",
+  "end_tip": "da2d458",
+  "dirty": 0,
+  "can_walk_org_to_invoiceable_without_db_edit": "no — yes-with-manual-steps: four of five steps have an API surface, but setting the flat-fee agreement requires a direct database write",
+  "commits": [
+    {
+      "sha": "c7ad6f4",
+      "subject": "feat(onboarding): validate the host kennitala properly and add an org readiness signal"
+    },
+    {
+      "sha": "b054bb5",
+      "subject": "feat(onboarding): walk the admin-onboard path, re-enumerate task 13, and prove the org offline"
+    },
+    {
+      "sha": "36e28a1",
+      "subject": "feat(invoice): render the document to PDF and wire it into the delivery log"
+    },
+    {
+      "sha": "da2d458",
+      "subject": "docs(release-ops): round-3 fallback queue and the completion artifact"
+    }
+  ],
+  "files_changed": {
+    "total": 17,
+    "insertions": 2491,
+    "deletions": 12,
+    "created": [
+      "packages/contracts/src/onboarding/org-readiness.ts",
+      "packages/contracts/src/onboarding/org-exposure.ts",
+      "packages/contracts/src/onboarding/org-onboarding.test.ts",
+      "packages/contracts/src/invoice/pdf.ts",
+      "packages/contracts/src/invoice/pdf.test.ts",
+      "packages/contracts/src/invoice/deliver-pdf.ts",
+      "packages/contracts/src/invoice/deliver-pdf.test.ts",
+      "packages/contracts/src/invoice/__golden__/pdf-principal.txt",
+      "scripts/dry-run-onboard-org.mts",
+      "scripts/dry-run-onboard-org.test.mts",
+      "docs/notes/2026-08-19-onboarding-an-org-to-invoiceable.md",
+      "docs/notes/2026-08-19-release-ops-queue-round3.md"
+    ],
+    "modified": [
+      "packages/contracts/src/inputs/orgs.ts",
+      "packages/contracts/src/index.ts",
+      "packages/contracts/src/invoice/index.ts",
+      "packages/contracts/package.json",
+      "package.json",
+      "scripts/check-all.mjs"
+    ]
+  },
+  "checks": {
+    "npm_run_check": {
+      "passed": 14,
+      "failed": 0,
+      "was": 13,
+      "note": "onboarding gate added"
+    },
+    "vitest_root": {
+      "passed": 992,
+      "skipped": 1,
+      "failed": 0,
+      "baseline": 888
+    },
+    "vitest_gateway": {
+      "passed": 176,
+      "failed": 0
+    },
+    "typecheck": {
+      "errors": 0
+    },
+    "check_onboarding": {
+      "cases": 6,
+      "passed": 6
+    },
+    "observability_vs_tree": {
+      "errors": 9,
+      "warnings": 3,
+      "unchanged": true
+    },
+    "commit_message_correction": "commit 36e28a1 states 999 tests; the accurate figure is 992"
+  },
+  "gates_met": {
+    "of": 21,
+    "met": 21
+  },
+  "fallback_items_done": {
+    "of": 7,
+    "done": 7
+  },
+  "fool_tests": {
+    "this_round": 8
+  },
+  "findings": [
+    "An org CANNOT be walked from nothing to invoiceable without hand-editing the database: setting the flat-fee agreement has no write surface. agreements.ts exports three functions and all three read; no application file calls agreement.create",
+    "Kennitala capture already existed end to end — column, input schema, repository and routes. The dispatch's premise that nothing captures it needed correcting; no migration was required",
+    "What was actually missing was validation: the field carried /^\\d{6}-?\\d{4}$/ and nothing else, accepting any ten digits, so a transposed pair was stored silently",
+    "Charger attach finding 3a: orgId comes from the request body and is never checked against the caller — but requirePermission(charger.write) has no orgIdParam so the route is platform-staff-only. NOT a tenant escalation; an operator-error surface",
+    "Charger attach finding 3b, which lands on money: ocppIdentities is unique on (orgId, identityString) not identityString, createCharger does no existence check, and the gateway auth lookup is WHERE lower(identity_string)=lower($1) LIMIT 1 with no org scope and no ORDER BY. Duplicated identities route a charger's energy to an arbitrary org. Trigger is an ordinary business event — a charger moving between orgs",
+    "All three 2026-08-08 invite defects verified FIXED: the bearer-only hijack (ADR 0053), the invitee lockout (claim-then-redeem via POST /api/driver/claim-invite), and the missing idToken (createDriver inserts a virtual_rfid)",
+    "kennitala is returned by the cross-tenant org LIST endpoint, because toSummary is shared by listOrgs and getOrgById. Not an open leak — the route carries platform.tenant.read — but an over-broad payload behind a correct guard",
+    "A checksum-valid COMPANY kennitala is committed in src/lib/org-tenant.ts. Reported by location, digits not reproduced, nothing changed — it is load-bearing for tenant matching",
+    "WinAnsiEncoding is not Latin-1: the header's en dash would have been written as byte 0x13, a device control, in every PDF. Caught by generating the golden file and reading it"
+  ],
+  "blockers": [
+    "No agreement write surface — blocks task 12 and task 13 equally, and is the single thing between an operator and a first invoice",
+    "Charger attach is platform-staff-only, which is correct for task 12 and fatal for task 13 self-serve",
+    "Charger-identity cross-org duplication needs an access-grant design decision (FOCUS Rule 5) plus a migration in A's lane",
+    "The invoice validator has still never run against a GENERATED invoice — A's branch carries no generated invoice document",
+    "A's round-3 operator runbook was not on dev/core-billing-integration at the tips read, so the two runbooks could not be cross-referenced; the seam is named instead"
+  ],
+  "next_actions": [
+    "Build the agreement write surface",
+    "Decide the charger-identity uniqueness fix — access-grant, design approval first",
+    "Lift task 13's [BLOCKER: invite codes are bearer-only] and restate it as [BLOCKER: no agreement write surface; charger attach is platform-only]",
+    "Wire redactOrgIdentityForList into listOrgs — one line, already tested",
+    "Adopt kennitalaProblems in register.ts and host-applications.ts, which also take a kennitala and were outside this lane",
+    "Answer round 2's Q1 — it still decides the production option"
+  ],
+  "external_state": {
+    "push": false,
+    "deploy": false,
+    "dns_or_domain_binding": false,
+    "cloudflare_mutation": false,
+    "cloudflare_read_only_verbs_used": [
+      "deployments list",
+      "queues list",
+      "r2 bucket list"
+    ],
+    "cloudflare_mutating_verbs_used": [],
+    "neon_mutation": false,
+    "migration_applied": false,
+    "sql_against_any_environment": false,
+    "github_remote_mutation": false,
+    "charger_ocpp_ble_nfc_or_hardware_action": false,
+    "account_registered": false,
+    "form_submitted": false,
+    "application_filed": false,
+    "third_party_contacted": false,
+    "real_or_checksum_valid_kennitala_written": false,
+    "branch_or_tag_deleted": false,
+    "worktree_retired": false,
+    "a_owned_paths_touched": false,
+    "a_owned_paths_read_only": [
+      "packages/commercial/**",
+      "apps/api/src/lib/billing/**",
+      "apps/api/drizzle/**",
+      "apps/api/src/routes/public/driver.ts"
+    ],
+    "branches_written_to": [
+      "scratch/claude-b-release-ops-2026-08-10",
+      "dev/market-rails"
+    ],
+    "branches_pushed": [],
+    "network_reads": "unauthenticated HTTPS GETs to public hostnames for /health"
+  },
+  "very_tldr": "An org cannot be walked from nothing to invoiceable without hand-editing the database: four of five steps have an API surface, but setting the flat-fee agreement has none — agreements.ts is read-only and nothing calls agreement.create. Kennitala capture already existed; the real gap was validation, since the field accepted any ten digits and stored a transposed pair silently. Two charger findings, one of which routes a charger's energy to an arbitrary org because identities are unique per (orgId, identityString) while the auth lookup is an unscoped LIMIT 1 with no ORDER BY. All three 2026-08-08 invite defects are fixed, so task 13's BLOCKER should be lifted and restated. 21 of 21 gates, 7 of 7 fallback items, npm run check 14 green, 992 + 176 tests."
+}

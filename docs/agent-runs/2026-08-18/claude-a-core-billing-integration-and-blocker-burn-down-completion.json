@@ -1,0 +1,189 @@
+{
+  "agent": "claude-a",
+  "status": "complete",
+  "prompt_file": "docs/agent-prompts/2026-08-18/2026-08-18-1415-claude-a-core-billing-integration-and-blocker-burn-down.md",
+  "start_utc": "2026-08-18T14:27:40Z",
+  "end_utc": "2026-08-18T15:25:00Z",
+  "wall_clock_seconds": 3440,
+  "target_met": null,
+  "target_note": "No wall-clock target was set this round. The prompt is deliverable-gated; all 20 gates in section 11 are met.",
+  "worktree": "E:\\Claude\\Straumvakt-core-billing",
+  "branch": "dev/core-billing-integration",
+  "branch_created": "dev/core-billing-integration",
+  "start_tip": "a615a52",
+  "start_branch": "scratch/claude-a-core-billing-2026-08-10",
+  "canonical_tip_branched_from": "82c63ac",
+  "end_tip": "686f5af",
+  "dirty": 0,
+  "commits": [
+    { "sha": "b81430d", "subject": "Merge scratch/claude-a-core-billing-2026-08-10 into dev/core-billing-integration" },
+    { "sha": "d7161a2", "subject": "Exclude tools/ from the root typecheck, which canonical 82c63ac made red" },
+    { "sha": "2846b18", "subject": "docs: record the core-billing integration merge and the canonical typecheck red" },
+    { "sha": "7ff2414", "subject": "Money leaves the API in aurar, in a field that says aurar" },
+    { "sha": "a620d4f", "subject": "Refuse to attribute a CDR to a driver the host has never met" },
+    { "sha": "5706382", "subject": "Decide what to write by natural key, not by counting rows" },
+    { "sha": "2715052", "subject": "Make the repository the tenancy enforcement point, and say so" },
+    { "sha": "d389bcc", "subject": "The flat-fee feeder: the market line, or a named refusal" },
+    { "sha": "686f5af", "subject": "docs: migration 0002 preflight pack" }
+  ],
+  "files_changed": {
+    "own_commits_total": 33,
+    "insertions": 4573,
+    "deletions": 144,
+    "created": [
+      "apps/api/src/lib/billing/money-wire.ts",
+      "apps/api/src/lib/billing/money-wire.test.ts",
+      "apps/api/src/lib/billing/cdr-driver-resolution.ts",
+      "apps/api/src/lib/billing/cdr-driver-resolution.test.ts",
+      "apps/api/src/lib/billing/generation-idempotency.ts",
+      "apps/api/src/lib/billing/generation-idempotency.test.ts",
+      "apps/api/src/lib/billing/ledger-scope.ts",
+      "apps/api/src/lib/billing/ledger-scope.test.ts",
+      "apps/api/src/repositories/billing-summary.test.ts",
+      "packages/commercial/src/core-billing/flat-fee.ts",
+      "packages/commercial/src/core-billing/flat-fee.test.ts",
+      "docs/notes/2026-08-18-core-billing-integration-merge.md",
+      "docs/notes/2026-08-18-money-unit-boundary.md",
+      "docs/notes/2026-08-18-cdr-tenant-attribution.md",
+      "docs/notes/2026-08-18-tenant-scoping-burn-down.md",
+      "docs/notes/2026-08-18-migration-0002-preflight.md"
+    ],
+    "modified": [
+      "tsconfig.json",
+      "scripts/check-orgid-param.mjs",
+      "apps/api/src/lib/agreement/persist.ts",
+      "apps/api/src/repositories/driver-sessions.ts",
+      "apps/api/src/repositories/driver-sessions.test.ts",
+      "apps/api/src/repositories/driver-invoices.ts",
+      "apps/api/src/repositories/session-ledger.ts",
+      "apps/api/src/repositories/session-ledger.test.ts",
+      "apps/api/src/repositories/billing-summary.ts",
+      "apps/api/src/repositories/zaptec-session-sync.ts",
+      "apps/api/src/repositories/zaptec-session-sync.test.ts",
+      "apps/api/src/routes/admin/billing.ts",
+      "apps/api/src/routes/admin/billing-summary.ts",
+      "apps/api/src/routes/public/driver.ts",
+      "packages/commercial/src/agreement/types.ts",
+      "packages/commercial/src/index.ts",
+      "docs/architecture/dependency-graph.md"
+    ]
+  },
+  "tests": {
+    "baseline_files": 68,
+    "baseline_passed": 1185,
+    "baseline_skipped": 1,
+    "final_files": 74,
+    "final_passed": 1303,
+    "final_skipped": 1,
+    "added": 118,
+    "tsc_apps_api": "pass",
+    "npm_run_typecheck": "pass (6 workspaces)",
+    "npm_run_check": "11 of 12",
+    "npm_run_check_failing": ["work-view"],
+    "work_view_attribution": "red before this branch existed; all four of its inputs are byte-identical to merge-base 10c292b on both sides, proven with git log and git diff",
+    "fool_tests_run": 7,
+    "fool_tests_caught": 6,
+    "fool_test_not_caught": "Removing orgId from the importer's membership.findMany changed no test, by design: the pure resolver re-checks membership against chargerOrgId, so the SQL narrowing is not the guard. Reported as a finding, not a gap."
+  },
+  "gates_met": {
+    "total": 20,
+    "met": 20,
+    "unmet": 0,
+    "detail": {
+      "1_integration_branch": "met - zero conflicts",
+      "2_money_boundary_table": "met - 8 driver-facing, 12 operator-facing, 2 engine sites; rule stated once in money-wire.ts",
+      "3_defect_pinning_test_corrected": "met - driver-sessions.test.ts:246",
+      "4_mobile_patch_and_deploy_hazard": "met",
+      "5_money_regression_tests": "met - 17 plus 10 through the endpoint",
+      "6_cdr_path_and_guard": "met - 15 file:symbol steps; fail-closed guard",
+      "7_cdr_tenancy_tests": "met - 22",
+      "8_idempotency_implemented": "met",
+      "9_double_billing_tests": "met - 21",
+      "10_census_fully_classified": "met - 105 of 105",
+      "11_scoping_fixes": "met - 3 plus the Phase 3 guard",
+      "12_lying_headers_corrected": "met - 3 headers plus 1 stale comment",
+      "13_flat_fee_via_resolver": "met - pickActiveRate",
+      "14_cap_arithmetic_tests": "met - 13",
+      "15_rate_lock_in_and_no_silent_zero": "met",
+      "16_activity_count_source": "met - connectors derived, drivers refuse",
+      "17_plug_time_contract": "met",
+      "18_preflight_pack": "met - eight sections plus a ninth",
+      "19_fool_tests": "met - 7 run",
+      "20_completion_artifacts": "met"
+    }
+  },
+  "blockers": [
+    {
+      "id": "activity-count-source-missing",
+      "severity": "blocks first invoice",
+      "detail": "reports.connector_activity_month and reports.driver_activity_month are created by migration 0002 and have ZERO writers. The flat-fee feeder therefore has no count source and every period holds. Applying 0002 does not by itself make an invoice possible."
+    },
+    {
+      "id": "active-driver-definition-undecidable",
+      "severity": "needs product decision",
+      "detail": "'Active driver' is defined as charging OR REPORTING activity. Reporting activity has no persisted event of any kind. deriveActiveDrivers refuses rather than returning the charging-only lower bound, because at 50 kr per driver per month the shortfall is invisible on the invoice that omits it."
+    },
+    {
+      "id": "mobile-patch-required-before-deploy",
+      "severity": "blocks deploy of this branch",
+      "detail": "The API now emits costAurar instead of costIsk. The Flutter patch is written as a diff in docs/notes/2026-08-18-money-unit-boundary.md sections 5.2-5.4 and must land before this branch's API reaches an environment the app talks to."
+    },
+    {
+      "id": "canonical-typecheck-red",
+      "severity": "mainline gate red",
+      "detail": "dev/straumvakt-org-relaunch at 82c63ac fails npm run typecheck with 118 errors, all under tools/zaptec-test, because the root tsconfig excluded every other standalone tree but not tools/**. Fixed on this branch in one line; the fix belongs on canonical too."
+    },
+    {
+      "id": "legacy-billing-lines-has-no-unique",
+      "severity": "double-billing remains unlikely rather than impossible",
+      "detail": "agreements.billing_lines has only a plain index on (session_id, factor_code, kind). Application code closed the read-decide gap as far as it can; only the constraint makes a concurrent double-write impossible. Needs a dedupe-then-index migration - preflight pack delta 9.1."
+    },
+    {
+      "id": "flat-fee-cannot-be-stored-as-components",
+      "severity": "schema gap",
+      "detail": "RateComponentKind is only dso|retailer|cpo_addon, settlement_components.session_id is NOT NULL and the flat fee has no session, and settlement_holds.session_id is NOT NULL so a period-level hold has no row to be. Preflight pack deltas 9.2-9.4."
+    }
+  ],
+  "corrections": [
+    "The cross-tenant CDR hole is NOT a token collision: identity.id_tokens.value is globally UNIQUE so a collision is unreachable, and the table has no org_id column so an org-scoped lookup does not exist. The reachable failure needs no coincidence - the lookup never checked membership at all.",
+    "The Flutter client was not uniformly compensating: DriverHistorySession divides by 100, ActiveSession does not, so in-flight cost is 100x too large in production today.",
+    "per_connector is NOT ahead of the Postgres column: 19bb4ef was atomic across all four declarations and shipped migration 0001_regular_talos.sql with it. The comment claiming otherwise is corrected.",
+    "A subscription line cannot be stored as a settlement component under the 0002 schema; statement lines are supported, components are not.",
+    "My own: the first cdr-driver-resolution implementation keyed tokens into Map<string,CdrTokenRow>, so the ambiguity check could never fire on the case it was written for. Caught by my own test.",
+    "My own: I rewrote a source file with PowerShell and double-encoded its UTF-8 - the exact failure my standing note warns against. Caught immediately, rewritten, encoding verified across all touched files before committing."
+  ],
+  "next_actions": [
+    "Carry the tools/** tsconfig exclusion to canonical - npm run check is red on the mainline and the billing lane did not cause it.",
+    "Assign an owner to the Flutter patch in docs/notes/2026-08-18-money-unit-boundary.md sections 5.2-5.4; the API change is not safe to deploy until it lands.",
+    "Read section 9.6 of docs/notes/2026-08-18-migration-0002-preflight.md before authorising the apply - the activity-count source, not the migration, is what stands between here and customer 1's first invoice.",
+    "Decide what makes a driver 'active'. Narrowing to charging activity is a one-line change in deriveActiveDrivers and a commercial decision elsewhere."
+  ],
+  "external_state": {
+    "push": false,
+    "deploy": false,
+    "migration_applied": false,
+    "sql_executed_against_any_environment": false,
+    "database_connected": false,
+    "cloudflare_mutation": false,
+    "neon_mutation": false,
+    "github_mutation": false,
+    "charger_or_hardware_action": false,
+    "ble_nfc": false,
+    "branch_or_tag_deleted": false,
+    "git_clean_reset_rebase_amend_or_force": false,
+    "new_top_level_folder_under_e_claude": false,
+    "secrets_or_token_values_printed_logged_or_committed": false,
+    "branches_created": ["dev/core-billing-integration"],
+    "branches_untouched": {
+      "scratch/claude-a-core-billing-2026-08-10": "a615a52",
+      "dev/straumvakt-org-relaunch": "82c63ac"
+    },
+    "files_written_into_canonical_checkout": [
+      "docs/agent-runs/2026-08-18/claude-a-core-billing-integration-and-blocker-burn-down-completion.md",
+      "docs/agent-runs/2026-08-18/claude-a-core-billing-integration-and-blocker-burn-down-completion.json"
+    ],
+    "note": "All test fixtures use synthetic token values. No real idTag, RFID UID, email or vendor UUID appears in any file, log line or artifact."
+  },
+  "cleanup_candidates": [],
+  "very_tldr": "Core billing merged onto dev/core-billing-integration with zero conflicts and all 20 gates met: money now leaves the API in aurar under a name that says so, a CDR is attributed only to a driver the host actually has, generation decides by natural key instead of by counting, and the flat-fee feeder refuses rather than inventing a count. Four written claims were false and are corrected, including the census's own description of the cross-tenant hole. Canonical is red on its own typecheck for a reason this branch did not cause and has fixed."
+}

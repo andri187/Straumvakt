@@ -1,0 +1,37 @@
+{
+  "agent": "claude-b",
+  "lane": "market-cloud-release-observability",
+  "status": "complete",
+  "prompt": "docs/agent-prompts/2026-08-10/2026-08-10-2305-claude-b-market-cloud-release-observability.md",
+  "start_utc": "2026-08-11T00:00:42Z",
+  "end_utc": "2026-08-11T00:05:46Z",
+  "target_wall_clock": "4-8h",
+  "target_met": false,
+  "external_mutation": "none",
+  "worktree": "E:ClaudeStraumvakt-beta-production",
+  "start_tip": "a951669",
+  "end_tip": "44230c9",
+  "dirty": 0,
+  "commits": [
+    "44230c9"
+  ],
+  "deliverables": 5,
+  "artifact_kb": 72,
+  "checks": {
+    "self_test_all": "168/168 across 7 checkers",
+    "wrangler_L1_errors": 0,
+    "ocpp_errors_relops_b": 3,
+    "ocpp_errors_primary": 5
+  },
+  "blockers": [
+    "no Worker version id recorded (no rollback target)",
+    "relops-b unmerged so the heartbeat fix is not in production",
+    "BootNotification returns interval 60 vs a 3600s product frame",
+    "Sentry absent",
+    "Analytics Engine absent",
+    "queue binding unverified in deployment",
+    "Neon: no production project, no protected branch, require_mfa false",
+    "connected-charger count not exposed"
+  ],
+  "next_action": "One 30-45 minute read-only Cloudflare session to capture Worker version ids; before that, merge relops-b and unset the four mis-tracked upstreams (no cloud access needed)."
+}

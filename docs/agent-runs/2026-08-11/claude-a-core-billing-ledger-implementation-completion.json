@@ -1,0 +1,111 @@
+{
+  "agent": "claude-a",
+  "lane": "core-billing-ledger-implementation",
+  "prompt": "docs/agent-prompts/2026-08-11/2026-08-11-0005-claude-a-core-billing-ledger-implementation.md",
+  "run": {
+    "startUtc": "2026-08-11T03:16:23Z",
+    "endUtc": "2026-08-11T03:28:07Z",
+    "wallClockMinutes": 12,
+    "targetHours": 4,
+    "targetMet": false,
+    "targetMissReason": "The lane already held the eight pure core-billing modules and the readiness package, so this was a compose-and-verify slice rather than a cold start. All six phases ran; the 60-assertion minimum was exceeded by 29 and the finish-early list was worked through."
+  },
+  "containment": {
+    "worktree": "E:\\Claude\\Straumvakt-core-billing",
+    "branch": "scratch/claude-a-core-billing-2026-08-10",
+    "startTip": "55cdfe8",
+    "endTip": "47a99f6d9e2d67679bcf7f63e69acae701448600",
+    "dirtyAtStart": false,
+    "dirtyAtEnd": false,
+    "upstream": null,
+    "pushed": false,
+    "deployed": false,
+    "canonicalWrites": [
+      "docs/agent-runs/2026-08-11/claude-a-core-billing-ledger-implementation-completion.md",
+      "docs/agent-runs/2026-08-11/claude-a-core-billing-ledger-implementation-completion.json"
+    ]
+  },
+  "commits": [
+    {
+      "sha": "47a99f6d9e2d67679bcf7f63e69acae701448600",
+      "subject": "feat(commercial): settlement snapshot, statements and the money contract"
+    }
+  ],
+  "filesChanged": {
+    "added": [
+      "packages/commercial/src/core-billing/money.ts",
+      "packages/commercial/src/core-billing/money.test.ts",
+      "packages/commercial/src/core-billing/settlement.ts",
+      "packages/commercial/src/core-billing/settlement.test.ts",
+      "packages/commercial/src/core-billing/statement.ts",
+      "packages/commercial/src/core-billing/statement.test.ts",
+      "docs/notes/2026-08-11-core-billing-ledger-schema-api-followup.md",
+      "docs/notes/2026-08-11-core-billing-ledger-acceptance-update.md"
+    ],
+    "modified": [
+      "packages/commercial/src/core-billing/delivery-log.ts",
+      "packages/commercial/src/core-billing/delivery-log.test.ts",
+      "packages/commercial/src/index.ts"
+    ]
+  },
+  "checks": {
+    "coreBillingTests": { "passed": 330, "failed": 0, "newAssertions": 89, "before": 241 },
+    "fullSuite": { "files": 64, "passed": 1051, "skipped": 1, "failed": 0 },
+    "typecheck": { "command": "npx tsc --noEmit -p packages/commercial", "exitCode": 0 },
+    "encodingSweep": { "filesChecked": 11, "bomOrMojibake": 0 },
+    "dependenciesInstalled": false,
+    "foolTests": [
+      { "sabotage": "round the sum instead of summing rounded lines", "caught": true, "failures": 1 },
+      { "sabotage": "ignore the rate window and price with today's rate", "caught": true, "failures": 2 },
+      { "sabotage": "stop holding a CDR mismatch", "caught": true, "failures": 2 },
+      { "sabotage": "let another org bleed onto a driver statement", "caught": true, "failures": 3 },
+      { "sabotage": "re-introduce the duplicate-statement retry", "caught": true, "failures": 3 }
+    ]
+  },
+  "implemented": [
+    "money.ts: aurar internal, line rounds to whole ISK half-up symmetric about zero, statement total is the sum of rounded lines, VAT, largest-remainder apportionment",
+    "settlement.ts: rate locked to session start, exclusive effectiveUntil, retailer component and VAT split retained, review-required for bad meter/CDR mismatch/missing times/manual hold with all reasons collected",
+    "statement.ts: driver lines, organisation material with a visible cap line, deterministic statement identity, idempotent replay, cross-tenant exclusion, invariant checks",
+    "delivery-log.ts: fixed a defect where a 2xx acknowledgement without an id was retried five times, mailing duplicate statements"
+  ],
+  "persistsAnything": false,
+  "launchBlockers": [
+    { "id": "B1", "title": "rate lock-in at session start", "status": "logic done, unpersisted" },
+    { "id": "B2", "title": "session settlement snapshot", "status": "shape done, unpersisted" },
+    { "id": "B3", "title": "billing period, statement, delivery record", "status": "logic done, unpersisted" },
+    { "id": "B4", "title": "cross-tenant billing reads", "status": "untouched" },
+    { "id": "B5", "title": "active connector and driver not computable", "status": "untouched; still the blocker that stops invoicing" },
+    { "id": "B6", "title": "plug-time has no input", "status": "untouched" },
+    { "id": "B7", "title": "published tariffs unpriceable", "status": "untouched" }
+  ],
+  "humanDecisionsOutstanding": [
+    "VAT on the Core subscription: buildOrgStatement mixes an ex-VAT subscription line with VAT-inclusive session material",
+    "Who is billed for what: driver-paid vs organisation-paid vs split",
+    "Which resolver Core launches on: legacy tariff chain or agreements",
+    "Retention and correction window for closed periods",
+    "Whether /apply conversion is in Core scope"
+  ],
+  "selfCorrections": [
+    "resolveMeterEnergy takes a nested { reading } and detects the register mode rather than being told it",
+    "CoreSubscriptionBreakdown exposes lineItems with connector_subscription/driver_subscription/connector_cap_relief kinds",
+    "An org with 0 connectors emits two cancelling lines rather than none; the test was corrected, not the code"
+  ],
+  "cleanupCandidates": [
+    "docs/notes/2026-08-10-core-backend-billing-security-census.md carries a UTF-8 BOM",
+    "packages/commercial/package.json has no ./core-billing/* exports subpath; production reaches the modules only via the root barrel",
+    "cdr-provenance.ts:64 still defaults to 0.001 kWh tolerance while the live path and settlement.ts use 0.05"
+  ],
+  "externalState": {
+    "push": false,
+    "deploy": false,
+    "migrationWrittenOrRun": false,
+    "sqlExecuted": false,
+    "databaseConnection": false,
+    "cloudflareOrNeonOrDnsOrRemote": false,
+    "ocppOrChargerOrBleOrNfc": false,
+    "secretsOpened": false,
+    "newTopLevelClaudeFolder": false,
+    "buildOutputOrCache": false
+  },
+  "nextAction": "Answer the VAT question on the Core subscription, then ship migrations M1/M2 (connector_status_history, driver_activity_month). History cannot be reconstructed backwards, so the first invoiceable month is the first whole month after M1 ships."
+}

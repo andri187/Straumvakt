@@ -1,0 +1,179 @@
+{
+  "agent": "claude-a",
+  "round": 3,
+  "status": "complete",
+  "prompt_file": "docs/agent-prompts/2026-08-18/2026-08-18-2055-claude-a-period-lifecycle-and-the-operable-invoice.md",
+  "follows": "docs/agent-runs/2026-08-18/claude-a2c-feeder-wiring-and-first-invoice-dry-run-completion.md",
+  "start_utc": "2026-08-19T19:02:55Z",
+  "end_utc": "2026-08-19T19:47:00Z",
+  "wall_clock_seconds": 2645,
+  "target_met": null,
+  "target_note": "No wall-clock target. Deliverable-gated; 22 of 22 gates met.",
+  "worktree": "E:\\Claude\\Straumvakt-core-billing",
+  "branch": "dev/core-billing-integration",
+  "start_tip": "a84141e",
+  "end_tip": "4a84b5b",
+  "dirty": 0,
+  "baseline": {
+    "expected": "1630 tests, 16 of 16 checks, tree clean",
+    "observed": "1630 tests, 16 of 16 checks, tree clean, dev/market-rails unmoved at a81860b",
+    "deviation": "none"
+  },
+  "commits": [
+    { "sha": "e86718d", "subject": "Close preflight deltas 9.7 and 9.8: the period lifecycle and the assertion" },
+    { "sha": "c24f162", "subject": "The billing API surface, over ports, proven with no database" },
+    { "sha": "7c8fa5a", "subject": "Drive the API surface from the dry run, not just the library" },
+    { "sha": "599453a", "subject": "docs: the first-invoice operator runbook" },
+    { "sha": "4a84b5b", "subject": "Surface the operator assertion on the invoice's provenance block" }
+  ],
+  "files_changed": {
+    "created": [
+      "packages/commercial/src/core-billing/period-lifecycle.ts",
+      "packages/commercial/src/core-billing/period-lifecycle.test.ts",
+      "apps/api/src/lib/billing/period-repository.ts",
+      "apps/api/src/lib/billing/period-repository.test.ts",
+      "apps/api/src/lib/billing/operations-port.ts",
+      "apps/api/src/lib/billing/fixture-operations-port.ts",
+      "apps/api/src/lib/billing/drizzle-operations-port.ts",
+      "apps/api/src/routes/admin/billing/periods.ts",
+      "apps/api/src/routes/admin/billing/periods.test.ts",
+      "apps/api/drizzle/0003_handy_stranger.sql",
+      "apps/api/drizzle/meta/0003_snapshot.json",
+      "docs/notes/2026-08-18-first-invoice-operator-runbook.md"
+    ],
+    "modified": [
+      "packages/shared/src/db/commercial.ts",
+      "prisma/schema/commercial.prisma",
+      "apps/api/prisma/schema/commercial.prisma",
+      "packages/commercial/src/index.ts",
+      "packages/commercial/src/core-billing/activity-source.ts",
+      "packages/commercial/src/core-billing/activity-source.test.ts",
+      "packages/commercial/src/core-billing/activity-month.test.ts",
+      "apps/api/src/repositories/activity-month.ts",
+      "apps/api/src/index.ts",
+      "scripts/dry-run-first-invoice.mts",
+      "scripts/dry-run-first-invoice.test.mts",
+      ".unused-exports-known.json",
+      "docs/architecture/dependency-graph.md",
+      "docs/reference/api-endpoints.md"
+    ]
+  },
+  "tests": {
+    "start_passed": 1630,
+    "final_files": 92,
+    "final_passed": 1689,
+    "final_failed": 0,
+    "final_skipped": 1,
+    "added_this_round": 59,
+    "tsc_apps_api": "pass",
+    "npm_run_typecheck": "pass",
+    "npm_run_check": "all 16 pass",
+    "dry_run": "8/8 cases behaved as specified",
+    "api_endpoints_doc": "178 -> 187 endpoints",
+    "schema_consistency": "79 tables, 959 columns",
+    "fool_tests_run": 4,
+    "fool_tests_caught": 4,
+    "fool_test_detail": [
+      "a closed period accepts new activity -> 6 of 26 failed",
+      "a missing idempotency key is generated -> 1 of 20 failed",
+      "an assertion crosses an org boundary -> 2 of 40 failed",
+      "the billing tenancy guard disabled -> 3 of 20 failed"
+    ]
+  },
+  "gates_met": {
+    "total": 22,
+    "met": 22,
+    "unmet": 0,
+    "detail": {
+      "1_baseline": "met - matched exactly, no deviation",
+      "2_state_machine_justified": "met - six states, each justified; not_opened is the absence of a row",
+      "3_closed_immutability": "met - activity, re-pricing, re-issue, each refused with period_closed",
+      "4_pure_then_repository": "met",
+      "5_activityJobHasRun_derived": "met - gone from every signature owned by this lane",
+      "6_idempotent_and_ten_tests": "met - 26 lifecycle tests",
+      "7_delta_9_7_frequency": "met - structural, not rare: every vendor-native connector, permanently",
+      "8_assertion_designed_and_surfaced": "met - who/when/why, and cited on the provenance block",
+      "9_migration_0003": "met - CREATE only, natural-key unique, generated and UNAPPLIED",
+      "10_manually_asserted_documented": "met",
+      "11_five_assertion_tests": "met - 7, including cross-org and contradicted-by-evidence",
+      "12_endpoints_through_a_port": "met - 9 endpoints",
+      "13_mutation_receipts": "met - missing key is a 400 refusal",
+      "14_tenancy_and_allowlist": "met - no allowlist entry needed; staleness detection proven",
+      "15_pricing_refuses_named": "met - 409 count_unavailable, no number allocated",
+      "16_numbering_transactional": "met",
+      "17_dry_run_drives_api": "met - 8/8, original six unchanged",
+      "18_idempotency_tests": "met - 4",
+      "19_cross_tenant_refusal": "met - every read and every write, 404 not 403",
+      "20_operator_runbook": "met - 13 steps, stop point at each irreversible one, hold-reason section",
+      "21_fool_tests": "met - 4",
+      "22_artifact_committed": "met - incrementally after every phase"
+    }
+  },
+  "fallback_items_done": {
+    "count": 0,
+    "of": 7,
+    "note": "The 22-gate table consumed the round. All seven items remain unchanged."
+  },
+  "blockers": [
+    {
+      "id": "invoice-sequence-store-missing",
+      "severity": "last engineering item on the critical path",
+      "new_this_round": true,
+      "detail": "Neither 0002 nor 0003 creates a store for the invoice number sequence, so makeDrizzleOperationsPort.issueDocument refuses with document_sequence_table_not_yet_created. The numbering LOGIC is proven - gap-free, transactional with issue, crash-safe between allocate and issue - but has nowhere to persist a counter. Migration 0004 is required. Deliberately not invented: an unapplied, untested sequence table guessed at in a round that could not run it would be worse than naming the gap."
+    },
+    {
+      "id": "active-driver-definition-unanswered",
+      "severity": "blocks every real period",
+      "detail": "Unchanged from A2b. deriveActiveDrivers still refuses. Option A in docs/notes/2026-08-18-active-driver-definition.md is one line."
+    },
+    {
+      "id": "migrations-0002-and-0003-unapplied",
+      "severity": "blocks a real invoice",
+      "detail": "Both CREATE-only, no lock on any populated table. Runbook steps 4 and 5; preflight pack unchanged."
+    },
+    {
+      "id": "period-repository-placement",
+      "severity": "cosmetic, lane-boundary artefact",
+      "detail": "apps/api/src/lib/billing/period-repository.ts is a repository living in lib/ because the round-3 boundary gives A lib/billing/** outright and repositories/ only as activity-month*. Move to repositories/period-store.ts when the lanes merge."
+    },
+    {
+      "id": "index-ts-edited",
+      "severity": "informational, possible trivial merge conflict",
+      "detail": "Two lines added to apps/api/src/index.ts to mount the router. B is also in apps/api this round. An unmounted API is not operable, so the mount was made rather than deferred."
+    }
+  ],
+  "corrections": [
+    "Delta 9.7 is structural, not rare. The earlier framing ('at 21 chargers that is unlikely') understates it: every connector on a vendor-native Zaptec-authentication installation produces neither session nor StatusNotification evidence, permanently and by construction. Verified by grep - the Zaptec importer writes connector_id null, and StatusNotification only reaches events.event_log from our own OCPP gateway.",
+    "Two static gates would have gone blind to this round's code without conforming to their textual matching: gen-api-endpoints.mjs (nine endpoints invisible) and check-orgid-param.mjs (nine tenancy gates invisible). Both were conformed to rather than worked around, and the coupling is documented at each declaration.",
+    "My own: the first route-test helper had an unused leading `path` parameter, so every call passed its intended idempotency key as the path and fell back to one shared default key - which made the drive-through calls replay each other and eighteen assertions fail for one reason."
+  ],
+  "next_actions": [
+    "Andri answers the active-driver decision packet.",
+    "Andri authorises migrations 0002 and 0003 per the runbook, steps 4 and 5.",
+    "Write migration 0004: a store for the invoice number sequence. Last engineering item on the critical path.",
+    "Then the fallback queue: parity harness at the new ledger, census row 104, the 22 remaining missing-orgIdParam gates."
+  ],
+  "external_state": {
+    "push": false,
+    "deploy": false,
+    "migration_applied": false,
+    "migrations_generated_unapplied": ["0002_powerful_warbird", "0003_handy_stranger"],
+    "sql_executed_against_any_environment": false,
+    "database_connected": false,
+    "socket_opened": false,
+    "cloudflare_mutation": false,
+    "neon_mutation": false,
+    "neon_mcp_tools_used": false,
+    "github_mutation": false,
+    "charger_or_hardware_action": false,
+    "ble_nfc": false,
+    "branch_or_tag_deleted": false,
+    "git_clean_reset_rebase_amend_or_force": false,
+    "gitattributes_added_or_proposed": false,
+    "contracts_package_edited": false,
+    "cr_filed_this_round": "none - B's contracts covered everything again",
+    "branches_written_to": ["dev/core-billing-integration"],
+    "note": "The Neon MCP tools became available to this session and were deliberately not used: operating rule 3 forbids any Neon mutation and any SQL against any environment. Every fixture value is synthetic; no kennitala-shaped value appears."
+  },
+  "very_tldr": "Both preflight deltas are closed and the invoice is now reachable through an API, still with no database touched. activityJobHasRun stopped being a boolean a caller handed in and became a fact derived from a recorded transition saying who sealed the period. Delta 9.7 turned out structural rather than rare - every connector on a vendor-native installation produces no machine evidence at all, permanently - so the assertion table was necessary, and an assertion is now cited on the invoice's provenance block beside the derived counts. Nine endpoints, each through a port, 20 route tests against a fixture adapter and a Drizzle adapter that has never executed. What remains: two decisions of Andri's, and one migration for the invoice number sequence."
+}

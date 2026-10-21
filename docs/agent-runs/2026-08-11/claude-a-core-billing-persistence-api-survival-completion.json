@@ -1,0 +1,244 @@
+{
+  "agent": "claude-a",
+  "status": "complete",
+  "start_utc": "2026-08-11T08:39:11Z",
+  "end_utc": "2026-08-11T09:33:38Z",
+  "wall_clock_seconds": 3267,
+  "target_met": false,
+  "target_note": "Target was 4-8h; run took 54 minutes. Bounded by three things, none of them running out of work: the census was parallelised across five readers (310 rows, 63 findings, 761k tokens of reading in twelve minutes of wall clock); every route the prompt asks for is blocked on a table that cannot be applied because the prompt correctly forbids database access; and the fallback queue was worked to 10 of 12 items rather than the required 8. The next step needs either a database or a decision from Andri.",
+  "worktree": "E:\\Claude\\Straumvakt-core-billing",
+  "branch": "scratch/claude-a-core-billing-2026-08-10",
+  "start_tip": "47a99f6",
+  "end_tip": "a615a52db08c620d6fdd2717b6086f7d005a02ed",
+  "dirty": false,
+  "commits": [
+    { "sha": "b327053", "subject": "Core billing: census, tenant-scoping guard, route contracts" },
+    { "sha": "f8f74c9", "subject": "Core billing: eleven tables, generated migration, enum mirror test" },
+    { "sha": "a5b7d8f", "subject": "Core billing: snapshot-to-row mapper, and a predicate that now checks something" },
+    { "sha": "8ef0084", "subject": "Core billing: scope the two by-id session reads, classify the other 103" },
+    { "sha": "7e0d808", "subject": "Restore the resolveOrgScope tests I overwrote, and add to them instead" },
+    { "sha": "48f2e12", "subject": "Core billing: readiness board, correction audit, and a census fix" },
+    { "sha": "a615a52", "subject": "Core billing: verb census, 30 work packages, 30 scenarios, operations pack" }
+  ],
+  "files_changed": {
+    "count": 29,
+    "insertions": 17484,
+    "deletions": 6,
+    "added": [
+      "apps/api/drizzle/0002_powerful_warbird.sql",
+      "apps/api/drizzle/meta/0002_snapshot.json",
+      "apps/api/src/lib/billing/settlement-rows.ts",
+      "apps/api/src/lib/billing/settlement-rows.test.ts",
+      "apps/api/src/lib/billing/statement-zod.ts",
+      "apps/api/src/lib/billing/statement-zod.test.ts",
+      "packages/shared/src/db/tests/core-billing-enums.test.ts",
+      "scripts/check-orgid-param.mjs",
+      "scripts/check-orgid-param.test.mjs",
+      "docs/notes/2026-08-11-core-billing-persistence-census.md",
+      "docs/notes/2026-08-11-core-billing-schema-survival.md",
+      "docs/notes/2026-08-11-core-billing-tenant-scoping.md",
+      "docs/notes/2026-08-11-core-billing-market-readiness.md",
+      "docs/notes/2026-08-11-core-billing-correction-audit.md",
+      "docs/notes/2026-08-11-core-billing-verb-census.md",
+      "docs/notes/2026-08-11-core-billing-work-packages.md",
+      "docs/notes/2026-08-11-core-billing-scenarios-and-examples.md",
+      "docs/notes/2026-08-11-core-billing-operations-pack.md"
+    ],
+    "modified": [
+      "apps/api/drizzle.config.ts",
+      "apps/api/drizzle/meta/_journal.json",
+      "apps/api/package.json",
+      "apps/api/prisma/schema/commercial.prisma",
+      "apps/api/src/lib/auth/org-scope.test.ts",
+      "apps/api/src/routes/admin/billing.ts",
+      "package.json",
+      "packages/commercial/src/core-billing/settlement.ts",
+      "packages/shared/src/db/commercial.ts",
+      "prisma/schema/commercial.prisma",
+      "scripts/check-all.mjs"
+    ]
+  },
+  "tests": {
+    "command": "npx vitest run",
+    "files": 68,
+    "passed": 1185,
+    "skipped": 1,
+    "failed": 0,
+    "tests_added_this_run": 134,
+    "assertion_sites_added_this_run": 191,
+    "counts_note": "Measured, not estimated: `it(` and `expect(` counted per file after an earlier draft of this JSON misreported statement-zod.test.ts as 51 tests. It is 37; the 51 was the combined run of two files. The enum file declares 7 `it(` statically and runs 17, because one is generated in a loop over the 11 enums.",
+    "new_test_files": [
+      "apps/api/src/lib/billing/statement-zod.test.ts (37 tests, 52 assertion sites)",
+      "apps/api/src/lib/billing/settlement-rows.test.ts (58 tests, 100 assertion sites)",
+      "packages/shared/src/db/tests/core-billing-enums.test.ts (17 tests, 11 assertion sites incl. one loop)",
+      "scripts/check-orgid-param.test.mjs (14 tests, 18 assertion sites)"
+    ],
+    "extended_test_files": [
+      "apps/api/src/lib/auth/org-scope.test.ts (+8 tests, +10 assertion sites; now 17 tests)"
+    ],
+    "coverage_by_class": {
+      "negative": 10,
+      "cross_tenant": 10,
+      "idempotency_retry": 15,
+      "cdr_meter_trust": 8,
+      "rounding_rate_window": 15,
+      "statement_export_delivery": 15,
+      "note": "Each meets or exceeds the prompt's minimum (10 negative, 5 of each other class). Counted by describe block, not estimated."
+    },
+    "fool_tests": {
+      "attempted": 7,
+      "caught": 7,
+      "all_restored": true,
+      "note": "Sabotage 5 (non-deterministic statement identity) was caught by the commercial package's own test, not by mine: my determinism test calls the same function twice with the same inputs, so a deterministic-but-wrong identity still passes it."
+    }
+  },
+  "checks": {
+    "command": "npm run check",
+    "passed": 11,
+    "failed": 1,
+    "failing": ["work-view"],
+    "failure_is_unrelated": true,
+    "failure_proof": "check:work-view byte-compares src/app/(app)/admin/work/page.tsx. `git cat-file -e 47a99f6:src/app/(app)/admin/work/page.tsx` fails: the file does not exist at the start tip. It was deleted in 5f810a9 (park the operator console), before this branch began. None of its three inputs (WORKSPACE.md, TASKS.md, the page) is touched by any commit in this run.",
+    "detail": {
+      "typecheck": "pass (6 workspaces)",
+      "schemas": "pass",
+      "api-schema": "pass (in sync, 9 files)",
+      "schema-consistency": "pass (77 tables, 938 columns)",
+      "deps": "pass",
+      "deps-graph": "pass",
+      "api-endpoints": "pass",
+      "unused-exports": "pass",
+      "work-view": "FAIL (pre-existing)",
+      "pricing-ssot": "pass (6 files price a session)",
+      "orgid-param": "pass (75 allowlisted)",
+      "invite-guard": "pass"
+    }
+  },
+  "schema": {
+    "migration_file": "apps/api/drizzle/0002_powerful_warbird.sql",
+    "applied": false,
+    "additive_only": true,
+    "statements": { "create_type": 11, "create_table": 11, "create_index": 26, "alter": 0, "drop": 0 },
+    "tables": [
+      "billing.billing_periods",
+      "billing.session_settlements",
+      "billing.settlement_components",
+      "billing.settlement_holds",
+      "billing.statements",
+      "billing.statement_lines",
+      "billing.statement_delivery_attempts",
+      "billing.statement_exports",
+      "billing.mutation_receipts",
+      "reports.driver_activity_month",
+      "reports.connector_activity_month"
+    ],
+    "deviation": "rate_books was requested and deliberately not added. agreements.rate_references already is the rate book; what it lacks is UNIQUE (cost_factor_id, code, effective_from). CREATE UNIQUE INDEX can fail on existing duplicates and this migration is otherwise unfailable, so the dedupe-then-index sequence is specified as a separate migration with its duplicate query supplied. It needs a database, which this prompt does not authorise.",
+    "rollback": "One transaction: drop 11 tables in reverse dependency order, then 11 types. Nothing outside the slice references any of it. Stays true only until the first route lands."
+  },
+  "blockers": [
+    {
+      "id": "aurar-100x",
+      "severity": "live",
+      "summary": "Both driver money endpoints render aurar as kronur, so a 649.88 kr session displays as 64,988 kr.",
+      "evidence": "repositories/driver-sessions.ts:93-98 (used at :137 and :270), repositories/driver-invoices.ts:66-68; compute-session-cost.ts:10-24 fixes minor = 1/100 krona; projections.test.ts:397 pins 64988n.",
+      "note": "The defect is pinned by a PASSING test: driver-sessions.test.ts:216 feeds costIskMinor 64988n and :246 asserts costIsk 64988. Fixing the code turns a green test red."
+    },
+    {
+      "id": "billing-line-double-write",
+      "severity": "blocks-launch",
+      "summary": "persist.ts counts then createMany, outside a transaction, against a table with no unique constraint. Two concurrent billing ticks both observe zero and both insert.",
+      "evidence": "lib/agreement/persist.ts:359-364 then :401; agreements.billing_lines has three plain indexes and no unique. dispatcher.ts:54-71 solves the identical problem correctly in one statement in the same codebase."
+    },
+    {
+      "id": "cdr-cross-tenant-driver",
+      "severity": "blocks-launch",
+      "summary": "The Zaptec CDR import resolves a driver by token value with no org filter, so a token collision across tenants attributes a billable session and its ledger driverUserId to a foreign driver.",
+      "evidence": "repositories/zaptec-session-sync.ts:186-189; adjacent station lookup at :149-152 likewise unfiltered."
+    },
+    {
+      "id": "email-fails-open",
+      "severity": "blocks-launch",
+      "summary": "email.ts fails OPEN when RESEND_API_KEY is absent, so a statement 'delivered' with no provider configured is indistinguishable from one that reached the customer.",
+      "evidence": "lib/email.ts:45-51; sendEmail returns {ok,id} and all 8 call sites drop it."
+    },
+    {
+      "id": "rate-references-no-uniqueness",
+      "severity": "blocks-launch",
+      "summary": "agreements.rate_references has no unique on (cost_factor_id, code, effective_from), so a retried POST stages a duplicate rate version and 'the rate in force at T' becomes ambiguous for every session priced afterwards.",
+      "evidence": "commercial.prisma:450-471 declares only two indexes."
+    },
+    {
+      "id": "no-activity-month-source",
+      "severity": "blocks-launch",
+      "summary": "Active-connector and active-driver month counts are not reconstructible after the month ends, and they are the subscription revenue.",
+      "evidence": "assets.connectors has a mutable status and no history; charging_stations has no status/active/removed column; session.user_id is nullable; 'reporting activity' has no persisted event; driver_group_memberships has added_at only with a unique that forbids history."
+    },
+    {
+      "id": "idempotency-ttl-unenforced",
+      "severity": "blocks-launch",
+      "summary": "events.idempotency_keys writes expires_at on every insert and no reader ever compares it to now(), so an expired row suppresses a replay permanently. No purge exists. No route in the tree reads an Idempotency-Key header at all.",
+      "evidence": "events-repository.ts:49/103-113/159, db/raw.ts:264-269/303/380-381; partition-cron.ts:220-227 enrols only events.event_log."
+    },
+    {
+      "id": "support-context-shadow-only",
+      "severity": "decision",
+      "summary": "Support context exists in three places and enforces in none; its warnings go to console rather than audit.actions, and platform.impersonate and platform.support.action gate nothing. There is no queryable record of any cross-tenant billing read.",
+      "evidence": "require-permission.ts:109/132-149, org-scope.ts:59-69, effective-permissions.ts:125-162; no support_contexts table in any prisma schema."
+    },
+    {
+      "id": "partial-rate-coverage",
+      "severity": "decision",
+      "summary": "A session whose DSO window has moved but whose retailer window has not is priced on the retailer alone - settled, no hold, materially under-billed. Pinned by a test, not fixed: changing the rule is a pricing decision.",
+      "evidence": "settlement.ts:236 raises no_rate_at_session_start only when usable.length === 0."
+    }
+  ],
+  "corrections": {
+    "prior_findings_refuted_or_narrowed": 6,
+    "own_assumptions_wrong_first_attempt": 6,
+    "notable": [
+      "Finding 8 is half FALSE: TTL is written on every insert. What is true is worse - nothing enforces it.",
+      "Overwrote apps/api/src/lib/auth/org-scope.test.ts believing I was creating it; it existed and covered resolveOrgScope through mocks. Caught from the commit diffstat, restored from HEAD~1, additions appended. Verified git diff HEAD~2 HEAD on that path: +62, -0.",
+      "This run's own census placed the aurar defect in routes/public/driver-sessions.ts; it is repositories/. Corrected in the census and in the source comment quoting it.",
+      "snapshotIsImmutableUnder previously returned true unconditionally - it voided its second argument and only checked that prices were bigints. Rewritten to check self-consistency and independence, and it now catches the rate-lock sabotage."
+    ]
+  },
+  "fallback_queue": {
+    "required": 8,
+    "completed": 10,
+    "items": {
+      "1_route_census_by_verb": "done - found 7 verbs used under BOTH scoping conventions and 17 of 40 catalogued verbs gating nothing",
+      "2_30_implementation_packages": "done - 30 packages, each sized to one PR",
+      "3_30_gherkin_scenarios": "done - 30 scenarios for settlement, period close, statements, delivery",
+      "4_20_api_examples": "done - 10 valid, 10 invalid with the reason each is wrong",
+      "5_migration_preflight_rollback": "done",
+      "6_ui_contract_note": "done - 14 surfaces, each interactive/read-only/disabled/hidden with a reason",
+      "7_data_quality_checklist": "done - 12 queries",
+      "8_operator_runbook": "done - regeneration, retry, delivery diagnosis, close refusal",
+      "9_privacy_security_note": "done",
+      "10_rate_authoring_handoff": "done - folded into the work-packages doc",
+      "11_cross_tenant_threat_model": "done - 10 entries, 5 live and unmitigated",
+      "12_final_diff_review": "done - 10 review questions in the completion Markdown"
+    }
+  },
+  "external_state": {
+    "pushed": false,
+    "deployed": false,
+    "merged": false,
+    "branches_deleted": false,
+    "migrations_run": false,
+    "ddl_executed": false,
+    "cloudflare_mutated": false,
+    "neon_mutated": false,
+    "github_remote_mutated": false,
+    "secrets_or_env_opened": false,
+    "chargers_commanded": false,
+    "ble_nfc_used": false,
+    "hardware_touched": false,
+    "new_top_level_folders": false,
+    "canonical_writes": [
+      "docs/agent-runs/2026-08-11/claude-a-core-billing-persistence-api-survival-completion.md",
+      "docs/agent-runs/2026-08-11/claude-a-core-billing-persistence-api-survival-completion.json"
+    ]
+  },
+  "very_tldr": "Core billing was a complete, tested, unreachable calculation library - 10 of its 11 modules had zero production callers because there was nothing to write to. Built the 11 tables under it (generated, unapplied), a pure mapper that refuses seven contradictions rather than guessing, and a tenant-scoping guard wired into npm run check. A 310-row source census refuted six written claims and turned up three launch blockers nobody was looking for, one of which is live today: every driver sees a figure 100x too large."
+}
