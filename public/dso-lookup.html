@@ -38,6 +38,26 @@
     #map { height: 60vh !important; }
   }
 
+  /* ── gate ─────────────────────────────────────────────────────── */
+  #gate {
+    position: fixed; inset: 0; z-index: 50;
+    display: grid; place-items: center;
+    background: radial-gradient(900px 500px at 50% 0%, #14202c, var(--bg));
+    padding: 16px;
+    overflow: auto;
+  }
+  #gate .card {
+    width: 100%; max-width: 430px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 18px;
+  }
+  #gate h1 { margin: 6px 0 0; font-size: 17px; }
+  #gate form { display: grid; gap: 9px; margin-top: 14px; }
+  #gate label { font-size: 11px; color: var(--muted); display: grid; gap: 4px; }
+  .err { color: var(--bad); font-size: 11px; min-height: 15px; }
+
   aside {
     border-right: 1px solid var(--line);
     background: var(--panel);
@@ -154,11 +174,52 @@
   table.bc th { color: var(--muted); font-weight: 500; font-size: 10px; text-transform: uppercase; }
   table.bc tr.nb td { background: rgba(242,196,101,.06); }
 
+  ul.legend { list-style: none; margin: 0; padding: 8px 12px; display: grid; gap: 5px; font-size: 11px; }
+  ul.legend li { display: flex; align-items: center; gap: 7px; color: var(--text); }
+  ul.legend .sw { width: 14px; height: 10px; border-radius: 2px; flex: 0 0 auto; }
+  ul.legend li.op { color: var(--muted); font-size: 10px; line-height: 1.4; margin-top: 3px; display: block; }
+
   /* ── map ──────────────────────────────────────────────────────── */
   main { position: relative; }
   #map { width: 100%; height: 100%; background: #0e131b; }
+  /* Parent bar sits directly above the child bar, visually dominant. */
+  #parentbar {
+    position: absolute; top: 10px; left: 10px; z-index: 6;
+    display: flex; flex-wrap: wrap; gap: 6px;
+    background: rgba(11,15,22,.92);
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    padding: 6px;
+    max-width: calc(100% - 20px);
+  }
+  #parentbar .pbtn {
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    color: var(--muted);
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .01em;
+  }
+  #parentbar .pbtn:hover:not([disabled]) { border-color: #3d5468; color: var(--text); }
+  #parentbar .pbtn[aria-pressed="true"] {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(62,233,167,.12);
+  }
+  /* Not-yet-built groups are inert and must LOOK inert - a button that
+     silently does nothing is worse than one that says it is not ready. */
+  #parentbar .pbtn[disabled] {
+    opacity: .45;
+    cursor: not-allowed;
+    border-style: dashed;
+  }
+  #parentbar .pbtn[disabled]::after { content: " (later)"; font-weight: 400; font-size: 10px; }
+
   #maptools {
-    position: absolute; top: 10px; left: 10px; z-index: 5;
+    position: absolute; top: 56px; left: 10px; z-index: 5;
     display: flex; flex-wrap: wrap; gap: 6px;
     background: rgba(11,15,22,.86);
     border: 1px solid var(--line);
@@ -166,6 +227,8 @@
     padding: 6px;
     max-width: calc(100% - 20px);
   }
+  #maptools[hidden] { display: none; }
+  #maptools [data-ctl][hidden] { display: none; }
   #maptools label { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); }
   #status {
     position: absolute; bottom: 10px; left: 10px; z-index: 5;
@@ -178,61 +241,47 @@
     max-width: calc(100% - 20px);
   }
 
-  /* ── gate ─────────────────────────────────────────────────────── */
-  #gate {
-    position: fixed; inset: 0; z-index: 50;
-    display: grid; place-items: center;
-    background: radial-gradient(900px 500px at 50% 0%, #14202c, var(--bg));
-    padding: 16px;
-    overflow: auto;
-  }
-  #gate .card {
-    width: 100%; max-width: 420px;
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    padding: 18px;
-  }
-  #gate h1 { margin: 6px 0 0; font-size: 17px; }
-  #gate form { display: grid; gap: 9px; margin-top: 14px; }
-  #gate label { font-size: 11px; color: var(--muted); display: grid; gap: 4px; }
-  .err { color: var(--bad); font-size: 11px; min-height: 14px; }
   code { color: var(--accent); }
 </style>
 </head>
 <body>
 
-<!-- ── Gate. Not authentication; see the note in the card. ───────────── -->
+<!-- Page-local gate. NOT authentication, and the card below says so.
+     It compares two strings and flips a variable. It sets no cookie, stores
+     nothing, issues no session or token, and reaches no Straumvakt API — so
+     it does not survive a reload, by design. What it protects is public
+     reference data anyway; it exists to keep the tool out of a casual
+     visitor's way, not to secure anything. -->
 <div id="gate">
   <div class="card">
-    <div class="brand"><b>Straumvakt</b> <span class="tag">Public-data POC</span></div>
+    <div class="brand"><b>Straumvakt</b> <span class="tag">Public-data DSO lookup POC</span></div>
     <h1>DSO lookup</h1>
     <p class="note">
       Which Icelandic electricity distribution operator serves an address, from
       Orkustofnun&rsquo;s published <code>raforkudreifing</code> service areas.
     </p>
     <p class="note">
-      <b style="color:var(--warn)">This is not a Straumvakt tenant or admin login.</b>
-      The gate below is a client-side check over public map data. It sets no cookie,
-      issues no session or token, and reaches no Straumvakt API. Do not treat it as
-      a security control.
+      <b style="color:var(--warn)">This is not Straumvakt tenant/admin authentication.</b>
+      It is a client-side check over public map data. No cookie, no session, no token,
+      and no Straumvakt API is contacted. Do not treat it as a security control.
     </p>
     <form id="gate-form">
       <label>User <input type="text" id="u" autocomplete="off" autocapitalize="none" spellcheck="false" /></label>
       <label>Password <input type="password" id="p" autocomplete="off" /></label>
-      <div class="err" id="gate-err"></div>
+      <div class="err" id="gate-err" role="alert" aria-live="polite"></div>
       <button class="btn primary" type="submit">Open</button>
     </form>
-    <p class="note" style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px">
-      Demo credential <code>DSO</code> / <code>map</code>.
-    </p>
   </div>
 </div>
 
 <div id="app">
   <aside>
     <div class="sec pad">
-      <div class="brand"><b>DSO lookup</b> <span class="tag">POC</span></div>
+      <div class="brand"><b>DSO lookup</b> <span class="tag">Public-data POC</span></div>
+      <p class="note">
+        <b style="color:var(--warn)">Proof of concept, not a Straumvakt product page and not a
+        login.</b> It shows public reference data only and reaches no Straumvakt system.
+      </p>
       <p class="note">
         Operator answer: <b style="color:var(--text)">Orkustofnun raforkudreifing</b>,
         point-in-polygon against live WFS vector geometry.
@@ -273,46 +322,69 @@
       </p>
     </div>
 
+    <div class="sec">
+      <h2>Legend</h2>
+      <ul class="legend" id="legend"></ul>
+    </div>
+
     <div class="sec pad">
       <p class="note" id="prov"></p>
     </div>
   </aside>
 
   <main>
+    <!-- Parent bar selects the data domain; the child bar below shows only
+         that domain's controls. General map controls stay put regardless. -->
+    <div id="parentbar" role="group" aria-label="Data layer groups"></div>
+
     <div id="maptools">
-      <button class="btn" data-view="southwest" aria-pressed="true">Southwest</button>
-      <button class="btn" data-view="iceland" aria-pressed="false">Iceland</button>
-      <button class="btn" data-type="roadmap" aria-pressed="true">Roadmap</button>
-      <button class="btn" data-type="hybrid" aria-pressed="false">Hybrid</button>
-      <button class="btn" id="ovl" aria-pressed="true">Overlay on</button>
-      <button class="btn" data-layer="raforkudreifing" aria-pressed="true">Raforkudreifing</button>
-      <button class="btn" data-layer="orkusparsvaedi" aria-pressed="false">Orkuspársvæði</button>
-      <label>Opacity <input type="range" id="op" min="0" max="100" value="55" style="width:70px" /></label>
+      <button class="btn" data-ctl="view-southwest" data-view="southwest" aria-pressed="true">Southwest</button>
+      <button class="btn" data-ctl="view-iceland" data-view="iceland" aria-pressed="false">Iceland</button>
+      <button class="btn" data-ctl="type-roadmap" data-type="roadmap" aria-pressed="true">Roadmap</button>
+      <button class="btn" data-ctl="type-hybrid" data-type="hybrid" aria-pressed="false">Hybrid</button>
+      <button class="btn" data-ctl="overlay-toggle" id="ovl" aria-pressed="true">Overlay on</button>
+      <button class="btn" data-ctl="layer-raforkudreifing" data-layer="raforkudreifing" aria-pressed="true">Raforkudreifing</button>
+      <button class="btn" data-ctl="layer-orkusparsvaedi" data-layer="orkusparsvaedi" aria-pressed="false">Orkuspársvæði</button>
+      <label data-ctl="opacity">Opacity <input type="range" id="op" min="0" max="100" value="55" style="width:70px" /></label>
     </div>
     <div id="map"></div>
     <div id="status">Starting&hellip;</div>
   </main>
 </div>
 
+<!-- Optional local key file, git-ignored. Define
+     window.STRAUMVAKT_MAPS_KEY = "..." in it, or pass ?key= in the URL.
+     When the file is absent this 404s harmlessly in the console and the page
+     shows its missing-key panel — no key is ever committed. -->
+<script src="./dso-lookup-config.js" onerror="void 0"></script>
+
 <script type="module">
 import {
-  checkCredential, resolveMapsKey, googleMapsScriptUrl,
+  checkCredential, resolveMapsKey, googleMapsScriptUrl, readStoredMapsKey, writeStoredMapsKey,
   wmsTileUrl, wfsGeoJsonUrl, resolveDso, runBoundaryCheck,
   searchFixtures, formatDistance, BOUNDARY_SAMPLES,
   DSO_LAYER, COMPARISON_LAYER,
+  styleForFeature, legendEntries, FILL_OPACITY, STROKE_OPACITY,
+  CONTROL_GROUPS, visibleChildControls, dsoLayersActive, isSelectable,
 } from "./dso-lookup.mjs";
 
 const $ = (id) => document.getElementById(id);
 const setStatus = (t) => { $("status").textContent = t; };
 
 // ── Gate ────────────────────────────────────────────────────────────
+// Nothing is persisted: reloading re-gates. That is deliberate — persisting
+// it would mean storing something that looks like an auth decision, and this
+// is not authentication.
 $("gate-form").addEventListener("submit", (e) => {
   e.preventDefault();
   if (!checkCredential($("u").value, $("p").value)) {
-    $("gate-err").textContent = "Incorrect demo credential.";
+    $("gate-err").textContent = "Incorrect credential.";
+    $("p").value = "";
+    $("p").focus();
     return;
   }
-  $("gate").style.display = "none";
+  $("gate-err").textContent = "";
+  $("gate").remove();
   $("app").classList.add("ready");
   start();
 });
@@ -329,31 +401,69 @@ async function start() {
   const key = resolveMapsKey({
     search: location.search,
     injected: window.STRAUMVAKT_MAPS_KEY,
+    stored: readStoredMapsKey(window.localStorage),
   });
   if (!key) {
     setStatus("No Google Maps API key.");
     $("map").innerHTML =
-      '<div style="padding:24px;max-width:620px;line-height:1.6">' +
-      '<h2 style="margin:0 0 8px;font-size:15px;color:#ff8f8f">Google Maps API key missing</h2>' +
-      '<p style="color:#92a0b3">This page needs a Maps JavaScript API key. No key is committed to ' +
-      'the repository, by design. Supply one of:</p>' +
-      '<ul style="color:#92a0b3"><li>append <code style="color:#3ee9a7">?key=YOUR_KEY</code> to this URL ' +
-      '(local testing only), or</li>' +
-      '<li>create <code style="color:#3ee9a7">public/dso-lookup-config.js</code> containing ' +
-      '<code style="color:#3ee9a7">window.STRAUMVAKT_MAPS_KEY="YOUR_KEY"</code> ' +
-      '(git-ignored), or</li>' +
-      '<li>inject it at deploy time from a Cloudflare secret.</li></ul>' +
-      '<p style="color:#92a0b3">Required API: <b>Maps JavaScript API</b>. Optional: ' +
-      '<b>Places API</b> for address autocomplete.</p>' +
-      '<p style="color:#92a0b3">The DSO lookup itself does not need Google &mdash; the boundary ' +
-      'check below still works.</p></div>';
-    await loadFeatures();       // the answer does not depend on Google
+      '<div style="padding:24px;max-width:640px;line-height:1.6">' +
+      '<h2 style="margin:0 0 8px;font-size:15px;color:#f2c465">Google Maps API key needed</h2>' +
+      '<p style="color:#92a0b3">Paste a <b>Maps JavaScript API</b> key to draw the map. It is kept ' +
+      'in this browser only (localStorage) and is never sent to Straumvakt or committed anywhere.</p>' +
+      '<div style="display:flex;gap:6px;margin:12px 0;flex-wrap:wrap">' +
+      '<input id="key-input" type="password" autocomplete="off" placeholder="Paste Google Maps JavaScript API key" ' +
+      'style="flex:1;min-width:260px;background:#0b0f16;border:1px solid #26313f;color:#e9eef4;padding:7px 9px;border-radius:4px" />' +
+      '<button id="key-save" style="background:rgba(62,233,167,.1);border:1px solid rgba(62,233,167,.5);color:#3ee9a7;' +
+      'padding:7px 12px;border-radius:4px;cursor:pointer">Load map</button></div>' +
+      '<p style="color:#92a0b3;font-size:11px">Restrict the key by HTTP referrer to this site in the Google ' +
+      'Cloud console &mdash; a Maps JS key is always visible to the browser, so referrer restriction is what ' +
+      'protects it. Optional: <b>Places API</b> for address autocomplete.</p>' +
+      '<p style="color:#92a0b3;font-size:11px">The DSO answer does not need Google &mdash; address search and ' +
+      'operator resolution below already work.</p></div>';
+
+    const save = () => {
+      const pasted = $("key-input").value.trim();
+      if (!pasted) return;
+      writeStoredMapsKey(window.localStorage, pasted);
+      location.reload();
+    };
+    $("key-save").addEventListener("click", save);
+    $("key-input").addEventListener("keydown", (e) => { if (e.key === "Enter") save(); });
+
+    // Nothing about the ANSWER depends on Google: the fixture search and the
+    // point-in-polygon resolution are ours. So the page stays useful without a
+    // key instead of degrading to an error message.
+    setupSearch();
+    await loadFeatures();
     return;
   }
 
+  // Google calls this global when the key is rejected — wrong referrer,
+  // disabled API, billing off. Without it the failure is Google's opaque
+  // "This page can't load Google Maps correctly" overlay, which does not say
+  // WHICH hostname was refused. That matters here: the key is restricted to
+  // *.straumvakt.org, so it is refused on localhost and on *.pages.dev, and
+  // the fix is different in each case.
+  window.gm_authFailure = () => {
+    const host = location.hostname || "this page";
+    setStatus(`Google rejected the Maps key for ${host}.`);
+    $("map").innerHTML =
+      '<div style="padding:24px;max-width:640px;line-height:1.6">' +
+      '<h2 style="margin:0 0 8px;font-size:15px;color:#ff8f8f">Google refused the key for ' + host + '</h2>' +
+      '<p style="color:#92a0b3">The key loaded, but Google will not serve a map to this hostname. ' +
+      'Almost always the HTTP-referrer restriction on the key does not cover it.</p>' +
+      '<p style="color:#92a0b3">Either add <code style="color:#3ee9a7">' + location.origin +
+      '/*</code> to the key\'s referrer list in the Google Cloud console, or open this page from a ' +
+      'host that is already allowed.</p>' +
+      '<p style="color:#92a0b3;font-size:11px">Other causes: Maps JavaScript API not enabled, or billing ' +
+      'not active on the project.</p>' +
+      '<p style="color:#92a0b3;font-size:11px">Address search and operator resolution below are ' +
+      'unaffected &mdash; they do not use Google.</p></div>';
+  };
+
   setStatus("Loading Google Maps…");
   try { await loadScript(googleMapsScriptUrl(key)); }
-  catch { setStatus("Google Maps failed to load. Check the key, its referrer restrictions, and that Maps JavaScript API is enabled."); await loadFeatures(); return; }
+  catch { setStatus("Google Maps failed to load. Check the key, its referrer restrictions, and that Maps JavaScript API is enabled."); setupSearch(); await loadFeatures(); return; }
 
   map = new google.maps.Map($("map"), {
     ...VIEWS.southwest,
@@ -381,32 +491,117 @@ function loadScript(src) {
   });
 }
 
+// The comparison layer only. The DSO layer is drawn as vectors — see
+// applyOverlay and dso-lookup.mjs for why.
 function buildOverlay() {
-  for (const id of [DSO_LAYER, COMPARISON_LAYER]) {
-    overlays[id] = new google.maps.ImageMapType({
-      name: id,
-      tileSize: new google.maps.Size(256, 256),
-      opacity,
-      getTileUrl: (coord, zoom) => {
-        const n = 1 << zoom;
-        if (coord.y < 0 || coord.y >= n) return null;
-        const x = ((coord.x % n) + n) % n;   // wrap the antimeridian
-        return wmsTileUrl(id, x, coord.y, zoom);
-      },
-    });
-  }
+  overlays[COMPARISON_LAYER] = new google.maps.ImageMapType({
+    name: COMPARISON_LAYER,
+    tileSize: new google.maps.Size(256, 256),
+    opacity,
+    getTileUrl: (coord, zoom) => {
+      const n = 1 << zoom;
+      if (coord.y < 0 || coord.y >= n) return null;
+      const x = ((coord.x % n) + n) % n;   // wrap the antimeridian
+      return wmsTileUrl(COMPARISON_LAYER, x, coord.y, zoom);
+    },
+  });
   applyOverlay();
 }
 
 function applyOverlay() {
+  if (!map) return;
   map.overlayMapTypes.clear();
-  if (overlayOn) {
-    overlays[layer].setOpacity(opacity);
-    map.overlayMapTypes.push(overlays[layer]);
+  map.data.setStyle(styleFn);
+  map.data.revertStyle();
+  // Switching the parent group off takes its map layers with it. The DSO
+  // ANSWER is unaffected - it comes from the geometry, not from what is drawn.
+  if (!dsoLayersActive(activeGroup) || !overlayOn) {
+    map.data.setStyle({ visible: false });
+    return;
+  }
+  if (layer === COMPARISON_LAYER) {
+    map.data.setStyle({ visible: false });
+    overlays[COMPARISON_LAYER].setOpacity(opacity);
+    map.overlayMapTypes.push(overlays[COMPARISON_LAYER]);
+  }
+}
+
+/**
+ * Every area is drawn at the SAME opacity and stroke weight; only hue
+ * differs. The user-facing opacity slider scales all providers together,
+ * so no provider can be made louder than another.
+ */
+function styleFn(feature) {
+  const s = styleForFeature(feature.getProperty("nafn"));
+  const scale = opacity / FILL_OPACITY_BASE;
+  return {
+    ...s,
+    fillOpacity: Math.min(1, s.fillOpacity * scale),
+    strokeOpacity: Math.min(1, s.strokeOpacity * scale),
+    visible: true,
+  };
+}
+const FILL_OPACITY_BASE = 0.55; // slider midpoint maps to the module defaults
+
+function renderLegend() {
+  const el = $("legend");
+  el.innerHTML = "";
+  for (const { name, color } of legendEntries()) {
+    const li = document.createElement("li");
+    li.innerHTML =
+      `<span class="sw" style="background:${color};opacity:${STROKE_OPACITY}"></span>${name}`;
+    el.appendChild(li);
+  }
+  el.insertAdjacentHTML("beforeend",
+    `<li class="op">All areas: fill ${FILL_OPACITY}, stroke ${STROKE_OPACITY} — identical for every operator.</li>`);
+}
+
+// ── Parent bar ──────────────────────────────────────────────────────
+// Which data domain is on screen. Only "dso" is built; the other two are
+// rendered disabled so the bar has its final shape without pretending to work.
+let activeGroup = "dso";
+
+function renderParentBar() {
+  const bar = $("parentbar");
+  bar.innerHTML = "";
+  for (const g of CONTROL_GROUPS) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "pbtn";
+    b.textContent = g.label;
+    b.title = g.title;
+    b.dataset.group = g.id;
+    b.setAttribute("aria-pressed", String(activeGroup === g.id));
+    if (!g.ready) { b.disabled = true; b.setAttribute("aria-disabled", "true"); }
+    else b.addEventListener("click", () => setActiveGroup(g.id));
+    bar.appendChild(b);
+  }
+}
+
+/** Clicking the active group again switches it off, hiding its controls. */
+function setActiveGroup(id) {
+  if (!isSelectable(id)) return;
+  activeGroup = activeGroup === id ? null : id;
+  renderParentBar();
+  applyGroupVisibility();
+  applyOverlay();
+  setStatus(
+    activeGroup === "dso"
+      ? "Dreifiveitusvæði layer on."
+      : "Dreifiveitusvæði layer off. Address lookup still resolves the operator.",
+  );
+}
+
+function applyGroupVisibility() {
+  const allowed = new Set(visibleChildControls(activeGroup));
+  for (const el of document.querySelectorAll("#maptools [data-ctl]")) {
+    el.hidden = !allowed.has(el.dataset.ctl);
   }
 }
 
 function wireControls() {
+  renderParentBar();
+  applyGroupVisibility();
   document.querySelectorAll("[data-view]").forEach((b) =>
     b.addEventListener("click", () => {
       const v = VIEWS[b.dataset.view];
@@ -454,6 +649,19 @@ async function loadFeatures() {
     return;
   }
   const n = features.features.length;
+
+  // Draw the same geometry the answer is computed from. One source, so the
+  // map cannot disagree with the result panel.
+  if (map) {
+    map.data.addGeoJson(features);
+    map.data.setStyle(styleFn);
+    map.data.addListener("click", (e) => {
+      select({ label: "Map click", lat: e.latLng.lat(), lng: e.latLng.lng(), postnr: null });
+    });
+    renderLegend();
+    applyOverlay();
+  }
+
   setStatus(`${n} distribution areas loaded. Click the map or search an address.`);
   $("prov").innerHTML =
     `Source: <code>raforkudreifing</code> via WFS (${n} areas), EPSG:4326, fetched live from ` +

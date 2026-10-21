@@ -17,11 +17,16 @@ import {
   searchFixtures, fold, formatDistance,
   MERCATOR_HALF_WORLD_M, NEAR_BOUNDARY_M, UNDEFINED_OPERATOR,
   BOUNDARY_SAMPLES, FIXTURE_ADDRESSES,
+  styleForFeature, colorForOperator, legendEntries,
+  readStoredMapsKey, writeStoredMapsKey, MAPS_KEY_STORAGE_KEY,
+  CONTROL_GROUPS, GENERAL_CONTROLS, controlGroup, visibleChildControls, dsoLayersActive, isSelectable,
+  DSO_COLORS, DEFAULT_DSO_COLOR, FILL_OPACITY, STROKE_OPACITY, darken,
 } from "../public/dso-lookup.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const html = readFileSync(join(here, "../public/dso-lookup.html"), "utf8");
 const mjs = readFileSync(join(here, "../public/dso-lookup.mjs"), "utf8");
+const gitignore = readFileSync(join(here, "../.gitignore"), "utf8");
 /**
  * Copy text as a reader sees it: HTML entities decoded and whitespace
  * collapsed. Asserting against raw source would fail on `&ndash;` and on
@@ -34,7 +39,7 @@ const prose = html
   .replace(/&hellip;/g, "…")
   .replace(/&rsquo;/g, "’")
   .replace(/&deg;/g, "°")
-  .replace(/"\s*\+\s*"/g, "")
+  .replace(/["']\s*\+\s*["']/g, "")
   .replace(/\s+/g, " ");
 
 // A unit square around (0,0) and a neighbour to its east, as a stand-in for
@@ -74,16 +79,70 @@ describe("the demo gate", () => {
     }
   });
 
-  it("issues nothing — no cookie, storage, token or session anywhere in the POC", () => {
+  it("issues no cookie, token or session", () => {
     for (const src of [html, mjs]) {
-      expect(src).not.toMatch(/document\.cookie|localStorage|setItem\(/);
+      expect(src).not.toMatch(/document\.cookie/);
       expect(src).not.toMatch(/\bjwt\b|Bearer |Authorization/i);
     }
   });
 
-  it("says on the page that it is not a Straumvakt login", () => {
-    expect(prose).toMatch(/not a Straumvakt tenant or admin login/i);
-    expect(prose).toMatch(/Do not treat it as a security control/i);
+  it("uses storage ONLY for the user's own Google key, never for identity", () => {
+    // localStorage is allowed here for exactly one thing: remembering the
+    // Maps key the user pasted. It must never hold a credential or session.
+    const storageCalls = [...mjs.matchAll(/(?:get|set)Item\(([^)]*)\)/g)].map((m) => m[1].trim());
+    expect(storageCalls.length).toBeGreaterThan(0);
+    for (const arg of storageCalls) expect(arg).toContain("MAPS_KEY_STORAGE_KEY");
+    expect(mjs).not.toMatch(/setItem\([^)]*(?:pass|cred|token|session|user)/i);
+  });
+
+  it("the page is GATED — the form exists and guards the app", () => {
+    expect(html).toMatch(/id="gate-form"/);
+    expect(html).toMatch(/id="u"/);
+    expect(html).toMatch(/type="password" id="p"/);
+    expect(html).toMatch(/checkCredential\(\$\("u"\)\.value, \$\("p"\)\.value\)/);
+  });
+
+  it("the workspace is hidden until the gate opens it", () => {
+    // #app is display:none and only .ready reveals it, and .ready is added
+    // solely in the success branch. A CSS-only reader sees nothing.
+    expect(html).toMatch(/#app \{ display: none;/);
+    expect(html).toMatch(/#app\.ready \{ display: grid;/);
+    expect(html).toMatch(/classList\.add\("ready"\)/);
+  });
+
+  it("does not start the app except through the gate", () => {
+    // No top-level start(): if one crept back, the map would load for
+    // everyone regardless of the credential.
+    expect(html).not.toMatch(/^start\(\);/m);
+
+    // Assert ORDER inside the success branch, not exact adjacency — a test
+    // that breaks on an inserted comment is noise, not a guard.
+    const handler = html.slice(html.indexOf('$("gate-form")'), html.indexOf("// ── State"));
+    const success = handler.slice(handler.indexOf("return;") + "return;".length);
+    const reveal = success.indexOf('classList.add("ready")');
+    const boot = success.indexOf("start();");
+    expect(reveal).toBeGreaterThan(-1);
+    expect(boot).toBeGreaterThan(reveal); // revealed before booted
+    // and start() is reached ONLY after the credential check passes
+    expect(handler.slice(0, handler.indexOf("return;"))).not.toContain("start();");
+  });
+
+  it("shows a small error on a wrong credential and clears the password", () => {
+    expect(html).toMatch(/Incorrect credential\./);
+    expect(html).toMatch(/id="gate-err"/);
+    expect(html).toMatch(/\$\("p"\)\.value = "";/);
+  });
+
+  it("carries the two required labels verbatim", () => {
+    expect(prose).toMatch(/Public-data DSO lookup POC/);
+    expect(prose).toMatch(/This is not Straumvakt tenant\/admin authentication/);
+  });
+
+  it("the gate persists NOTHING, so a reload re-gates", () => {
+    // Anything persisted here would be a stored auth decision, which is
+    // exactly what this must not be.
+    const gateBlock = html.slice(html.indexOf('$("gate-form")'), html.indexOf("// ── State"));
+    expect(gateBlock).not.toMatch(/localStorage|sessionStorage|document\.cookie|setItem/);
   });
 });
 
@@ -104,10 +163,67 @@ describe("the Google key is never committed", () => {
     expect(resolveMapsKey({ search: "?key=fromurl", injected: "xyz" })).toBe("fromurl");
   });
 
-  it("returns null when absent, so the UI can say so", () => {
+  it("returns null when absent, so the UI can ask for one", () => {
     expect(resolveMapsKey({ search: "" })).toBeNull();
     expect(resolveMapsKey({ search: "?key=", injected: "  " })).toBeNull();
     expect(resolveMapsKey()).toBeNull();
+  });
+
+  it("falls back to a key the user pasted earlier", () => {
+    expect(resolveMapsKey({ stored: "FROM_STORAGE" })).toBe("FROM_STORAGE");
+    // Explicit sources still win over the remembered one.
+    expect(resolveMapsKey({ search: "?key=URL", stored: "FROM_STORAGE" })).toBe("URL");
+    expect(resolveMapsKey({ injected: "CFG", stored: "FROM_STORAGE" })).toBe("CFG");
+  });
+
+  it("reads and writes the remembered key without throwing when storage is blocked", () => {
+    const blocked = { getItem() { throw new Error("blocked"); }, setItem() { throw new Error("blocked"); } };
+    expect(readStoredMapsKey(blocked)).toBeNull();
+    expect(writeStoredMapsKey(blocked, "x")).toBe(false);
+    expect(readStoredMapsKey(undefined)).toBeNull();
+
+    const store = new Map();
+    const ok = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, v) };
+    expect(writeStoredMapsKey(ok, "K1")).toBe(true);
+    expect(readStoredMapsKey(ok)).toBe("K1");
+  });
+
+  it("reuses the storage key the earlier local viewer already used", () => {
+    // So a key pasted into the older Google viewer is picked up here on the
+    // same origin, rather than asking for it twice.
+    expect(MAPS_KEY_STORAGE_KEY).toBe("straumvakt-google-maps-key");
+  });
+
+  it("offers a paste field so no key has to be baked into the deploy", () => {
+    expect(html).toMatch(/id="key-input"/);
+    expect(html).toMatch(/id="key-save"/);
+    expect(prose).toMatch(/kept in this browser only/i);
+    expect(prose).toMatch(/never sent to Straumvakt/i);
+  });
+
+  it("tells the user to restrict the key by referrer", () => {
+    expect(prose).toMatch(/Restrict the key by HTTP referrer/i);
+  });
+
+  it("handles Google REFUSING the key, naming the hostname it refused", () => {
+    // The key is restricted to *.straumvakt.org, so it is refused on
+    // localhost and on *.pages.dev. Google's own failure is an opaque overlay
+    // that does not say which hostname was rejected; gm_authFailure is the
+    // documented hook for replacing it with something actionable.
+    expect(html).toMatch(/window\.gm_authFailure\s*=/);
+    expect(html).toMatch(/location\.hostname/);
+    expect(html).toMatch(/location\.origin/);
+    expect(prose).toMatch(/referrer restriction on the key does not cover it/i);
+  });
+
+  it("keeps the DSO answer working when Google is refused or unreachable", () => {
+    // Every Google failure path must still call setupSearch() and
+    // loadFeatures() — the operator answer owes nothing to Google.
+    const start = html.slice(html.indexOf("async function start()"), html.indexOf("function loadScript"));
+    const returns = start.split("return;").length - 1;
+    const searches = start.split("setupSearch()").length - 1;
+    expect(returns).toBeGreaterThanOrEqual(2);
+    expect(searches).toBeGreaterThanOrEqual(returns);
   });
 
   it("refuses to build a script URL without a key", () => {
@@ -125,6 +241,18 @@ describe("the Google key is never committed", () => {
   it("tells the user exactly which Google APIs are needed", () => {
     expect(prose).toMatch(/Maps JavaScript API/);
     expect(prose).toMatch(/Places API/);
+  });
+
+  it("actually LOADS the local key file it tells the user to create", () => {
+    // The page documented public/dso-lookup-config.js but had no script tag
+    // for it, so window.STRAUMVAKT_MAPS_KEY could never be set that way.
+    expect(html).toMatch(/<script src="\.\/dso-lookup-config\.js"/);
+    // Relative, so it works from a subdomain root too.
+    expect(html).not.toMatch(/<script src="\/dso-lookup-config\.js"/);
+  });
+
+  it("keeps that key file out of git", () => {
+    expect(gitignore).toMatch(/dso-lookup-config\.js/);
   });
 });
 
@@ -385,10 +513,251 @@ describe("containment — this POC touches nothing of Straumvakt's", () => {
   });
 });
 
+describe("parent control bar drives the child bar", () => {
+  it("declares exactly three groups, in order", () => {
+    expect(CONTROL_GROUPS.map((g) => g.id)).toEqual(["dso", "bev", "forecast"]);
+    expect(CONTROL_GROUPS.map((g) => g.label)).toEqual(["Dreifiveitusvæði", "BEV", "Orkuspá"]);
+  });
+
+  it("marks only Dreifiveitusvæði as built", () => {
+    expect(controlGroup("dso").ready).toBe(true);
+    expect(controlGroup("bev").ready).toBe(false);
+    expect(controlGroup("forecast").ready).toBe(false);
+    expect(isSelectable("dso")).toBe(true);
+    expect(isSelectable("bev")).toBe(false);
+    expect(isSelectable("forecast")).toBe(false);
+    expect(isSelectable("nonexistent")).toBe(false);
+  });
+
+  it("shows the DSO child controls when its group is active", () => {
+    const v = visibleChildControls("dso");
+    for (const c of ["overlay-toggle", "layer-raforkudreifing", "layer-orkusparsvaedi", "opacity"]) {
+      expect(v).toContain(c);
+    }
+  });
+
+  it("HIDES those child controls when the group is switched off", () => {
+    const v = visibleChildControls(null);
+    for (const c of ["overlay-toggle", "layer-raforkudreifing", "layer-orkusparsvaedi", "opacity"]) {
+      expect(v).not.toContain(c);
+    }
+  });
+
+  it("keeps general map controls visible in every state", () => {
+    // Hiding "Iceland" because a data layer is off would be a bug.
+    //
+    // The expected ids are listed literally rather than looped over
+    // GENERAL_CONTROLS: iterating the very array under test makes the
+    // assertion vacuously true the moment that array is emptied, which is
+    // exactly the regression this is meant to catch.
+    const expected = ["view-southwest", "view-iceland", "type-roadmap", "type-hybrid"];
+    expect(GENERAL_CONTROLS).toEqual(expected);
+    for (const state of ["dso", "bev", "forecast", null]) {
+      const v = visibleChildControls(state);
+      for (const c of expected) expect(v).toContain(c);
+    }
+  });
+
+  it("shows no domain controls for a group that is not built yet", () => {
+    expect(visibleChildControls("bev")).toEqual(GENERAL_CONTROLS);
+    expect(visibleChildControls("forecast")).toEqual(GENERAL_CONTROLS);
+  });
+
+  it("ties the DSO map layers to the DSO group only", () => {
+    expect(dsoLayersActive("dso")).toBe(true);
+    expect(dsoLayersActive("bev")).toBe(false);
+    expect(dsoLayersActive(null)).toBe(false);
+  });
+
+  it("every declared child id exists as a control in the markup", () => {
+    // Catches a rename on one side only, which would silently hide a button.
+    const inMarkup = [...html.matchAll(/data-ctl="([^"]+)"/g)].map((m) => m[1]);
+    for (const id of visibleChildControls("dso")) expect(inMarkup).toContain(id);
+    expect(new Set(inMarkup).size).toBe(inMarkup.length); // no duplicates
+  });
+
+  it("renders the parent bar above the child bar", () => {
+    expect(html).toMatch(/id="parentbar"/);
+    expect(html.indexOf('id="parentbar"')).toBeLessThan(html.indexOf('id="maptools"'));
+  });
+
+  it("renders unbuilt groups as genuinely disabled, not as dead buttons", () => {
+    expect(html).toMatch(/b\.disabled = true/);
+    expect(html).toMatch(/aria-disabled/);
+    expect(html).toMatch(/\[disabled\]::after \{ content: " \(later\)"/);
+  });
+
+  it("switching the group off does not disable the operator lookup", () => {
+    // The answer comes from geometry, not from what is drawn.
+    expect(html).toMatch(/Address lookup still resolves the operator/);
+  });
+});
+
+describe("the standalone bundle stays in sync with the site copy", () => {
+  // poc/dso-standalone/ is what gets deployed to a subdomain (Pages serves
+  // index.html at the root). It is a copy, so the only real risk is drift —
+  // someone edits public/ and the subdomain quietly serves something older.
+  const standaloneHtml = readFileSync(join(here, "../poc/dso-standalone/index.html"), "utf8");
+  const standaloneMjs = readFileSync(join(here, "../poc/dso-standalone/dso-lookup.mjs"), "utf8");
+
+  it("index.html is byte-identical to public/dso-lookup.html", () => {
+    expect(standaloneHtml).toBe(html);
+  });
+
+  it("dso-lookup.mjs is byte-identical to public/dso-lookup.mjs", () => {
+    expect(standaloneMjs).toBe(mjs);
+  });
+
+  it("resolves its module by a relative path, so it works at any origin", () => {
+    // "./dso-lookup.mjs" — not "/dso-lookup.mjs". An absolute path would
+    // break the moment the page is served from a subdomain root.
+    expect(standaloneHtml).toMatch(/from "\.\/dso-lookup\.mjs"/);
+    expect(standaloneHtml).not.toMatch(/from "\/dso-lookup\.mjs"/);
+  });
+});
+
 describe("formatting", () => {
   it("uses metres below a kilometre", () => {
     expect(formatDistance(36)).toBe("36 m");
     expect(formatDistance(1500)).toBe("1.5 km");
     expect(formatDistance(Infinity)).toBe("unknown distance");
+  });
+});
+
+describe("overlay styling — no provider may look louder than another", () => {
+  it("gives EVERY operator identical fill and stroke opacity", () => {
+    // This is the whole fix. The WMS raster made the red/pink area dominate;
+    // drawing vectors ourselves means one constant governs all of them.
+    const styles = Object.keys(DSO_COLORS).map((n) => styleForFeature(n));
+    expect(new Set(styles.map((s) => s.fillOpacity)).size).toBe(1);
+    expect(new Set(styles.map((s) => s.strokeOpacity)).size).toBe(1);
+    expect(new Set(styles.map((s) => s.strokeWeight)).size).toBe(1);
+  });
+
+  it("keeps the defaults inside the agreed ranges", () => {
+    expect(FILL_OPACITY).toBeGreaterThanOrEqual(0.22);
+    expect(FILL_OPACITY).toBeLessThanOrEqual(0.32);
+    expect(STROKE_OPACITY).toBeGreaterThanOrEqual(0.7);
+    expect(STROKE_OPACITY).toBeLessThanOrEqual(0.85);
+  });
+
+  it("gives each operator a distinct hue", () => {
+    const colors = Object.values(DSO_COLORS);
+    expect(new Set(colors).size).toBe(colors.length);
+    for (const c of colors) expect(c).toMatch(/^#[0-9a-f]{6}$/i);
+  });
+
+  it("covers every operator the dataset publishes, including the undefined one", () => {
+    for (const n of ["Veitur", "HS Veitur", "RARIK", "Norðurorka", "Orkubú Vestfjarða", UNDEFINED_OPERATOR]) {
+      expect(DSO_COLORS[n]).toBeDefined();
+    }
+  });
+
+  it("falls back to a neutral colour for an unknown operator", () => {
+    expect(colorForOperator("Something New")).toBe(DEFAULT_DSO_COLOR);
+    expect(colorForOperator(null)).toBe(DEFAULT_DSO_COLOR);
+  });
+
+  it("keeps every pair perceptually apart AS COMPOSITED over the basemap", () => {
+    // The colours are never seen neat - they sit at FILL_OPACITY over Google
+    // imagery. So the separation that matters is between the COMPOSITED
+    // results, measured perceptually, over both a light and a dark basemap.
+    // This is the guard that stops a future edit quietly reintroducing two
+    // colours that blend.
+    const hex2rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+    const over = (fg, bg, a) => fg.map((c, i) => c * a + bg[i] * (1 - a));
+    const lab = (rgb) => {
+      const [R, G, B] = rgb.map((v) => {
+        v /= 255;
+        return v > 0.04045 ? Math.pow((v + 0.055) / 1.055, 2.4) : v / 12.92;
+      });
+      const f = (t) => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116);
+      const X = f((R * 0.4124 + G * 0.3576 + B * 0.1805) / 0.95047);
+      const Y = f(R * 0.2126 + G * 0.7152 + B * 0.0722);
+      const Z = f((R * 0.0193 + G * 0.1192 + B * 0.9505) / 1.08883);
+      return [116 * Y - 16, 500 * (X - Y), 200 * (Y - Z)];
+    };
+    const dist = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]);
+
+    const names = Object.keys(DSO_COLORS);
+    for (const bg of [[242, 240, 236], [51, 56, 46]]) {
+      const labs = names.map((n) => lab(over(hex2rgb(DSO_COLORS[n]), bg, FILL_OPACITY)));
+      for (let i = 0; i < names.length; i++) {
+        for (let j = i + 1; j < names.length; j++) {
+          const d = dist(labs[i], labs[j]);
+          // 15 sits just below the measured minimum (17.4, Veitur vs the
+          // undefined slate over the light basemap), so it catches a
+          // regression without tripping on the palette as designed.
+          expect(
+            d,
+            `${names[i]} vs ${names[j]} too close over bg ${bg}: ${d.toFixed(1)}`,
+          ).toBeGreaterThan(15);
+        }
+      }
+    }
+  });
+
+  it("keeps RARIK the palest and least saturated operator colour", () => {
+    // 84 of 109 areas are RARIK. A vivid hue across most of the country
+    // would drown the map, so it is the palest (highest L*) and least
+    // chromatic (lowest C*) of the operators.
+    //
+    // Measured in Lab, not in raw RGB: max-minus-min channel spread calls
+    // pale peach "more chromatic" than forest green, which is simply wrong
+    // and is what an earlier version of this test got backwards.
+    const lab = (h) => {
+      const [R, G, B] = [1, 3, 5]
+        .map((i) => parseInt(h.slice(i, i + 2), 16) / 255)
+        .map((v) => (v > 0.04045 ? Math.pow((v + 0.055) / 1.055, 2.4) : v / 12.92));
+      const f = (t) => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116);
+      const X = f((R * 0.4124 + G * 0.3576 + B * 0.1805) / 0.95047);
+      const Y = f(R * 0.2126 + G * 0.7152 + B * 0.0722);
+      const Z = f((R * 0.0193 + G * 0.1192 + B * 0.9505) / 1.08883);
+      return { L: 116 * Y - 16, C: Math.hypot(500 * (X - Y), 200 * (Y - Z)) };
+    };
+    const rarik = lab(DSO_COLORS["RARIK"]);
+    for (const n of ["Veitur", "HS Veitur", "Norðurorka", "Orkubú Vestfjarða"]) {
+      const o = lab(DSO_COLORS[n]);
+      expect(rarik.C, `RARIK C* vs ${n}`).toBeLessThan(o.C);
+      expect(rarik.L, `RARIK L* vs ${n}`).toBeGreaterThan(o.L);
+    }
+  });
+
+  it("does not colour the countryside like water", () => {
+    // A pale blue covering rural Iceland reads as sea on a map made largely
+    // of coastline. RARIK must be warm: red channel highest, blue lowest.
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(DSO_COLORS["RARIK"].slice(i, i + 2), 16));
+    expect(r).toBeGreaterThan(b);
+    expect(g).toBeGreaterThan(b);
+  });
+
+  it("strokes darker than the fill, so edges stay crisp at low opacity", () => {
+    const s = styleForFeature("Veitur");
+    const val = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)).reduce((a, c) => a + c, 0);
+    expect(val(s.strokeColor)).toBeLessThan(val(s.fillColor));
+    expect(darken("#ffffff", 0.5)).toBe("#808080");
+    expect(darken("#000000", 0.5)).toBe("#000000");
+  });
+
+  it("only stands out as an explicit interaction state", () => {
+    const normal = styleForFeature("Veitur");
+    const picked = styleForFeature("Veitur", { selected: true });
+    expect(picked.fillOpacity).toBeGreaterThan(normal.fillOpacity);
+    expect(picked.strokeWeight).toBeGreaterThan(normal.strokeWeight);
+    expect(picked.fillColor).toBe(normal.fillColor); // hue never changes
+  });
+
+  it("draws the DSO layer as vectors, not as the unevenly-styled raster", () => {
+    expect(html).toMatch(/map\.data\.addGeoJson/);
+    expect(html).toMatch(/map\.data\.setStyle/);
+    // The raster is retained only for the comparison layer.
+    expect(html).not.toMatch(/ImageMapType[\s\S]{0,400}DSO_LAYER/);
+  });
+
+  it("publishes a legend so the colours are readable", () => {
+    const entries = legendEntries();
+    expect(entries.length).toBe(Object.keys(DSO_COLORS).length);
+    expect(entries[0]).toHaveProperty("color");
+    expect(html).toMatch(/id="legend"/);
   });
 });

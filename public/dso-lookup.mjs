@@ -46,16 +46,50 @@ export function checkCredential(user, pass) {
 // ── Google Maps key handling ──────────────────────────────────────────────
 
 /**
+ * Where a pasted key is remembered. Deliberately the same name the earlier
+ * local Google viewer used, so a key already pasted there is picked up here
+ * when both are opened from the same origin.
+ */
+export const MAPS_KEY_STORAGE_KEY = "straumvakt-google-maps-key";
+
+/**
  * Resolve the Maps key from runtime sources, never from source control.
  *
- * Order: ?key= in the URL (local testing), then window.STRAUMVAKT_MAPS_KEY
- * (set by an ignored local config file or injected at deploy time).
- * Returns null when absent so the UI can say so plainly.
+ * Order:
+ *   1. ?key= in the URL          — explicit, one-off, wins over everything
+ *   2. window.STRAUMVAKT_MAPS_KEY — deploy-time injection or local config file
+ *   3. localStorage              — a key the user pasted into this page before
+ *
+ * Returns null when absent so the UI can ask for one rather than fail silently.
+ *
+ * Note what this means for deployment: because a key can be pasted at runtime
+ * and kept in the browser, the deployed bundle needs NO key baked into it and
+ * no Cloudflare secret. A Maps JS key is visible to the client by nature, so
+ * the real protection is an HTTP-referrer restriction on the key itself, not
+ * secrecy about where it is stored.
  */
-export function resolveMapsKey({ search = "", injected = null } = {}) {
+export function resolveMapsKey({ search = "", injected = null, stored = null } = {}) {
   const fromQuery = new URLSearchParams(search).get("key");
-  const key = (fromQuery || injected || "").trim();
+  const key = (fromQuery || injected || stored || "").trim();
   return key.length > 0 ? key : null;
+}
+
+/** Read the remembered key. Safe where storage is unavailable or blocked. */
+export function readStoredMapsKey(storage) {
+  try {
+    return storage?.getItem(MAPS_KEY_STORAGE_KEY) || null;
+  } catch {
+    return null; // private mode, blocked cookies, etc.
+  }
+}
+
+export function writeStoredMapsKey(storage, key) {
+  try {
+    if (key) storage?.setItem(MAPS_KEY_STORAGE_KEY, key);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function googleMapsScriptUrl(key, { places = true } = {}) {
@@ -378,6 +412,200 @@ export const BOUNDARY_SAMPLES = [
 
 export function runBoundaryCheck(featureCollection, samples = BOUNDARY_SAMPLES) {
   return samples.map((s) => ({ ...s, result: resolveDso(s.lng, s.lat, featureCollection) }));
+}
+
+// ── Overlay styling ───────────────────────────────────────────────────────
+//
+// WHY THE OVERLAY IS DRAWN AS VECTORS, NOT AS A WMS IMAGE
+//
+// The WMS raster carries GeoServer's own SLD styling, and that styling is not
+// even-handed: over Google's hybrid imagery the red/pink area reads far
+// stronger than the others, so the map looks like it is making a claim about
+// which operator matters. We cannot change the server's SLD.
+//
+// We already fetch the vector geometry for point-in-polygon, so drawing it
+// through the Google Data layer costs nothing extra and puts fill and stroke
+// opacity under our control. Every operator is then rendered at IDENTICAL
+// opacity and stroke weight, and only hue distinguishes them.
+//
+// The comparison layer (orkusparsvaedi) is still a WMS raster — its vectors
+// are not loaded — so it will not be weight-matched to these. It is a
+// comparison aid behind an explicit toggle, and the handoff says so.
+
+/** One opacity for every provider. Changing this changes all of them. */
+export const FILL_OPACITY = 0.32;
+export const STROKE_OPACITY = 0.85;
+export const STROKE_WEIGHT = 1.4;
+
+/** Explicit interaction state — the ONLY thing allowed to stand out. */
+export const SELECTED_FILL_OPACITY = 0.5;
+export const SELECTED_STROKE_OPACITY = 1;
+export const SELECTED_STROKE_WEIGHT = 3;
+
+/**
+ * Hue per operator.
+ *
+ * NOT hand-picked. The colours are never seen neat — they are composited at
+ * FILL_OPACITY over Google's basemap — so they were chosen by measuring the
+ * COMPOSITED result in CIEDE2000 over three backgrounds (light roadmap, mid
+ * terrain, dark satellite) and under normal vision plus deuteranopia and
+ * protanopia, then maximising the SMALLEST separation between any two
+ * operators. A palette is only as good as its most confusable pair.
+ *
+ * Measured against the previous palette, at the same opacities:
+ *   worst pair, normal vision : 10.63 -> 12.83 dE00
+ *   worst pair, colour-blind  :  2.58 ->  5.18 dE00   (was indistinguishable)
+ *
+ * Two constraints the metric cannot know, applied as bounds on the search:
+ *   - RARIK covers 84 of 109 areas, i.e. most of Iceland. It is the palest
+ *     (L* 83) and least chromatic (C* 28, against 39-66 for the rest), so a
+ *     hue does not get smeared across the whole country. Every vivid colour
+ *     is reserved for a compact urban operator.
+ *   - RARIK must not be blue. A pale blue covering the countryside reads as
+ *     water on a map made largely of coastline.
+ *
+ * One honest trade-off: pale-and-low-chroma makes RARIK recede on the light
+ * roadmap, where boundary inspection mostly happens, but over dark satellite
+ * imagery a pale fill is the MOST prominent of the six, not the least. That
+ * is a consequence of the choice, not an oversight.
+ *
+ * Hand-tuning was tried and measured worse every time; the numbers, not
+ * taste, decided these values.
+ */
+export const DSO_COLORS = {
+  "Veitur": "#00bcc7",              // turquoise
+  "HS Veitur": "#e13d70",           // rose
+  "RARIK": "#fbc3a4",               // pale peach — the quiet, dominant one
+  "Norðurorka": "#8c83f5",          // periwinkle
+  "Orkubú Vestfjarða": "#257523",   // forest green
+  // Deep navy: reads as inactive rather than as a sixth brand. "RARIK serves
+  // this" and "no operator is defined here" mean opposite things and must not
+  // look alike — the original pale slate sat only 14.0 from RARIK once
+  // composited. Going dark fixes that AND doubles colour-blind separation for
+  // the whole palette (2.5 -> 5.2 dE00), because lightness survives the loss
+  // of hue discrimination when chroma does not.
+  [UNDEFINED_OPERATOR]: "#1e506e",
+};
+
+export const DEFAULT_DSO_COLOR = "#1e506e";
+
+export function colorForOperator(nafn) {
+  return DSO_COLORS[String(nafn ?? "").trim()] ?? DEFAULT_DSO_COLOR;
+}
+
+/**
+ * Darken a hex colour toward black by `amount` (0..1).
+ *
+ * The stroke uses a darkened version of the fill rather than the fill itself:
+ * at a 32% fill the edges are otherwise mushy, and the boundary is the part a
+ * reader actually navigates by. Same hue, so identity is unchanged.
+ */
+export function darken(hex, amount = 0.4) {
+  const h = String(hex).replace("#", "");
+  const rgb = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+  return (
+    "#" +
+    rgb
+      .map((c) => Math.round(c * (1 - amount)).toString(16).padStart(2, "0"))
+      .join("")
+  );
+}
+
+export const STROKE_DARKEN = 0.4;
+
+/**
+ * Google Maps Data-layer style for one area.
+ *
+ * Note what is NOT parameterised: opacity and stroke weight are the same
+ * constants for every operator. A future edit cannot make one provider louder
+ * without changing them for all, which is the property the test asserts.
+ */
+export function styleForFeature(nafn, { selected = false } = {}) {
+  const color = colorForOperator(nafn);
+  return {
+    fillColor: color,
+    strokeColor: darken(color, STROKE_DARKEN),
+    fillOpacity: selected ? SELECTED_FILL_OPACITY : FILL_OPACITY,
+    strokeOpacity: selected ? SELECTED_STROKE_OPACITY : STROKE_OPACITY,
+    strokeWeight: selected ? SELECTED_STROKE_WEIGHT : STROKE_WEIGHT,
+    zIndex: selected ? 2 : 1,
+  };
+}
+
+/** Legend rows, so the map's colours are readable rather than guessed at. */
+export function legendEntries() {
+  return Object.entries(DSO_COLORS).map(([name, color]) => ({ name, color }));
+}
+
+// ── Control groups (parent bar -> child bar) ──────────────────────────────
+//
+// The child control bar is getting crowded, and it is about to hold controls
+// for three unrelated data domains. So the parent bar selects the DOMAIN and
+// the child bar only ever shows the controls belonging to the active one.
+//
+// Two kinds of child control exist and the distinction matters:
+//   - GENERAL map controls (view presets, base map type) belong to no domain
+//     and are always shown. Hiding the "Iceland" button because a data layer
+//     is off would be a bug, not a feature.
+//   - DOMAIN controls appear and disappear with their parent.
+//
+// Only `dso` is implemented. `bev` and `forecast` are declared here, disabled,
+// so the bar has its final shape and nobody has to guess where they go — but
+// they are explicitly NOT ready, and the UI must render them as inert rather
+// than as buttons that silently do nothing.
+
+/** Child controls that belong to no domain and are always visible. */
+export const GENERAL_CONTROLS = ["view-southwest", "view-iceland", "type-roadmap", "type-hybrid"];
+
+export const CONTROL_GROUPS = [
+  {
+    id: "dso",
+    label: "Dreifiveitusvæði",
+    title: "Distribution service areas (Raforkudreifing)",
+    ready: true,
+    children: ["overlay-toggle", "layer-raforkudreifing", "layer-orkusparsvaedi", "opacity"],
+  },
+  {
+    id: "bev",
+    label: "BEV",
+    title: "Battery-electric vehicles — not implemented yet",
+    ready: false,
+    children: [],
+  },
+  {
+    id: "forecast",
+    label: "Orkuspá",
+    title: "Energy forecast — scope not defined yet",
+    ready: false,
+    children: [],
+  },
+];
+
+export function controlGroup(id) {
+  return CONTROL_GROUPS.find((g) => g.id === id) ?? null;
+}
+
+/**
+ * Which child controls should be on screen, given the active parent group.
+ *
+ * `activeGroupId` of null means every domain is switched off — the general map
+ * controls remain, because they are not part of any domain.
+ */
+export function visibleChildControls(activeGroupId) {
+  const group = activeGroupId ? controlGroup(activeGroupId) : null;
+  const domain = group && group.ready ? group.children : [];
+  return [...GENERAL_CONTROLS, ...domain];
+}
+
+/** True when the DSO map layers should be drawn at all. */
+export function dsoLayersActive(activeGroupId) {
+  return activeGroupId === "dso";
+}
+
+/** A group the user may actually select. Unready ones are inert. */
+export function isSelectable(id) {
+  const g = controlGroup(id);
+  return !!g && g.ready === true;
 }
 
 // ── Address fixtures (fallback when Places is unavailable) ────────────────
