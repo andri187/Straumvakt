@@ -41,6 +41,56 @@ export interface DriverContractsTileData {
   membersByAgreement: Array<{ agreementDisplayName: string; count: number }>;
 }
 
+// ── TENANCY: the `?orgId=` parameter was the only confinement ───────────
+//
+// `listDriverMemberships` and `getDriverContractsTiles` both took an OPTIONAL
+// `orgId` read straight from the query string, and `null` meant every row.
+// The route is mounted behind `billing.read`, which `requireAdmin` grants to
+// any org member — so omitting the parameter returned **every tenant's driver
+// memberships**, and the rows carry `email`, `displayName` and `phone`.
+//
+// That makes this worse than census row 104 in kind rather than degree: the
+// enrichment leak was operational data, this one is personal data about
+// people who are not the caller's drivers.
+//
+// **A caller-supplied filter is not a tenancy control.** It confines the query
+// only for callers who choose to send it, which is precisely the set of
+// callers who were not the threat.
+//
+// Both functions now take a REQUIRED `restrictToOrgIds`, applied through one
+// shared `ownerOrgWhere` so the tile strip cannot be confined differently from
+// the list beneath it. The requested `?orgId=` still narrows further, and the
+// route validates it against the caller's memberships through the SAME
+// `decideLedgerAccess` the session ledger uses — naming someone else's org is
+// a 403, not a quiet narrowing to your own rows.
+
+/** `null` is platform-wide. An empty array is "may see nothing". */
+export type DriverContractsTenantScope = string[] | null;
+
+/**
+ * The membership predicate for a tenant scope, plus an optional narrowing.
+ *
+ * Shared by the list and the tiles. `requestedOrgId` has already been checked
+ * against the caller's memberships by the route; passing it here narrows, it
+ * never widens — an empty allow-list stays empty whatever is requested.
+ */
+export function ownerOrgWhere(
+  restrictToOrgIds: DriverContractsTenantScope,
+  requestedOrgId: string | null,
+): Record<string, unknown> {
+  if (restrictToOrgIds === null) {
+    return requestedOrgId ? { driverGroup: { ownerOrgId: requestedOrgId } } : {};
+  }
+  const orgIds = requestedOrgId
+    ? restrictToOrgIds.filter((id) => id === requestedOrgId)
+    : restrictToOrgIds;
+  // `{ in: [] }` matches nothing, which is what an empty allow-list must mean.
+  // `{}` would mean everything, so the empty case is spelled out rather than
+  // fallen into.
+  return { driverGroup: { ownerOrgId: { in: orgIds } } };
+}
+
+
 // ─── Repository functions ────────────────────────────────────────────────────
 
 /**
@@ -53,11 +103,11 @@ export interface DriverContractsTileData {
  */
 export async function listDriverMemberships(
   db: PrismaClient,
-  orgId: string | null,
+  /** REQUIRED. null is platform-wide; an empty array is "may see nothing". */
+  restrictToOrgIds: DriverContractsTenantScope,
+  requestedOrgId: string | null = null,
 ): Promise<DriverMembershipRow[]> {
-  const where = orgId
-    ? { driverGroup: { ownerOrgId: orgId } }
-    : {};
+  const where = ownerOrgWhere(restrictToOrgIds, requestedOrgId);
 
   const memberships = await db.driverGroupMembership.findMany({
     where,
@@ -138,11 +188,12 @@ export async function listDriverMemberships(
 /** Tile aggregates for the /billing/driver-contracts dashboard strip. */
 export async function getDriverContractsTiles(
   db: PrismaClient,
-  orgId: string | null,
+  /** REQUIRED. Same shared predicate as the list, so the tiles cannot be
+   *  confined differently from the rows beneath them. */
+  restrictToOrgIds: DriverContractsTenantScope,
+  requestedOrgId: string | null = null,
 ): Promise<DriverContractsTileData> {
-  const where = orgId
-    ? { driverGroup: { ownerOrgId: orgId } }
-    : {};
+  const where = ownerOrgWhere(restrictToOrgIds, requestedOrgId);
 
   const allMembers = await db.driverGroupMembership.findMany({
     where,

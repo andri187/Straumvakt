@@ -166,13 +166,38 @@ export async function resolveAuthorize(
   // O(1) at any fleet size: the question is "who is at this one charger
   // right now", never "which of N phones was this".
   //
-  // Ordering matters — this runs BEFORE the IdToken lookup so a random
-  // UID never burns a lookup, but it only engages for tags matching the
-  // random-UID shape. Anything else falls straight through, so no
-  // existing path changes.
+  // Ordering, revised. This used to run BEFORE the IdToken lookup so a
+  // random UID never burned a lookup. That optimisation is deliberately
+  // traded away below, because it made ENROLMENT invisible to this
+  // branch, and enrolment is the one signal that distinguishes a person's
+  // card from an anonymous tap.
+  //
+  // Why the intent cannot simply be matched on idTag, which is the
+  // obvious fix and is not available: a phone's UID is regenerated on
+  // every tap, so there is no value to bind an intent to in advance. The
+  // intent exists precisely BECAUSE the tag carries no identity. What can
+  // be established is the negative — this tag is a known enrolled token,
+  // therefore it is not an anonymous tap.
+  const token = await db.idToken.findUnique({
+    where: { value: input.idTag },
+    select: {
+      id: true,
+      userId: true,
+      status: true,
+      expiresAt: true,
+      scopeInstallationId: true,
+    },
+  });
+
+  // `!token` is the load-bearing addition. Without it, station + liveness
+  // alone consume an intent, so ANY 08-shaped tag presented at a charger
+  // where another driver has armed one takes over that driver's identity
+  // — the session is billed to a person who did not plug in. Enrolled
+  // tokens now fall straight through to the normal path below.
   if (
     db.tapIntent &&
     identity?.chargingStationId &&
+    !token &&
     isRandomEmulatedUid(input.idTag)
   ) {
     const match = await matchAndConsumeTapIntent(
@@ -210,17 +235,6 @@ export async function resolveAuthorize(
         break; // fall through to the normal IdToken path
     }
   }
-
-  const token = await db.idToken.findUnique({
-    where: { value: input.idTag },
-    select: {
-      id: true,
-      userId: true,
-      status: true,
-      expiresAt: true,
-      scopeInstallationId: true,
-    },
-  });
 
   if (!token) {
     return { verdict: "Invalid", reason: "unknown_id_tag", enforceAuthorize };

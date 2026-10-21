@@ -49,6 +49,9 @@ interface State {
   sessionLedger: Array<{
     sessionId: string;
     costIskMinor: bigint | null;
+    // Who the money was attributed to. null = nobody, which is a real and
+    // acceptable state; a WRONG value here is a stranger's invoice.
+    driverUserId?: string | null;
     // ENRICH-1 — provenance metadata.
     verifiedSource?: string | null;
     enrichmentStatus?: string | null;
@@ -60,6 +63,15 @@ interface State {
   preSeededOcppRow?:
     | { id: string; userId: string | null; ocppEnergyKwh?: string | null }
     | null;
+  // Driver attribution inputs. Empty by default, which is the pre-Authorize
+  // historical case: no token, no membership, nobody to bill.
+  idTokens?: Array<{
+    value: string;
+    userId: string;
+    status: string;
+    expiresAt: Date | null;
+  }>;
+  memberships?: Array<{ userId: string; orgId: string }>;
 }
 
 interface FakeOpts {
@@ -112,7 +124,27 @@ function makeFakeDb(state: State, opts: FakeOpts = {}): PrismaClient {
       findFirst: async () => (hasEvse ? { id: EVSE } : null),
     },
     idToken: {
-      findFirst: async () => null,
+      // The importer no longer calls findFirst — it fetches every candidate
+      // row and lets the pure resolver decide. Left present and throwing so a
+      // regression to the unscoped single-row lookup fails loudly here.
+      findFirst: async () => {
+        throw new Error("idToken.findFirst is not the attribution path any more");
+      },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      findMany: async ({ where }: any) => {
+        const wanted: string[] = where?.value?.in ?? [];
+        return (state.idTokens ?? []).filter((t) => wanted.includes(t.value));
+      },
+    },
+    membership: {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      findMany: async ({ where }: any) => {
+        const users: string[] = where?.userId?.in ?? [];
+        const orgId: string | undefined = where?.orgId;
+        return (state.memberships ?? []).filter(
+          (m) => users.includes(m.userId) && (orgId === undefined || m.orgId === orgId),
+        );
+      },
     },
     site: {
       findUnique: async () =>
@@ -232,6 +264,7 @@ function makeFakeDb(state: State, opts: FakeOpts = {}): PrismaClient {
           state.sessionLedger.push({
             sessionId: create.sessionId,
             costIskMinor: create.costIskMinor,
+            driverUserId: create.driverUserId ?? null,
             verifiedSource: create.verifiedSource ?? null,
             enrichmentStatus: create.enrichmentStatus ?? null,
           });
@@ -262,6 +295,224 @@ function happyPathHistory(): unknown {
     ],
   };
 }
+
+// ── Driver attribution across tenants ────────────────────────────────
+//
+// Every token value below is synthetic. The importer used to resolve a driver
+// with `idToken.findFirst({ value: { in: candidates }, status: "active" })` —
+// no org term — four lines after identity.orgId came into scope, and the
+// resolved userId went straight onto session_ledger.driver_user_id. These
+// tests exercise the real query shapes through the fake, so they fail if the
+// importer stops passing org context even though the pure resolver still
+// refuses correctly in isolation.
+
+const LOCAL_DRIVER = "aaaaaaaa-0000-0000-0000-00000000000a";
+const FOREIGN_DRIVER = "bbbbbbbb-0000-0000-0000-00000000000b";
+const OTHER_ORG = "99999999-9999-9999-9999-999999999999";
+
+function historyWithToken(tokenName: string): unknown {
+  return {
+    ok: true,
+    value: [
+      {
+        Id: "z-session-1",
+        ChargerId: Z_CHARGER,
+        StartDateTime: "2026-04-15T12:00:00Z",
+        EndDateTime: "2026-04-15T13:00:00Z",
+        Energy: 30,
+        TokenName: tokenName,
+      },
+    ],
+  };
+}
+
+describe("syncZaptecSessions — driver attribution is tenant-scoped", () => {
+  beforeEach(() => {
+    vi.mocked(listZaptecChargeHistory).mockReset();
+  });
+
+  it("attributes a token whose owner belongs to the charger's org", async () => {
+    vi.mocked(listZaptecChargeHistory).mockResolvedValue(
+      historyWithToken("SYNTH-TAG-LOCAL-01") as never,
+    );
+    const state: State = {
+      importedCdrRefs: [],
+      chargeSessions: [],
+      sessionLedger: [],
+      idTokens: [
+        { value: "SYNTH-TAG-LOCAL-01", userId: LOCAL_DRIVER, status: "active", expiresAt: null },
+      ],
+      memberships: [{ userId: LOCAL_DRIVER, orgId: ORG }],
+    };
+
+    const report = await syncZaptecSessions(makeFakeDb(state), { accessToken: "stub" });
+
+    expect(report.errors).toEqual([]);
+    expect(report.imported[0].driverAttribution).toEqual({
+      kind: "attributed",
+      userId: LOCAL_DRIVER,
+    });
+    expect(state.sessionLedger[0].driverUserId).toBe(LOCAL_DRIVER);
+    expect(state.chargeSessions[0].userId).toBe(LOCAL_DRIVER);
+  });
+
+  it("refuses to bill a driver from another org, and still imports the session", async () => {
+    // The charge happened. It must be recorded and priced — it just cannot be
+    // put on a stranger's invoice.
+    vi.mocked(listZaptecChargeHistory).mockResolvedValue(
+      historyWithToken("SYNTH-TAG-FOREIGN-01") as never,
+    );
+    const state: State = {
+      importedCdrRefs: [],
+      chargeSessions: [],
+      sessionLedger: [],
+      idTokens: [
+        {
+          value: "SYNTH-TAG-FOREIGN-01",
+          userId: FOREIGN_DRIVER,
+          status: "active",
+          expiresAt: null,
+        },
+      ],
+      memberships: [{ userId: FOREIGN_DRIVER, orgId: OTHER_ORG }],
+    };
+
+    const report = await syncZaptecSessions(makeFakeDb(state), { accessToken: "stub" });
+
+    expect(report.errors).toEqual([]);
+    expect(report.imported).toHaveLength(1);
+    expect(report.imported[0].costIskMinor).toBe("64988");
+    expect(report.imported[0].driverAttribution).toEqual({
+      kind: "unattributed",
+      reason: "driver_outside_charger_org",
+    });
+    expect(state.sessionLedger[0].driverUserId).toBeNull();
+    expect(state.chargeSessions[0].userId).toBeNull();
+  });
+
+  it("refuses when two vendor identifiers on one CDR point at two drivers", async () => {
+    vi.mocked(listZaptecChargeHistory).mockResolvedValue({
+      ok: true,
+      value: [
+        {
+          Id: "z-session-1",
+          ChargerId: Z_CHARGER,
+          StartDateTime: "2026-04-15T12:00:00Z",
+          EndDateTime: "2026-04-15T13:00:00Z",
+          Energy: 30,
+          TokenName: "SYNTH-TAG-LOCAL-01",
+          UserUserName: "SYNTH-NAME-COLLIDES",
+        },
+      ],
+    } as never);
+    const state: State = {
+      importedCdrRefs: [],
+      chargeSessions: [],
+      sessionLedger: [],
+      idTokens: [
+        { value: "SYNTH-TAG-LOCAL-01", userId: LOCAL_DRIVER, status: "active", expiresAt: null },
+        {
+          value: "SYNTH-NAME-COLLIDES",
+          userId: FOREIGN_DRIVER,
+          status: "active",
+          expiresAt: null,
+        },
+      ],
+      // Both are members here, so only refusing to choose can save this.
+      memberships: [
+        { userId: LOCAL_DRIVER, orgId: ORG },
+        { userId: FOREIGN_DRIVER, orgId: ORG },
+      ],
+    };
+
+    const report = await syncZaptecSessions(makeFakeDb(state), { accessToken: "stub" });
+
+    expect(report.imported[0].driverAttribution).toEqual({
+      kind: "unattributed",
+      reason: "ambiguous_candidates",
+    });
+    expect(state.sessionLedger[0].driverUserId).toBeNull();
+  });
+
+  it("records a pre-Authorize CDR with no identifiers as imported, not as an error", async () => {
+    // ADR 0049 amendment: structurally unattributable, and not broken.
+    vi.mocked(listZaptecChargeHistory).mockResolvedValue({
+      ok: true,
+      value: [
+        {
+          Id: "z-session-1",
+          ChargerId: Z_CHARGER,
+          StartDateTime: "2026-04-15T12:00:00Z",
+          EndDateTime: "2026-04-15T13:00:00Z",
+          Energy: 30,
+        },
+      ],
+    } as never);
+    const state: State = { importedCdrRefs: [], chargeSessions: [], sessionLedger: [] };
+
+    const report = await syncZaptecSessions(makeFakeDb(state), { accessToken: "stub" });
+
+    expect(report.errors).toEqual([]);
+    expect(report.skipped).toEqual([]);
+    expect(report.imported[0].driverAttribution).toEqual({
+      kind: "unattributed",
+      reason: "no_candidates",
+    });
+  });
+
+  it("refuses a revoked token belonging to a member of the charger's org", async () => {
+    vi.mocked(listZaptecChargeHistory).mockResolvedValue(
+      historyWithToken("SYNTH-TAG-LOCAL-01") as never,
+    );
+    const state: State = {
+      importedCdrRefs: [],
+      chargeSessions: [],
+      sessionLedger: [],
+      idTokens: [
+        { value: "SYNTH-TAG-LOCAL-01", userId: LOCAL_DRIVER, status: "revoked", expiresAt: null },
+      ],
+      memberships: [{ userId: LOCAL_DRIVER, orgId: ORG }],
+    };
+
+    const report = await syncZaptecSessions(makeFakeDb(state), { accessToken: "stub" });
+
+    expect(report.imported[0].driverAttribution).toEqual({
+      kind: "unattributed",
+      reason: "token_not_usable",
+    });
+    expect(state.sessionLedger[0].driverUserId).toBeNull();
+  });
+
+  it("does not overwrite a userId the OCPP path already pinned", async () => {
+    // The reconciliation branch. OCPP's Authorize-driven resolution is
+    // stronger than the CDR's vendor-profile chain, so an existing userId
+    // wins — and an unattributed CDR must not clear it either.
+    vi.mocked(listZaptecChargeHistory).mockResolvedValue(
+      historyWithToken("SYNTH-TAG-FOREIGN-01") as never,
+    );
+    const state: State = {
+      importedCdrRefs: [],
+      chargeSessions: [
+        { id: "ocpp-row-1", orgId: ORG, energyWh: 30_000n, userId: LOCAL_DRIVER },
+      ],
+      sessionLedger: [],
+      preSeededOcppRow: { id: "ocpp-row-1", userId: LOCAL_DRIVER },
+      idTokens: [
+        {
+          value: "SYNTH-TAG-FOREIGN-01",
+          userId: FOREIGN_DRIVER,
+          status: "active",
+          expiresAt: null,
+        },
+      ],
+      memberships: [{ userId: FOREIGN_DRIVER, orgId: OTHER_ORG }],
+    };
+
+    await syncZaptecSessions(makeFakeDb(state), { accessToken: "stub" });
+
+    expect(state.chargeSessions[0].userId).toBe(LOCAL_DRIVER);
+  });
+});
 
 describe("syncZaptecSessions", () => {
   beforeEach(() => {
@@ -660,5 +911,96 @@ describe("syncZaptecSessions", () => {
 
       expect(state.sessionLedger[0].enrichmentStatus).toBe("complete");
     });
+  });
+});
+
+// ── Ledger note 22, at ingest ────────────────────────────────────────────
+//
+// `const energyKwh = z.Energy ?? 0` stood at line 235. A CDR with no `Energy`
+// field was priced at zero and, on a Zaptec-native installation where no OCPP
+// row exists to compare against, marked `complete`: a free session with a
+// clean bill of health, invisible to the enrichment view that exists to catch
+// exactly this.
+//
+// A missing reading is not zero energy. It is no reading.
+
+function historyWithEnergy(energy: unknown): unknown {
+  const cdr: Record<string, unknown> = {
+    Id: "z-session-1",
+    ChargerId: Z_CHARGER,
+    StartDateTime: "2026-04-15T12:00:00Z",
+    EndDateTime: "2026-04-15T13:00:00Z",
+    UserUserName: "andri",
+  };
+  if (energy !== "__omit__") cdr.Energy = energy;
+  return { ok: true, value: [cdr] };
+}
+
+function emptyState(): State {
+  return {
+    importedCdrRefs: [],
+    chargeSessions: [],
+    sessionLedger: [],
+    idTokens: [],
+    memberships: [],
+  };
+}
+
+describe("a CDR with no Energy is SKIPPED, never priced at zero", () => {
+  beforeEach(() => {
+    vi.mocked(listZaptecChargeHistory).mockReset();
+  });
+
+  it("skips when the field is absent entirely", async () => {
+    vi.mocked(listZaptecChargeHistory).mockResolvedValue(historyWithEnergy("__omit__") as never);
+    const state = emptyState();
+    const report = await syncZaptecSessions(makeFakeDb(state), { accessToken: "stub" });
+
+    expect(report.skipped).toEqual([{ zaptecId: "z-session-1", reason: "no_energy_in_cdr" }]);
+    expect(report.imported).toEqual([]);
+    // The proof that matters: NO row was written. A zero-priced session is
+    // invisible forever; a skipped one is in the report and re-importable the
+    // moment the vendor supplies the figure.
+    expect(state.chargeSessions).toEqual([]);
+    expect(state.sessionLedger).toEqual([]);
+    expect(state.importedCdrRefs).toEqual([]);
+  });
+
+  it("skips when the field is null", async () => {
+    vi.mocked(listZaptecChargeHistory).mockResolvedValue(historyWithEnergy(null) as never);
+    const state = emptyState();
+    const report = await syncZaptecSessions(makeFakeDb(state), { accessToken: "stub" });
+    expect(report.skipped[0]?.reason).toBe("no_energy_in_cdr");
+    expect(state.sessionLedger).toEqual([]);
+  });
+
+  it("skips a NaN reading rather than pricing one", async () => {
+    // `Number.isFinite` catches what `?? 0` never could: a field that is
+    // present, non-null, and not a number.
+    vi.mocked(listZaptecChargeHistory).mockResolvedValue(historyWithEnergy(Number.NaN) as never);
+    const state = emptyState();
+    const report = await syncZaptecSessions(makeFakeDb(state), { accessToken: "stub" });
+    expect(report.skipped[0]?.reason).toBe("no_energy_in_cdr");
+    expect(state.sessionLedger).toEqual([]);
+  });
+
+  it("a MEASURED zero is imported — it is a real reading", async () => {
+    // The distinction the whole fix rests on. A session that genuinely
+    // delivered nothing — a plug-in that never drew — is a fact, and refusing
+    // it would be the same error in the other direction.
+    vi.mocked(listZaptecChargeHistory).mockResolvedValue(historyWithEnergy(0) as never);
+    const state = emptyState();
+    const report = await syncZaptecSessions(makeFakeDb(state), { accessToken: "stub" });
+    expect(report.skipped).toEqual([]);
+    expect(report.imported).toHaveLength(1);
+    expect(state.sessionLedger).toHaveLength(1);
+  });
+
+  it("a real reading is imported unchanged", async () => {
+    vi.mocked(listZaptecChargeHistory).mockResolvedValue(historyWithEnergy(30) as never);
+    const state = emptyState();
+    const report = await syncZaptecSessions(makeFakeDb(state), { accessToken: "stub" });
+    expect(report.skipped).toEqual([]);
+    expect(report.imported).toHaveLength(1);
   });
 });

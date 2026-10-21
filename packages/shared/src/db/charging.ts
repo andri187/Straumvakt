@@ -81,12 +81,72 @@ export const sessions = chargingSchema.table(
     ocppStoppedAt: timestamp("ocpp_stopped_at", { withTimezone: true, precision: 6, mode: "date" }),
     cdrStoppedAt: timestamp("cdr_stopped_at", { withTimezone: true, precision: 6, mode: "date" }),
     ocmfBlobRef: text("ocmf_blob_ref"),
+    // ── ADR 0054 decision 6 — a session is SEALED ────────────────────────
+    //
+    // OCPI `mod_cdrs` puts it exactly: a CDR is "sealed, preserving the
+    // information valid at the moment in time the underlying session was
+    // started", carries the owning party, and COPIES the location in rather
+    // than referencing it. Decision 6 is that rule, and these columns are what
+    // make it enforceable rather than aspirational.
+    //
+    // A session is NEVER re-attributed when a device moves. A dispute years
+    // later must be answerable without reconstructing where the device was
+    // that day — and reconstruction is exactly what a bare foreign key forces,
+    // because the row it points at has moved on.
+
+    /**
+     * The placement live at session start.
+     *
+     * Nullable: sessions written before migration 0008 have no placement to
+     * point at, and back-filling one would mean deciding where a device was
+     * during a period nothing recorded. That is a claim about the past, and
+     * `unavailable` is the honest value.
+     *
+     * This is a REFERENCE, and the snapshot columns beside it are why that is
+     * safe. The placement row itself is immutable in the ways that matter —
+     * its `device_id`, `org_id` and `installation_id` never change, and only
+     * its period's upper bound closes — so pointing at it does not risk
+     * re-attribution. What could change (a tariff, a site name) is copied in.
+     */
+    placementId: uuid("placement_id"),
+
+    /**
+     * The tariff AS APPLIED, copied in rather than referenced.
+     *
+     * `rate_references` rows are effective-dated and new ones supersede old
+     * ones; resolving "what did this cost" by re-running the resolver against
+     * today's rows is the re-derivation FOCUS rule 4 forbids. The shape mirrors
+     * a resolved rate reference — `code`, `basis`, `priceMinor`, `currency`,
+     * `vatRatePct`, `supplierOrgId` — so a dispute is answered by reading one
+     * row rather than by reconstructing a resolver's state from an earlier day.
+     *
+     * JSONB rather than columns because a tariff is not one number: an org may
+     * be on per-kWh and per-minute at once, and flattening that into columns
+     * fixes the arity of something the agreement model deliberately leaves
+     * open.
+     */
+    tariffSnapshotJson: jsonb("tariff_snapshot_json"),
+
+    /**
+     * WHEN the snapshot was taken.
+     *
+     * Almost always equal to `started_at`, and stored separately anyway,
+     * because "the tariff we sealed" and "the moment the session began" are
+     * different facts and a gap between them is a bug worth being able to see.
+     * A snapshot taken at stop time would silently price a session that
+     * straddles a rate change at the wrong rate.
+     */
+    tariffSnapshotAt: timestamp("tariff_snapshot_at", { withTimezone: true, precision: 6, mode: "date" }),
   },
   (t) => [
     index().on(t.orgId, t.startedAt),
     index().on(t.evseId, t.startedAt),
     index().on(t.userId, t.startedAt),
     index().on(t.evPlcMac),
+    // "Which sessions ran on this placement" is the dispute query, and it is
+    // also what Phase 5 needs to attribute a mid-month move. Without it that
+    // is a scan of every session the org has ever had.
+    index().on(t.placementId, t.startedAt),
   ],
 );
 

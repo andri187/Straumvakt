@@ -831,3 +831,122 @@ describe("resolveAuthorize — Tap & Auth tap intents", () => {
     expect(result.reason).toBe("revoked");
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────
+// Enrolment beats the tap-intent join
+// ─────────────────────────────────────────────────────────────────────
+//
+// `matchAndConsumeTapIntent` keys on STATION and LIVENESS only — never on
+// the idTag, and it cannot: a phone's UID is regenerated on every tap, so
+// there is no value to bind an intent to in advance. The intent exists
+// precisely because the tag carries no identity.
+//
+// That leaves station + liveness as the whole test, which is too weak. Any
+// 08-shaped tag presented where another driver had armed an intent would
+// consume it, and the session would be billed to someone who did not plug
+// in. The available discriminator is the negative one: a tag that resolves
+// to an enrolled IdToken is a person's card, so it is not an anonymous tap.
+//
+// Corrected severity (doc 20 A1): this was never a lockout. An 08-prefixed
+// tag with no matching intent has always fallen through to the normal path
+// — `case "none": break`. The defect is misattribution, and it needs a
+// live intent at that station to occur at all.
+
+describe("resolveAuthorize — an enrolled token is never an anonymous tap", () => {
+  const OTHER_DRIVER = { id: "intent-1", userId: "driver-b", orgId: "org-1" };
+
+  function enrolled(overrides: Partial<TokenRow> = {}): TokenRow {
+    return {
+      id: "tok-enrolled",
+      userId: "driver-a",
+      status: "active",
+      expiresAt: null,
+      scopeInstallationId: null,
+      ...overrides,
+    };
+  }
+
+  it("station plus liveness alone is NOT enough to consume an intent", async () => {
+    const calls: TapCalls = { findFirst: 0, findMany: 0, updateMany: 0 };
+    const db = makeTapDb({
+      token: enrolled(), // driver-a's card, 08-shaped by bad luck
+      live: [OTHER_DRIVER], // driver-b is armed at this very station
+      calls,
+    });
+
+    const result = await resolveAuthorize(db, { ...INPUT, idTag: TAP_UID });
+
+    // Attributed to the cardholder, not the armed driver.
+    expect(result.verdict).toBe("Accepted");
+    expect(result.userId).toBe("driver-a");
+    expect(result.reason).toBe("ok");
+    // And driver-b's intent is untouched — still armed for their own tap.
+    expect(calls.updateMany).toBe(0);
+    expect(calls.findMany).toBe(0);
+    expect(calls.findFirst).toBe(0);
+  });
+
+  it("an UNenrolled random UID still consumes the live intent", async () => {
+    // The contrast case. Without it, the test above could pass by
+    // disabling tap-and-auth altogether.
+    const calls: TapCalls = { findFirst: 0, findMany: 0, updateMany: 0 };
+    const db = makeTapDb({ token: null, live: [OTHER_DRIVER], calls });
+
+    const result = await resolveAuthorize(db, { ...INPUT, idTag: TAP_UID });
+
+    expect(result.verdict).toBe("Accepted");
+    expect(result.reason).toBe("tap_intent");
+    expect(result.userId).toBe("driver-b");
+    expect(calls.updateMany).toBe(1);
+  });
+
+  it("an enrolled 08-prefixed card authorises normally when no intent is live", async () => {
+    const calls: TapCalls = { findFirst: 0, findMany: 0, updateMany: 0 };
+    const db = makeTapDb({ token: enrolled(), live: [], calls });
+
+    const result = await resolveAuthorize(db, { ...INPUT, idTag: TAP_UID });
+
+    expect(result.verdict).toBe("Accepted");
+    expect(result.userId).toBe("driver-a");
+    expect(calls.findMany).toBe(0); // never entered the tap branch at all
+  });
+
+  it("an unenrolled random UID with no live intent is still Invalid, not an error", async () => {
+    // The fall-through that proves ND-2's "can never authorise" was wrong:
+    // nothing here throws or blocks, it just reaches the normal lookup.
+    const db = makeTapDb({ token: null, live: [] });
+    const result = await resolveAuthorize(db, { ...INPUT, idTag: TAP_UID });
+    expect(result.verdict).toBe("Invalid");
+    expect(result.reason).toBe("unknown_id_tag");
+  });
+
+  it("a shared installation-scoped token does not inherit a driver identity", async () => {
+    // The invariant that matters for billing: a technical token belongs to
+    // an installation, and must never be resolved to whoever happened to
+    // have an intent armed nearby.
+    const calls: TapCalls = { findFirst: 0, findMany: 0, updateMany: 0 };
+    const db = makeTapDb({
+      token: enrolled({
+        id: "tok-technical",
+        userId: "installation-technical-user",
+        scopeInstallationId: "inst-1",
+      }),
+      live: [OTHER_DRIVER],
+      calls,
+    });
+
+    const result = await resolveAuthorize(db, { ...INPUT, idTag: TAP_UID });
+
+    expect(result.userId).not.toBe("driver-b");
+    expect(result.userId).toBe("installation-technical-user");
+    expect(calls.updateMany).toBe(0);
+  });
+
+  it("a non-random card UID is unaffected either way", async () => {
+    const calls: TapCalls = { findFirst: 0, findMany: 0, updateMany: 0 };
+    const db = makeTapDb({ token: enrolled(), live: [OTHER_DRIVER], calls });
+    const result = await resolveAuthorize(db, { ...INPUT, idTag: CARD_UID });
+    expect(result.userId).toBe("driver-a");
+    expect(calls.findMany).toBe(0);
+  });
+});

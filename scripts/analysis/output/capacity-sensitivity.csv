@@ -1,0 +1,6 @@
+assumption,low_ingest_per_sec,base_ingest_per_sec,high_ingest_per_sec,swing_factor_high_over_base
+heartbeatIntervalSec,17.64,26.27,78.00,2.97
+meterValuesPerChargeMin,26.27,26.27,46.27,1.76
+statusNotifPerConnHour,21.82,26.27,41.82,1.59
+concurrentChargingPct,22.93,26.27,36.27,1.38
+activeWebsocketPct,25.33,26.27,26.53,1.01

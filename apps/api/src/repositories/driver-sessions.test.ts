@@ -6,6 +6,7 @@
 // the history enrichment join, and the profile-patch behaviour.
 
 import { describe, expect, it, vi } from "vitest";
+import { roundAurarToIsk } from "@straumvakt/commercial";
 import {
   getDriverActiveSessions,
   resolveStoppableSession,
@@ -50,7 +51,7 @@ describe("getDriverActiveSessions", () => {
         startedAt: "2026-06-04T08:00:00.000Z",
         powerKw: 0,
         energyKwh: 12.5,
-        costIsk: 0,
+        costAurar: 0,
       },
     ]);
   });
@@ -233,7 +234,13 @@ describe("listDriverSessionHistory", () => {
     expect(calls[0].take).toBe(100);
   });
 
-  it("enriches charger/site/billing-home names + maps cost", async () => {
+  // CORRECTED 2026-08-18. This assertion previously read `costIsk: 64988` and
+  // PASSED, which is how the 100× defect survived: 64988 is the right number
+  // under the wrong name. The ledger row is 64988 aurar — a 649.88 kr session
+  // — so a field called `costIsk` carrying 64988 asserts that the driver owes
+  // sixty-five thousand krónur, and the test agreed. The value is unchanged
+  // because the value was never wrong; the contract was.
+  it("enriches charger/site/billing-home names + emits cost as aurar", async () => {
     const { db } = makeHistoryFake([LEDGER_ROW]);
     const out = await listDriverSessionHistory(db, "user-1");
     expect(out).toEqual([
@@ -243,12 +250,15 @@ describe("listDriverSessionHistory", () => {
         stoppedAt: "2026-06-01T09:00:00.000Z",
         durationSec: 3600,
         energyKwh: 30,
-        costIsk: 64988,
+        costAurar: 64988,
         chargerName: "Festi 8",
         siteName: "Festi Reykjavík",
         billingHomeName: "Festi hf",
       },
     ]);
+    // And say out loud what that means in krónur, so a future reader cannot
+    // mistake the magnitude the way this test's previous version invited.
+    expect(roundAurarToIsk(BigInt(out[0].costAurar!))).toBe(650n);
   });
 
   it("returns [] without firing enrichment lookups when no rows", async () => {
@@ -260,7 +270,34 @@ describe("listDriverSessionHistory", () => {
   it("passes through a null cost (unbilled-yet) as null", async () => {
     const { db } = makeHistoryFake([{ ...LEDGER_ROW, costIskMinor: null }]);
     const out = await listDriverSessionHistory(db, "user-1");
-    expect(out[0].costIsk).toBeNull();
+    expect(out[0].costAurar).toBeNull();
+  });
+
+  // The wire contract, asserted on the surface that actually serves it rather
+  // than only on the helper. Each row is (aurar stored, krónur the driver must
+  // see) — see docs/notes/2026-08-18-money-unit-boundary.md.
+  it.each([
+    [0n, 0n],
+    [1n, 0n],
+    [50n, 1n],
+    [99n, 1n],
+    [100n, 1n],
+    [64988n, 650n],
+    [45000n, 450n],
+    [45001n, 450n],
+    [123456789n, 1234568n],
+  ])("emits %s aurar unchanged, which displays as %s kr", async (stored, expectedIsk) => {
+    const { db } = makeHistoryFake([{ ...LEDGER_ROW, costIskMinor: stored }]);
+    const out = await listDriverSessionHistory(db, "user-1");
+    expect(out[0].costAurar).toBe(Number(stored));
+    expect(roundAurarToIsk(BigInt(out[0].costAurar!))).toBe(expectedIsk);
+  });
+
+  it("carries a negative adjustment through without flipping its sign", async () => {
+    const { db } = makeHistoryFake([{ ...LEDGER_ROW, costIskMinor: -25000n }]);
+    const out = await listDriverSessionHistory(db, "user-1");
+    expect(out[0].costAurar).toBe(-25000);
+    expect(roundAurarToIsk(BigInt(out[0].costAurar!))).toBe(-250n);
   });
 });
 

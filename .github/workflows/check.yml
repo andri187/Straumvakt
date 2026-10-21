@@ -7,8 +7,41 @@
 #   - `check:schema-parity` existed but nothing called it, so the two Prisma
 #     schemas drifted (ArchiveWatermark missing from apps/api) unnoticed.
 #
-# `check:migrations` is deliberately NOT here: `prisma migrate status` needs
-# a live DATABASE_URL. Run it against staging before deploying, not in CI.
+# `check:migrations` is still deliberately NOT here — now for a checked
+# reason rather than an assumed one.
+#
+# It needs a live DATABASE_URL, and no such secret exists in this repo: the
+# only secret any workflow references is FLY_API_TOKEN_ZAPTEC_CONSUMER.
+# Adding one is a decision, not a wiring chore — this workflow triggers on
+# `push: **` and on `pull_request`, so a staging database credential would be
+# reachable from every branch and every PR run.
+#
+# Two things changed on 2026-08-08 that whoever revisits this needs to know:
+#
+#   1. Until then the check could not have caught anything, wired or not.
+#      prisma.config.ts set no `migrations.path`, so after the move to a
+#      schema folder Prisma looked for migrations next to the datasource file
+#      (prisma/schema/migrations — absent) rather than prisma/migrations, and
+#      `migrate status` answered "No migration found in prisma/migrations"
+#      then "Database schema is up to date!" and exited 0. Green regardless of
+#      reality. Fixed in the same commit as this comment — and it is the same
+#      failure as the two above: a check that ran and proved nothing.
+#
+#   2. Now that it works, it exits NON-ZERO while migrations are pending, and
+#      two are pending against staging today
+#      (20260807003000_drop_issues_scaffold and
+#      20260807120000_drop_never_used_tables — both already applied by hand,
+#      neither recorded). Wiring it in before those are reconciled turns CI
+#      red on every branch immediately.
+#
+# Order, therefore: reconcile those two first, then decide the secret, then
+# add to the job below:
+#
+#     - run: npm run check:migrations
+#       env:
+#         DATABASE_URL: ${{ secrets.DATABASE_URL }}
+#
+# Until then, run it by hand against staging before deploying.
 name: check
 
 on:
@@ -35,3 +68,26 @@ jobs:
       # every file that touches the database.
       - run: npm run db:generate
       - run: npm run check
+      # The unit/route suite. Measured on a clean install of this tree:
+      # 50 files, 686 tests, ~10s, no database, no network, no bindings.
+      # It was never wired here — and unlike `check:migrations` above,
+      # whose exclusion is a documented decision, this one was simply
+      # absent. Adoption cost is zero: the suite is green today, so there
+      # is no backlog of red tests to clear before turning it on.
+      #
+      # NOT redundant with `npm run check`. That runs nine static checks;
+      # typecheck and vitest catch disjoint failures, and both directions
+      # were observed while wiring this up — a test file that passed
+      # vitest failed tsc (an untyped global), and a broken
+      # `assertPermission` passed 686 tests because nothing covers it.
+      #
+      # NOTE for whoever turns this on: `npm run check` is RED on every
+      # branch today, and has been since before this step existed.
+      # check:work-view compares src/app/(app)/admin/work/page.tsx, and
+      # that file no longer exists — the whole (app) console moved to
+      # archive/straumvakt-org-console-2026-08-08/. Adding this step does
+      # not make CI red; CI is already red. Resolve work-view first, or
+      # this step's value is invisible under a failure nobody looks at.
+      - run: npm test
+        env:
+          CI: "true"

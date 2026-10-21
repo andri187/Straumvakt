@@ -28,17 +28,26 @@
     "check:deps-graph": "node scripts/gen-dependency-graph.mjs --check",
     "check": "node scripts/check-all.mjs",
     "check:schemas": "prisma validate --schema prisma/schema && prisma validate --schema apps/api/prisma/schema",
+    "check:workspace-typecheck": "node scripts/check-workspace-typecheck.mjs",
+    "check:migrations-visible": "tsx scripts/check-migrations-visible.mts",
+    "check:invoice": "tsx scripts/validate-invoice.mts --self-test",
+    "check:bindings": "node scripts/analysis/bindings/check-bindings.mjs",
+    "check:bindings:self-test": "node scripts/analysis/bindings/check-bindings.mjs --self-test",
+    "check:version-id": "node scripts/analysis/release/check-version-id.mjs",
     "check:migrations": "prisma migrate status --schema prisma/schema",
     "api:endpoints": "node scripts/gen-api-endpoints.mjs",
     "check:api-endpoints": "node scripts/gen-api-endpoints.mjs --check",
     "check:unused-exports": "node scripts/check-unused-exports.mjs",
     "unused-exports:baseline": "node scripts/check-unused-exports.mjs --baseline",
-    "db:generate:sql": "npm --prefix apps/api exec -- drizzle-kit generate",
+    "db:generate:sql": "npm --prefix apps/api run db:generate:sql",
     "db:baseline": "node apps/api/scripts/drizzle-baseline.mjs",
     "db:migrate:status": "npm --prefix apps/api exec -- drizzle-kit check",
     "check:schema-consistency": "node scripts/check-schema-consistency.mjs",
     "work-view": "node scripts/gen-work-view.mjs",
-    "check:work-view": "node scripts/gen-work-view.mjs --check"
+    "check:work-view": "node scripts/gen-work-view.mjs --check",
+    "check:pricing-ssot": "node scripts/check-pricing-ssot.mjs",
+    "check:orgid-param": "node scripts/check-orgid-param.mjs",
+    "check:invite-guard": "node scripts/check-invite-guard.mjs"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

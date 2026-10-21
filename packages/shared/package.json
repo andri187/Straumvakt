@@ -2,6 +2,9 @@
   "name": "@straumvakt/shared",
   "version": "0.1.0",
   "private": true,
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
@@ -36,6 +39,8 @@
     "./domain/host-applications": "./src/domain/host-applications.ts",
     "./domain/family-groups": "./src/domain/family-groups.ts",
     "./domain/vendor-user-groups": "./src/domain/vendor-user-groups.ts",
+    "./domain/effective-dating": "./src/domain/effective-dating.ts",
+    "./domain/ocpp-connector-status": "./src/domain/ocpp-connector-status.ts",
     "./db/identity": "./src/db/identity.ts",
     "./db/assets": "./src/db/assets.ts",
     "./db/charging": "./src/db/charging.ts",

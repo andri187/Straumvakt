@@ -1,9 +1,14 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { UserCreateInput, UserUpdateInput } from "@straumvakt/shared/inputs/users";
+import type { UserSummary } from "@straumvakt/shared/domain/users";
 import { makePrisma } from "../../../lib/prisma";
 import { makeDrizzle } from "../../../lib/drizzle";
-import { requireAdmin, type AuthVars } from "../../../lib/auth-middleware";
+import {
+  requireAdmin,
+  type AuthVars,
+  type PermissionBasis,
+} from "../../../lib/auth-middleware";
 import { requirePermission } from "../../../lib/auth/require-permission";
 import { hashPassword } from "../../../lib/password";
 import {
@@ -96,8 +101,57 @@ adminUsers.get("/:id", requirePermission("member.read"), async (c) => {
     }),
   ]);
   if (!user) return c.json({ error: "not_found" }, 404);
-  return c.json({ user, memberships, idTokens, agreementMemberships });
+  return c.json({
+    user: redactForPlatformReader(user, c.get("permissionBasis")),
+    memberships,
+    idTokens,
+    agreementMemberships,
+  });
 });
+
+/**
+ * Withhold the identity-document fields from a caller whose access is
+ * platform-derived.
+ *
+ * This route is gated on `member.read` with NO `orgIdParam`, so
+ * `requirePermission` resolves orgId = null, skips the membership lookup
+ * entirely, and only the platform expansion can satisfy the verb. Every
+ * platform role holds `platform.tenant.read`, which expands to every
+ * per-tenant `.read` — so `auditor`, `sales_cs`, `finance_internal` and
+ * `support_agent` could all read `kennitala`, `dateOfBirth`, `address`
+ * and `notes` for ANY user in ANY tenant, with no audit row.
+ *
+ * The right long-term fix is org scope plus a support context, and both
+ * are blocked: the route has no org in its URL to scope by, and
+ * `support_contexts` does not exist yet. Redaction is what can be done
+ * now without inventing either. It is not a substitute for them.
+ *
+ * Deliberately NOT a 403. Straumvakt staff have a real reason to open a
+ * user record — to see who the person is, their memberships, their
+ * tokens. What they do not need is the national ID number. Withholding
+ * four fields keeps support working and removes the bulk-PII surface.
+ *
+ * A caller whose membership genuinely supplies `member.read` is
+ * unaffected, which is the whole point of resolving provenance rather
+ * than checking a role name.
+ */
+function redactForPlatformReader(
+  user: UserSummary,
+  basis: PermissionBasis | undefined,
+): UserSummary & { redacted?: readonly string[] } {
+  // Undefined basis means the bootstrap session short-circuited before
+  // resolution. It already has god-mode; redacting here would imply a
+  // guarantee that branch does not provide.
+  if (!basis?.platformDerived) return user;
+  return {
+    ...user,
+    kennitala: null,
+    dateOfBirth: null,
+    address: null,
+    notes: null,
+    redacted: ["kennitala", "dateOfBirth", "address", "notes"],
+  };
+}
 
 adminUsers.patch("/:id", requirePermission("member.write"), async (c) => {
   const raw = (await c.req.json().catch(() => null)) as unknown;
@@ -132,6 +186,34 @@ adminUsers.patch("/:id", requirePermission("member.write"), async (c) => {
 // No "current password" challenge — admin-side reset, not user-side.
 // The user's old session is not invalidated by this endpoint; that's a
 // separate concern.
+//
+// ⚠ REACHABILITY CHANGED — needs a product decision, deliberately not
+// taken here.
+//
+// These routes are gated on `member.write` with no `orgIdParam`, so
+// `requirePermission` resolves orgId = null, skips the membership lookup
+// entirely (lib/auth/effective-permissions.ts), and only the platform
+// expansion could ever satisfy the verb. Membership-administration verbs
+// are no longer part of that expansion — they conferred the ability to
+// set ANY user's password in ANY tenant on every holder of
+// platform.tenant.write, `sales_cs` included.
+//
+// Consequence: a real multi-user operator session (userId present,
+// platform grant, no membership) is now DENIED here. The bootstrap admin
+// still passes, through the god-mode branch, so the operator console
+// works today — but this endpoint is on borrowed time.
+//
+// Three ways out, none of them obviously right:
+//   (a) gate on an explicit platform verb that says what this is;
+//   (b) require a support context once support_contexts exists, which is
+//       the honest shape — an admin resetting a customer's password is
+//       exactly the act that should carry a recorded reason;
+//   (c) drop admin-set-password entirely in favour of the existing
+//       password-reset email flow (routes/public/password-reset.ts),
+//       which never puts a chosen password in an operator's hands.
+//
+// (c) is the smallest attack surface and (b) the most useful; the
+// decision is Andri's.
 
 const passwordSchema = z.object({ password: z.string().min(8).max(200) });
 

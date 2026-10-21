@@ -504,6 +504,36 @@ export async function getChargerById(
   };
 }
 
+/**
+ * Create a charger — site asset, charging station, EVSE, connector, OCPP
+ * identity — in one transaction.
+ *
+ * ── MARKED FOR RETIREMENT (ADR 0054 item 10). LEFT IN PLACE ON PURPOSE. ──
+ *
+ * This is the function `attachDevice` / `detachDevice` replace. It bakes the
+ * 1:1:1 hierarchy in, writes the placement-shaped columns onto the hardware
+ * row, and has no way to express a device MOVING — the only thing it can do
+ * with a relocated charger is create a second one.
+ *
+ * **It is not being changed in this round, and that is a decision.** B's
+ * onboarding path reaches it through `onboarding-chains.ts`, which is B's
+ * file. Changing both sides in two trees is the merge conflict this boundary
+ * exists to prevent, so the new repositories land beside it and the call-site
+ * migration is round 5's:
+ *
+ *   apps/api/src/routes/admin/chargers.ts:68   ->  attachDevice
+ *   apps/api/src/repositories/onboarding-chains.ts:163  ->  B's, coordinate
+ *
+ * What replaces it, and where:
+ *
+ *   repositories/devices.ts     register()      the hardware, immortal
+ *   repositories/placements.ts  attachDevice()  where it is, dated
+ *                               detachDevice()  closing is a STATE (item 13)
+ *                               moveDevice()    close-then-open, atomic
+ *
+ * Until then this is live and every existing caller is correct to use it. Do
+ * not add capability here; add it to the new repositories.
+ */
 export async function createCharger(
   db: Db,
   input: ChargerCreateInput,

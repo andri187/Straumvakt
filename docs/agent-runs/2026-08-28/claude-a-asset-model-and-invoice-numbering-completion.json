@@ -1,0 +1,267 @@
+{
+  "agent": "claude-a",
+  "round": 4,
+  "status": "complete",
+  "start_utc": "2026-08-28T18:00:27Z",
+  "end_utc": "2026-08-28T20:08:41Z",
+  "wall_clock_seconds": 7694,
+  "target_met": null,
+  "worktree": "E:/Claude/Straumvakt-core-billing",
+  "branch": "dev/core-billing-integration",
+  "start_tip": "8274256",
+  "end_tip": "d832c4d",
+  "dirty": 0,
+  "commits": [
+    {
+      "sha": "7507bc7",
+      "phase": 1,
+      "subject": "Migration 0004: the invoice number sequence store"
+    },
+    {
+      "sha": "454802a",
+      "phase": 2,
+      "subject": "Migration 0005: devices, identities and placements (ADR 0054 items 1-3)"
+    },
+    {
+      "sha": "501b82e",
+      "phase": 3,
+      "subject": "Migration 0007: the hierarchy, the vocabulary, the vendor config"
+    },
+    {
+      "sha": "76dd7ee",
+      "phase": 4,
+      "subject": "Migration 0008: a session is sealed and carries its own context"
+    },
+    {
+      "sha": "64770cb",
+      "phase": 5,
+      "subject": "Item 7: billing counts placement overlap, not current rows"
+    },
+    {
+      "sha": "df5529f",
+      "phase": 6,
+      "subject": "Items 10 and 13: attachDevice, detachDevice, and closing as a state"
+    },
+    {
+      "sha": "2235d85",
+      "phase": "gates",
+      "subject": "Round 4 gate table and the JSON sidecar"
+    },
+    {
+      "sha": "0298578",
+      "phase": "fallback 1",
+      "subject": "The first-placement write path, and a defect it found"
+    },
+    {
+      "sha": "c7e553b",
+      "phase": "fallback 2",
+      "subject": "Census row 104 - the cross-tenant enrichment view"
+    },
+    {
+      "sha": "b541409",
+      "phase": "fallback 3",
+      "subject": "Two orgIdParam gates paid, 31 named as remaining"
+    },
+    {
+      "sha": "49b7693",
+      "phase": "fallback 4-5",
+      "subject": "The conversion assessed, the scenarios written"
+    },
+    {
+      "sha": "d2ca93f",
+      "phase": "fallback 6-10",
+      "subject": "The retirement plan, the counters, OCPI, and the revised list"
+    },
+    {
+      "sha": "a121145",
+      "phase": "backlog 1",
+      "subject": "A CDR with no Energy is skipped, never priced at zero"
+    },
+    {
+      "sha": "515460a",
+      "phase": "backlog 2-3",
+      "subject": "The Active census, and the temporal key generated"
+    },
+    {
+      "sha": "d832c4d",
+      "phase": "backlog 4-5",
+      "subject": "Which of the six essentials shape the schema, and the audit trail"
+    }
+  ],
+  "files_changed": 77,
+  "tests": {
+    "baseline": {
+      "passed": 1689,
+      "skipped": 1,
+      "failed": 0,
+      "files": 92
+    },
+    "final": {
+      "passed": 1882,
+      "skipped": 1,
+      "failed": 0,
+      "files": 105
+    },
+    "added": 193,
+    "checks": "16 of 16",
+    "dry_run": "9 of 9 cases",
+    "schema_consistency": {
+      "tables": 85,
+      "columns": 1038
+    },
+    "fool_tests": 19
+  },
+  "gates_met": {
+    "total": 31,
+    "met": 29,
+    "met_with_stated_exception": 1,
+    "partial": 1,
+    "partial_detail": "gate 14 - the 1:1:1 invention lives in zaptec-import.ts, which the prompt assigns to Claude B. Columns and hierarchy done; the importer edit is a coordination item and is written up for B with line numbers.",
+    "exception_detail": "gate 28 - assets.devices and assets.vendor_config_observations carry no org_id on purpose. A device is not tenanted (decision 1); tenancy is reached through the placement, and the vendor-config port scopes on device ids, returning out_of_scope distinct from never_observed."
+  },
+  "migrations": {
+    "generated": [
+      "0004_tough_reaper",
+      "0005_supreme_psylocke",
+      "0006_heavy_cobalt_man",
+      "0007_mean_overlord",
+      "0008_worthless_mimic"
+    ],
+    "applied": [],
+    "note": "Every migration in this branch, including 0002 and 0003 from earlier rounds, remains generated and unexecuted. No database was connected to."
+  },
+  "schema_requests": {
+    "channel": "docs/notes/2026-08-28-round-4-schema-requests.md on dev/market-rails",
+    "responses": "docs/notes/2026-08-28-round-4-schema-responses.md on dev/core-billing-integration",
+    "seen": [
+      "SR-1",
+      "SR-2",
+      "SR-3"
+    ],
+    "serviced": [
+      "SR-1",
+      "SR-2"
+    ],
+    "refused_as_specified": [
+      "SR-3"
+    ],
+    "market_rails_tips_read": [
+      "7cc591e",
+      "ae99700",
+      "d9a8b18"
+    ]
+  },
+  "fallback_items_done": [
+    {
+      "item": 1,
+      "title": "the first-placement write path",
+      "note": "design plus port; surfaced and fixed a live defect in placement-evidence.ts (a connectorless placement was a measured zero)"
+    },
+    {
+      "item": 2,
+      "title": "census row 104 - the cross-tenant enrichment view",
+      "note": "both halves were unconfined; the summary was the worse one. Required restrictToOrgIds, shared tenantWhere, 9 tests, 2 fool tests."
+    },
+    {
+      "item": 3,
+      "title": "the missing-orgIdParam gates",
+      "note": "2 of 33 paid: billing-enrichment (stale reason corrected) and billing-driver-contracts (?orgId= was the only confinement and it is caller-supplied; rows carry email, displayName and phone). 31 remain, listed by name. Not swept."
+    },
+    {
+      "item": 4,
+      "title": "Prisma to Drizzle in the billing tree",
+      "note": "ASSESSED AND NOT DONE, with the reason recorded. Converting a working read path to code that cannot be run, in the same commit as a security fix, is the inverse of the argument that makes the new Drizzle adapters safe to leave unexecuted. billing-enrichment.ts is the tractable one and is recorded as owed."
+    },
+    {
+      "item": 5,
+      "title": "the flat-fee scenarios",
+      "note": "34 scenarios plus a coverage map: 24 covered, 10 gaps. Eight of the ten are one gap - the SQL has never run. Gap 1 was closed while writing the map."
+    },
+    {
+      "item": 6,
+      "title": "the ocpp_identities retirement plan",
+      "note": "64 readers in four tiers; only the auth path can take the site down. Two findings: the Durable Object keys on ocpp_identities.id, so the backfill must carry ids across or every live DO is orphaned at cutover; and an identity ever CHANGED in place cannot be reconstructed - a permanent hole, recorded rather than papered over."
+    },
+    {
+      "item": 7,
+      "title": "the createCharger call-site migration",
+      "note": "done inside the asset-model retirement plan, both callers named with the ordering constraint."
+    },
+    {
+      "item": 9,
+      "title": "lifetime-counter maintenance",
+      "note": "store the reading, never accumulate. Assignment with a guard: replay is a no-op, out-of-order is a no-op, a backwards reading is REFUSED and what to do then is deliberately left open so the event is visible first."
+    },
+    {
+      "item": 10,
+      "title": "the OCPI mapping note",
+      "note": "EVSE.uid is the placement, never the device. The move maps onto moveDevice and the wire order matters. The status conversion is lossy and is written out."
+    },
+    {
+      "item": 8,
+      "title": "what now stands between here and a real invoice",
+      "note": "LONGER than round 3, and that is honest: round 3 counted what stood between the code and AN invoice; round 4 made it correct and correctness added items that were always there."
+    }
+  ],
+  "backlog_items_done": [
+    {
+      "item": 1,
+      "title": "the ?? 0 refusal at ingest",
+      "note": "zaptec-session-sync.ts:235 priced a CDR with no Energy at zero AND marked it complete on Zaptec-native installations, because no OCPP row existed to disagree. Now skipped by name. Census: one storing coalesce fixed, nine displaying ones recorded as not the same defect."
+    },
+    {
+      "item": 2,
+      "title": "Charger.Active consumers",
+      "note": "the field is already read and dropped by zaptec-charger-status-sync, which persists its two neighbours. 11 read paths censused: 5 matter, 2 matter in the OPPOSITE direction, 4 do not. Three rules, and the ordering - writer, backfill, filters - must not overlap."
+    },
+    {
+      "item": 3,
+      "title": "property-based tests for the temporal key",
+      "note": "5 tests over 8 seeds, deterministic PRNG, no new dependency. Both directions: accepted sets hold the invariant, and every rejection genuinely collides. The ADR claim about the partial index is generated rather than worked once."
+    },
+    {
+      "item": 4,
+      "title": "schema consequences of the six unaccounted essentials",
+      "note": "2 of 6 have a real schema consequence. The remittance ledger should land first and is a schema decision, not a feature - it is not derivable from invoices. 2.3 turns out to be already paid for by migration 0004. A draft recommendation to add org_id to audit.actions was WRONG and was corrected: it already has one."
+    },
+    {
+      "item": 5,
+      "title": "an audit trail for the asset model",
+      "note": "the row answers who, the audit answers what happened - and a refused attach writes no row, which is why both are needed. Nothing built: the write paths go through an adapter that has never run, AND the refusal that matters most cannot be audited where it happens, which is why attachDevice returns a named reason rather than throwing."
+    }
+  ],
+  "blockers": [
+    "ADR 0054 is committed on NO branch. It exists only as an untracked file in the canonical working tree at E:/Claude/Straumvakt/docs/adr/0054-devices-placements-and-effective-dating.md. One git clean destroys the specification for rounds 4 and 5. Coordinator action.",
+    "The PostgreSQL version Neon serves is unrecorded. Migrations 0005 and 0006 ship both constraint forms so this does not block, but it must be answered before either is applied.",
+    "Mid-month proration is Andri's commercial decision. Both branches are implemented; the default is today's behaviour so nothing changes silently.",
+    "The accountant's constraint on invoice numbering is still unanswered. Three things it could move are each a one-place change by construction.",
+    "Five Dalvegur chargers exist in the Zaptec portal with no row in our database. No predicate can see them; it under-bills and needs a reconciliation."
+  ],
+  "next_actions": [
+    "Standing backlog 6 - it points back at fallback 3's 31 remaining orgIdParam gates, worked down deliberately rather than swept",
+    "The remittance ledger's shape, once the vorslureikningur question is answered - it is the schema decision that should land first",
+    "The statement renderer - issueDocument now allocates a real number and refuses the render half by name",
+    "Convert billing-enrichment.ts to Drizzle once there is a database to run it against"
+  ],
+  "external_state": {
+    "push": false,
+    "deploy": false,
+    "migrations_applied": false,
+    "sql_against_any_environment": false,
+    "socket_opened": false,
+    "database_connected": false,
+    "cloudflare_neon_github_mutation": false,
+    "neon_mcp_tools_used": false,
+    "charger_or_hardware_action": false,
+    "ble_nfc": false,
+    "branch_or_tag_deleted": false,
+    "git_clean_reset_rebase_amend_force": false,
+    "contracts_or_b_paths_edited": false,
+    "zaptec_import_edited": false,
+    "branches_written_to": [
+      "dev/core-billing-integration"
+    ],
+    "fixture_values": "all synthetic; no checksum-valid kennitala, no real idTag, no token value, no personal row"
+  },
+  "very_tldr": "Six phases, five migrations generated and none applied, then the whole fallback queue and five of six standing-backlog items. The invoice sequence is gap-free and unique; devices, identities and placements are effective-dated with the temporal key emitted in both PostgreSQL forms; the ADR's double-invoice is a named test proving the constraint refuses it and the rejected partial index permits it, and a property test now generates that claim over eight seeds rather than working it once. Billing counts placement overlap rather than current rows - which for Dalvegur takes the connector count from 30 to 20, and stops a mid-month move billing the wrong host. Three of B's schema requests answered: two serviced, one refused for creating a cross-tenant idempotency namespace. Five real defects found and fixed along the way, four of them in code that was already live: a cross-tenant enrichment view, a driver-contracts view confined only by a caller-supplied query parameter, a createMembership that would have called a driver who left in March a current member, a removeMembership that hard-deleted, and a CDR with no Energy priced at zero and marked complete."
+}

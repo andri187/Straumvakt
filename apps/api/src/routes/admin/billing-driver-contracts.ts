@@ -10,6 +10,8 @@
 import { Hono } from "hono";
 import { makePrisma } from "../../lib/prisma";
 import { requirePermission } from "../../lib/auth/require-permission";
+import { resolveOrgScope } from "../../lib/auth/org-scope";
+import { decideLedgerAccess } from "../../lib/billing/ledger-scope";
 import {
   listDriverMemberships,
   getDriverContractsTiles,
@@ -33,11 +35,31 @@ driverContractsRouter.get(
   "/",
   requirePermission("billing.read"),
   async (c) => {
-    const orgId = c.req.query("orgId") ?? null;
+    // TENANCY. The ?orgId= query parameter was the ONLY confinement, and it
+    // is supplied by the caller: omitting it returned every tenant's driver
+    // memberships, with email, displayName and phone attached. A
+    // caller-supplied filter is not a tenancy control -- it confines the
+    // query only for callers who choose to send it, which is exactly the set
+    // of callers who were not the threat.
+    //
+    // The decision now goes through the SAME decideLedgerAccess the session
+    // ledger uses, so naming someone else's org is a 403 rather than a quiet
+    // narrowing to your own rows, and a caller with no memberships is denied
+    // outright instead of being handed the whole table.
+    const requestedOrgId = c.req.query("orgId") ?? null;
+    const decision = decideLedgerAccess(
+      { orgId: requestedOrgId ?? undefined },
+      await resolveOrgScope(c.env, c.get("session")),
+    );
+    if (decision.kind === "deny") {
+      return c.json({ error: decision.reason }, 403);
+    }
+    const { restrictToOrgIds } = decision.access;
+
     const db = makePrisma(c.env);
     const [memberships, tiles] = await Promise.all([
-      listDriverMemberships(db, orgId),
-      getDriverContractsTiles(db, orgId),
+      listDriverMemberships(db, restrictToOrgIds, requestedOrgId),
+      getDriverContractsTiles(db, restrictToOrgIds, requestedOrgId),
     ]);
     return c.json({ memberships, tiles });
   },

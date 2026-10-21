@@ -2,6 +2,9 @@
   "name": "@straumvakt/contracts",
   "version": "0.1.0",
   "private": true,
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
   "description": "Canonical vocabulary: DTOs, input shapes, the vendor-adapter interface, and the money-line shape. Types and contracts only — no domain logic, no schema, no vendor code.",
   "type": "module",
   "main": "./src/index.ts",
@@ -38,7 +41,16 @@
     "./inputs/vendor-credentials": "./src/inputs/vendor-credentials.ts",
     "./inputs/zaptec-import": "./src/inputs/zaptec-import.ts",
     "./vendor/adapter": "./src/vendor/adapter.ts",
-    "./money/lines": "./src/money/lines.ts"
+    "./money/lines": "./src/money/lines.ts",
+    "./invoice": "./src/invoice/index.ts",
+    "./invoice/document": "./src/invoice/document.ts",
+    "./invoice/number": "./src/invoice/number.ts",
+    "./invoice/delivery": "./src/invoice/delivery.ts",
+    "./invoice/dunning": "./src/invoice/dunning.ts",
+    "./invoice/reconciliation": "./src/invoice/reconciliation.ts",
+    "./invoice/header": "./src/invoice/header.ts",
+    "./invoice/fixtures": "./src/invoice/fixtures.ts",
+    "./invoice/kennitala": "./src/invoice/kennitala.ts"
   },
   "dependencies": {
     "zod": "^4.3.6"

@@ -1,0 +1,17 @@
+Sölureikningur nr. SV-2026-000010
+
+KRÖFUHAFI
+Straumvakt f.h. Hýsill A ehf.
+Kt. FIXTURE-ID-HOST-A
+VSK-númer kröfuhafa: FIXTURE-VSK-A
+
+Krafan er sett fram af Straumvakt fyrir hönd kröfuhafa. Kröfuhafi er Hýsill A ehf.
+
+GREIÐANDI
+Ökumaður D
+Fixture Path 4
+105 Reykjavík
+IS
+
+Tímabil: 2026-07-01 – 2026-07-31
+Útgáfudagur: 2026-08-01  ·  Gjalddagi: 2026-08-15

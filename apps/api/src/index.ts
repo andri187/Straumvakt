@@ -32,6 +32,7 @@ import { adminGroups } from "./routes/admin/groups";
 import { adminIdTokens } from "./domains/identity/routes/admin-id-tokens";
 import { adminOrgInvites } from "./routes/admin/org-invites";
 import { adminBilling } from "./routes/admin/billing";
+import { adminBillingPeriods } from "./routes/admin/billing/periods";
 import { adminContracts } from "./routes/admin/contracts";
 import { adminAgreementsDebug } from "./routes/admin/agreements-debug";
 import { adminAgreementsResolve } from "./routes/admin/agreements-resolve";
@@ -166,6 +167,15 @@ app.route("/api/admin/orgs", adminBillObjects);
 // Operator console reads from here; per-entity tabs (org / site /
 // charger / driver detail pages) pass the right query param.
 app.route("/api/admin/billing", adminBilling);
+
+// Round 3 — the operable invoice. Period lifecycle, connector assertions,
+// pricing, issuing and the rendered document, all under
+//   /api/admin/orgs/:orgId/billing/...
+// Every handler goes through BillingOperationsPort; the Drizzle adapter below
+// is written and has never executed, because neither migration 0002 nor 0003
+// has been applied to any database. See
+// docs/notes/2026-08-18-first-invoice-operator-runbook.md.
+app.route("/api/admin/orgs", adminBillingPeriods);
 
 // Sprint 8.13 — per-contract management (read/update/delete).
 // Org-scoped list is at /api/admin/orgs/:id/contracts; this is the

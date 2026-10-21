@@ -53,17 +53,13 @@ I["contracts"]
 J["shared"]
 end
 K["path"]
-subgraph L["public"]
-subgraph M["zaptec"]
-N["openapi.json"]
-O["zaptec-constants.json"]
+subgraph L["src"]
+M["app"]
+N["components"]
+O["lib"]
+P["middleware.ts"]
 end
-end
-subgraph P["src"]
-Q["app"]
-R["components"]
-S["lib"]
-end
+Q["url"]
 3-->8
 5-->8
 5-->J
@@ -80,28 +76,29 @@ end
 8-->J
 8-->H
 8-->A
+8-->I
 9-->3
 9-->8
 A-->8
 A-->J
 A-->3
+A-->H
 B-->3
 B-->8
 B-->A
 B-->J
+B-->H
 B-->5
 B-->6
+I-->F
+I-->K
+I-->Q
 J-->I
-Q-->R
-Q-->S
-Q-->J
-Q-->F
-Q-->K
-Q-->N
-Q-->O
-R-->S
-R-->Q
-S-->E
+M-->O
+M-->N
+N-->O
+O-->E
+P-->O
 ```
 
 ## Known violations

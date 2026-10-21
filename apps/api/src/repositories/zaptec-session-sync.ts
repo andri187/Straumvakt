@@ -27,6 +27,12 @@ import {
   TariffResolutionError,
 } from "../lib/tariff/resolve-tariff-chain";
 import { computeSessionCost } from "../lib/tariff/compute-session-cost";
+import {
+  cdrCandidatesFromVendorFields,
+  resolveCdrDriver,
+  type CdrDriverResolution,
+  type CdrUnattributedReason,
+} from "../lib/billing/cdr-driver-resolution";
 
 export interface ZaptecSyncOptions {
   accessToken: string;
@@ -43,6 +49,12 @@ export interface ZaptecSyncImported {
   ourSessionId: string;
   energyKwh: number;
   costIskMinor: string;
+  /** Who the session was billed to, or why nobody was. An operator has to be
+   *  able to see the difference between "no driver" and "we refused to name
+   *  one", because only the second is a thing they can act on. */
+  driverAttribution:
+    | { kind: "attributed"; userId: string }
+    | { kind: "unattributed"; reason: CdrUnattributedReason };
 }
 
 export interface ZaptecSyncSkip {
@@ -52,7 +64,24 @@ export interface ZaptecSyncSkip {
     | "session_open"
     | "no_station_mapped"
     | "no_evse_under_station"
-    | "no_site_for_station";
+    | "no_site_for_station"
+    /**
+     * The CDR carried no `Energy` field.
+     *
+     * LEDGER NOTE 22, AT INGEST. This used to be `z.Energy ?? 0`, and a
+     * zero is not a missing reading: the session was PRICED at zero and,
+     * on a Zaptec-native installation where no OCPP row exists to compare
+     * against, marked `complete`. A free session with a clean bill of
+     * health.
+     *
+     * Skipping is the honest outcome rather than writing the row with a
+     * null energy. The row would be unpriceable, and every downstream
+     * reader — the enrichment view, the ledger totals, the statement —
+     * would have to learn a null it has never had to handle. A skipped
+     * session is visible in the report and re-importable the moment the
+     * vendor supplies the figure; a zero-priced one is invisible forever.
+     */
+    | "no_energy_in_cdr";
 }
 
 export interface ZaptecSyncError {
@@ -169,30 +198,68 @@ async function importOne(
   });
   if (!evse) return { kind: "skipped", reason: "no_evse_under_station" };
 
-  // Best-effort driver match. Try every identifier Zaptec gives us
-  // against IdToken.value. UserId (Zaptec UUID) is most stable;
-  // TokenName (RFID label) is what we'd see in OCPP idTag flows;
-  // UserUserName / UserEmail vary if the driver renames themselves.
-  // If none hit we record an anonymous ledger row — better
-  // unattributed than missed.
-  const candidates = [
-    z.UserId,
-    z.TokenName,
-    z.UserUserName,
-    z.UserEmail,
-  ].filter((v): v is string => Boolean(v));
-  let driverUserId: string | null = null;
+  // Driver attribution. Every identifier Zaptec gives us is tried against
+  // IdToken.value, but the DECISION is made by the pure resolver in
+  // lib/billing/cdr-driver-resolution.ts, which refuses rather than guesses:
+  // ambiguous candidates, an unusable token, or a driver who is not a member
+  // of `identity.orgId` all produce an unattributed row with a named reason.
+  //
+  // What stood here was `findFirst({ value: { in: candidates }, status:
+  // "active" })` with no org term at all, four lines below the point where
+  // identity.orgId came into scope. Any active token in the database matched
+  // at any charger, and the money followed it onto session_ledger.
+  // "Better unattributed than missed" is still the policy; "better a stranger
+  // than unattributed" never was.
+  const candidates = cdrCandidatesFromVendorFields({
+    vendorUserId: z.UserId,
+    tokenName: z.TokenName,
+    username: z.UserUserName,
+    email: z.UserEmail,
+  });
+
+  let resolution: CdrDriverResolution = { kind: "unattributed", reason: "no_candidates" };
   if (candidates.length > 0) {
-    const idToken = await tx.idToken.findFirst({
-      where: { value: { in: candidates }, status: "active" },
-      select: { userId: true },
+    const tokens = await tx.idToken.findMany({
+      where: { value: { in: candidates.map((c) => c.value) } },
+      select: { value: true, userId: true, status: true, expiresAt: true },
     });
-    driverUserId = idToken?.userId ?? null;
+    const memberships =
+      tokens.length > 0
+        ? await tx.membership.findMany({
+            where: {
+              userId: { in: Array.from(new Set(tokens.map((t) => t.userId))) },
+              // FOCUS rule 5 — org_id in the query. Narrowing here is not the
+              // guard, though: the pure resolver re-checks membership against
+              // chargerOrgId, so removing this term changes how many rows are
+              // fetched and not who gets billed. Proven by fool test 3.
+              orgId: identity.orgId,
+            },
+            select: { userId: true, orgId: true },
+          })
+        : [];
+    resolution = resolveCdrDriver({
+      chargerOrgId: identity.orgId,
+      candidates,
+      tokens,
+      memberships,
+      now: new Date(),
+    });
   }
+  const driverUserId = resolution.kind === "attributed" ? resolution.userId : null;
 
   const startedAt = new Date(z.StartDateTime!);
   const stoppedAt = new Date(z.EndDateTime!);
-  const energyKwh = z.Energy ?? 0;
+  // LEDGER NOTE 22, AT INGEST. `z.Energy ?? 0` was here, and the zero
+  // reached two places that both believed it: `computeSessionCost`, which
+  // priced the session at nothing, and the CDR/OCPP enrichment comparison,
+  // which on a Zaptec-native installation has no OCPP row to disagree with
+  // and therefore marked the session `complete`.
+  //
+  // A missing reading is not zero energy. It is no reading.
+  if (z.Energy === null || z.Energy === undefined || !Number.isFinite(z.Energy)) {
+    return { kind: "skipped", reason: "no_energy_in_cdr" };
+  }
+  const energyKwh = z.Energy;
   const energyWh = BigInt(Math.round(energyKwh * 1000));
   const durationSec = Math.max(
     0,
@@ -255,6 +322,14 @@ async function importOne(
   // endedAt, energyWh, stopReason, status, cost.
   const existingRow = await tx.chargeSession.findFirst({
     where: {
+      // FOCUS rule 5 — org_id in the query. A station belongs to exactly one
+      // org, so today this term selects the same row either way; it is here
+      // because the NEXT reader of this predicate should not have to prove
+      // that to themselves, and because the day a station is re-parented
+      // between orgs, an unscoped ±60s window would overlay one tenant's CDR
+      // onto the other's session row. Census rows 98 and 105, previously
+      // "unknown — did not open the org predicate on the update path".
+      orgId: identity.orgId,
       chargingStationId: identity.chargingStationId,
       startedAt: {
         gte: new Date(startedAt.getTime() - 60_000),
@@ -477,6 +552,10 @@ async function importOne(
       ourSessionId: sessionId,
       energyKwh,
       costIskMinor: String(breakdown.totalIncVatMinor),
+      driverAttribution:
+        resolution.kind === "attributed"
+          ? { kind: "attributed", userId: resolution.userId }
+          : { kind: "unattributed", reason: resolution.reason },
     },
   };
 }

@@ -29,6 +29,24 @@
           "service": "straumvakt-ocpp-staging"
         }
       ],
+
+      // ── LIVE PUBLIC HOSTNAMES ─────────────────────────────────────
+      //
+      // api.straumvakt.org → this Worker. Verified 2026-08-18 by tailing
+      // hlada-api-staging while requesting /health?probe=… and watching
+      // the probe arrive. GET /health returns {"ok":true,...}.
+      //
+      // It served production traffic while appearing in no committed
+      // config — bound in the dashboard only. Declared here so version
+      // control records reality.
+      //
+      // workers_dev stays true: hlada-api-staging.straumvakt.workers.dev
+      // is referenced by the console's NEXT_PUBLIC_API_BASE_URL
+      // (wrangler.jsonc, staging env) and by the alert-policy synthetic
+      // probe. Declaring routes without this would remove it on the next
+      // deploy — OB19's foot-gun.
+      "routes": [{ "pattern": "api.straumvakt.org", "custom_domain": true }],
+      "workers_dev": true,
       "hyperdrive": [
         {
           "binding": "HYPERDRIVE_DB",
