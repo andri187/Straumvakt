@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Straumvakt Core morning review</title>
+  <style>
+    :root{font-family:Arial,sans-serif;color:#14201d;background:#fff}body{max-width:920px;margin:0 auto;padding:32px}header{border-bottom:3px solid #177a5b;padding-bottom:18px}h1{font-size:28px;margin:0 0 8px}h2{font-size:18px;margin-top:28px;color:#135f49}p,li,td,th{font-size:12px;line-height:1.5}code{background:#eef4f1;padding:2px 4px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #aab8b3;padding:7px;text-align:left;vertical-align:top}.hold{border-left:4px solid #b66b00;padding:9px 12px;background:#fff8e8}.stop{border-left:4px solid #a52222;padding:9px 12px;background:#fff0f0}.check{break-inside:avoid}.small{color:#4b5d57}@media print{body{padding:0;max-width:none}a{color:inherit;text-decoration:none}.page-break{break-before:page}.no-print{display:none}h2{break-after:avoid}table{break-inside:avoid}}
+  </style>
+</head>
+<body>
+  <header>
+    <p><strong>Straumvakt Core / local demo review</strong></p>
+    <h1>Billing trust, access and operational readiness</h1>
+    <p class="small">Open <code>http://127.0.0.1:3012/login-demo</code>. No screen proves backend, cloud or deployment readiness.</p>
+  </header>
+  <section class="hold"><strong>Current truth:</strong> meter delta is fixed in the billing engine; session evidence may still be held. Heartbeat fast path exists in source; gateway-suite/toolchain and deployed queue evidence remain incomplete.</section>
+  <h2>Twenty-five minute route</h2>
+  <table>
+    <thead><tr><th>Min</th><th>Route</th><th>Decision</th></tr></thead>
+    <tbody>
+      <tr><td>0-3</td><td><code>/app/admin/integration-heartbeat</code></td><td>Does source-versus-runtime evidence read clearly?</td></tr>
+      <tr><td>3-5</td><td><code>/app/admin/integration-queue-deployment</code></td><td>Is unknown deployment distinct from missing queue?</td></tr>
+      <tr><td>5-7</td><td><code>/app/admin/integration-offline-sweep</code></td><td>Is the missing sweep an operational gap, not a UI command?</td></tr>
+      <tr><td>7-9</td><td><code>/app/admin/integration-tenant-billing</code></td><td>Which platform role may read across tenants?</td></tr>
+      <tr><td>9-11</td><td><code>/app/org/integration-driver-management</code></td><td>Who may add or deactivate a driver?</td></tr>
+      <tr><td>11-13</td><td><code>/app/org/integration-cdr-mismatch</code></td><td>Who owns mismatch review?</td></tr>
+      <tr><td>13-15</td><td><code>/app/org/integration-period-lock</code></td><td>Are lock blockers complete?</td></tr>
+      <tr><td>15-17</td><td><code>/app/driver/integration-cdr-pending</code></td><td>Is energy visible while cost remains unavailable?</td></tr>
+      <tr><td>17-19</td><td><code>/app/driver/integration-cdr-mismatch-driver</code></td><td>Does the Driver avoid choosing authority?</td></tr>
+      <tr><td>19-21</td><td><code>/app/driver/integration-manual-review</code></td><td>Does it credit the engine fix while holding one session?</td></tr>
+      <tr><td>21-23</td><td><code>/app/driver/integration-access-offline</code></td><td>Is cached access clearly not authorisation?</td></tr>
+      <tr><td>23-25</td><td><code>/app/driver/integration-manual-support</code></td><td>Is support separated from impersonation and mutation?</td></tr>
+    </tbody>
+  </table>
+  <h2>Keyboard and accessibility</h2>
+  <ol class="check">
+    <li>Use Skip to content without a pointer.</li>
+    <li>Open and close the mobile drawer by keyboard; confirm focus remains visible.</li>
+    <li>Filter a table to one and zero rows; confirm result count is announced.</li>
+    <li>Navigate the named horizontal table region.</li>
+    <li>Verify every disabled action has adjacent dependency copy.</li>
+    <li>Repeat key Driver, CPO and Admin routes at 200% browser zoom.</li>
+    <li>Check Windows forced colors and reduced motion.</li>
+    <li>Review long Icelandic candidates at 390 px before translation lands.</li>
+  </ol>
+  <h2 class="page-break">Go/no-go questions</h2>
+  <ul>
+    <li>CDR mismatch and unlabelled provenance owner named?</li>
+    <li>Cross-tenant billing permission and audit designed?</li>
+    <li>Manual driver add/deactivate authority decided?</li>
+    <li>Gateway suite/toolchain and heartbeat runtime evidence green?</li>
+    <li>Queue deployment and offline sweep verified?</li>
+    <li>Per-connector frame cap decision made?</li>
+    <li>Icelandic export format research complete?</li>
+    <li>First real statement reviewed end to end?</li>
+  </ul>
+  <section class="stop"><strong>Hard stop:</strong> do not enable driver mutation, period lock, export, download, retry, queue control or protocol protection from these local screens.</section>
+</body>
+</html>

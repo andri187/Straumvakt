@@ -96,6 +96,7 @@ export type OrgBranding = {
  */
 export type OrgSectionKey =
   | "overview"
+  | "onboarding"
   | "profile"
   | "chargers"
   | "drivers"
@@ -192,6 +193,7 @@ const DEFAULT_ACCENT: OrgAccent = {
 
 const DEFAULT_SECTIONS: OrgSectionKey[] = [
   "overview",
+  "onboarding",
   "profile",
   "chargers",
   "drivers",
@@ -203,11 +205,18 @@ const DEFAULT_SECTIONS: OrgSectionKey[] = [
 /** Sections that have a real page today. Everything else renders as "soon". */
 const BUILT_SECTIONS: ReadonlySet<OrgSectionKey> = new Set<OrgSectionKey>([
   "overview",
+  "onboarding",
   "profile",
+  "chargers",
+  "drivers",
+  "invite",
+  "sessions",
+  "agreements",
 ]);
 
 const SECTION_PATHS: Record<OrgSectionKey, string> = {
   overview: "",
+  onboarding: "/onboarding",
   profile: "/profile",
   chargers: "/chargers",
   drivers: "/drivers",
@@ -409,6 +418,10 @@ export function orgSectionLabel(
     overview: {
       is: ["Yfirlit", "Staðan á hleðslunetinu í dag."],
       en: ["Overview", "How the charging network is doing today."],
+    },
+    onboarding: {
+      is: ["Onboarding", "Organisation, infrastructure and access readiness."],
+      en: ["Onboarding", "Organisation, infrastructure and access readiness."],
     },
     profile: {
       is: ["Fyrirtækið", "Skráning, kennitala, heimilisfang og tengiliðir."],
