@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 //
 // Worker binding checker — offline, no network, no cloud credentials.
 //
