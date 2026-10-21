@@ -50,6 +50,26 @@ class AuthSession {
   }
 }
 
+class DriverInviteRedemption {
+  const DriverInviteRedemption({
+    required this.driverGroupId,
+    required this.driverGroupDisplayName,
+    this.installationDisplayName,
+  });
+
+  final String driverGroupId;
+  final String driverGroupDisplayName;
+  final String? installationDisplayName;
+
+  factory DriverInviteRedemption.fromJson(Map<String, dynamic> json) {
+    return DriverInviteRedemption(
+      driverGroupId: json['driverGroupId'] as String,
+      driverGroupDisplayName: json['driverGroupDisplayName'] as String,
+      installationDisplayName: json['installationDisplayName'] as String?,
+    );
+  }
+}
+
 enum ConnectorStatus {
   available,
   preparing,
@@ -187,7 +207,7 @@ class ConsumeInviteResult {
 class ActiveSession {
   const ActiveSession({
     required this.sessionId,
-    required this.connectorId,
+    this.connectorId,
     required this.chargerName,
     required this.status,
     this.startedAt,
@@ -197,7 +217,7 @@ class ActiveSession {
   });
 
   final String sessionId;
-  final String connectorId;
+  final String? connectorId;
   final String chargerName;
   // Raw OCPP-ish session status string, e.g. 'Charging', 'Preparing'.
   final String status;
@@ -207,21 +227,32 @@ class ActiveSession {
   final double? costIsk;
 
   factory ActiveSession.fromJson(Map<String, dynamic> json) {
+    // The current backend uses zero as a placeholder for power and
+    // in-flight cost because neither value is available on this read model.
+    // Preserve that uncertainty instead of showing measured 0 kW / 0 kr.
+    final rawPower = (json['powerKw'] as num?)?.toDouble();
+    final rawCost = (json['costIsk'] as num?)?.toDouble();
     return ActiveSession(
       sessionId: json['sessionId'] as String,
-      connectorId: json['connectorId'] as String,
+      connectorId: json['connectorId'] as String?,
       chargerName: json['chargerName'] as String? ?? 'Charger',
       status: json['status'] as String? ?? 'Unknown',
       startedAt: json['startedAt'] != null
           ? DateTime.tryParse(json['startedAt'] as String)
           : null,
-      powerKw: (json['powerKw'] as num?)?.toDouble(),
+      powerKw: rawPower == null || rawPower == 0 ? null : rawPower,
       energyKwh: (json['energyKwh'] as num?)?.toDouble(),
-      costIsk: (json['costIsk'] as num?)?.toDouble(),
+      costIsk: rawCost == null || rawCost == 0 ? null : rawCost,
     );
   }
 
   ConnectorStatus get connectorStatus => ConnectorStatus.fromString(status);
+
+  String? get costLabel {
+    final minor = costIsk;
+    if (minor == null) return null;
+    return '${(minor / 100).round()} kr';
+  }
 }
 
 // Result of POST /api/driver/stop-session — 202 accepted with the
@@ -315,10 +346,87 @@ class TapIntentResult {
       intentId: json['intentId'] as String,
       expiresAt:
           DateTime.tryParse((json['expiresAt'] ?? '') as String)?.toLocal() ??
-              DateTime.now().add(const Duration(seconds: 120)),
+          DateTime.now().add(const Duration(seconds: 120)),
       chargerName: json['chargerName'] as String?,
       ttlSeconds: (json['ttlSeconds'] as num?)?.toInt(),
     );
+  }
+}
+
+class ActiveSessionsResponse {
+  const ActiveSessionsResponse(this.sessions);
+
+  final List<ActiveSession> sessions;
+
+  factory ActiveSessionsResponse.fromJson(Map<String, dynamic> json) {
+    final rows = json['sessions'];
+    if (rows is! List) return const ActiveSessionsResponse([]);
+    return ActiveSessionsResponse(
+      rows
+          .whereType<Map>()
+          .map((row) => ActiveSession.fromJson(Map<String, dynamic>.from(row)))
+          .toList(growable: false),
+    );
+  }
+}
+
+class DriverSessionDetail {
+  const DriverSessionDetail({
+    required this.sessionId,
+    required this.startedAt,
+    required this.energyKwh,
+    this.endedAt,
+    this.durationSec,
+    this.chargeTimeSec,
+    this.idleTimeSec,
+    this.status,
+    this.siteName,
+    this.chargerName,
+    this.costFormatted,
+    this.stopReason,
+  });
+
+  final String sessionId;
+  final DateTime startedAt;
+  final DateTime? endedAt;
+  final int? durationSec;
+  final int? chargeTimeSec;
+  final int? idleTimeSec;
+  final String? status;
+  final String? siteName;
+  final String? chargerName;
+  final double energyKwh;
+  final String? costFormatted;
+  final String? stopReason;
+
+  factory DriverSessionDetail.fromJson(Map<String, dynamic> json) {
+    return DriverSessionDetail(
+      sessionId: json['sessionId'] as String,
+      startedAt: DateTime.parse(json['startedAt'] as String).toLocal(),
+      endedAt: json['endedAt'] == null
+          ? null
+          : DateTime.tryParse(json['endedAt'] as String)?.toLocal(),
+      durationSec: (json['durationSec'] as num?)?.toInt(),
+      chargeTimeSec: (json['chargeTimeSec'] as num?)?.toInt(),
+      idleTimeSec: (json['idleTimeSec'] as num?)?.toInt(),
+      status: json['status'] as String?,
+      siteName: json['siteDisplayName'] as String?,
+      chargerName: json['chargerDisplayName'] as String?,
+      energyKwh: double.tryParse('${json['energyKwh'] ?? 0}') ?? 0,
+      costFormatted: json['costFormatted'] as String?,
+      stopReason: json['stopReason'] as String?,
+    );
+  }
+
+  String get durationLabel => _durationLabel(durationSec);
+  String get chargeTimeLabel => _durationLabel(chargeTimeSec);
+  String get idleTimeLabel => _durationLabel(idleTimeSec);
+
+  static String _durationLabel(int? seconds) {
+    if (seconds == null) return 'Unavailable';
+    final hours = seconds ~/ 3600;
+    final minutes = (seconds % 3600) ~/ 60;
+    return hours > 0 ? '${hours}h ${minutes}m' : '${minutes}m';
   }
 }
 

@@ -7,33 +7,66 @@
 // driver, and the steady-state for a driver whose access was revoked.
 
 import 'package:flutter/material.dart';
+import '../api/auth_storage.dart';
+import '../api/client.dart';
 import '../api/types.dart';
 import '../i18n/strings.dart';
 import '../theme/logo.dart';
 import '../theme/palette.dart';
 import 'menu_drawer.dart';
-import 'redeem_invite.dart';
+import 'redeem_driver_invite.dart';
+import 'installation_access.dart';
+import 'home.dart';
+
+enum DriverAccessRequestState { none, pending, rejected }
 
 class EmptyAccessScreen extends StatelessWidget {
   const EmptyAccessScreen({
     super.key,
     required this.driver,
     this.onRefresh,
+    this.onInstallationAccess,
+    this.requestState = DriverAccessRequestState.none,
   });
 
   final DriverProfile driver;
   // Re-check access (re-fetch /chargers). Wired by the host so a driver
   // whose host just approved them can pull to refresh into the app.
   final Future<void> Function()? onRefresh;
+  final InstallationAccessSubmit? onInstallationAccess;
+  final DriverAccessRequestState requestState;
+
+  Future<void> _refreshAccess(BuildContext context) async {
+    if (onRefresh != null) {
+      await onRefresh!();
+      return;
+    }
+    final storage = AuthStorage();
+    final api = StraumvaktApi();
+    try {
+      final token = await storage.readAccessToken();
+      if (token == null) return;
+      final chargers = await api.getChargers(token);
+      if (!context.mounted || chargers.isEmpty) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => HomeScreen(driver: driver)),
+      );
+    } catch (_) {
+      // Empty access remains the truthful state until a refresh succeeds.
+    } finally {
+      api.close();
+    }
+  }
 
   Future<void> _toRedeem(BuildContext context) async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const RedeemInviteScreen()),
-    );
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const RedeemDriverInviteScreen()));
     // On return, re-check access — the driver may have redeemed an
     // invite that activated immediately (which would have navigated past
     // this screen) or one pending approval (still empty).
-    if (onRefresh != null) await onRefresh!();
+    if (!context.mounted) return;
+    await _refreshAccess(context);
   }
 
   @override
@@ -54,28 +87,35 @@ class EmptyAccessScreen extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Container(
-                    width: 96,
-                    height: 96,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: BrandPalette.mint.withValues(alpha: 0.10),
-                      border: Border.all(
-                        color: BrandPalette.mint.withValues(alpha: 0.35),
+                  ExcludeSemantics(
+                    child: Container(
+                      width: 96,
+                      height: 96,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: BrandPalette.mint.withValues(alpha: 0.10),
+                        border: Border.all(
+                          color: BrandPalette.mint.withValues(alpha: 0.35),
+                        ),
+                      ),
+                      child: const Icon(
+                        Icons.qr_code_scanner_rounded,
+                        size: 44,
+                        color: BrandPalette.mint,
                       ),
                     ),
-                    child: const Icon(Icons.qr_code_scanner_rounded,
-                        size: 44, color: BrandPalette.mint),
                   ),
                   const SizedBox(height: 24),
-                  Text(
-                    tr('empty.title'),
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: -0.4,
+                  Semantics(
+                    header: true,
+                    child: Text(
+                      tr('empty.title'),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 10),
@@ -83,8 +123,15 @@ class EmptyAccessScreen extends StatelessWidget {
                     tr('empty.body'),
                     textAlign: TextAlign.center,
                     style: const TextStyle(
-                        color: BrandPalette.muted, fontSize: 14, height: 1.5),
+                      color: BrandPalette.muted,
+                      fontSize: 14,
+                      height: 1.5,
+                    ),
                   ),
+                  if (requestState != DriverAccessRequestState.none) ...[
+                    const SizedBox(height: 18),
+                    _RequestStatus(state: requestState),
+                  ],
                   const SizedBox(height: 28),
                   SizedBox(
                     width: double.infinity,
@@ -94,21 +141,93 @@ class EmptyAccessScreen extends StatelessWidget {
                       label: Text(tr('empty.cta')),
                     ),
                   ),
-                  if (onRefresh != null) ...[
-                    const SizedBox(height: 12),
-                    TextButton.icon(
-                      onPressed: onRefresh,
-                      icon: const Icon(Icons.refresh_rounded,
-                          color: BrandPalette.muted, size: 18),
-                      label: Text(
-                        tr('empty.refresh'),
-                        style: const TextStyle(color: BrandPalette.muted),
-                      ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () async {
+                        await Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => InstallationAccessScreen(
+                              enabled: onInstallationAccess != null,
+                              onSubmit:
+                                  onInstallationAccess ??
+                                  (_, _) => throw UnsupportedError(
+                                    'Installation access is unavailable',
+                                  ),
+                            ),
+                          ),
+                        );
+                        if (context.mounted) await _refreshAccess(context);
+                      },
+                      icon: const Icon(Icons.key_rounded),
+                      label: const Text('Use installation code'),
                     ),
-                  ],
+                  ),
+                  const SizedBox(height: 12),
+                  TextButton.icon(
+                    onPressed: () => _refreshAccess(context),
+                    icon: const Icon(
+                      Icons.refresh_rounded,
+                      color: BrandPalette.muted,
+                      size: 18,
+                    ),
+                    label: Text(
+                      tr('empty.refresh'),
+                      style: const TextStyle(color: BrandPalette.muted),
+                    ),
+                  ),
                 ],
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RequestStatus extends StatelessWidget {
+  const _RequestStatus({required this.state});
+  final DriverAccessRequestState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final pending = state == DriverAccessRequestState.pending;
+    final color = pending ? BrandPalette.amber : BrandPalette.danger;
+    return Semantics(
+      container: true,
+      liveRegion: true,
+      label: pending
+          ? 'Access request pending. The organisation is reviewing your request.'
+          : 'Access not granted. Check the invitation or contact the organisation.',
+      child: ExcludeSemantics(
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.10),
+            border: Border.all(color: color.withValues(alpha: 0.35)),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                pending ? 'Waiting for approval' : 'Access not granted',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                pending
+                    ? 'The organisation is reviewing your request.'
+                    : 'Check the invitation or contact the organisation.',
+                style: const TextStyle(color: BrandPalette.muted, fontSize: 13),
+              ),
+            ],
           ),
         ),
       ),

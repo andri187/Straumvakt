@@ -4,7 +4,22 @@
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-class AuthStorage {
+abstract interface class SessionStorage {
+  Future<void> save({
+    required String accessToken,
+    required String refreshToken,
+    required String email,
+  });
+
+  Future<String?> readAccessToken();
+  Future<String?> readRefreshToken();
+  Future<String?> readEmail();
+  Future<String?> readLocale();
+  Future<void> saveLocale(String locale);
+  Future<void> clear();
+}
+
+class AuthStorage implements SessionStorage {
   static const _accessKey = 'straumvakt.driver.accessToken';
   static const _refreshKey = 'straumvakt.driver.refreshToken';
   static const _emailKey = 'straumvakt.driver.email';
@@ -14,6 +29,7 @@ class AuthStorage {
     aOptions: AndroidOptions(encryptedSharedPreferences: true),
   );
 
+  @override
   Future<void> save({
     required String accessToken,
     required String refreshToken,
@@ -24,16 +40,22 @@ class AuthStorage {
     await _storage.write(key: _emailKey, value: email);
   }
 
+  @override
   Future<String?> readAccessToken() => _storage.read(key: _accessKey);
+  @override
   Future<String?> readRefreshToken() => _storage.read(key: _refreshKey);
+  @override
   Future<String?> readEmail() => _storage.read(key: _emailKey);
 
   // Locale ('is' | 'en') — persisted so the chosen language survives
   // restarts and is applied before the first /me round-trip on boot.
+  @override
   Future<String?> readLocale() => _storage.read(key: _localeKey);
+  @override
   Future<void> saveLocale(String locale) =>
       _storage.write(key: _localeKey, value: locale);
 
+  @override
   Future<void> clear() async {
     await _storage.delete(key: _accessKey);
     await _storage.delete(key: _refreshKey);

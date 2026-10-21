@@ -14,10 +14,14 @@ class ApiException implements Exception {
 }
 
 class StraumvaktApi {
-  StraumvaktApi({String? baseUrl})
-      : baseUrl = baseUrl ?? defaultBaseUrl;
+  StraumvaktApi({String? baseUrl, http.Client? client})
+    : baseUrl = baseUrl ?? defaultBaseUrl,
+      _client = client ?? http.Client(),
+      _ownsClient = client == null;
 
   final String baseUrl;
+  final http.Client _client;
+  final bool _ownsClient;
 
   // Pinned to staging. Swap for production when that domain lands.
   // No localhost fallback — the standalone bridge is retired.
@@ -28,7 +32,7 @@ class StraumvaktApi {
     required String email,
     required String password,
   }) async {
-    final res = await http.post(
+    final res = await _client.post(
       Uri.parse('$baseUrl/api/driver/login'),
       headers: {'content-type': 'application/json'},
       body: jsonEncode({'email': email, 'password': password}),
@@ -46,7 +50,7 @@ class StraumvaktApi {
   }
 
   Future<DriverProfile> getMe(String accessToken) async {
-    final res = await http.get(
+    final res = await _client.get(
       Uri.parse('$baseUrl/api/driver/me'),
       headers: _authHeaders(accessToken),
     );
@@ -66,7 +70,7 @@ class StraumvaktApi {
     required String accessToken,
     required String connectorId,
   }) async {
-    final res = await http.post(
+    final res = await _client.post(
       Uri.parse('$baseUrl/api/driver/start-session'),
       headers: _authHeaders(accessToken),
       body: jsonEncode({'connectorId': connectorId}),
@@ -95,7 +99,7 @@ class StraumvaktApi {
     required String kennitala,
     required String password,
   }) async {
-    final res = await http.post(
+    final res = await _client.post(
       Uri.parse('$baseUrl/api/public/invites/consume'),
       headers: {'content-type': 'application/json'},
       body: jsonEncode({
@@ -111,8 +115,8 @@ class StraumvaktApi {
         (body is Map && body['error'] is String)
             ? _inviteErrorMessage(body['error'] as String)
             : (body is Map && body['message'] is String)
-                ? body['message'] as String
-                : 'Could not redeem invite',
+            ? body['message'] as String
+            : 'Could not redeem invite',
       );
     }
     return ConsumeInviteResult.fromJson(body as Map<String, dynamic>);
@@ -136,16 +140,46 @@ class StraumvaktApi {
     }
   }
 
+  /// Redeem a driver invite for the already-authenticated, bound identity.
+  ///
+  /// This deliberately does not use /api/public/invites/consume. That bearer
+  /// path can create credentials and is not the safe path for an existing
+  /// signed-in driver.
+  Future<DriverInviteRedemption> redeemDriverInvite({
+    required String accessToken,
+    required String token,
+  }) async {
+    final res = await _client.post(
+      Uri.parse('$baseUrl/api/driver/redeem-invite'),
+      headers: _authHeaders(accessToken),
+      body: jsonEncode({'token': token}),
+    );
+    final body = _decode(res);
+    if (res.statusCode != 200) {
+      throw ApiException(
+        res.statusCode,
+        (body is Map && body['message'] is String)
+            ? body['message'] as String
+            : (body is Map && body['error'] is String)
+            ? _inviteErrorMessage(body['error'] as String)
+            : 'Could not redeem invite',
+      );
+    }
+    return DriverInviteRedemption.fromJson(
+      Map<String, dynamic>.from(body as Map),
+    );
+  }
+
   // ── Live session (aligns with the web live screen) ────────────────
   //
-  // Poll the driver's current active session. Returns null on 204 / 404
-  // (no active session) so callers can render an idle state.
-  Future<ActiveSession?> getCurrentSession(String accessToken) async {
-    final res = await http.get(
+  // The endpoint returns an envelope because a driver can have more than
+  // one in-progress session. Rows are newest first.
+  Future<List<ActiveSession>> getCurrentSessions(String accessToken) async {
+    final res = await _client.get(
       Uri.parse('$baseUrl/api/driver/sessions/current'),
       headers: _authHeaders(accessToken),
     );
-    if (res.statusCode == 204 || res.statusCode == 404) return null;
+    if (res.statusCode == 204 || res.statusCode == 404) return const [];
     final body = _decode(res);
     if (res.statusCode != 200) {
       throw ApiException(
@@ -155,8 +189,15 @@ class StraumvaktApi {
             : 'Failed to load session',
       );
     }
-    if (body == null) return null;
-    return ActiveSession.fromJson(body as Map<String, dynamic>);
+    if (body is! Map) return const [];
+    return ActiveSessionsResponse.fromJson(
+      Map<String, dynamic>.from(body),
+    ).sessions;
+  }
+
+  Future<ActiveSession?> getCurrentSession(String accessToken) async {
+    final sessions = await getCurrentSessions(accessToken);
+    return sessions.isEmpty ? null : sessions.first;
   }
 
   // Request a remote stop. 202 Accepted with the command id + the
@@ -165,7 +206,7 @@ class StraumvaktApi {
     required String accessToken,
     required String sessionId,
   }) async {
-    final res = await http.post(
+    final res = await _client.post(
       Uri.parse('$baseUrl/api/driver/stop-session'),
       headers: _authHeaders(accessToken),
       body: jsonEncode({'sessionId': sessionId}),
@@ -189,7 +230,7 @@ class StraumvaktApi {
     required String accessToken,
     required String locale,
   }) async {
-    final res = await http.patch(
+    final res = await _client.patch(
       Uri.parse('$baseUrl/api/driver/me'),
       headers: _authHeaders(accessToken),
       body: jsonEncode({'locale': locale}),
@@ -207,7 +248,7 @@ class StraumvaktApi {
   }
 
   Future<List<DriverCharger>> getChargers(String accessToken) async {
-    final res = await http.get(
+    final res = await _client.get(
       Uri.parse('$baseUrl/api/driver/chargers'),
       headers: _authHeaders(accessToken),
     );
@@ -243,7 +284,7 @@ class StraumvaktApi {
     int? rssi,
     String? deviceHandle,
   }) async {
-    final res = await http.post(
+    final res = await _client.post(
       Uri.parse('$baseUrl/api/driver/tap-intent'),
       headers: _authHeaders(accessToken),
       body: jsonEncode({
@@ -268,7 +309,7 @@ class StraumvaktApi {
     required String accessToken,
     required String intentId,
   }) async {
-    final res = await http.delete(
+    final res = await _client.delete(
       Uri.parse('$baseUrl/api/driver/tap-intent/$intentId'),
       headers: _authHeaders(accessToken),
     );
@@ -297,7 +338,7 @@ class StraumvaktApi {
     required String serial,
   }) async {
     try {
-      final res = await http.get(
+      final res = await _client.get(
         Uri.parse('$baseUrl/api/driver/chargers/$serial/ble-pin'),
         headers: _authHeaders(accessToken),
       );
@@ -329,7 +370,7 @@ class StraumvaktApi {
     required String serial,
   }) async {
     try {
-      final res = await http.get(
+      final res = await _client.get(
         Uri.parse('$baseUrl/api/driver/chargers/$serial/advanced-grant'),
         headers: _authHeaders(accessToken),
       );
@@ -352,8 +393,15 @@ class StraumvaktApi {
 
   /// Completed sessions, newest first. Backs the Charge history screen.
   Future<List<DriverHistorySession>> getSessionHistory(
-      String accessToken) async {
-    return _sessionList(accessToken, '/api/driver/sessions/history');
+    String accessToken, {
+    int skip = 0,
+    int limit = 25,
+  }) async {
+    return _sessionList(
+      accessToken,
+      '/api/driver/sessions/history',
+      query: {'skip': '$skip', 'limit': '$limit'},
+    );
   }
 
   /// Invoiceable sessions. Same DTO as history — the API distinguishes
@@ -363,11 +411,12 @@ class StraumvaktApi {
   }
 
   Future<List<DriverHistorySession>> _sessionList(
-      String accessToken, String path) async {
-    final res = await http.get(
-      Uri.parse('$baseUrl$path'),
-      headers: _authHeaders(accessToken),
-    );
+    String accessToken,
+    String path, {
+    Map<String, String>? query,
+  }) async {
+    final uri = Uri.parse('$baseUrl$path').replace(queryParameters: query);
+    final res = await _client.get(uri, headers: _authHeaders(accessToken));
     final body = _decode(res);
     if (res.statusCode != 200) {
       throw ApiException(
@@ -383,13 +432,37 @@ class StraumvaktApi {
         .toList();
   }
 
+  Future<DriverSessionDetail> getSessionDetail({
+    required String accessToken,
+    required String sessionId,
+  }) async {
+    final res = await _client.get(
+      Uri.parse('$baseUrl/api/driver/sessions/$sessionId'),
+      headers: _authHeaders(accessToken),
+    );
+    final body = _decode(res);
+    if (res.statusCode != 200) {
+      throw ApiException(
+        res.statusCode,
+        (body is Map && body['message'] is String)
+            ? body['message'] as String
+            : 'Failed to load session detail',
+      );
+    }
+    final session = body is Map ? body['session'] : null;
+    if (session is! Map) {
+      throw ApiException(502, 'Session detail response was incomplete.');
+    }
+    return DriverSessionDetail.fromJson(Map<String, dynamic>.from(session));
+  }
+
   /// Update the driver's display name. The endpoint accepts displayName
   /// and locale ONLY — email and password are not editable through it.
   Future<DriverProfile> updateDisplayName({
     required String accessToken,
     required String displayName,
   }) async {
-    final res = await http.patch(
+    final res = await _client.patch(
       Uri.parse('$baseUrl/api/driver/me'),
       headers: _authHeaders(accessToken),
       body: jsonEncode({'displayName': displayName}),
@@ -407,9 +480,9 @@ class StraumvaktApi {
   }
 
   Map<String, String> _authHeaders(String token) => {
-        'authorization': 'Bearer $token',
-        'content-type': 'application/json',
-      };
+    'authorization': 'Bearer $token',
+    'content-type': 'application/json',
+  };
 
   dynamic _decode(http.Response r) {
     if (r.body.isEmpty) return null;
@@ -418,5 +491,11 @@ class StraumvaktApi {
     } catch (_) {
       return r.body;
     }
+  }
+
+  /// Releases the production HTTP client. Injected clients remain owned by
+  /// their caller so a test can reuse one across several API instances.
+  void close() {
+    if (_ownsClient) _client.close();
   }
 }

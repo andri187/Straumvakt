@@ -48,11 +48,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text('Your name',
-                style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900)),
+            const Text(
+              'Your name',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
             const SizedBox(height: 6),
             const Text(
               'Shown to your operator on charge records.',
@@ -84,14 +87,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       final token = await _storage.readAccessToken();
       if (token == null) throw ApiException(401, 'Signed out.');
-      final updated =
-          await _api.updateDisplayName(accessToken: token, displayName: entered);
+      final updated = await _api.updateDisplayName(
+        accessToken: token,
+        displayName: entered,
+      );
       if (!mounted) return;
       setState(() => _profile = updated);
     } on ApiException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(e.message)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message)));
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -109,41 +115,47 @@ class _ProfileScreenState extends State<ProfileScreen> {
       appBar: AppBar(
         backgroundColor: BrandPalette.midnight,
         foregroundColor: Colors.white,
-        title: const Text('Profile',
-            style: TextStyle(fontWeight: FontWeight.w900)),
+        title: const Text(
+          'Profile',
+          style: TextStyle(fontWeight: FontWeight.w900),
+        ),
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
         children: [
-          _Card(children: [
-            _Row(
-              label: 'Name',
-              value: _profile.displayName,
-              onTap: _busy ? null : _editName,
-            ),
-            // Read-only, and the row says why rather than looking broken.
-            // Changing an email needs re-verification, which is a flow
-            // that exists on the API but has no driver-facing route yet.
-            const _Divider(),
-            _Row(
-              label: 'Email',
-              value: _profile.email,
-              note: 'Contact your operator to change this',
-            ),
-            const _Divider(),
-            _Row(
-              label: 'Organisation',
-              value: _profile.organizationName ?? 'Not assigned',
-            ),
-          ]),
+          _Card(
+            children: [
+              _Row(
+                label: 'Name',
+                value: _profile.displayName,
+                onTap: _busy ? null : _editName,
+              ),
+              // Read-only, and the row says why rather than looking broken.
+              // Changing an email needs re-verification, which is a flow
+              // that exists on the API but has no driver-facing route yet.
+              const _Divider(),
+              _Row(
+                label: 'Email',
+                value: _profile.email,
+                note: 'Contact your operator to change this',
+              ),
+              const _Divider(),
+              _Row(
+                label: 'Organisation',
+                value: _profile.organizationName ?? 'Not assigned',
+              ),
+            ],
+          ),
           const SizedBox(height: 20),
-          _Card(children: [
-            _Row(label: 'Language', value: _localeLabel(_profile.locale)),
-            const _Divider(),
-            // The account id is what support will ask for, and what ties
-            // this driver to their charge records.
-            _Row(label: 'Account', value: _shortId(_profile.id)),
-          ]),
+          _Card(
+            children: [
+              _Row(label: 'Language', value: _localeLabel(_profile.locale)),
+              const _Divider(),
+              // The account id is what support will ask for, and what ties
+              // this driver to their charge records.
+              _Row(label: 'Account', value: _shortId(_profile.id)),
+            ],
+          ),
           const SizedBox(height: 24),
           const Text(
             'Password changes are handled by your operator.',
@@ -156,10 +168,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   static String _localeLabel(String code) => switch (code) {
-        'is' => 'Íslenska',
-        'en' => 'English',
-        _ => code,
-      };
+    'is' => 'Íslenska',
+    'en' => 'English',
+    _ => code,
+  };
 
   /// First segment of the uuid — enough for support to find the account,
   /// short enough to read aloud.
@@ -173,13 +185,13 @@ class _Card extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        decoration: BoxDecoration(
-          color: BrandPalette.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: BrandPalette.border),
-        ),
-        child: Column(children: children),
-      );
+    decoration: BoxDecoration(
+      color: BrandPalette.surface,
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(color: BrandPalette.border),
+    ),
+    child: Column(children: children),
+  );
 }
 
 class _Divider extends StatelessWidget {
@@ -190,12 +202,7 @@ class _Divider extends StatelessWidget {
 }
 
 class _Row extends StatelessWidget {
-  const _Row({
-    required this.label,
-    required this.value,
-    this.note,
-    this.onTap,
-  });
+  const _Row({required this.label, required this.value, this.note, this.onTap});
 
   final String label;
   final String value;
@@ -214,28 +221,41 @@ class _Row extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(label,
-                      style: const TextStyle(
-                          color: BrandPalette.muted, fontSize: 12)),
+                  Text(
+                    label,
+                    style: const TextStyle(
+                      color: BrandPalette.muted,
+                      fontSize: 12,
+                    ),
+                  ),
                   const SizedBox(height: 2),
-                  Text(value,
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700)),
+                  Text(
+                    value,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                   if (note != null)
                     Padding(
                       padding: const EdgeInsets.only(top: 3),
-                      child: Text(note!,
-                          style: const TextStyle(
-                              color: BrandPalette.muted, fontSize: 11)),
+                      child: Text(
+                        note!,
+                        style: const TextStyle(
+                          color: BrandPalette.muted,
+                          fontSize: 11,
+                        ),
+                      ),
                     ),
                 ],
               ),
             ),
             if (onTap != null)
-              const Icon(Icons.chevron_right_rounded,
-                  color: BrandPalette.muted),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: BrandPalette.muted,
+              ),
           ],
         ),
       ),

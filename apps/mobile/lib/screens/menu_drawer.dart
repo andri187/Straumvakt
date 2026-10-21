@@ -13,16 +13,16 @@ import '../api/types.dart';
 import '../i18n/strings.dart';
 import '../theme/palette.dart';
 import 'login.dart';
-import '../zaptec_ble_settings/settings_screen.dart';
 import 'charge_history.dart';
+import 'account_privacy.dart';
 import 'my_vehicle.dart';
 import 'profile.dart';
+import 'redeem_driver_invite.dart';
 
 class MenuDrawer extends StatelessWidget {
-  const MenuDrawer({super.key, required this.driver, this.plate = 'N1 742'});
+  const MenuDrawer({super.key, required this.driver});
 
   final DriverProfile driver;
-  final String plate;
 
   Future<void> _signOut(BuildContext context) async {
     final confirmed = await showDialog<bool>(
@@ -84,88 +84,106 @@ class MenuDrawer extends StatelessWidget {
       child: SafeArea(
         child: Column(
           children: [
-            _DriverHeader(driver: driver, plate: plate),
+            _DriverHeader(driver: driver),
             Expanded(
               child: ListView(
                 padding: EdgeInsets.zero,
                 children: [
+                  const _SectionLabel('Activity'),
+                  _MenuTile(
+                    icon: Icons.history_rounded,
+                    label: 'Charge history',
+                    subtitle: 'Completed sessions and energy',
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const ChargeHistoryScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  _MenuTile(
+                    icon: Icons.receipt_long_outlined,
+                    label: 'Billing records',
+                    subtitle: 'Session costs when available',
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const ChargeHistoryScreen(
+                            mode: HistoryMode.invoices,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                  const _SectionLabel('Access'),
+                  _MenuTile(
+                    icon: Icons.lock_open_outlined,
+                    label: 'Charging access',
+                    subtitle: driver.organizationName != null
+                        ? 'Provided by ${driver.organizationName}'
+                        : 'No organization shown on your profile',
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      _showSnack(
+                        context,
+                        driver.organizationName == null
+                            ? 'No organization access is shown on your profile.'
+                            : 'Access is provided by ${driver.organizationName}.',
+                      );
+                    },
+                  ),
+                  _MenuTile(
+                    icon: Icons.add_link_rounded,
+                    label: 'Use an invite code',
+                    subtitle: 'Join another charging organization',
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const RedeemDriverInviteScreen(),
+                        ),
+                      );
+                    },
+                  ),
                   const _SectionLabel('Account'),
                   _MenuTile(
                     icon: Icons.person_outline,
                     label: 'Profile',
-                    subtitle: 'Name, email, password',
+                    subtitle: 'Name and account email',
                     onTap: () {
                       Navigator.of(context).pop();
-                      Navigator.of(context).push(MaterialPageRoute(
-                        builder: (_) => ProfileScreen(driver: driver),
-                      ));
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => ProfileScreen(driver: driver),
+                        ),
+                      );
+                    },
+                  ),
+                  _MenuTile(
+                    icon: Icons.shield_outlined,
+                    label: 'Account & privacy',
+                    subtitle: 'Account status and requests',
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => AccountPrivacyScreen(driver: driver),
+                        ),
+                      );
                     },
                   ),
                   _MenuTile(
                     icon: Icons.directions_car_outlined,
                     label: 'My vehicle',
-                    subtitle: '$plate · plate + EV identity',
-                    onTap: () {
-                      Navigator.of(context).pop();
-                      Navigator.of(context).push(MaterialPageRoute(
-                        builder: (_) => const MyVehicleScreen(),
-                      ));
-                    },
-                  ),
-                  const _SectionLabel('Charging'),
-                  _MenuTile(
-                    icon: Icons.credit_card_outlined,
-                    label: 'RFID & tokens',
-                    subtitle: 'Cards, virtual tags, vehicle ID',
-                    onTap: () {
-                      Navigator.of(context).pop();
-                      _showSnack(context, 'Tokens list — Phase 2');
-                    },
-                  ),
-                  _MenuTile(
-                    icon: Icons.lock_open_outlined,
-                    label: 'Charging access',
-                    subtitle: driver.organizationName != null
-                        ? 'Via ${driver.organizationName}'
-                        : 'Installations you can charge at',
-                    onTap: () {
-                      Navigator.of(context).pop();
-                      _showSnack(context, 'Access view — Phase 2');
-                    },
-                  ),
-                  _MenuTile(
-                    icon: Icons.history_rounded,
-                    label: 'Charge history',
-                    subtitle: 'Past sessions, kWh, cost',
-                    onTap: () {
-                      Navigator.of(context).pop();
-                      Navigator.of(context).push(MaterialPageRoute(
-                        builder: (_) => const ChargeHistoryScreen(),
-                      ));
-                    },
-                  ),
-                  _MenuTile(
-                    icon: Icons.receipt_long_outlined,
-                    label: 'Receipts & invoices',
-                    subtitle: 'Billed charges',
-                    onTap: () {
-                      Navigator.of(context).pop();
-                      Navigator.of(context).push(MaterialPageRoute(
-                        builder: (_) => const ChargeHistoryScreen(
-                            mode: HistoryMode.invoices),
-                      ));
-                    },
-                  ),
-                  const _SectionLabel('Settings'),
-                  _MenuTile(
-                    icon: Icons.ev_station_rounded,
-                    label: 'Charger settings',
-                    subtitle: 'Connect over Bluetooth',
+                    subtitle: 'Vehicle profile and Autocharge status',
                     onTap: () {
                       Navigator.of(context).pop();
                       Navigator.of(context).push(
                         MaterialPageRoute(
-                          builder: (_) => const ChargerPickerScreen(),
+                          builder: (_) => const MyVehicleScreen(),
                         ),
                       );
                     },
@@ -179,33 +197,23 @@ class MenuDrawer extends StatelessWidget {
                       onTap: () => _pickLanguage(context),
                     ),
                   ),
-                  _MenuTile(
-                    icon: Icons.notifications_none_rounded,
-                    label: 'Notifications',
-                    subtitle: 'Session start, finish, faults',
-                    trailing: const _SoonBadge(),
-                    onTap: () {
-                      Navigator.of(context).pop();
-                      _showSnack(context, 'Push notifications — Phase 4');
-                    },
-                  ),
                   const _SectionLabel('Help'),
                   _MenuTile(
                     icon: Icons.help_outline_rounded,
                     label: 'Help & support',
-                    subtitle: 'Contact your operator',
+                    subtitle: 'Contact your charging provider',
                     onTap: () {
                       Navigator.of(context).pop();
-                      _showSnack(context, 'Support contact — Phase 2');
+                      _showSnack(context, 'Support contact is not configured.');
                     },
                   ),
                   _MenuTile(
                     icon: Icons.info_outline_rounded,
                     label: 'About Straumvakt',
-                    subtitle: 'Version, privacy, terms',
+                    subtitle: 'App version 0.1.0',
                     onTap: () {
                       Navigator.of(context).pop();
-                      _showSnack(context, 'About / version — Phase 2');
+                      _showSnack(context, 'Straumvakt driver app · 0.1.0');
                     },
                   ),
                 ],
@@ -323,10 +331,9 @@ class MenuDrawer extends StatelessWidget {
 }
 
 class _DriverHeader extends StatelessWidget {
-  const _DriverHeader({required this.driver, required this.plate});
+  const _DriverHeader({required this.driver});
 
   final DriverProfile driver;
-  final String plate;
 
   @override
   Widget build(BuildContext context) {
@@ -464,13 +471,11 @@ class _MenuTile extends StatelessWidget {
     required this.label,
     required this.subtitle,
     required this.onTap,
-    this.trailing,
   });
 
   final IconData icon;
   final String label;
   final String subtitle;
-  final Widget? trailing;
   final VoidCallback onTap;
 
   @override
@@ -520,43 +525,13 @@ class _MenuTile extends StatelessWidget {
                 ),
               ),
             ),
-            if (trailing != null) ...[
-              const SizedBox(width: 4),
-              trailing!,
-              const SizedBox(width: 8),
-            ] else ...[
-              const Icon(
-                Icons.chevron_right_rounded,
-                color: BrandPalette.muted,
-                size: 20,
-              ),
-              const SizedBox(width: 8),
-            ],
+            const Icon(
+              Icons.chevron_right_rounded,
+              color: BrandPalette.muted,
+              size: 20,
+            ),
+            const SizedBox(width: 8),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SoonBadge extends StatelessWidget {
-  const _SoonBadge();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: BrandPalette.amber.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: const Text(
-        'Soon',
-        style: TextStyle(
-          color: BrandPalette.amber,
-          fontSize: 10,
-          fontWeight: FontWeight.w800,
-          letterSpacing: 0.4,
         ),
       ),
     );

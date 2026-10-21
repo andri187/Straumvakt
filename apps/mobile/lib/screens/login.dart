@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import '../api/client.dart';
 import '../api/auth_storage.dart';
@@ -18,20 +17,12 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-// Pilot dev shortcut — default credentials in debug builds so the
-// emulator round-trips without fighting Android autofill. Stripped
-// from any release build via the kDebugMode gate.
-const _devDefaultEmail = 'driver@n1.is';
-const _devDefaultPassword = '1234';
-
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _email = TextEditingController(
-    text: widget.prefilledEmail ?? (kDebugMode ? _devDefaultEmail : ''),
+    text: widget.prefilledEmail ?? '',
   );
-  late final TextEditingController _password = TextEditingController(
-    text: kDebugMode ? _devDefaultPassword : '',
-  );
+  late final TextEditingController _password = TextEditingController();
   final _api = StraumvaktApi();
   final _storage = AuthStorage();
   bool _busy = false;
@@ -133,7 +124,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 8),
                       const Text(
-                        'Sign in with the credentials your operator gave you.',
+                        'Sign in to your Straumvakt account.',
                         style: TextStyle(color: BrandPalette.muted),
                         textAlign: TextAlign.center,
                       ),
@@ -228,7 +219,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 18),
                       const Text(
-                        'No self-signup yet — your operator creates your account.',
+                        'An account can exist before it has access to an installation.',
                         style: TextStyle(
                           color: BrandPalette.muted,
                           fontSize: 11,

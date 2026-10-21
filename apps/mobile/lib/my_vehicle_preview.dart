@@ -16,7 +16,7 @@ class MyVehiclePreviewApp extends StatelessWidget {
       title: 'Straumvakt | My vehicle',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.dark(),
-      home: const MyVehicleScreen(showBackButton: false),
+      home: const MyVehicleScreen(),
     );
   }
 }

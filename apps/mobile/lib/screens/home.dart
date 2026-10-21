@@ -10,6 +10,8 @@ import '../tap_auth/tap_intent.dart';
 import '../theme/logo.dart';
 import '../theme/palette.dart';
 import 'charger_detail_sheet.dart';
+import 'active_session.dart';
+import 'session_picker.dart';
 import 'hero_image.dart';
 import 'installation_picker.dart';
 import 'menu_drawer.dart';
@@ -43,6 +45,7 @@ class _HomeScreenState extends State<HomeScreen> {
   StreamSubscription<TapIntentState>? _tapSub;
 
   late Future<List<DriverCharger>> _futureChargers;
+  late Future<List<ActiveSession>> _futureActiveSessions;
 
   // Sprint 9 / 2026-05-10 — installation picker state.
   // null = "All locations" (no filter active). When set, the home
@@ -61,6 +64,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    _futureActiveSessions = _loadActiveSessions();
     _futureChargers = _loadChargers();
     _futureChargers.then(_startScanning).catchError((_) {});
   }
@@ -190,11 +194,68 @@ class _HomeScreenState extends State<HomeScreen> {
     return _api.getChargers(token);
   }
 
+  Future<List<ActiveSession>> _loadActiveSessions() async {
+    final token = await _storage.readAccessToken();
+    if (token == null) return const [];
+    try {
+      return _api.getCurrentSessions(token);
+    } catch (_) {
+      return const [];
+    }
+  }
+
   Future<void> _refresh() async {
     setState(() {
+      _futureActiveSessions = _loadActiveSessions();
       _futureChargers = _loadChargers();
     });
     await _futureChargers.catchError((_) => <DriverCharger>[]);
+  }
+
+  void _openActiveSession(
+    BuildContext routeContext,
+    ActiveSession session, {
+    bool replace = false,
+  }) {
+    final route = MaterialPageRoute(
+      builder: (activeContext) => ActiveSessionScreen(
+        initialSession: session,
+        onDoneWithSessions: (remaining) =>
+            _routeAfterSession(activeContext, remaining),
+      ),
+    );
+    if (replace) {
+      Navigator.of(routeContext).pushReplacement(route);
+    } else {
+      Navigator.of(routeContext).push(route);
+    }
+  }
+
+  void _routeAfterSession(
+    BuildContext routeContext,
+    List<ActiveSession> sessions,
+  ) {
+    if (!mounted) return;
+    setState(() {
+      _futureActiveSessions = Future.value(sessions);
+    });
+    if (sessions.length == 1) {
+      _openActiveSession(routeContext, sessions.single, replace: true);
+      return;
+    }
+    if (sessions.length > 1) {
+      Navigator.of(routeContext).pushReplacement(
+        MaterialPageRoute(
+          builder: (pickerContext) => SessionPickerScreen(
+            sessions: sessions,
+            onSelected: (session) =>
+                _openActiveSession(pickerContext, session, replace: true),
+          ),
+        ),
+      );
+      return;
+    }
+    Navigator.of(routeContext).pop();
   }
 
   // Status filter dropped 2026-05-10 — the filter-chip row was removed
@@ -221,6 +282,37 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               const SliverToBoxAdapter(child: HeroImageBanner()),
+              SliverToBoxAdapter(
+                child: FutureBuilder<List<ActiveSession>>(
+                  future: _futureActiveSessions,
+                  builder: (context, snapshot) {
+                    final sessions = snapshot.data ?? const <ActiveSession>[];
+                    if (sessions.isEmpty) return const SizedBox.shrink();
+                    if (sessions.length > 1) {
+                      return _MultipleSessionsBanner(
+                        count: sessions.length,
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (pickerContext) => SessionPickerScreen(
+                              sessions: sessions,
+                              onSelected: (session) => _openActiveSession(
+                                pickerContext,
+                                session,
+                                replace: true,
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }
+                    final session = sessions.single;
+                    return _ActiveSessionBanner(
+                      session: session,
+                      onTap: () => _openActiveSession(context, session),
+                    );
+                  },
+                ),
+              ),
               SliverToBoxAdapter(child: _TapBanner(state: _tapState)),
               FutureBuilder<List<DriverCharger>>(
                 future: _futureChargers,
@@ -276,15 +368,13 @@ class _HomeScreenState extends State<HomeScreen> {
                   final inLocation = _selectedLocation == null
                       ? all
                       : all
-                          .where((c) => c.locationName == _selectedLocation)
-                          .toList();
+                            .where((c) => c.locationName == _selectedLocation)
+                            .toList();
                   // No status filter — driver sees the whole list under
                   // the active location context.
                   final byLocation = <String, List<DriverCharger>>{};
                   for (final c in inLocation) {
-                    byLocation
-                        .putIfAbsent(c.locationName, () => [])
-                        .add(c);
+                    byLocation.putIfAbsent(c.locationName, () => []).add(c);
                   }
 
                   return SliverPadding(
@@ -294,8 +384,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         if (_nearbySorted.isNotEmpty)
                           NearbyCard(
                             nearby: _nearbySorted.first,
-                            othersNearby:
-                                _nearbySorted.skip(1).toList(growable: false),
+                            othersNearby: _nearbySorted
+                                .skip(1)
+                                .toList(growable: false),
                             onPickOther: _showNearbyPicker,
                           ),
                         if (showPicker)
@@ -319,7 +410,10 @@ class _HomeScreenState extends State<HomeScreen> {
                                     ? null
                                     : _nearbySorted.first;
                                 if (near != null) {
-                                  ChargerDetailSheet.show(context, near.charger);
+                                  ChargerDetailSheet.show(
+                                    context,
+                                    near.charger,
+                                  );
                                 }
                               },
                             ),
@@ -333,11 +427,13 @@ class _HomeScreenState extends State<HomeScreen> {
                               location: entry.key,
                               count: entry.value.length,
                             ),
-                            ...entry.value.map((c) => _ChargerRow(
-                                  charger: c,
-                                  onTap: () =>
-                                      ChargerDetailSheet.show(context, c),
-                                )),
+                            ...entry.value.map(
+                              (c) => _ChargerRow(
+                                charger: c,
+                                onTap: () =>
+                                    ChargerDetailSheet.show(context, c),
+                              ),
+                            ),
                             const SizedBox(height: 8),
                           ],
                       ]),
@@ -407,7 +503,6 @@ class _Header extends StatelessWidget {
   }
 }
 
-
 // Compact charger row — pattern lifted from ChargePoint / Octopus
 // Electroverse / Tesla detail list. ~64px tall, status dot + name +
 // meta + chevron. Tap → ChargerDetailSheet (modal bottom sheet) with
@@ -430,7 +525,8 @@ class _ChargerRow extends StatelessWidget {
       ConnectorStatus.unavailable => BrandPalette.danger,
       _ => BrandPalette.muted,
     };
-    final dimmed = c.status == ConnectorStatus.offline ||
+    final dimmed =
+        c.status == ConnectorStatus.offline ||
         c.status == ConnectorStatus.unavailable ||
         c.status == ConnectorStatus.faulted;
     final isAvailable = c.status == ConnectorStatus.available;
@@ -538,7 +634,8 @@ class _ChargerRow extends StatelessWidget {
                     child: Icon(
                       Icons.chevron_right_rounded,
                       color: BrandPalette.muted.withValues(
-                          alpha: dimmed ? 0.5 : 1.0),
+                        alpha: dimmed ? 0.5 : 1.0,
+                      ),
                       size: 20,
                     ),
                   ),
@@ -606,10 +703,9 @@ class _NearbyPickerSheet extends StatelessWidget {
             style: TextStyle(color: BrandPalette.muted, fontSize: 12),
           ),
           const SizedBox(height: 14),
-          ...nearby.map((n) => _NearbyPickRow(
-                nearby: n,
-                onTap: () => onPick(n),
-              )),
+          ...nearby.map(
+            (n) => _NearbyPickRow(nearby: n, onTap: () => onPick(n)),
+          ),
         ],
       ),
     );
@@ -640,8 +736,11 @@ class _NearbyPickRow extends StatelessWidget {
           ),
           child: Row(
             children: [
-              const Icon(Icons.bluetooth_rounded,
-                  color: BrandPalette.cyan, size: 18),
+              const Icon(
+                Icons.bluetooth_rounded,
+                color: BrandPalette.cyan,
+                size: 18,
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -657,7 +756,9 @@ class _NearbyPickRow extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      cm < 100 ? '$cm cm · ${nearby.rssi} dBm' : '~${nearby.approxMetres.toStringAsFixed(1)} m · ${nearby.rssi} dBm',
+                      cm < 100
+                          ? '$cm cm · ${nearby.rssi} dBm'
+                          : '~${nearby.approxMetres.toStringAsFixed(1)} m · ${nearby.rssi} dBm',
                       style: const TextStyle(
                         color: BrandPalette.muted,
                         fontSize: 11,
@@ -667,8 +768,11 @@ class _NearbyPickRow extends StatelessWidget {
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right_rounded,
-                  color: BrandPalette.muted, size: 20),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: BrandPalette.muted,
+                size: 20,
+              ),
             ],
           ),
         ),
@@ -689,8 +793,7 @@ class _LocationHeader extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(2, 4, 2, 6),
       child: Row(
         children: [
-          const Icon(Icons.place_rounded,
-              size: 16, color: BrandPalette.muted),
+          const Icon(Icons.place_rounded, size: 16, color: BrandPalette.muted),
           const SizedBox(width: 6),
           Expanded(
             child: Text(
@@ -754,7 +857,6 @@ class _NoMatches extends StatelessWidget {
   }
 }
 
-
 class _EmptyState extends StatelessWidget {
   const _EmptyState();
 
@@ -765,8 +867,11 @@ class _EmptyState extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.ev_station_outlined,
-              size: 64, color: BrandPalette.muted.withValues(alpha: 0.5)),
+          Icon(
+            Icons.ev_station_outlined,
+            size: 64,
+            color: BrandPalette.muted.withValues(alpha: 0.5),
+          ),
           const SizedBox(height: 16),
           const Text(
             'No chargers yet',
@@ -803,8 +908,7 @@ class _ErrorState extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.error_outline,
-              size: 64, color: BrandPalette.danger),
+          const Icon(Icons.error_outline, size: 64, color: BrandPalette.danger),
           const SizedBox(height: 16),
           const Text(
             'Something went wrong',
@@ -854,23 +958,23 @@ class _TapBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final (icon, tint, title, body) = switch (state.phase) {
       TapIntentPhase.armed => (
-          Icons.contactless_rounded,
-          BrandPalette.mint,
-          'Ready — tap the charger',
-          state.chargerName ?? state.serial ?? '',
-        ),
+        Icons.contactless_rounded,
+        BrandPalette.mint,
+        'Ready — tap the charger',
+        state.chargerName ?? state.serial ?? '',
+      ),
       TapIntentPhase.arming => (
-          Icons.wifi_tethering_rounded,
-          BrandPalette.muted,
-          'Charger detected…',
-          state.serial ?? '',
-        ),
+        Icons.wifi_tethering_rounded,
+        BrandPalette.muted,
+        'Charger detected…',
+        state.serial ?? '',
+      ),
       TapIntentPhase.error when state.error == TapIntentError.tooFar => (
-          Icons.social_distance_rounded,
-          BrandPalette.amber,
-          'Move closer to the charger',
-          state.serial ?? '',
-        ),
+        Icons.social_distance_rounded,
+        BrandPalette.amber,
+        'Move closer to the charger',
+        state.serial ?? '',
+      ),
       _ => (null, null, null, null),
     };
     if (icon == null) return const SizedBox.shrink();
@@ -892,22 +996,135 @@ class _TapBanner extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title!,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                      )),
+                  Text(
+                    title!,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                   if ((body ?? '').isNotEmpty)
-                    Text(body!,
-                        style: const TextStyle(
-                          color: BrandPalette.muted,
-                          fontSize: 12,
-                        )),
+                    Text(
+                      body!,
+                      style: const TextStyle(
+                        color: BrandPalette.muted,
+                        fontSize: 12,
+                      ),
+                    ),
                 ],
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MultipleSessionsBanner extends StatelessWidget {
+  const _MultipleSessionsBanner({required this.count, required this.onTap});
+
+  final int count;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+      child: Material(
+        color: BrandPalette.cyan.withValues(alpha: 0.10),
+        shape: RoundedRectangleBorder(
+          side: BorderSide(color: BrandPalette.cyan.withValues(alpha: 0.35)),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: ListTile(
+          leading: const Icon(
+            Icons.ev_station_rounded,
+            color: BrandPalette.cyan,
+          ),
+          title: Text(
+            '$count active charges',
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          subtitle: const Text(
+            'Choose which charge to view',
+            style: TextStyle(color: BrandPalette.muted),
+          ),
+          trailing: const Icon(
+            Icons.chevron_right_rounded,
+            color: BrandPalette.cyan,
+          ),
+          onTap: onTap,
+        ),
+      ),
+    );
+  }
+}
+
+class _ActiveSessionBanner extends StatelessWidget {
+  const _ActiveSessionBanner({required this.session, required this.onTap});
+
+  final ActiveSession session;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+      child: Material(
+        color: BrandPalette.surface,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: BrandPalette.mint),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.bolt_rounded,
+                  color: BrandPalette.mint,
+                  size: 28,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Charging now',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        session.chargerName,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: BrandPalette.muted,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  color: BrandPalette.muted,
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
