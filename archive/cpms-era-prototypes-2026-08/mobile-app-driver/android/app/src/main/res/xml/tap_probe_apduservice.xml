@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Bench probe AID set (2026-08-02). Deliberately broad: we don't know what, if
+  anything, a charger's RFID reader selects, so we register the AIDs a
+  UID-or-NDEF reader is most likely to try.
+
+    D2760000850101  NFC Forum Type 4 Tag NDEF application — what a reader
+                    looking for an NDEF tag selects. Most likely hit.
+    325041592E…     PPSE (2PAY.SYS.DDF01) — contactless payment discovery.
+    315041592E…     PSE  (1PAY.SYS.DDF01) — contact-era discovery, some
+                    readers still probe it.
+    A000000003*     Visa prefix
+    A000000004*     Mastercard prefix
+
+  category="other" (not payment) so this never competes with a wallet app for
+  the payment default. requireDeviceUnlock=false so a tap registers even on a
+  locked screen — that's part of what we're measuring.
+-->
+<host-apdu-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/tap_probe_description"
+    android:requireDeviceUnlock="false"
+    android:requireDeviceScreenOn="false">
+    <aid-group
+        android:description="@string/tap_probe_description"
+        android:category="other">
+        <aid-filter android:name="D2760000850101" />
+        <aid-filter android:name="325041592E5359532E4444463031" />
+        <aid-filter android:name="315041592E5359532E4444463031" />
+        <aid-prefix-filter android:name="A000000003*" />
+        <aid-prefix-filter android:name="A000000004*" />
+    </aid-group>
+</host-apdu-service>

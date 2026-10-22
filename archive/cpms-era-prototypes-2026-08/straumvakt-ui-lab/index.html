@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Straumvakt UI Lab</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <aside class="sidebar">
+      <button class="brand" type="button" data-view="overview" aria-label="Open dashboard">
+        <div class="brand-mark">S</div>
+        <div>
+          <div class="brand-name">Straumvakt</div>
+          <div class="brand-kicker">UI visualization lab</div>
+        </div>
+      </button>
+
+      <section class="tree-panel" aria-label="Installation tree">
+        <div class="tree-title">Installation</div>
+        <button class="tree-root active" data-tree-toggle="sites-tree" data-tree-scope="sites" aria-expanded="true">
+          <span class="tree-caret">v</span>
+          <span>Sites</span>
+          <small>2 sites</small>
+        </button>
+        <div class="tree-children" id="sites-tree">
+          <button class="tree-branch" data-tree-toggle="site-reykjavik" data-tree-scope="site" aria-expanded="true">
+            <span class="tree-caret">v</span>
+            <span>Reykjavik West</span>
+            <small>Site</small>
+          </button>
+          <div class="tree-children tree-level-2" id="site-reykjavik">
+            <button class="tree-branch" data-tree-toggle="install-1" data-tree-scope="installation" aria-expanded="true">
+              <span class="tree-caret">v</span>
+              <span>Installation 1</span>
+              <small>8 chargers</small>
+            </button>
+            <div class="tree-children tree-level-3" id="install-1">
+              <button data-view="chargers" data-tree-scope="charger">N1 Hringbraut C02</button>
+              <button data-view="sessions" data-tree-scope="charger">Austurvollur P2 C05</button>
+              <button data-view="issues" data-tree-scope="charger">Connector alerts</button>
+            </div>
+          </div>
+          <button class="tree-branch" data-tree-toggle="site-depot" data-tree-scope="site" aria-expanded="true">
+            <span class="tree-caret">v</span>
+            <span>Fleet Depot North</span>
+            <small>Site</small>
+          </button>
+          <div class="tree-children tree-level-2" id="site-depot">
+            <button class="tree-branch" data-tree-toggle="install-2" data-tree-scope="installation" aria-expanded="true">
+              <span class="tree-caret">v</span>
+              <span>Installation 2</span>
+              <small>20 chargers</small>
+            </button>
+            <div class="tree-children tree-level-3" id="install-2">
+              <button data-view="chargers" data-tree-scope="charger">Depot charger 14</button>
+              <button data-view="sessions" data-tree-scope="charger">Depot sessions</button>
+              <button data-view="issues" data-tree-scope="charger">Depot issue queue</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <nav class="nav" aria-label="Main navigation">
+        <button class="nav-item" data-view="chargers">
+          <span>Chargers</span>
+          <small>Installations</small>
+        </button>
+        <button class="nav-item" data-view="sessions">
+          <span>Sessions</span>
+          <small>Live activity</small>
+        </button>
+        <button class="nav-item" data-view="issues">
+          <span>Issues</span>
+          <small>Rule engine</small>
+        </button>
+        <button class="nav-item" data-view="billing">
+          <span>Billing</span>
+          <small>Review only</small>
+        </button>
+        <button class="nav-item" data-view="architecture">
+          <span>Architecture</span>
+          <small>Docs map</small>
+        </button>
+        <button class="nav-item" data-view="roadmap">
+          <span>Roadmap</span>
+          <small>Sprint plan</small>
+        </button>
+      </nav>
+
+      <div class="sidebar-note">
+        <strong>Fake data</strong>
+        <span>No Straumvakt database or project files are touched.</span>
+      </div>
+    </aside>
+
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Operator console concept</p>
+          <h1 id="view-title">Overview</h1>
+        </div>
+        <div class="role-switcher" aria-label="View mode">
+          <button class="role-emblem active" data-role="Admin view">
+            <span class="emblem-icon">A</span>
+            <span>Admin view</span>
+          </button>
+          <button class="role-emblem" data-role="CPO view">
+            <span class="emblem-icon">C</span>
+            <span>CPO view</span>
+          </button>
+          <button class="role-emblem" data-role="User view">
+            <span class="emblem-icon">U</span>
+            <span>User view</span>
+          </button>
+          <button class="role-emblem" data-role="Support view">
+            <span class="emblem-icon">S</span>
+            <span>Support view</span>
+          </button>
+          <button class="role-emblem" data-role="Organization view">
+            <span class="emblem-icon">O</span>
+            <span>Organization</span>
+          </button>
+        </div>
+        <div class="environment">
+          <span class="pulse"></span>
+          <span id="role-label">Admin view</span>
+        </div>
+      </header>
+
+      <div class="context-toolbar" aria-label="Current tree actions">
+        <div class="tree-toolbar">
+          <button type="button" id="tree-primary-action">Add site</button>
+          <button type="button" id="tree-secondary-action">Import</button>
+          <button type="button" id="tree-tertiary-action">Filter</button>
+        </div>
+        <div>
+          <span class="context-label">Tree actions</span>
+          <strong id="tree-context-label">Sites</strong>
+        </div>
+      </div>
+
+      <section id="app" class="content" aria-live="polite"></section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
