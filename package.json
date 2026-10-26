@@ -19,6 +19,7 @@
     "db:generate": "prisma generate && npm --prefix apps/api run prisma:generate",
     "db:studio": "prisma studio",
     "db:validate": "prisma validate",
+    "db:seed": "tsx scripts/seed.mts",
     "sync:api-schema": "node scripts/sync-api-prisma-schema.mjs",
     "check:api-schema": "node scripts/sync-api-prisma-schema.mjs --check",
     "sync:detour-assets": "node scripts/sync-detour-assets.mjs",
