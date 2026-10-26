@@ -282,6 +282,22 @@ for (const m of models) {
     imports.add("primaryKey");
     extras.push(`    primaryKey({ columns: [${idCols.map((c) => `t.${c}`).join(", ")}] }),`);
   }
+  // Field-level `@unique`. Parsed into f.isUnique at the top of this file
+  // since the first version and never emitted — one unused variable, which
+  // silently dropped all 13 single-column unique constraints from the Drizzle
+  // schema while every composite `@@unique` below came through intact.
+  // users.email, id_tokens.value and user_tokens.token_hash were among them.
+  //
+  // Nothing downstream caught it: check-schema-consistency.mjs compares tables
+  // and columns only, and drizzle-baseline.mjs marked 0000 applied without
+  // running it, so no database was ever built from these declarations.
+  //
+  // Fixed 2026-10-26. The guard is packages/shared/src/db/tests/unique-constraints.test.ts.
+  for (const f of m.fields) {
+    if (!f.isUnique || f.isId || f.isRelation) continue;
+    imports.add("uniqueIndex");
+    extras.push(`    uniqueIndex().on(t.${f.name}),`);
+  }
   for (const u of m.uniques) {
     imports.add("uniqueIndex");
     extras.push(`    uniqueIndex().on(${u.map((c) => `t.${c}`).join(", ")}),`);
