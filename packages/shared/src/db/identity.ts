@@ -97,6 +97,11 @@ export const users = identitySchema.table(
     consentMarketingAt: timestamp("consent_marketing_at", { withTimezone: true, precision: 6, mode: "date" }),
     metadata: jsonb("metadata").notNull().default({}),
   },
+  (t) => [
+    // @unique in Prisma — lost in the Drizzle port, restored 2026-10-26.
+    uniqueIndex().on(t.email),
+    uniqueIndex().on(t.kennitala),
+  ],
 );
 
 /** Prisma model `UserVendorRef` — identity.user_vendor_refs */
@@ -143,6 +148,8 @@ export const idTokens = identitySchema.table(
     updatedAt: timestamp("updated_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().$defaultFn(() => new Date()).$onUpdateFn(() => new Date()),
   },
   (t) => [
+    // @unique in Prisma — lost in the Drizzle port, restored 2026-10-26.
+    uniqueIndex().on(t.value),
     index().on(t.userId),
     index().on(t.status, t.value),
     index().on(t.scopeInstallationId),
@@ -203,6 +210,8 @@ export const vehicles = peopleSchema.table(
     updatedAt: timestamp("updated_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().$defaultFn(() => new Date()).$onUpdateFn(() => new Date()),
   },
   (t) => [
+    // @unique in Prisma — lost in the Drizzle port, restored 2026-10-26.
+    uniqueIndex().on(t.vin),
     index().on(t.userId),
   ],
 );
@@ -238,6 +247,8 @@ export const userTokens = identitySchema.table(
     maxRedemptions: integer("max_redemptions"),
   },
   (t) => [
+    // @unique in Prisma — lost in the Drizzle port, restored 2026-10-26.
+    uniqueIndex().on(t.tokenHash),
     index().on(t.userId, t.kind, t.expiresAt),
   ],
 );
@@ -287,6 +298,10 @@ export const organizations = tenancySchema.table(
     contacts: jsonb("contacts").notNull().default([]),
     mainContactUserId: uuid("main_contact_user_id"),
   },
+  (t) => [
+    // @unique in Prisma — lost in the Drizzle port, restored 2026-10-26.
+    uniqueIndex().on(t.kennitala),
+  ],
 );
 
 /** Prisma model `HostApplication` — tenancy.host_applications */

@@ -47,6 +47,10 @@ export const vendors = hardwareSchema.table(
     createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().$defaultFn(() => new Date()).$onUpdateFn(() => new Date()),
   },
+  (t) => [
+    // @unique in Prisma — lost in the Drizzle port, restored 2026-10-26.
+    uniqueIndex().on(t.slug),
+  ],
 );
 
 /** Prisma model `HardwareModel` — hardware.models */

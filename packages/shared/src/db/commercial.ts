@@ -101,6 +101,10 @@ export const billingCostFactors = billingSchema.table(
     createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().$defaultFn(() => new Date()).$onUpdateFn(() => new Date()),
   },
+  (t) => [
+    // @unique in Prisma — lost in the Drizzle port, restored 2026-10-26.
+    uniqueIndex().on(t.code),
+  ],
 );
 
 /** Prisma model `TariffDefinition` — billing.tariff_definitions */
@@ -265,6 +269,10 @@ export const agreementsCostFactors = agreementsSchema.table(
     createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().$defaultFn(() => new Date()).$onUpdateFn(() => new Date()),
   },
+  (t) => [
+    // @unique in Prisma — lost in the Drizzle port, restored 2026-10-26.
+    uniqueIndex().on(t.code),
+  ],
 );
 
 /** Prisma model `RateReference` — agreements.rate_references */

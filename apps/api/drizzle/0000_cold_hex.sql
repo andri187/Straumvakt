@@ -55,16 +55,27 @@ CREATE TYPE "agreements"."BillingLineKind" AS ENUM('passthrough', 'markup');--> 
 CREATE TYPE "billing"."BillingTxType" AS ENUM('payment', 'refund', 'penalty', 'credit', 'contract_charge', 'external_payment');--> statement-breakpoint
 CREATE TYPE "billing"."ContractScopeType" AS ENUM('org', 'property', 'site', 'installation', 'charger');--> statement-breakpoint
 CREATE TYPE "billing"."ContractStatus" AS ENUM('pending_configuration', 'active', 'superseded', 'archived');--> statement-breakpoint
+CREATE TYPE "billing"."CorrectionReason" AS ENUM('cdr_mismatch_resolved', 'meter_fault', 'tariff_misapplied', 'duplicate_session', 'customer_dispute', 'operator_goodwill');--> statement-breakpoint
 CREATE TYPE "billing"."CostFactorAnchor" AS ENUM('org', 'property', 'site', 'installation', 'circuit', 'charger', 'driver_contract');--> statement-breakpoint
 CREATE TYPE "billing"."CostFactorStatus" AS ENUM('draft', 'active', 'archived');--> statement-breakpoint
+CREATE TYPE "billing"."DeliveryChannel" AS ENUM('email', 'download', 'webhook');--> statement-breakpoint
+CREATE TYPE "billing"."DeliveryState" AS ENUM('pending', 'sending', 'sent', 'retrying', 'failed', 'abandoned');--> statement-breakpoint
 CREATE TYPE "agreements"."DriverAccessRequestStatus" AS ENUM('pending', 'approved', 'denied', 'withdrawn');--> statement-breakpoint
 CREATE TYPE "agreements"."DriverAccessRequestTrigger" AS ENUM('self_request', 'email_domain_match');--> statement-breakpoint
 CREATE TYPE "billing"."DriverContractOwnerType" AS ENUM('workplace', 'family_group', 'self');--> statement-breakpoint
 CREATE TYPE "billing"."InvoiceStatus" AS ENUM('draft', 'issued', 'paid', 'void');--> statement-breakpoint
+CREATE TYPE "billing"."PeriodState" AS ENUM('open', 'closing', 'closed');--> statement-breakpoint
 CREATE TYPE "billing"."PlanCategory" AS ENUM('single_tariff', 'membership', 'roaming', 'guest_otp');--> statement-breakpoint
-CREATE TYPE "agreements"."RateBasis" AS ENUM('per_kwh', 'per_minute', 'per_day', 'per_session');--> statement-breakpoint
+CREATE TYPE "billing"."ProvenanceState" AS ENUM('estimated', 'ocpp_derived', 'cdr_pending', 'cdr_confirmed', 'cdr_mismatch', 'corrected', 'held_manual_review');--> statement-breakpoint
+CREATE TYPE "agreements"."RateBasis" AS ENUM('per_kwh', 'per_minute', 'per_day', 'per_session', 'per_connector');--> statement-breakpoint
+CREATE TYPE "billing"."RateComponentKind" AS ENUM('dso', 'retailer', 'cpo_addon');--> statement-breakpoint
+CREATE TYPE "billing"."ReviewReason" AS ENUM('no_rate_at_session_start', 'meter_unresolvable', 'cdr_mismatch_beyond_tolerance', 'negative_or_impossible_energy', 'missing_session_times', 'unsupported_compute_rule', 'manual_hold');--> statement-breakpoint
 CREATE TYPE "agreements"."RuleAudienceType" AS ENUM('driver_group', 'user');--> statement-breakpoint
 CREATE TYPE "agreements"."RuleScopeType" AS ENUM('site', 'installation', 'circuit', 'charger');--> statement-breakpoint
+CREATE TYPE "billing"."SettlementProvenance" AS ENUM('ocpp', 'cdr', 'manual', 'unknown');--> statement-breakpoint
+CREATE TYPE "billing"."SettlementStatus" AS ENUM('settled', 'billing_review_required');--> statement-breakpoint
+CREATE TYPE "billing"."StatementLineKind" AS ENUM('session_energy', 'plug_time', 'subscription_connector', 'subscription_driver', 'cap_relief', 'correction');--> statement-breakpoint
+CREATE TYPE "billing"."StatementRecipientKind" AS ENUM('driver', 'organisation');--> statement-breakpoint
 CREATE TYPE "billing"."TerminationBehavior" AS ENUM('terminate', 'evergreen', 'rollover');--> statement-breakpoint
 CREATE TYPE "identity"."DriverInviteSecurity" AS ENUM('none', 'password_key', 'allow_term');--> statement-breakpoint
 CREATE TYPE "tenancy"."HostApplicationStatus" AS ENUM('new', 'in_review', 'offered', 'won', 'lost');--> statement-breakpoint
@@ -186,10 +197,46 @@ CREATE TABLE "assets"."control_routing_policies" (
 	"updated_at" timestamp (6) with time zone NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE "assets"."device_identities" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"device_id" uuid NOT NULL,
+	"identity_string" text NOT NULL,
+	"period" "tstzrange" NOT NULL,
+	"assigned_by_user_id" uuid,
+	"note" text,
+	"created_at" timestamp (6) with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "assets"."devices" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"vendor" text,
+	"model" text,
+	"serial_number" text,
+	"charge_box_serial_number" text,
+	"meter_type" text,
+	"meter_serial_number" text,
+	"firmware_version" text,
+	"firmware_observed_at" timestamp (6) with time zone,
+	"hardware_version" text,
+	"iccid" text,
+	"imsi" text,
+	"lifetime_kwh" numeric(14, 3),
+	"lifetime_kwh_observed_at" timestamp (6) with time zone,
+	"lifetime_session_count" integer,
+	"lifetime_session_count_observed_at" timestamp (6) with time zone,
+	"warranty_expires" date,
+	"manufactured_at" date,
+	"retired_at" timestamp (6) with time zone,
+	"retired_reason" text,
+	"created_at" timestamp (6) with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp (6) with time zone NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE "assets"."evses" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"org_id" uuid NOT NULL,
 	"charging_station_id" uuid NOT NULL,
+	"device_id" uuid,
 	"evse_index" integer NOT NULL,
 	"max_power_kw" numeric(8, 2),
 	"phase_count" integer,
@@ -225,6 +272,22 @@ CREATE TABLE "assets"."modems" (
 	"carrier" text,
 	"iccid" text,
 	"last_seen_at" timestamp (6) with time zone,
+	"created_at" timestamp (6) with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp (6) with time zone NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "assets"."placements" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"public_id" uuid NOT NULL,
+	"device_id" uuid NOT NULL,
+	"org_id" uuid NOT NULL,
+	"installation_id" uuid NOT NULL,
+	"site_id" uuid,
+	"circuit_id" uuid,
+	"period" "tstzrange" NOT NULL,
+	"attached_by_user_id" uuid,
+	"detached_by_user_id" uuid,
+	"detach_reason" text,
 	"created_at" timestamp (6) with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp (6) with time zone NOT NULL
 );
@@ -276,6 +339,17 @@ CREATE TABLE "properties"."sites" (
 	"opening_hours" jsonb DEFAULT '{}'::jsonb NOT NULL,
 	"access_note" text,
 	"photo_url" text
+);
+--> statement-breakpoint
+CREATE TABLE "assets"."vendor_config_observations" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"device_id" uuid NOT NULL,
+	"observed_at" timestamp (6) with time zone NOT NULL,
+	"charger_active" boolean,
+	"authentication_type" integer,
+	"is_authorization_required" boolean,
+	"ocpp_default_id_tag" text,
+	"created_at" timestamp (6) with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "hardware"."models" (
@@ -426,7 +500,10 @@ CREATE TABLE "charging"."sessions" (
 	"amqp_energy_kwh" numeric(10, 4),
 	"ocpp_stopped_at" timestamp (6) with time zone,
 	"cdr_stopped_at" timestamp (6) with time zone,
-	"ocmf_blob_ref" text
+	"ocmf_blob_ref" text,
+	"placement_id" uuid,
+	"tariff_snapshot_json" jsonb,
+	"tariff_snapshot_at" timestamp (6) with time zone
 );
 --> statement-breakpoint
 CREATE TABLE "charging"."tap_intents" (
@@ -451,6 +528,7 @@ CREATE TABLE "agreements"."agreement_clauses" (
 	"default_bearer_ref" uuid,
 	"default_rate_ref_code" text,
 	"allocation_json" jsonb NOT NULL,
+	"period" "tstzrange" DEFAULT tstzrange(now(), NULL, '[)') NOT NULL,
 	"created_at" timestamp (6) with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp (6) with time zone NOT NULL
 );
@@ -576,6 +654,54 @@ CREATE TABLE "billing"."cost_factors" (
 	"updated_at" timestamp (6) with time zone NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE "billing"."billing_periods" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"org_id" uuid NOT NULL,
+	"period_year" integer NOT NULL,
+	"period_month" integer NOT NULL,
+	"period_start" timestamp (6) with time zone NOT NULL,
+	"period_end" timestamp (6) with time zone NOT NULL,
+	"state" "billing"."PeriodState" DEFAULT 'open' NOT NULL,
+	"currency" text DEFAULT 'ISK' NOT NULL,
+	"closed_at" timestamp (6) with time zone,
+	"closed_by_user_id" uuid,
+	"blockers_at_close" jsonb,
+	"reopened_at" timestamp (6) with time zone,
+	"reopened_by_user_id" uuid,
+	"reopen_reason" text,
+	"created_at" timestamp (6) with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp (6) with time zone NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "reports"."connector_activity_month" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"org_id" uuid NOT NULL,
+	"period_year" integer NOT NULL,
+	"period_month" integer NOT NULL,
+	"connector_id" uuid NOT NULL,
+	"charging_station_id" uuid,
+	"source" text NOT NULL,
+	"session_count" integer DEFAULT 0 NOT NULL,
+	"active_days" integer,
+	"first_seen_at" timestamp (6) with time zone NOT NULL,
+	"last_seen_at" timestamp (6) with time zone NOT NULL,
+	"cap_applied_isk" bigint,
+	"created_at" timestamp (6) with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "billing"."connector_assertions" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"org_id" uuid NOT NULL,
+	"period_year" integer NOT NULL,
+	"period_month" integer NOT NULL,
+	"connector_id" uuid NOT NULL,
+	"asserted_by_user_id" uuid NOT NULL,
+	"reason" text NOT NULL,
+	"evidence_note" text,
+	"asserted_at" timestamp (6) with time zone NOT NULL,
+	"created_at" timestamp (6) with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE "billing"."contracts" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"org_id" uuid NOT NULL,
@@ -604,6 +730,35 @@ CREATE TABLE "billing"."cost_centers" (
 	"updated_at" timestamp (6) with time zone NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE "billing"."document_number_series" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"org_id" uuid NOT NULL,
+	"series" text NOT NULL,
+	"period_year" integer NOT NULL,
+	"next_ordinal" integer DEFAULT 1 NOT NULL,
+	"pad_width" integer DEFAULT 6 NOT NULL,
+	"created_at" timestamp (6) with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp (6) with time zone NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "billing"."document_numbers" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"org_id" uuid NOT NULL,
+	"series" text NOT NULL,
+	"period_year" integer NOT NULL,
+	"ordinal" integer NOT NULL,
+	"document_number" text NOT NULL,
+	"purpose" text NOT NULL,
+	"status" text DEFAULT 'issued' NOT NULL,
+	"statement_id" uuid,
+	"idempotency_key" text NOT NULL,
+	"issued_by_user_id" uuid,
+	"issued_at" timestamp (6) with time zone NOT NULL,
+	"voided_at" timestamp (6) with time zone,
+	"void_reason" text,
+	"created_at" timestamp (6) with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE "agreements"."driver_access_requests" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"user_id" uuid NOT NULL,
@@ -617,6 +772,19 @@ CREATE TABLE "agreements"."driver_access_requests" (
 	"resulting_membership_id" uuid,
 	"created_at" timestamp (6) with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp (6) with time zone NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "reports"."driver_activity_month" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"org_id" uuid NOT NULL,
+	"period_year" integer NOT NULL,
+	"period_month" integer NOT NULL,
+	"driver_user_id" uuid NOT NULL,
+	"source" text NOT NULL,
+	"session_count" integer DEFAULT 0 NOT NULL,
+	"first_seen_at" timestamp (6) with time zone NOT NULL,
+	"last_seen_at" timestamp (6) with time zone NOT NULL,
+	"created_at" timestamp (6) with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "billing"."driver_contracts" (
@@ -641,7 +809,8 @@ CREATE TABLE "agreements"."driver_group_memberships" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"driver_group_id" uuid NOT NULL,
 	"user_id" uuid NOT NULL,
-	"added_at" timestamp (6) with time zone DEFAULT now() NOT NULL
+	"added_at" timestamp (6) with time zone DEFAULT now() NOT NULL,
+	"period" "tstzrange" DEFAULT tstzrange(now(), NULL, '[)') NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "agreements"."driver_groups" (
@@ -652,6 +821,33 @@ CREATE TABLE "agreements"."driver_groups" (
 	"scope_filter_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
 	"created_at" timestamp (6) with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp (6) with time zone NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "billing"."mutation_receipts" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"org_id" uuid NOT NULL,
+	"scope" text NOT NULL,
+	"idempotency_key" text NOT NULL,
+	"request_hash" text NOT NULL,
+	"response_status" integer NOT NULL,
+	"response_body" jsonb,
+	"actor_user_id" uuid,
+	"expires_at" timestamp (6) with time zone NOT NULL,
+	"created_at" timestamp (6) with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "billing"."period_transitions" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"org_id" uuid NOT NULL,
+	"period_year" integer NOT NULL,
+	"period_month" integer NOT NULL,
+	"from_state" text NOT NULL,
+	"to_state" text NOT NULL,
+	"event" text NOT NULL,
+	"actor_user_id" uuid NOT NULL,
+	"reason" text,
+	"occurred_at" timestamp (6) with time zone NOT NULL,
+	"created_at" timestamp (6) with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "agreements"."rate_references" (
@@ -685,6 +881,134 @@ CREATE TABLE "reports"."session_ledger" (
 	"computed_at" timestamp (6) with time zone DEFAULT now() NOT NULL,
 	"verified_source" text,
 	"enrichment_status" text
+);
+--> statement-breakpoint
+CREATE TABLE "billing"."session_settlements" (
+	"session_id" uuid PRIMARY KEY NOT NULL,
+	"org_id" uuid NOT NULL,
+	"period_id" uuid NOT NULL,
+	"connector_id" uuid,
+	"driver_user_id" uuid,
+	"started_at" timestamp (6) with time zone NOT NULL,
+	"stopped_at" timestamp (6) with time zone,
+	"energy_wh" integer,
+	"meter_start_wh" integer,
+	"meter_stop_wh" integer,
+	"cdr_energy_kwh" numeric(10, 3),
+	"plug_time_seconds" integer,
+	"plug_time_fee_minor" bigint NOT NULL,
+	"amount_ex_vat_minor" bigint NOT NULL,
+	"vat_rate_pct" numeric(4, 2) NOT NULL,
+	"vat_minor" bigint NOT NULL,
+	"total_inc_vat_minor" bigint NOT NULL,
+	"total_isk" bigint NOT NULL,
+	"currency" text DEFAULT 'ISK' NOT NULL,
+	"status" "billing"."SettlementStatus" NOT NULL,
+	"provenance" "billing"."SettlementProvenance" NOT NULL,
+	"provenance_state" "billing"."ProvenanceState" NOT NULL,
+	"rate_selection_policy" text DEFAULT 'start_rate' NOT NULL,
+	"priced_at" timestamp (6) with time zone NOT NULL,
+	"committed_at" timestamp (6) with time zone,
+	"explanation" text NOT NULL,
+	"created_at" timestamp (6) with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp (6) with time zone NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "billing"."settlement_components" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"session_id" uuid NOT NULL,
+	"org_id" uuid NOT NULL,
+	"kind" "billing"."RateComponentKind" NOT NULL,
+	"rate_version_id" uuid NOT NULL,
+	"unit_price_minor" bigint NOT NULL,
+	"effective_from" timestamp (6) with time zone NOT NULL,
+	"effective_until" timestamp (6) with time zone,
+	"amount_ex_vat_minor" bigint NOT NULL,
+	"created_at" timestamp (6) with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "billing"."settlement_holds" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"session_id" uuid NOT NULL,
+	"org_id" uuid NOT NULL,
+	"reason" "billing"."ReviewReason" NOT NULL,
+	"detail" text,
+	"raised_at" timestamp (6) with time zone DEFAULT now() NOT NULL,
+	"resolved_at" timestamp (6) with time zone,
+	"resolved_by_user_id" uuid,
+	"resolution" text,
+	"resolution_note" text,
+	"created_at" timestamp (6) with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "billing"."statement_delivery_attempts" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"statement_id" uuid NOT NULL,
+	"org_id" uuid NOT NULL,
+	"channel" "billing"."DeliveryChannel" DEFAULT 'email' NOT NULL,
+	"state" "billing"."DeliveryState" DEFAULT 'pending' NOT NULL,
+	"attempts" integer DEFAULT 0 NOT NULL,
+	"not_before" timestamp (6) with time zone,
+	"last_attempt_at" timestamp (6) with time zone,
+	"outcome_kind" text,
+	"provider_message_id" text,
+	"destination" text,
+	"last_error" text,
+	"result" jsonb,
+	"idempotency_key" text NOT NULL,
+	"requested_by_user_id" uuid,
+	"created_at" timestamp (6) with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp (6) with time zone NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "billing"."statement_exports" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"org_id" uuid NOT NULL,
+	"period_id" uuid NOT NULL,
+	"format" text DEFAULT 'csv' NOT NULL,
+	"row_count" integer NOT NULL,
+	"total_isk" bigint NOT NULL,
+	"content_hash" text NOT NULL,
+	"storage_key" text,
+	"idempotency_key" text NOT NULL,
+	"requested_by_user_id" uuid,
+	"created_at" timestamp (6) with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "billing"."statement_lines" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"statement_id" uuid NOT NULL,
+	"org_id" uuid NOT NULL,
+	"line_no" integer NOT NULL,
+	"kind" "billing"."StatementLineKind" NOT NULL,
+	"description" text NOT NULL,
+	"quantity" numeric(14, 4),
+	"unit" text,
+	"unit_price_minor" bigint,
+	"amount_minor" bigint NOT NULL,
+	"amount_isk" bigint NOT NULL,
+	"session_id" uuid,
+	"corrects_session_id" uuid,
+	"correction_reason" "billing"."CorrectionReason",
+	"reason" text,
+	"created_at" timestamp (6) with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "billing"."statements" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"org_id" uuid NOT NULL,
+	"period_id" uuid NOT NULL,
+	"recipient_kind" "billing"."StatementRecipientKind" NOT NULL,
+	"recipient_id" uuid NOT NULL,
+	"statement_key" text NOT NULL,
+	"total_isk" bigint NOT NULL,
+	"currency" text DEFAULT 'ISK' NOT NULL,
+	"excluded_session_ids" jsonb NOT NULL,
+	"generated_at" timestamp (6) with time zone NOT NULL,
+	"generated_by_user_id" uuid,
+	"superseded_by_statement_id" uuid,
+	"created_at" timestamp (6) with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp (6) with time zone NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "billing"."tariff_definitions" (
@@ -1079,6 +1403,7 @@ CREATE TABLE "hardware"."vendor_credentials" (
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX "capability_profiles_charging_station_id_control_plane_index" ON "assets"."capability_profiles" USING btree ("charging_station_id","control_plane");--> statement-breakpoint
+CREATE UNIQUE INDEX "charging_stations_serial_number_index" ON "assets"."charging_stations" USING btree ("serial_number");--> statement-breakpoint
 CREATE INDEX "charging_stations_model_id_index" ON "assets"."charging_stations" USING btree ("model_id");--> statement-breakpoint
 CREATE INDEX "charging_stations_installation_id_index" ON "assets"."charging_stations" USING btree ("installation_id");--> statement-breakpoint
 CREATE INDEX "charging_stations_circuit_id_index" ON "assets"."charging_stations" USING btree ("circuit_id");--> statement-breakpoint
@@ -1087,19 +1412,32 @@ CREATE INDEX "circuits_org_id_site_id_index" ON "properties"."circuits" USING bt
 CREATE INDEX "circuits_installation_id_index" ON "properties"."circuits" USING btree ("installation_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "connectors_evse_id_connector_index_index" ON "assets"."connectors" USING btree ("evse_id","connector_index");--> statement-breakpoint
 CREATE INDEX "connectors_org_id_index" ON "assets"."connectors" USING btree ("org_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "control_routing_policies_charging_station_id_index" ON "assets"."control_routing_policies" USING btree ("charging_station_id");--> statement-breakpoint
+CREATE INDEX "device_identities_device_id_index" ON "assets"."device_identities" USING btree ("device_id");--> statement-breakpoint
+CREATE INDEX "device_identities_identity_string_index" ON "assets"."device_identities" USING btree ("identity_string");--> statement-breakpoint
+CREATE UNIQUE INDEX "devices_vendor_serial_number_index" ON "assets"."devices" USING btree ("vendor","serial_number");--> statement-breakpoint
+CREATE INDEX "devices_serial_number_index" ON "assets"."devices" USING btree ("serial_number");--> statement-breakpoint
 CREATE UNIQUE INDEX "evses_charging_station_id_evse_index_index" ON "assets"."evses" USING btree ("charging_station_id","evse_index");--> statement-breakpoint
 CREATE INDEX "evses_org_id_status_index" ON "assets"."evses" USING btree ("org_id","status");--> statement-breakpoint
 CREATE INDEX "installations_org_id_site_id_index" ON "properties"."installations" USING btree ("org_id","site_id");--> statement-breakpoint
 CREATE INDEX "installations_vendor_id_index" ON "properties"."installations" USING btree ("vendor_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "modems_imei_index" ON "assets"."modems" USING btree ("imei");--> statement-breakpoint
+CREATE UNIQUE INDEX "placements_public_id_index" ON "assets"."placements" USING btree ("public_id");--> statement-breakpoint
+CREATE INDEX "placements_device_id_index" ON "assets"."placements" USING btree ("device_id");--> statement-breakpoint
+CREATE INDEX "placements_org_id_index" ON "assets"."placements" USING btree ("org_id");--> statement-breakpoint
+CREATE INDEX "placements_installation_id_index" ON "assets"."placements" USING btree ("installation_id");--> statement-breakpoint
 CREATE INDEX "properties_org_id_index" ON "properties"."properties" USING btree ("org_id");--> statement-breakpoint
 CREATE INDEX "site_assets_org_id_site_id_index" ON "properties"."site_assets" USING btree ("org_id","site_id");--> statement-breakpoint
 CREATE INDEX "site_assets_kind_status_index" ON "properties"."site_assets" USING btree ("kind","status");--> statement-breakpoint
 CREATE INDEX "sites_org_id_property_id_index" ON "properties"."sites" USING btree ("org_id","property_id");--> statement-breakpoint
+CREATE INDEX "vendor_config_observations_device_id_observed_at_index" ON "assets"."vendor_config_observations" USING btree ("device_id","observed_at");--> statement-breakpoint
 CREATE UNIQUE INDEX "models_vendor_id_slug_index" ON "hardware"."models" USING btree ("vendor_id","slug");--> statement-breakpoint
 CREATE INDEX "models_kind_status_index" ON "hardware"."models" USING btree ("kind","status");--> statement-breakpoint
+CREATE UNIQUE INDEX "vendors_slug_index" ON "hardware"."vendors" USING btree ("slug");--> statement-breakpoint
 CREATE UNIQUE INDEX "imported_cdr_refs_source_kind_source_cdr_id_index" ON "charging"."imported_cdr_refs" USING btree ("source_kind","source_cdr_id");--> statement-breakpoint
 CREATE INDEX "imported_cdr_refs_session_id_index" ON "charging"."imported_cdr_refs" USING btree ("session_id");--> statement-breakpoint
 CREATE INDEX "live_session_samples_charger_id_observed_at_index" ON "charging"."live_session_samples" USING btree ("charger_id","observed_at");--> statement-breakpoint
+CREATE UNIQUE INDEX "live_sessions_ocpp_identity_id_index" ON "charging"."live_sessions" USING btree ("ocpp_identity_id");--> statement-breakpoint
 CREATE INDEX "live_sessions_org_id_index" ON "charging"."live_sessions" USING btree ("org_id");--> statement-breakpoint
 CREATE INDEX "live_sessions_last_observed_at_index" ON "charging"."live_sessions" USING btree ("last_observed_at");--> statement-breakpoint
 CREATE INDEX "live_sessions_user_id_index" ON "charging"."live_sessions" USING btree ("user_id");--> statement-breakpoint
@@ -1111,9 +1449,10 @@ CREATE INDEX "sessions_org_id_started_at_index" ON "charging"."sessions" USING b
 CREATE INDEX "sessions_evse_id_started_at_index" ON "charging"."sessions" USING btree ("evse_id","started_at");--> statement-breakpoint
 CREATE INDEX "sessions_user_id_started_at_index" ON "charging"."sessions" USING btree ("user_id","started_at");--> statement-breakpoint
 CREATE INDEX "sessions_ev_plc_mac_index" ON "charging"."sessions" USING btree ("ev_plc_mac");--> statement-breakpoint
+CREATE INDEX "sessions_placement_id_started_at_index" ON "charging"."sessions" USING btree ("placement_id","started_at");--> statement-breakpoint
 CREATE INDEX "tap_intents_charging_station_id_consumed_at_expires_at_index" ON "charging"."tap_intents" USING btree ("charging_station_id","consumed_at","expires_at");--> statement-breakpoint
 CREATE INDEX "tap_intents_user_id_expires_at_index" ON "charging"."tap_intents" USING btree ("user_id","expires_at");--> statement-breakpoint
-CREATE UNIQUE INDEX "agreement_clauses_agreement_id_cost_factor_id_index" ON "agreements"."agreement_clauses" USING btree ("agreement_id","cost_factor_id");--> statement-breakpoint
+CREATE INDEX "agreement_clauses_agreement_id_cost_factor_id_index" ON "agreements"."agreement_clauses" USING btree ("agreement_id","cost_factor_id");--> statement-breakpoint
 CREATE INDEX "agreements_counterparty_org_id_status_index" ON "agreements"."agreements" USING btree ("counterparty_org_id","status");--> statement-breakpoint
 CREATE INDEX "agreements_cpo_org_id_index" ON "agreements"."agreements" USING btree ("cpo_org_id");--> statement-breakpoint
 CREATE INDEX "agreements_installation_id_index" ON "agreements"."agreements" USING btree ("installation_id");--> statement-breakpoint
@@ -1121,6 +1460,7 @@ CREATE INDEX "agreements_effective_from_index" ON "agreements"."agreements" USIN
 CREATE INDEX "billing_lines_agreement_id_billable_event_type_index" ON "agreements"."billing_lines" USING btree ("agreement_id","billable_event_type");--> statement-breakpoint
 CREATE INDEX "billing_lines_session_id_factor_code_kind_index" ON "agreements"."billing_lines" USING btree ("session_id","factor_code","kind");--> statement-breakpoint
 CREATE INDEX "billing_lines_recipient_org_id_created_at_index" ON "agreements"."billing_lines" USING btree ("recipient_org_id","created_at");--> statement-breakpoint
+CREATE UNIQUE INDEX "cost_factors_code_index" ON "agreements"."cost_factors" USING btree ("code");--> statement-breakpoint
 CREATE INDEX "bearer_rules_agreement_id_cost_factor_id_audience_type_audience_id_scope_type_scope_id_effective_from_index" ON "agreements"."bearer_rules" USING btree ("agreement_id","cost_factor_id","audience_type","audience_id","scope_type","scope_id","effective_from");--> statement-breakpoint
 CREATE INDEX "bearer_rules_effective_from_index" ON "agreements"."bearer_rules" USING btree ("effective_from");--> statement-breakpoint
 CREATE INDEX "bill_object_members_user_id_effective_to_index" ON "billing"."bill_object_members" USING btree ("user_id","effective_to");--> statement-breakpoint
@@ -1130,25 +1470,62 @@ CREATE INDEX "bill_objects_owner_user_id_index" ON "billing"."bill_objects" USIN
 CREATE INDEX "bill_objects_owner_org_id_index" ON "billing"."bill_objects" USING btree ("owner_org_id");--> statement-breakpoint
 CREATE INDEX "billing_lines_org_id_session_id_index" ON "billing"."billing_lines" USING btree ("org_id","session_id");--> statement-breakpoint
 CREATE INDEX "billing_lines_cost_center_id_created_at_index" ON "billing"."billing_lines" USING btree ("cost_center_id","created_at");--> statement-breakpoint
+CREATE UNIQUE INDEX "cost_factors_code_index" ON "billing"."cost_factors" USING btree ("code");--> statement-breakpoint
+CREATE UNIQUE INDEX "billing_periods_org_id_period_year_period_month_index" ON "billing"."billing_periods" USING btree ("org_id","period_year","period_month");--> statement-breakpoint
+CREATE INDEX "billing_periods_org_id_state_index" ON "billing"."billing_periods" USING btree ("org_id","state");--> statement-breakpoint
+CREATE UNIQUE INDEX "connector_activity_month_org_id_period_year_period_month_connector_id_index" ON "reports"."connector_activity_month" USING btree ("org_id","period_year","period_month","connector_id");--> statement-breakpoint
+CREATE INDEX "connector_activity_month_org_id_period_year_period_month_index" ON "reports"."connector_activity_month" USING btree ("org_id","period_year","period_month");--> statement-breakpoint
+CREATE UNIQUE INDEX "connector_assertions_org_id_period_year_period_month_connector_id_index" ON "billing"."connector_assertions" USING btree ("org_id","period_year","period_month","connector_id");--> statement-breakpoint
+CREATE INDEX "connector_assertions_org_id_period_year_period_month_index" ON "billing"."connector_assertions" USING btree ("org_id","period_year","period_month");--> statement-breakpoint
 CREATE INDEX "contracts_org_id_scope_type_scope_id_index" ON "billing"."contracts" USING btree ("org_id","scope_type","scope_id");--> statement-breakpoint
 CREATE INDEX "contracts_counterparty_org_id_index" ON "billing"."contracts" USING btree ("counterparty_org_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "cost_centers_org_id_code_index" ON "billing"."cost_centers" USING btree ("org_id","code");--> statement-breakpoint
+CREATE UNIQUE INDEX "document_number_series_org_id_series_period_year_index" ON "billing"."document_number_series" USING btree ("org_id","series","period_year");--> statement-breakpoint
+CREATE UNIQUE INDEX "document_numbers_org_id_series_period_year_ordinal_index" ON "billing"."document_numbers" USING btree ("org_id","series","period_year","ordinal");--> statement-breakpoint
+CREATE UNIQUE INDEX "document_numbers_org_id_series_period_year_idempotency_key_index" ON "billing"."document_numbers" USING btree ("org_id","series","period_year","idempotency_key");--> statement-breakpoint
+CREATE UNIQUE INDEX "document_numbers_statement_id_purpose_index" ON "billing"."document_numbers" USING btree ("statement_id","purpose");--> statement-breakpoint
+CREATE INDEX "document_numbers_org_id_issued_at_index" ON "billing"."document_numbers" USING btree ("org_id","issued_at");--> statement-breakpoint
 CREATE INDEX "driver_access_requests_status_installation_id_index" ON "agreements"."driver_access_requests" USING btree ("status","installation_id");--> statement-breakpoint
 CREATE INDEX "driver_access_requests_user_id_status_index" ON "agreements"."driver_access_requests" USING btree ("user_id","status");--> statement-breakpoint
+CREATE UNIQUE INDEX "driver_activity_month_org_id_period_year_period_month_driver_user_id_index" ON "reports"."driver_activity_month" USING btree ("org_id","period_year","period_month","driver_user_id");--> statement-breakpoint
+CREATE INDEX "driver_activity_month_org_id_period_year_period_month_index" ON "reports"."driver_activity_month" USING btree ("org_id","period_year","period_month");--> statement-breakpoint
 CREATE INDEX "driver_contracts_org_id_user_id_valid_from_index" ON "billing"."driver_contracts" USING btree ("org_id","user_id","valid_from");--> statement-breakpoint
-CREATE UNIQUE INDEX "driver_group_memberships_driver_group_id_user_id_index" ON "agreements"."driver_group_memberships" USING btree ("driver_group_id","user_id");--> statement-breakpoint
+CREATE INDEX "driver_group_memberships_driver_group_id_user_id_index" ON "agreements"."driver_group_memberships" USING btree ("driver_group_id","user_id");--> statement-breakpoint
 CREATE INDEX "driver_group_memberships_user_id_index" ON "agreements"."driver_group_memberships" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "driver_groups_agreement_id_index" ON "agreements"."driver_groups" USING btree ("agreement_id");--> statement-breakpoint
 CREATE INDEX "driver_groups_owner_org_id_index" ON "agreements"."driver_groups" USING btree ("owner_org_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "mutation_receipts_org_id_scope_idempotency_key_index" ON "billing"."mutation_receipts" USING btree ("org_id","scope","idempotency_key");--> statement-breakpoint
+CREATE INDEX "mutation_receipts_expires_at_index" ON "billing"."mutation_receipts" USING btree ("expires_at");--> statement-breakpoint
+CREATE UNIQUE INDEX "period_transitions_org_id_period_year_period_month_event_index" ON "billing"."period_transitions" USING btree ("org_id","period_year","period_month","event");--> statement-breakpoint
+CREATE INDEX "period_transitions_org_id_period_year_period_month_occurred_at_index" ON "billing"."period_transitions" USING btree ("org_id","period_year","period_month","occurred_at");--> statement-breakpoint
 CREATE INDEX "rate_references_code_effective_from_index" ON "agreements"."rate_references" USING btree ("code","effective_from");--> statement-breakpoint
 CREATE INDEX "rate_references_cost_factor_id_effective_from_index" ON "agreements"."rate_references" USING btree ("cost_factor_id","effective_from");--> statement-breakpoint
 CREATE INDEX "session_ledger_org_id_started_at_index" ON "reports"."session_ledger" USING btree ("org_id","started_at");--> statement-breakpoint
 CREATE INDEX "session_ledger_driver_user_id_started_at_index" ON "reports"."session_ledger" USING btree ("driver_user_id","started_at");--> statement-breakpoint
 CREATE INDEX "session_ledger_charging_station_id_started_at_index" ON "reports"."session_ledger" USING btree ("charging_station_id","started_at");--> statement-breakpoint
+CREATE INDEX "session_settlements_org_id_period_id_index" ON "billing"."session_settlements" USING btree ("org_id","period_id");--> statement-breakpoint
+CREATE INDEX "session_settlements_period_id_status_index" ON "billing"."session_settlements" USING btree ("period_id","status");--> statement-breakpoint
+CREATE INDEX "session_settlements_org_id_driver_user_id_started_at_index" ON "billing"."session_settlements" USING btree ("org_id","driver_user_id","started_at");--> statement-breakpoint
+CREATE INDEX "session_settlements_org_id_connector_id_started_at_index" ON "billing"."session_settlements" USING btree ("org_id","connector_id","started_at");--> statement-breakpoint
+CREATE UNIQUE INDEX "settlement_components_session_id_kind_index" ON "billing"."settlement_components" USING btree ("session_id","kind");--> statement-breakpoint
+CREATE INDEX "settlement_components_org_id_rate_version_id_index" ON "billing"."settlement_components" USING btree ("org_id","rate_version_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "settlement_holds_session_id_reason_index" ON "billing"."settlement_holds" USING btree ("session_id","reason");--> statement-breakpoint
+CREATE INDEX "settlement_holds_org_id_resolved_at_index" ON "billing"."settlement_holds" USING btree ("org_id","resolved_at");--> statement-breakpoint
+CREATE UNIQUE INDEX "statement_delivery_attempts_statement_id_idempotency_key_index" ON "billing"."statement_delivery_attempts" USING btree ("statement_id","idempotency_key");--> statement-breakpoint
+CREATE INDEX "statement_delivery_attempts_org_id_state_index" ON "billing"."statement_delivery_attempts" USING btree ("org_id","state");--> statement-breakpoint
+CREATE INDEX "statement_delivery_attempts_state_not_before_index" ON "billing"."statement_delivery_attempts" USING btree ("state","not_before");--> statement-breakpoint
+CREATE UNIQUE INDEX "statement_exports_org_id_idempotency_key_index" ON "billing"."statement_exports" USING btree ("org_id","idempotency_key");--> statement-breakpoint
+CREATE INDEX "statement_exports_org_id_period_id_index" ON "billing"."statement_exports" USING btree ("org_id","period_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "statement_lines_statement_id_line_no_index" ON "billing"."statement_lines" USING btree ("statement_id","line_no");--> statement-breakpoint
+CREATE INDEX "statement_lines_org_id_session_id_index" ON "billing"."statement_lines" USING btree ("org_id","session_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "statements_period_id_recipient_kind_recipient_id_index" ON "billing"."statements" USING btree ("period_id","recipient_kind","recipient_id");--> statement-breakpoint
+CREATE INDEX "statements_org_id_period_id_index" ON "billing"."statements" USING btree ("org_id","period_id");--> statement-breakpoint
+CREATE INDEX "statements_org_id_recipient_kind_recipient_id_index" ON "billing"."statements" USING btree ("org_id","recipient_kind","recipient_id");--> statement-breakpoint
 CREATE INDEX "tariff_definitions_org_id_cost_factor_id_valid_from_index" ON "billing"."tariff_definitions" USING btree ("org_id","cost_factor_id","valid_from");--> statement-breakpoint
 CREATE INDEX "tariffs_org_id_index" ON "billing"."tariffs" USING btree ("org_id");--> statement-breakpoint
 CREATE INDEX "family_groups_org_id_index" ON "people"."family_groups" USING btree ("org_id");--> statement-breakpoint
 CREATE INDEX "host_applications_status_index" ON "tenancy"."host_applications" USING btree ("status");--> statement-breakpoint
+CREATE UNIQUE INDEX "id_tokens_value_index" ON "identity"."id_tokens" USING btree ("value");--> statement-breakpoint
 CREATE INDEX "id_tokens_user_id_index" ON "identity"."id_tokens" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "id_tokens_status_value_index" ON "identity"."id_tokens" USING btree ("status","value");--> statement-breakpoint
 CREATE INDEX "id_tokens_scope_installation_id_index" ON "identity"."id_tokens" USING btree ("scope_installation_id");--> statement-breakpoint
@@ -1156,10 +1533,15 @@ CREATE INDEX "id_tokens_vendor_issued_by_vendor_token_id_index" ON "identity"."i
 CREATE INDEX "memberships_org_id_status_index" ON "tenancy"."memberships" USING btree ("org_id","status");--> statement-breakpoint
 CREATE UNIQUE INDEX "org_email_domains_domain_index" ON "tenancy"."org_email_domains" USING btree ("domain");--> statement-breakpoint
 CREATE INDEX "org_email_domains_org_id_index" ON "tenancy"."org_email_domains" USING btree ("org_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "organizations_kennitala_index" ON "tenancy"."organizations" USING btree ("kennitala");--> statement-breakpoint
+CREATE UNIQUE INDEX "user_tokens_token_hash_index" ON "identity"."user_tokens" USING btree ("token_hash");--> statement-breakpoint
 CREATE INDEX "user_tokens_user_id_kind_expires_at_index" ON "identity"."user_tokens" USING btree ("user_id","kind","expires_at");--> statement-breakpoint
 CREATE UNIQUE INDEX "user_vendor_refs_vendor_slug_vendor_user_id_index" ON "identity"."user_vendor_refs" USING btree ("vendor_slug","vendor_user_id");--> statement-breakpoint
 CREATE INDEX "user_vendor_refs_user_id_index" ON "identity"."user_vendor_refs" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "user_vendor_refs_scope_installation_id_index" ON "identity"."user_vendor_refs" USING btree ("scope_installation_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "users_email_index" ON "identity"."users" USING btree ("email");--> statement-breakpoint
+CREATE UNIQUE INDEX "users_kennitala_index" ON "identity"."users" USING btree ("kennitala");--> statement-breakpoint
+CREATE UNIQUE INDEX "vehicles_vin_index" ON "people"."vehicles" USING btree ("vin");--> statement-breakpoint
 CREATE INDEX "vehicles_user_id_index" ON "people"."vehicles" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "vendor_user_group_memberships_user_id_index" ON "identity"."vendor_user_group_memberships" USING btree ("user_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "vendor_user_groups_vendor_slug_vendor_group_id_index" ON "identity"."vendor_user_groups" USING btree ("vendor_slug","vendor_group_id");--> statement-breakpoint

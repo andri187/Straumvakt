@@ -213,6 +213,8 @@ export const chargingStations = assetsSchema.table(
     pushedAuthListVersion: integer("pushed_auth_list_version").notNull().default(0),
   },
   (t) => [
+    // @unique in Prisma — lost in the Drizzle port, restored 2026-10-26.
+    uniqueIndex().on(t.serialNumber),
     index().on(t.modelId),
     index().on(t.installationId),
     index().on(t.circuitId),
@@ -311,6 +313,10 @@ export const controlRoutingPolicies = assetsSchema.table(
     createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().$defaultFn(() => new Date()).$onUpdateFn(() => new Date()),
   },
+  (t) => [
+    // @unique in Prisma — lost in the Drizzle port, restored 2026-10-26.
+    uniqueIndex().on(t.chargingStationId),
+  ],
 );
 
 /** Prisma model `Meter` — assets.meters */
@@ -327,6 +333,10 @@ export const modems = assetsSchema.table(
     createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().$defaultFn(() => new Date()).$onUpdateFn(() => new Date()),
   },
+  (t) => [
+    // @unique in Prisma — lost in the Drizzle port, restored 2026-10-26.
+    uniqueIndex().on(t.imei),
+  ],
 );
 
 /** Prisma model `Controller` — assets.controllers */
