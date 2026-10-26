@@ -90,15 +90,40 @@ async function seedHardwareCatalog() {
 }
 
 // ── ADR 0008 — pilot cost-factor catalog ─────────────────────────────
+//
+// Codes renamed 2026-10-26 to be self-describing. Safe to do because
+// nothing references them by code: every table points at
+// billing.cost_factors.id, and the only literals in the repository were
+// the ones here. Old -> new, for reading ADRs written before the rename:
+//
+//   DSOF      -> GRID_DISTRIBUTION     REPF   -> ENERGY_COMMODITY
+//   USRF      -> ACCESS_STANDARD       SPVIVF -> SERVICE_CONTRACTOR
+//   USRF_PREM -> ACCESS_PREMIUM        CHRGRF -> HARDWARE_RENTAL
+//   WRKPF     -> SUBSIDY_EMPLOYER
+//
+// Three rules, if you add one: no "FEE" suffix (all of them are fees, so
+// the word distinguishes nothing); name the thing charged, not the party
+// charging it (grid distribution, not DSO); and do not repeat the anchor
+// tier, which anchor_tier already carries.
+//
+// The rename also ends a collision: USRF existed in BOTH catalogues
+// meaning different things — site access here, per-user-on-installation
+// billed to the CPO in agreements.cost_factors.
+//
+// XTRRF is deliberately left alone. It is a catch-all — "Extra Tariffs
+// (Idle, etc.)" — and no name can describe a bag of unrelated charges.
+// ADR 0019 already split the same idea into TRF_CHG and TRF_IDLE. Either
+// split it into SURCHARGE_IDLE + SURCHARGE_CHARGE_TIME, or retire it in
+// favour of that pair. Open decision, deliberately not taken here.
 const COST_FACTORS = [
-  { code: "DSOF", displayName: "DSO Fee", anchorTier: "site" as const, description: "Distribution-system-operator network fee — anchored at the Site (DSO determined by address)." },
-  { code: "REPF", displayName: "Retailer Energy Price Fee", anchorTier: "installation" as const, description: "Electricity retailer commodity price — anchored at the Installation." },
-  { code: "USRF", displayName: "User Access Fee", anchorTier: "site" as const, description: "Per-session or per-month flat fee for site access." },
-  { code: "USRF_PREM", displayName: "Premium User Access Fee", anchorTier: "site" as const, description: "Higher-tier user access fee for differentiated pricing." },
+  { code: "GRID_DISTRIBUTION", displayName: "DSO Fee", anchorTier: "site" as const, description: "Distribution-system-operator network fee — anchored at the Site (DSO determined by address)." },
+  { code: "ENERGY_COMMODITY", displayName: "Retailer Energy Price Fee", anchorTier: "installation" as const, description: "Electricity retailer commodity price — anchored at the Installation." },
+  { code: "ACCESS_STANDARD", displayName: "User Access Fee", anchorTier: "site" as const, description: "Per-session or per-month flat fee for site access." },
+  { code: "ACCESS_PREMIUM", displayName: "Premium User Access Fee", anchorTier: "site" as const, description: "Higher-tier user access fee for differentiated pricing." },
   { code: "XTRRF", displayName: "Extra Tariffs (Idle, etc.)", anchorTier: "site" as const, description: "Per-minute idle fees, surge pricing, etc." },
-  { code: "SPVIVF", displayName: "Service Provider / Installer / Vendor Fee", anchorTier: "site" as const, description: "Fee paid to the service contractor handling installation/maintenance." },
-  { code: "CHRGRF", displayName: "Charger Rental Fee", anchorTier: "charger" as const, description: "Hardware-rental fee when the charger is rented rather than owned." },
-  { code: "WRKPF", displayName: "Workplace Fee", anchorTier: "driver_contract" as const, description: "Workplace-charging fee billed to the employer." },
+  { code: "SERVICE_CONTRACTOR", displayName: "Service Provider / Installer / Vendor Fee", anchorTier: "site" as const, description: "Fee paid to the service contractor handling installation/maintenance." },
+  { code: "HARDWARE_RENTAL", displayName: "Charger Rental Fee", anchorTier: "charger" as const, description: "Hardware-rental fee when the charger is rented rather than owned." },
+  { code: "SUBSIDY_EMPLOYER", displayName: "Workplace Fee", anchorTier: "driver_contract" as const, description: "Workplace-charging fee billed to the employer." },
 ];
 
 async function seedCostFactorCatalog() {
