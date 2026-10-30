@@ -19,7 +19,7 @@
 // cascade behaviour.
 
 import { sql } from "drizzle-orm";
-import { boolean, customType, date, index, integer, jsonb, numeric, pgSchema, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { bigint, boolean, customType, date, index, integer, jsonb, numeric, pgSchema, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 export const assetsSchema = pgSchema("assets");
 export const energySchema = pgSchema("energy");
@@ -139,10 +139,49 @@ export const installations = propertiesSchema.table(
     retailerTariffId: uuid("retailer_tariff_id"),
     enforceAuthorize: boolean("enforce_authorize").notNull().default(false),
     installationType: installationTypeEnum("installation_type").notNull().default("workplace"),
+    /**
+     * S1 installation management (migration 0002). Stable routing key: allocated
+     * once at creation, never derived from display_name, so a rename cannot move
+     * the future charger connection address. Unique across all installations.
+     */
+    installationKey: text("installation_key"),
+    /** Optimistic-concurrency counter. Every saved edit bumps it by one. */
+    revision: integer("revision").notNull().default(1),
+    /** Main protective device. NULL = unknown, which is not the same as 0. */
+    mainDeviceType: text("main_device_type"),
+    mainRatingAmps: integer("main_rating_amps"),
+    mainPhaseCount: integer("main_phase_count"),
+    /** On-site electrician. Not a Straumvakt user and not the signed-in account. */
+    electricianName: text("electrician_name"),
+    electricianEmail: text("electrician_email"),
+    electricianPhone: text("electrician_phone"),
+    /** The installation `revision` at which the electrician details last changed; 0 = never provided. */
+    electricianChangedRevision: integer("electrician_changed_revision").notNull().default(0),
+    /**
+     * The installation `revision` the electrician confirmed by email. NULL until
+     * email confirmation exists. Confirmed only while this equals `revision`, so
+     * any later contact or electrical edit leaves the installation unconfirmed.
+     */
+    responsibleConfirmedRevision: integer("responsible_confirmed_revision"),
+    /** 'unset' until chosen; 'none' is a deliberate no-password choice. */
+    ocppPasswordMode: text("ocpp_password_mode").notNull().default("unset"),
+    /** Salted PBKDF2 verifier. Never returned by any read, never audited. */
+    ocppPasswordVerifier: text("ocpp_password_verifier"),
+    ocppPasswordSetAt: timestamp("ocpp_password_set_at", { withTimezone: true, precision: 6, mode: "date" }),
+    archivedAt: timestamp("archived_at", { withTimezone: true, precision: 6, mode: "date" }),
+    /**
+     * Operational-state counter (S1 deltas, migration 0004). Bumped, under this
+     * row's lock, by every CHANGED device status in the installation; a device's
+     * `device_operational_state.seq` records the value it was written at. It is
+     * deliberately NOT `revision`: a charger changing state must not look like an
+     * edit to the installation, nor invalidate its structure.
+     */
+    statusVersion: bigint("status_version", { mode: "number" }).notNull().default(0),
   },
   (t) => [
     index().on(t.orgId, t.siteId),
     index().on(t.vendorId),
+    uniqueIndex().on(t.installationKey),
   ],
 );
 
@@ -357,8 +396,13 @@ export const circuits = propertiesSchema.table(
     installationId: uuid("installation_id"),
     displayName: text("display_name").notNull(),
     ampereCeiling: integer("ampere_ceiling"),
-    phaseCount: integer("phase_count").notNull().default(3),
+    /** NULL = unknown. No default: an unknown phase count is never assumed three. */
+    phaseCount: integer("phase_count"),
     vendorCircuitRef: text("vendor_circuit_ref"),
+    /** Electrical parent within the same installation; NULL = directly under the main device. */
+    parentCircuitId: uuid("parent_circuit_id"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    archivedAt: timestamp("archived_at", { withTimezone: true, precision: 6, mode: "date" }),
     metadata: jsonb("metadata").notNull().default({}),
     createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().$defaultFn(() => new Date()).$onUpdateFn(() => new Date()),
@@ -366,6 +410,7 @@ export const circuits = propertiesSchema.table(
   (t) => [
     index().on(t.orgId, t.siteId),
     index().on(t.installationId),
+    index().on(t.parentCircuitId),
   ],
 );
 
@@ -538,6 +583,8 @@ export const placements = assetsSchema.table(
     installationId: uuid("installation_id").notNull(),
     siteId: uuid("site_id"),
     circuitId: uuid("circuit_id"),
+    /** Operator-facing name of the charger at this place (S1 installation management). */
+    label: text("label"),
     /** `[from, until)`. Open-ended is `[from,)`, never NULL. */
     period: tstzrange("period").notNull(),
     attachedByUserId: uuid("attached_by_user_id"),
@@ -595,5 +642,122 @@ export const vendorConfigObservations = assetsSchema.table(
   },
   (t) => [
     index().on(t.deviceId, t.observedAt),
+  ],
+);
+
+/**
+ * properties.installation_changes — attributable change history (S1, migration 0002).
+ *
+ * APPEND-ONLY: no update path, no delete path. One row per changed entity per
+ * saved revision. `diff` holds { field: { from, to } } and never carries a
+ * password, verifier, token or cookie.
+ *
+ * The actor is the shared Straumvakt login, stated as such: actor_kind
+ * 'shared_login' with its label. It is not a user id and is never an
+ * electrician; no personal identity is inferred.
+ *
+ * `idempotency_key` is unique, so a replayed or double-submitted save is
+ * recognised instead of applied twice.
+ */
+export const installationChanges = propertiesSchema.table(
+  "installation_changes",
+  {
+    id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    orgId: uuid("org_id").notNull(),
+    installationId: uuid("installation_id").notNull(),
+    /** The installation revision this change produced. */
+    revision: integer("revision").notNull(),
+    entityType: text("entity_type").notNull(),
+    entityId: uuid("entity_id"),
+    action: text("action").notNull(),
+    diff: jsonb("diff").notNull().default({}),
+    actorKind: text("actor_kind").notNull(),
+    actorLabel: text("actor_label").notNull(),
+    /** When it physically happened, if the operator said so. Otherwise NULL. */
+    effectiveAt: timestamp("effective_at", { withTimezone: true, precision: 6, mode: "date" }),
+    idempotencyKey: uuid("idempotency_key"),
+    occurredAt: timestamp("occurred_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [
+    index().on(t.installationId, t.occurredAt),
+    // The structure delta reads "changes after revision R" for one installation.
+    index().on(t.installationId, t.revision),
+    uniqueIndex().on(t.idempotencyKey),
+  ],
+);
+
+/**
+ * assets.device_operational_state — latest reported state per device (S1 deltas, migration 0004).
+ *
+ * One row per PERMANENT device (it follows the device across placements; the
+ * placement/installation columns are the CURRENT ones and are rewritten on a
+ * move). Holds only what changes often and nothing a tree needs: per-connector
+ * status/error as reported, with the charger's clock and ours kept apart.
+ *
+ * `seq` is the installation `status_version` at the moment this row last
+ * changed. Because that counter is bumped under the installation row lock, seq
+ * order equals commit order: a reader that has seen seq N has seen every
+ * smaller one, which is what makes "changes since N" gap-free without a log.
+ * A write that changes nothing does not bump it: an idle fleet writes nothing.
+ */
+export const deviceOperationalState = assetsSchema.table(
+  "device_operational_state",
+  {
+    deviceId: uuid("device_id").primaryKey(),
+    orgId: uuid("org_id").notNull(),
+    installationId: uuid("installation_id").notNull(),
+    placementId: uuid("placement_id").notNull(),
+    /** { "<connectorNo>": { status, errorCode, reportedAt } } as last reported. */
+    connectors: jsonb("connectors").notNull().default({}),
+    lastReportedAt: timestamp("last_reported_at", { withTimezone: true, precision: 6, mode: "date" }),
+    lastReceivedAt: timestamp("last_received_at", { withTimezone: true, precision: 6, mode: "date" }).notNull(),
+    seq: bigint("seq", { mode: "number" }).notNull(),
+  },
+  (t) => [index().on(t.installationId, t.seq)],
+);
+
+/**
+ * assets.lifecycle_requests — guarded charger removal/retirement (S1 lifecycle, migration 0006).
+ *
+ * One row per operation, advanced step by step; it is the durable record that a
+ * removal is PENDING and what remains. The existence of an OPEN row for a device
+ * is what blocks new starts (the engine reads it), so the block is atomic with the
+ * request. At most one open request per device (partial unique index), which is how
+ * "repeating an action resumes the same operation" is enforced by the database.
+ *
+ * `sessions` is the per-session progress (stop attempts and outcomes, the durable
+ * stop confirmation, and settlement state). A command being accepted is recorded
+ * but never counts as the session being stopped. The actor is the shared login,
+ * stated as such.
+ */
+export const lifecycleRequests = assetsSchema.table(
+  "lifecycle_requests",
+  {
+    id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    /** Client-supplied idempotency key: a repeated request returns this row. */
+    requestKey: text("request_key").notNull(),
+    kind: text("kind").notNull(),
+    state: text("state").notNull(),
+    orgId: uuid("org_id").notNull(),
+    installationId: uuid("installation_id").notNull(),
+    deviceId: uuid("device_id").notNull(),
+    placementId: uuid("placement_id").notNull(),
+    reason: text("reason").notNull(),
+    actorKind: text("actor_kind").notNull(),
+    actorLabel: text("actor_label").notNull(),
+    requestedAt: timestamp("requested_at", { withTimezone: true, precision: 6, mode: "date" }).notNull(),
+    serviceEndedAt: timestamp("service_ended_at", { withTimezone: true, precision: 6, mode: "date" }),
+    completedAt: timestamp("completed_at", { withTimezone: true, precision: 6, mode: "date" }),
+    sessions: jsonb("sessions").notNull().default([]),
+    attention: text("attention"),
+    identityClosed: boolean("identity_closed").notNull().default(false),
+    /** Optimistic version: two workers advancing the same request cannot both win. */
+    version: integer("version").notNull().default(1),
+  },
+  (t) => [
+    uniqueIndex().on(t.requestKey),
+    // At most ONE open request per device. Partial: finished requests do not count.
+    uniqueIndex("lifecycle_requests_one_open_per_device").on(t.deviceId).where(sql`${t.state} NOT IN ('completed','cancelled')`),
+    index().on(t.installationId, t.state),
   ],
 );

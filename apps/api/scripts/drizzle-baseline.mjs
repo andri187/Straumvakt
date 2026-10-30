@@ -21,19 +21,36 @@
 // sha256(migration file contents). If drizzle-orm changes any of that this
 // script silently stops matching, which is why --verify exists.
 //
-// USAGE
-//   DATABASE_URL=... node scripts/drizzle-baseline.mjs            # dry run
-//   DATABASE_URL=... node scripts/drizzle-baseline.mjs --apply
-//   DATABASE_URL=... node scripts/drizzle-baseline.mjs --verify
+// SCOPE: THE COLD BASELINE ONLY
+// -----------------------------
+// This helper records ONLY the baseline entry (0000_cold_hex) as applied. Every
+// later journal entry (0001 restores 11 constraints that are NOT in the
+// existing tables) is left pending: run it with the migration runner so the SQL
+// actually executes. Recording a later hash here would make
+// `drizzle-kit migrate` skip SQL that never ran. If the journal no longer
+// starts with 0000_cold_hex, or the table already holds other history, the
+// script refuses. Logic lives in drizzle-baseline-lib.mjs (unit-tested with a
+// fake client, no database).
+//
+// USAGE (exactly one mode; combining flags is an error)
+//   DATABASE_URL=... node scripts/drizzle-baseline.mjs              # preview: READ ONLY, writes nothing
+//   DATABASE_URL=... node scripts/drizzle-baseline.mjs --apply      # records the baseline hash only
+//   DATABASE_URL=... node scripts/drizzle-baseline.mjs --verify     # READ ONLY, baseline only
+//   DATABASE_URL=... node scripts/drizzle-baseline.mjs --verify-all # READ ONLY, whole chain; exit 1 if any pending
+//
+// Preview and verify run in a BEGIN READ ONLY transaction: Postgres itself
+// rejects a write. `--verify` / `--verify-all` check the migration LEDGER (recorded
+// hashes vs the files); they do not prove any SQL ran or any constraint exists, and
+// a passing `--verify` does NOT mean 0001+ were applied.
 //
 // RULE 3: pass the connection string explicitly. RULE: staging needs
-// go-ahead — this writes to a shared branch.
+// go-ahead — --apply writes to a shared branch.
 
-import crypto from "node:crypto";
-import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Client } from "pg";
+
+import { parseMode, readJournalEntries, run } from "./drizzle-baseline-lib.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const FOLDER = path.join(HERE, "..", "drizzle");
@@ -43,73 +60,29 @@ if (!url) {
   console.error("DATABASE_URL is required.");
   process.exit(1);
 }
-const apply = process.argv.includes("--apply");
-const verify = process.argv.includes("--verify");
 
-const journal = JSON.parse(fs.readFileSync(path.join(FOLDER, "meta", "_journal.json"), "utf8"));
-const entries = journal.entries.map((e) => {
-  const sql = fs.readFileSync(path.join(FOLDER, `${e.tag}.sql`), "utf8");
-  return {
-    tag: e.tag,
-    when: e.when,
-    hash: crypto.createHash("sha256").update(sql).digest("hex"),
-    statements: sql.split("--> statement-breakpoint").length,
-  };
-});
+let mode;
+let entries;
+try {
+  mode = parseMode(process.argv.slice(2));
+  entries = readJournalEntries(FOLDER);
+} catch (err) {
+  console.error(`  refused: ${err.message}`);
+  process.exit(2);
+}
 
 const c = new Client({ connectionString: url });
 await c.connect();
-console.log(`  target ${url.match(/@([^/]+)\//)?.[1]}`);
+console.log(`  mode ${mode}, target ${url.match(/@([^/]+)\//)?.[1]}`);
 
+let code = 0;
 try {
-  if (verify) {
-    const { rows } = await c.query(
-      "SELECT hash, created_at FROM drizzle.__drizzle_migrations ORDER BY created_at",
-    );
-    const recorded = new Set(rows.map((r) => r.hash));
-    let ok = true;
-    for (const e of entries) {
-      const hit = recorded.has(e.hash);
-      console.log(`  ${hit ? "applied " : "PENDING "} ${e.tag}  ${e.hash.slice(0, 12)}`);
-      if (!hit) ok = false;
-    }
-    // A hash in the table that no file produces means the files were edited
-    // after being applied — drizzle would re-run nothing, but the snapshot
-    // and the database have silently diverged.
-    for (const r of rows) {
-      if (!entries.some((e) => e.hash === r.hash)) {
-        console.log(`  ORPHAN   recorded hash ${String(r.hash).slice(0, 12)} matches no file`);
-        ok = false;
-      }
-    }
-    process.exit(ok ? 0 : 1);
-  }
-
-  await c.query("CREATE SCHEMA IF NOT EXISTS drizzle");
-  await c.query(
-    `CREATE TABLE IF NOT EXISTS drizzle.__drizzle_migrations (
-       id SERIAL PRIMARY KEY, hash text NOT NULL, created_at bigint)`,
-  );
-  const { rows: existing } = await c.query("SELECT hash FROM drizzle.__drizzle_migrations");
-  const have = new Set(existing.map((r) => r.hash));
-
-  for (const e of entries) {
-    if (have.has(e.hash)) {
-      console.log(`  already baselined  ${e.tag}`);
-      continue;
-    }
-    console.log(
-      `  ${apply ? "BASELINING" : "would baseline"}  ${e.tag}  ` +
-        `(${e.statements} statements, NOT executed)  ${e.hash.slice(0, 12)}`,
-    );
-    if (apply) {
-      await c.query("INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES ($1, $2)", [
-        e.hash,
-        e.when,
-      ]);
-    }
-  }
-  if (!apply) console.log("\n  dry run — pass --apply to write");
+  const { ok } = await run({ client: c, entries, mode, log: (m) => console.log(m) });
+  code = ok ? 0 : 1;
+} catch (err) {
+  console.error(`  refused: ${err.message}`);
+  code = 2;
 } finally {
   await c.end();
 }
+process.exit(code);

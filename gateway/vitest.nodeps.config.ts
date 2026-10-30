@@ -16,6 +16,7 @@ export default {
     alias: {
       "@": new URL("./src/", import.meta.url).pathname,
       "@shared/ocpp": new URL("../src/lib/ocpp/", import.meta.url).pathname,
+      "@engine": new URL("../src/lib/ocpp-engine/", import.meta.url).pathname,
     },
   },
   test: {

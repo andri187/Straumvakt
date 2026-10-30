@@ -21,6 +21,7 @@
     "db:validate": "prisma validate",
     "db:seed": "tsx scripts/seed.mts",
     "sync:api-schema": "node scripts/sync-api-prisma-schema.mjs",
+    "check:adopted-schema": "node scripts/check-adopted-schema.mjs",
     "check:api-schema": "node scripts/sync-api-prisma-schema.mjs --check",
     "sync:detour-assets": "node scripts/sync-detour-assets.mjs",
     "check:deps": "depcruise apps/api/src src packages --config .dependency-cruiser.cjs --ignore-known",

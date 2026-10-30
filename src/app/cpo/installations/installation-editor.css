@@ -1,0 +1,44 @@
+/* Installation editor (S1). Same palette as workspace.css. */
+.ie { display: block; }
+.ie-row { display: flex; flex-wrap: wrap; gap: 12px 14px; align-items: flex-end; margin-bottom: 12px; }
+.ie-field { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: #93a5bc; min-width: 140px; }
+.ie-field.ie-grow, .ie-grow { flex: 1 1 180px; }
+.ie-field.ie-narrow { flex: 0 0 120px; min-width: 100px; }
+.ie-field input, .ie-field select {
+  background: #0f1a29; border: 1px solid #2d4056; border-radius: 7px; color: #e1eaf5;
+  padding: 10px 11px; min-height: 44px; font-size: 14px;
+}
+.ie-field input[aria-invalid="true"], .ie-field select[aria-invalid="true"] { border-color: #d98a8a; }
+.ie-field em { font-style: normal; color: #f0a9a9; font-size: 12px; }
+.ie-field em:empty { display: none; }
+.ie-allow { flex: 0 0 150px; font-size: 13px; color: #cfe3da; padding-bottom: 12px; }
+.ie-allow span { display: block; font-size: 11px; color: #93a5bc; margin-bottom: 4px; }
+.ie-address { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 4px 0 12px; }
+.ie-address code { flex: 1 1 320px; overflow-wrap: anywhere; background: #0f1a29; border: 1px solid #2d4056; border-radius: 7px; padding: 10px 12px; color: #c5ffea; }
+.ie-pw { border: 0; padding: 0; margin: 16px 0 0; }
+.ie-pw legend { font-size: 13px; color: #e9eff7; font-weight: 600; padding: 0 0 6px; }
+.ie-tree, .ie-chargers, .ie-history { list-style: none; padding: 0; margin: 0; }
+.ie-tree .ie-tree { margin-left: 22px; border-left: 1px solid #223145; padding-left: 14px; }
+.ie-node { margin: 14px 0; padding: 12px 14px; background: #0f1a29; border: 1px solid #223145; border-radius: 8px; }
+.ie-node .ie-node { background: #0c1623; }
+.ie-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 8px; }
+.ie-chargers { margin: 8px 0 6px 18px; }
+.ie-charger { padding: 10px 12px; margin: 8px 0; border: 1px dashed #2d4056; border-radius: 8px; }
+.ie-savebar { position: sticky; bottom: 0; display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: flex-end; padding: 14px 16px; margin: 0 0 22px; background: #0b1421; border: 1px solid #223145; border-radius: 10px; }
+.ie-msg { flex: 1 1 240px; font-size: 13px; line-height: 1.6; }
+.ie-ok { color: #8fe3bf; }
+.ie-error { color: #f0a9a9; }
+.ie-conflict { color: #f2cf86; }
+.ie-msg a { color: #6fdcea; margin-left: 6px; }
+.ie-history li { margin: 10px 0; font-size: 13px; color: #cbd9e9; }
+.ie-history ul { margin: 4px 0 0 16px; padding: 0; color: #a7bdd1; font-size: 12px; }
+.ie-dir { margin: 6px 0 14px; font-size: 13px; color: #a7bdd1; }
+.ie-dir summary { cursor: pointer; padding: 6px 0; min-height: 32px; }
+.ie input:focus-visible, .ie select:focus-visible, .ie summary:focus-visible { outline: 2px solid #6fdcea; outline-offset: 2px; }
+@media (max-width: 640px) {
+  .ie-allow, .ie-field.ie-narrow { flex: 1 1 100%; }
+  .ie-savebar { position: static; }
+}
+.ie-field { min-width: 0; max-width: 100%; }
+.ie-field input, .ie-field select { width: 100%; box-sizing: border-box; min-width: 0; }
+.ie-row > * { min-width: 0; }

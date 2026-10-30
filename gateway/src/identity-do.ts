@@ -66,6 +66,7 @@
  */
 import type { DurableObjectState } from "@cloudflare/workers-types";
 import { parseFrame, serializeCallResult, serializeCall } from "./ocpp-frame";
+import { EngineMode, ENGINE_CTX_HEADER, readTag } from "./engine-mode";
 import { enqueueOrPost, type IngestEvent } from "./ingest-client";
 import {
   bypassesIngest,
@@ -349,9 +350,12 @@ export class IdentityDurableObject {
   private readonly env: GatewayEnv;
   private meta: SessionMeta | null = null;
 
+  private readonly engine: EngineMode;
+
   constructor(state: DurableObjectState, env: GatewayEnv) {
     this.state = state;
     this.env = env;
+    this.engine = new EngineMode(state, env, selectSubprotocol);
   }
 
   // ───────────────────────────────────────────────────────────────
@@ -363,7 +367,17 @@ export class IdentityDurableObject {
 
     // WebSocket upgrade from a charger — auth already happened upstream.
     if (url.pathname === "/ws" && request.headers.get("upgrade") === "websocket") {
+      // Checkpoint A/B: an upgrade the engine admitted carries its resolved context.
+      if (request.headers.get(ENGINE_CTX_HEADER)) return this.engine.upgrade(request);
       return this.handleUpgrade(request);
+    }
+
+    // Engine-mode stop command (reached only via the gateway's named CommandEntrypoint; no public route leads here).
+    if (url.pathname === "/command/stop" && request.method === "POST") {
+      let body: { transactionNo?: unknown } = {};
+      try { body = (await request.json()) as typeof body; } catch { /* handled below */ }
+      const outcome = typeof body.transactionNo === "number" ? await this.engine.requestStop({ transactionNo: body.transactionNo }) : "unavailable";
+      return new Response(JSON.stringify({ outcome }), { status: 200, headers: { "content-type": "application/json" } });
     }
 
     // Outbound command injection from main-app dispatcher.
@@ -448,6 +462,13 @@ export class IdentityDurableObject {
       return;
     }
 
+    // Engine-mode sockets (tagged at upgrade) never touch the legacy path.
+    const engineTag = readTag(ws);
+    if (engineTag) {
+      await this.engine.message(ws, engineTag, message);
+      return;
+    }
+
     await this.ensureMeta();
     if (!this.meta) {
       // DO state lost — should not happen on Hibernation wake-ups. Close.
@@ -479,6 +500,12 @@ export class IdentityDurableObject {
   }
 
   async webSocketClose(ws: WebSocket, code: number, reason: string, _wasClean: boolean): Promise<void> {
+    const engineTag = readTag(ws);
+    if (engineTag) {
+      // A stale socket's close, or one with a current sibling still open, changes nothing about the device.
+      await this.engine.closed(ws, engineTag);
+      return;
+    }
     // Cleanly mark lastSeen; state survives the close — DO hibernates
     // until the next event.
     await this.state.storage.put("lastClosedAt", Date.now());
@@ -504,6 +531,11 @@ export class IdentityDurableObject {
    * same sweep (P4.16).
    */
   async webSocketError(ws: WebSocket, error: unknown): Promise<void> {
+    const engineTag = readTag(ws);
+    if (engineTag) {
+      await this.engine.closed(ws, engineTag);
+      return;
+    }
     await this.state.storage.put("lastClosedAt", Date.now());
     const remaining = this.state.getWebSockets().filter((s) => s !== ws);
     if (remaining.length > 0) return;
@@ -519,6 +551,8 @@ export class IdentityDurableObject {
    * rather than one per tick.
    */
   async alarm(): Promise<void> {
+    // Engine outbox first: a durable delivery attempt, re-arming only for the next due entry.
+    await this.engine.drainOutbox();
     await this.ensureMeta();
     const now = Date.now();
     const pending = await this.state.storage.list<OutboundPending>({

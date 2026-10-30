@@ -25,15 +25,29 @@
  *     main-app-side ingest route (ADR 0004).
  */
 import { authenticate } from "./auth";
+import { admit } from "./engine-client";
+import { ENGINE_CTX_HEADER } from "./engine-mode";
 import { IdentityDurableObject } from "./identity-do";
 import { versionResponseBody } from "./version";
 
 export { IdentityDurableObject };
+// Named entrypoint for commands from the shell Worker (service binding only; not a route).
+export { CommandEntrypoint } from "./command-entrypoint";
 
 interface Env {
   IDENTITY_DO: DurableObjectNamespace;
   MAIN_APP: { fetch: (req: Request) => Promise<Response> };
   OCPP_INGEST_SECRET: string;
+  /** Service binding to the shell Worker's `EngineEntrypoint` (adopted path). */
+  ENGINE?: import("./engine-client").EngineBinding;
+  /**
+   * Legacy identity path switch. ANY value other than the exact string "true"
+   * leaves /ocpp/<id>, /dispatch and /invalidate-authorize answering 404. The
+   * adopted configuration never sets it, so adopted traffic cannot fall into the
+   * legacy Prisma-backed path. It exists only so the retained legacy tests and a
+   * deliberate rollback can still exercise that code.
+   */
+  LEGACY_OCPP_ENABLED?: string;
   /**
    * Populated by Cloudflare when `version_metadata` is declared. Optional
    * because the binding is still commented out in wrangler.jsonc pending
@@ -64,10 +78,12 @@ export default {
       });
     }
 
+    const legacy = env.LEGACY_OCPP_ENABLED === "true";
+
     // WebSocket upgrade from a charger. Accept both /ocpp/<id> and
-    // /ocpp/1.6/<id> — see file header for why.
+    // /ocpp/1.6/<id> — see file header for why. LEGACY: gated off by default.
     const wsMatch = /^\/ocpp\/(?:1\.6\/)?([^/]+)$/.exec(url.pathname);
-    if (wsMatch && wsMatch[1]) {
+    if (legacy && wsMatch && wsMatch[1]) {
       if (request.headers.get("upgrade") !== "websocket") {
         return new Response("expected websocket upgrade", { status: 426 });
       }
@@ -77,7 +93,7 @@ export default {
 
     // Main-app → gateway outbound dispatch
     const dispatchMatch = /^\/dispatch\/([0-9a-f-]+)$/.exec(url.pathname);
-    if (dispatchMatch && dispatchMatch[1] && request.method === "POST") {
+    if (legacy && dispatchMatch && dispatchMatch[1] && request.method === "POST") {
       const secret = request.headers.get("x-straumvakt-ingest");
       if (!secret || secret !== env.OCPP_INGEST_SECRET) {
         return new Response("unauthorized", { status: 401 });
@@ -91,7 +107,7 @@ export default {
     // control-plane call, and an unauthenticated one would let anyone
     // force the fleet back onto the uncached (Postgres) path.
     const invalidateMatch = /^\/invalidate-authorize\/([0-9a-f-]+)$/.exec(url.pathname);
-    if (invalidateMatch && invalidateMatch[1] && request.method === "POST") {
+    if (legacy && invalidateMatch && invalidateMatch[1] && request.method === "POST") {
       const secret = request.headers.get("x-straumvakt-ingest");
       if (!secret || secret !== env.OCPP_INGEST_SECRET) {
         return new Response("unauthorized", { status: 401 });
@@ -110,9 +126,33 @@ export default {
       );
     }
 
+    // Generic engine route: wss://{cpo-routing-id}.straumvakt.org/{installation-key}/{charge-point-id}.
+    // Host and path are resolved TOGETHER by the engine (admission); this Worker never
+    // decides tenancy. The legacy /ocpp/<id> route above is excluded from the adopted release.
+    if (/^\/[A-Za-z0-9]{12}\/[^/]+$/.test(url.pathname) && url.hostname.endsWith(".straumvakt.org")) {
+      if (request.headers.get("upgrade") !== "websocket") {
+        return new Response("expected websocket upgrade", { status: 426 });
+      }
+      return handleEngineUpgrade(request, env, url);
+    }
+
     return new Response("not found", { status: 404 });
   },
 } satisfies ExportedHandler<Env>;
+
+async function handleEngineUpgrade(request: Request, env: Env, url: URL): Promise<Response> {
+  const decision = await admit(env, url.hostname, url.pathname, request.headers.get("authorization"));
+  // Every refusal looks the same to the charger; the reason stays inside the engine.
+  if (decision.kind === "deny") return new Response("unauthorized", { status: 401 });
+  if (decision.kind === "unavailable") return new Response("service unavailable", { status: 503 });
+
+  // One Durable Object per PERMANENT device, so a reconnect under a new placement supersedes the old socket.
+  const stub = env.IDENTITY_DO.get(env.IDENTITY_DO.idFromName(`device:${decision.context.deviceId}`));
+  const headers: Record<string, string> = { upgrade: "websocket", [ENGINE_CTX_HEADER]: JSON.stringify(decision.context) };
+  const offered = request.headers.get("sec-websocket-protocol");
+  if (offered) headers["x-straumvakt-ws-protocol"] = offered;
+  return stub.fetch(new Request("https://do.internal/ws", { method: "GET", headers }));
+}
 
 async function handleChargerUpgrade(
   request: Request,

@@ -18,6 +18,7 @@
 // explicit joins, and a wrong FK declaration would be a silent lie about
 // cascade behaviour.
 
+import { sql } from "drizzle-orm";
 import { bigint, boolean, index, integer, jsonb, numeric, pgSchema, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 export const chargingSchema = pgSchema("charging");
@@ -276,6 +277,108 @@ export const liveSessions = chargingSchema.table(
     index().on(t.lastObservedAt),
     index().on(t.userId),
   ],
+);
+
+/**
+ * charging.ocpp_transaction_no_seq — the OCPP 1.6 transactionId namespace.
+ *
+ * transactionId is a 32-bit signed integer on the wire, so the namespace is
+ * exactly 1..2^31-1. One global sequence (not per device) makes the number a
+ * unique lookup key on its own; NO CYCLE makes exhaustion a loud error instead
+ * of a reused id. A per-connection random id is rejected: it collides and cannot
+ * be looked up after a restart. (S1 generic OCPP engine, migration 0003.)
+ */
+export const ocppTransactionNoSeq = chargingSchema.sequence("ocpp_transaction_no_seq", { startWith: 1, minValue: 1, maxValue: 2147483647, increment: 1, cycle: false });
+
+/**
+ * charging.ocpp_transactions — one row per OCPP transaction, SEALED context.
+ *
+ * org / installation / device / placement are the ones live when the
+ * transaction STARTED and are never rewritten: a device that later moves CPO
+ * leaves its history where it was. The charger's clock (`*_reported_at`) is
+ * stored apart from ours (`*_received_at`); neither chooses a tenant.
+ *
+ * `authorized = false` rows exist on purpose: a refused start whose charger
+ * delivers energy anyway is evidence of an exception. It is kept, flagged
+ * `excluded_unauthorized`, and never priced as ordinary use.
+ *
+ * `costing_state` is the durable hand-off to the existing cost workflow
+ * (needed | blocked_energy | excluded_unauthorized | not_needed). Stopping a
+ * transaction never depends on a tariff existing.
+ */
+export const ocppTransactions = chargingSchema.table(
+  "ocpp_transactions",
+  {
+    id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    transactionNo: integer("transaction_no").notNull().default(sql`nextval('charging.ocpp_transaction_no_seq')`),
+    orgId: uuid("org_id").notNull(),
+    installationId: uuid("installation_id").notNull(),
+    deviceId: uuid("device_id").notNull(),
+    placementId: uuid("placement_id").notNull(),
+    identityString: text("identity_string").notNull(),
+    connectorNo: integer("connector_no").notNull(),
+    idTag: text("id_tag").notNull(),
+    authorization: jsonb("authorization").notNull(),
+    authorized: boolean("authorized").notNull(),
+    userId: uuid("user_id"),
+    idTokenId: uuid("id_token_id"),
+    meterStartWh: bigint("meter_start_wh", { mode: "number" }).notNull(),
+    meterStopWh: bigint("meter_stop_wh", { mode: "number" }),
+    startedReportedAt: timestamp("started_reported_at", { withTimezone: true, precision: 6, mode: "date" }).notNull(),
+    startedReceivedAt: timestamp("started_received_at", { withTimezone: true, precision: 6, mode: "date" }).notNull(),
+    stoppedReportedAt: timestamp("stopped_reported_at", { withTimezone: true, precision: 6, mode: "date" }),
+    stoppedReceivedAt: timestamp("stopped_received_at", { withTimezone: true, precision: 6, mode: "date" }),
+    stopReason: text("stop_reason"),
+    energyWh: bigint("energy_wh", { mode: "number" }),
+    energyQuality: text("energy_quality"),
+    costingState: text("costing_state").notNull().default("not_needed"),
+    /** When the costing consumer reached a terminal outcome (costed or an explicit unresolved state). */
+    costedAt: timestamp("costed_at", { withTimezone: true, precision: 6, mode: "date" }),
+    /** Why: reason/factors for an unresolved state, or line count + totals for a costed one. Never a secret. */
+    costingDetail: jsonb("costing_detail"),
+    /** Failed consumer attempts; the consumer parks a row at the bound so it cannot starve others. */
+    costingAttempts: integer("costing_attempts").notNull().default(0),
+    reconcileFlag: text("reconcile_flag"),
+    /**
+     * The terms that applied, captured ONCE at start, as of the server start time (see costing/terms-snapshot.ts):
+     * agreement, clauses, bearer rules, rate references and driver-group membership, content-addressed by sha-256.
+     * A trigger (migration 0007) refuses any later change to a non-null value, so editing a rate, clause or rule
+     * after the session started cannot change how it is priced or who pays. NULL = started before this contract.
+     */
+    termsSnapshot: jsonb("terms_snapshot"),
+    startReceiptId: uuid("start_receipt_id").notNull(),
+    stopReceiptId: uuid("stop_receipt_id"),
+    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().$defaultFn(() => new Date()).$onUpdateFn(() => new Date()),
+  },
+  (t) => [
+    uniqueIndex().on(t.transactionNo),
+    index().on(t.deviceId, t.connectorNo),
+    index().on(t.orgId, t.startedReceivedAt),
+    index().on(t.installationId, t.startedReceivedAt),
+    // The costing consumer's claim: only rows that still need costing.
+    index("ocpp_transactions_costing_needed_index").on(t.startedReceivedAt).where(sql`${t.costingState} = 'needed'`),
+  ],
+);
+
+/**
+ * charging.ocpp_transaction_readings — meter evidence, one row per sample time.
+ *
+ * Primary key (transaction_id, sampled_at) makes a redelivered MeterValues a
+ * no-op. Energy and power are columns; every other measurand is kept verbatim
+ * in `other`, so nothing reported is dropped and nothing multiplies rows.
+ */
+export const ocppTransactionReadings = chargingSchema.table(
+  "ocpp_transaction_readings",
+  {
+    transactionId: uuid("transaction_id").notNull(),
+    sampledAt: timestamp("sampled_at", { withTimezone: true, precision: 6, mode: "date" }).notNull(),
+    energyWh: bigint("energy_wh", { mode: "number" }),
+    powerW: integer("power_w"),
+    other: jsonb("other").notNull().default({}),
+    receivedAt: timestamp("received_at", { withTimezone: true, precision: 6, mode: "date" }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.transactionId, t.sampledAt] })],
 );
 
 /** Prisma model `LiveSessionSample` — charging.live_session_samples */

@@ -23,6 +23,8 @@ export interface AuthFail {
 export type AuthResult = AuthOk | AuthFail;
 
 export interface GatewayEnv {
+  /** Service binding to the shell Worker's `EngineEntrypoint` (adopted path). */
+  ENGINE?: import("./engine-client").EngineBinding;
   MAIN_APP: { fetch: (req: Request) => Promise<Response> };
   OCPP_INGEST_SECRET: string;
   // Sprint 5 / ADR 0017 — inbound OCPP events queue. Optional because

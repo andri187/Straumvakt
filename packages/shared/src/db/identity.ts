@@ -297,10 +297,13 @@ export const organizations = tenancySchema.table(
     kind: organizationKindEnum("kind"),
     contacts: jsonb("contacts").notNull().default([]),
     mainContactUserId: uuid("main_contact_user_id"),
+    /** Subdomain label for the future charger connection address (S1, migration 0002). */
+    cpoRoutingId: text("cpo_routing_id"),
   },
   (t) => [
     // @unique in Prisma — lost in the Drizzle port, restored 2026-10-26.
     uniqueIndex().on(t.kennitala),
+    uniqueIndex().on(t.cpoRoutingId),
   ],
 );
 

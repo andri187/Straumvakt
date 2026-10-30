@@ -1,0 +1,11 @@
+import { handleShellLogout } from "@/lib/cpo-shell-handlers";
+
+export const dynamic = "force-dynamic";
+
+export async function POST(request: Request) {
+  return handleShellLogout(request);
+}
+
+export async function GET(request: Request) {
+  return handleShellLogout(request);
+}

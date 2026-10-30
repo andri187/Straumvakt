@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminSessionConfig, verifyAdminSession } from "@/lib/admin-session";
+import { decideShellRoute } from "@/lib/cpo-shell-policy";
+import { SHELL_COOKIE_NAME, verifyShellSession } from "@/lib/cpo-shell-session";
 
 // 2026-08-08 relaunch — straumvakt.org was reset to a single clean login
 // (src/app/page.tsx) plus one placeholder authenticated destination
@@ -76,7 +78,68 @@ function staffRouteResponse(
   return NextResponse.next({ request: { headers } });
 }
 
+// ── Surface selection ───────────────────────────────────────────────────
+// The deployable surface is the CPO test shell: only the routes listed in
+// src/lib/cpo-shell-policy.ts exist, and the legacy rules below (admin
+// cookie, staff, org, demo and preview routes, the preview-flag bypass)
+// are never consulted. The legacy surface remains available for local
+// development only: it needs STRAUMVAKT_SURFACE=legacy AND a non-production
+// build, so a production deployment cannot be switched onto it by a stray
+// variable.
+function legacySurfaceEnabled(): boolean {
+  return (
+    process.env.NODE_ENV !== "production" &&
+    process.env.STRAUMVAKT_SURFACE === "legacy"
+  );
+}
+
+async function shellMiddleware(req: NextRequest): Promise<NextResponse> {
+  const { pathname } = req.nextUrl;
+
+  let hasSession = false;
+  try {
+    const session = await verifyShellSession(
+      req.cookies.get(SHELL_COOKIE_NAME)?.value,
+    );
+    hasSession = session !== null;
+  } catch {
+    hasSession = false;
+  }
+
+  const decision = decideShellRoute({ pathname, hasSession });
+
+  if (decision.action === "redirect") {
+    return NextResponse.redirect(new URL(decision.location, req.url));
+  }
+  if (decision.action === "unauthorized") {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401, headers: { "cache-control": "no-store" } });
+  }
+  if (decision.action === "notFound") {
+    return pathname.startsWith("/api/")
+      ? NextResponse.json({ error: "Not found" }, { status: 404 })
+      : new NextResponse("Not found", { status: 404 });
+  }
+
+  // Never forward a client-supplied trusted-admin header.
+  const headers = new Headers(req.headers);
+  headers.delete(ADMIN_HEADER);
+  const response = NextResponse.next({ request: { headers } });
+  if (decision.noStore) {
+    response.headers.set("cache-control", "private, no-store");
+  }
+  return response;
+}
+
 export async function middleware(req: NextRequest) {
+  if (legacySurfaceEnabled()) {
+    // Legacy behaviour: static files (paths with a dot) were never matched.
+    if (req.nextUrl.pathname.includes(".")) return NextResponse.next();
+    return legacyMiddleware(req);
+  }
+  return shellMiddleware(req);
+}
+
+async function legacyMiddleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   if (isPublicAsset(pathname)) {
@@ -152,6 +215,9 @@ export async function middleware(req: NextRequest) {
   return NextResponse.next({ request: { headers: sanitisedHeaders } });
 }
 
+// Matches every path except Next's own static output, so that on the shell
+// surface dotted public files (legacy HTML, images, SVG models) are also
+// answered by the route policy instead of being served unchecked.
 export const config = {
-  matcher: ["/((?!.*\\..*).*)"],
+  matcher: ["/((?!_next/static|_next/image).*)"],
 };

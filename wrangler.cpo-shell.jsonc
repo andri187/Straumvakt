@@ -1,0 +1,34 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "straumvakt-cpo-shell",
+  "account_id": "1b2fc4c163e8544e9cd472baa5a19c74",
+  "main": "workers/cpo-shell.mjs",
+  "compatibility_date": "2026-10-27",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  },
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [
+    { "pattern": "www.straumvakt.org", "custom_domain": true },
+    { "pattern": "straumvakt.org", "custom_domain": true }
+  ],
+  "vars": {
+    "CPO_SHELL_USERNAME": "Straumvakt",
+    "NEXT_PUBLIC_APP_NAME": "Straumvakt"
+  },
+  "ratelimits": [{
+    "name": "SHELL_LOGIN_LIMITER",
+    "namespace_id": "2026102701",
+    "simple": { "limit": 5, "period": 60 }
+  }],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 0.1,
+    "traces": { "enabled": true, "head_sampling_rate": 0.1 }
+  },
+  "limits": { "cpu_ms": 100 }
+}

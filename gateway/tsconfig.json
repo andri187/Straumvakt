@@ -17,7 +17,8 @@
     "noEmit": true,
     "paths": {
       "@/*": ["./src/*"],
-      "@shared/ocpp/*": ["../src/lib/ocpp/*"]
+      "@shared/ocpp/*": ["../src/lib/ocpp/*"],
+      "@engine/*": ["../src/lib/ocpp-engine/*"]
     },
     "baseUrl": "."
   },

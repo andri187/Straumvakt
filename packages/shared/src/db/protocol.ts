@@ -155,4 +155,67 @@ export const externalCpmsRefs = roamingSchema.table(
 
 /** Prisma model `OcppConfigurationKey` — ocpp.configuration_keys */
 
+/**
+ * ocpp.protocol_receipts — what arrived, what was decided, what we replied.
+ *
+ * (S1 generic OCPP engine, migration 0003.) Written only for the financially
+ * relevant actions (Authorize, StartTransaction, StopTransaction, plus
+ * quarantined MeterValues), NOT for Heartbeat or Status, so a quiet fleet writes
+ * nothing here. The unique key (device_id, message_id, request_hash) is what
+ * makes a charger's retransmission return the SAME stored response, while a
+ * different request that merely reuses a message id is a different row.
+ *
+ * `payload` is bounded by a CHECK in the migration (pg_column_size <= 16384).
+ */
+export const protocolReceipts = ocppSchema.table(
+  "protocol_receipts",
+  {
+    id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    orgId: uuid("org_id").notNull(),
+    installationId: uuid("installation_id").notNull(),
+    deviceId: uuid("device_id").notNull(),
+    placementId: uuid("placement_id").notNull(),
+    identityString: text("identity_string").notNull(),
+    action: text("action").notNull(),
+    messageId: text("message_id").notNull(),
+    requestHash: text("request_hash").notNull(),
+    payload: jsonb("payload").notNull(),
+    receivedAt: timestamp("received_at", { withTimezone: true, precision: 6, mode: "date" }).notNull(),
+    decision: jsonb("decision"),
+    response: jsonb("response"),
+    respondedAt: timestamp("responded_at", { withTimezone: true, precision: 6, mode: "date" }),
+  },
+  (t) => [
+    uniqueIndex().on(t.deviceId, t.messageId, t.requestHash),
+    index().on(t.orgId, t.receivedAt),
+  ],
+);
+
+/**
+ * ocpp.quarantined_events — evidence that matched no known transaction.
+ *
+ * A stop for an id we never issued, a stop for another device's transaction, or
+ * a reading with no home. Kept (never logged-and-dropped) until an operator or
+ * a reconciliation resolves it; `resolved_at IS NULL` is the open set.
+ */
+export const quarantinedEvents = ocppSchema.table(
+  "quarantined_events",
+  {
+    id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    orgId: uuid("org_id").notNull(),
+    installationId: uuid("installation_id").notNull(),
+    deviceId: uuid("device_id").notNull(),
+    receiptId: uuid("receipt_id").notNull(),
+    reason: text("reason").notNull(),
+    transactionNo: integer("transaction_no"),
+    receivedAt: timestamp("received_at", { withTimezone: true, precision: 6, mode: "date" }).notNull(),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true, precision: 6, mode: "date" }),
+    resolution: text("resolution"),
+  },
+  (t) => [
+    index().on(t.deviceId, t.receivedAt),
+    index().on(t.resolvedAt),
+  ],
+);
+
 /** Prisma model `CommandHistory` — reports.command_history */

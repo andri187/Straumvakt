@@ -6,6 +6,7 @@ export default defineConfig({
     alias: {
       "@": path.resolve(__dirname, "src"),
       "@shared/ocpp": path.resolve(__dirname, "../src/lib/ocpp"),
+      "@engine": path.resolve(__dirname, "../src/lib/ocpp-engine"),
     },
   },
   test: {
