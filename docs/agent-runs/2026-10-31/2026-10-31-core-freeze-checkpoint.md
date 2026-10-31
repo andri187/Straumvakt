@@ -120,3 +120,27 @@ showed activation waiting / status unknown, not a proven connected charger.
 Registration is on the existing live release, **not hardware validation of the
 new local core checkpoint**. A fresh accepted boot is the remaining connection
 proof; no charging session or CDR has been claimed.
+
+### Connection handoff remains unverified
+
+Read-only Neon inspection identified the existing primary target from current
+control-plane metadata: project `silent-thunder-69180957`, branch
+`br-broad-boat-zaftlmic` / development, endpoint `ep-red-pine-zasodu3y`, database
+`neondb`, role `neondb_owner`. Scoped SELECTs only, no direct SQL mutation.
+Promotion was recorded delivered once at 22:14:12.195Z, outcome
+`reconnect_requested`; the selected device had no registered BootNotification
+receipt at the subsequent check. At 22:18 UTC admission data was consistent:
+active Test CPO, exact `zpr148882` identity, current identity and placement,
+matching organisation, open installation, password mode none.
+
+Andri reports Zaptec Portal: online for 18 days, car disconnected, 0 kW,
+authentication OCPP 1.6J cloud. This proves the vendor-side online report, not a
+Straumvakt WebSocket. A narrowly scoped existing Cloudflare observability query
+found only sampled shell page requests; 1% gateway sampling cannot exclude a
+failed reconnect. No claim that Zaptec or the gateway is definitively at fault.
+
+Requested one operator-controlled OCPP URL disable/re-enable on the test
+installation to isolate a fresh registered connection from the pending-to-
+registered reconnect handoff. No reset or electrical/load-balancing change was
+requested. Until that succeeds, report **registered, connection unverified**,
+not complete working onboarding. Do not proceed to a charging-session test.
