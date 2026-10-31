@@ -94,3 +94,29 @@ plain-Node asset preparation now succeeds (88 excluded generated assets removed,
 three approved public files retained). The 43 edge/realtime tests pass with the
 workspace TEMP path; an initial test attempt failed on sandbox TEMP rename EPERM,
 not on assertions. No product feature was added.
+
+Follow-up packaging fix committed as **72a4fcb**. Fresh OpenNext packaging,
+asset pruning and both matched Worker dry-runs now pass. Still no deployment.
+
+## Real charger registration through the existing live UI
+
+Andri enabled `wss://test-cpo.straumvakt.org/{deviceid}` at the Zaptec installation
+level. Fresh incoming connections appeared around 22:12–22:13 UTC. Selected only
+`zpr148882`, whose retained BootNotification reports Zaptec / ZAPTEC PRO /
+serial ZPR148882 / firmware 6.3.3.3. The retained boot itself is timestamped 13:30,
+not falsely represented as a fresh boot.
+
+At **22:14:11 UTC**, saved this one device through the production installation
+editor into existing `Installation save test` / `Test circuit`. Save succeeded
+at revision 2, device `364a0fe4-80ca-4a29-b61f-f20d3bcdd8f0`, circuit
+`ca7f1170-9fa2-40d7-ae3a-fd4ad45593cb`, installation
+`11320b72-f9c8-4fa8-b104-25e95ec72f39`. The UI history records acceptance from
+Incoming. Main/circuit ratings remain the existing 0 A; no electrical value,
+vendor configuration or load-balancing setting was changed by Codex.
+
+The live list verified the device under the correct installation/circuit and
+removed it from unregistered Incoming. Immediately after saving it correctly
+showed activation waiting / status unknown, not a proven connected charger.
+Registration is on the existing live release, **not hardware validation of the
+new local core checkpoint**. A fresh accepted boot is the remaining connection
+proof; no charging session or CDR has been claimed.
