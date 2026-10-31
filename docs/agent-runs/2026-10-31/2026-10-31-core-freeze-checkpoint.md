@@ -81,3 +81,16 @@ three generated Drizzle snapshots. Four existing extra EOF blank lines remain
 in TASKS, installation-editor, meter-readings and pending-service; no semantic
 cleanup was mixed into the freeze. Source and prior historical changes outside
 the explicit checkpoint remain in the working tree.
+
+Local source checkpoint created: **05de7b2**. No active Git hooks were configured
+beyond the sample hook files; no push occurred. Remaining 140 short-status entries
+are outside the checkpoint (directory grouping changes this count).
+
+Fresh OpenNext packaging after checkpoint exposed a real integration regression:
+the asset-pruner's plain-Node import of the edge module eagerly loaded the optional
+TypeScript realtime runtime. Fixed by loading that runtime only for an enabled
+WebSocket upgrade, with disabled/unbound upgrades returning 404. The original
+plain-Node asset preparation now succeeds (88 excluded generated assets removed,
+three approved public files retained). The 43 edge/realtime tests pass with the
+workspace TEMP path; an initial test attempt failed on sandbox TEMP rename EPERM,
+not on assertions. No product feature was added.
