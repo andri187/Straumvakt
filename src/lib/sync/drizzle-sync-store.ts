@@ -80,17 +80,15 @@ export function drizzleSyncRepo(x: Executor): SyncRepo {
 
     async chargersByIds(installationId, ids) {
       if (ids.length === 0) return [];
-      const [inst] = await x.select({ key: installations.installationKey }).from(installations).where(eq(installations.id, installationId));
-      const prefix = `${inst?.key ?? ""}/`;
       const rows = await x
-        .select({ deviceId: devices.id, vendor: devices.vendor, model: devices.model, serialNumber: devices.serialNumber, circuitId: placements.circuitId, label: placements.label, identity: deviceIdentities.identityString })
+        .select({ deviceId: devices.id, vendor: devices.vendor, model: devices.model, serialNumber: devices.serialNumber, circuitId: placements.circuitId, label: placements.label, chargePointId: deviceIdentities.chargePointId, identity: deviceIdentities.identityString })
         .from(placements)
         .innerJoin(devices, eq(devices.id, placements.deviceId))
         .leftJoin(deviceIdentities, and(eq(deviceIdentities.deviceId, devices.id), openIdentity))
         .where(and(eq(placements.installationId, installationId), inArray(devices.id, ids), openPlacement));
       return rows
         .filter((r) => r.circuitId !== null)
-        .map((r): ChargerView => ({ id: r.deviceId, circuitId: r.circuitId as string, label: r.label ?? "", chargePointId: r.identity?.startsWith(prefix) ? r.identity.slice(prefix.length) : (r.identity ?? ""), vendor: r.vendor, model: r.model, serialNumber: r.serialNumber }));
+        .map((r): ChargerView => ({ id: r.deviceId, circuitId: r.circuitId as string, label: r.label ?? "", chargePointId: r.chargePointId ?? r.identity ?? "", vendor: r.vendor, model: r.model, serialNumber: r.serialNumber }));
     },
 
     async operationalSince(id, afterSeq, limit) {

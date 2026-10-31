@@ -14,7 +14,8 @@
 //      file and snapshot, and does every snapshot's `prevId` equal its
 //      predecessor's `id`?
 //   3. SAFETY Is every migration after the baseline additive (no DROP TABLE /
-//      COLUMN / SCHEMA / SEQUENCE, no data statement)? Hand-written CHECKs live in
+//      COLUMN / SCHEMA / SEQUENCE, no unapproved data statement)? Migration 0008's
+//      exact reviewed identity-column backfill is the sole exception. Hand-written CHECKs live in
 //      the SQL tail that snapshots cannot express, so the named ones are required.
 //
 // What this does NOT prove: that the SQL executes, that constraints hold, or that
@@ -24,6 +25,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { hasUnapprovedDataStatement } from "./adopted-migration-policy.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const DRIZZLE = path.join(ROOT, "apps/api/drizzle");
@@ -57,7 +59,7 @@ const REQUIRED = {
 for (const e of journal.entries.slice(1)) {
   const sql = fs.readFileSync(path.join(DRIZZLE, `${e.tag}.sql`), "utf8");
   if (/\bDROP\s+(TABLE|COLUMN|SCHEMA|SEQUENCE)\b/i.test(sql)) fail(`${e.tag} drops a table/column/schema/sequence`);
-  if (/\b(DELETE\s+FROM|TRUNCATE|INSERT\s+INTO|UPDATE\s+")/i.test(sql)) fail(`${e.tag} contains a data statement`);
+  if (hasUnapprovedDataStatement(e.tag, sql)) fail(`${e.tag} contains an unapproved data statement`);
   for (const name of REQUIRED[e.tag] ?? []) if (!sql.includes(name)) fail(`${e.tag} lacks required constraint ${name}`);
 }
 
@@ -90,4 +92,4 @@ if (problems.length) {
   console.error(`check-adopted-schema: ${problems.length} problem(s)\n- ${problems.join("\n- ")}`);
   process.exit(1);
 }
-console.log(`check-adopted-schema: OK (${journal.entries.length} migrations, chain intact, no drift, additive). This does not prove the SQL executes.`);
+console.log(`check-adopted-schema: OK (${journal.entries.length} migrations, chain intact, no drift, approved migration policy). This does not prove the SQL executes.`);

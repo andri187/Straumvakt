@@ -31,12 +31,12 @@ export function hubFromNamespace(ns: HubNamespace | undefined | null): HubClient
 /** Per-isolate structure cache. Correctness never depends on it (see cache.ts); it only saves tree reads. */
 const isolateCache = new StructureCache();
 
-export type SyncBindings = { VERSION_HUB?: HubNamespace };
+export type SyncBindings = { VERSION_HUB?: HubNamespace; CPO_SHELL_REALTIME_ENABLED?: string };
 
 export function liveSyncDeps(env: ShellDbEnv, bindings: SyncBindings = {}, now: () => number = Date.now): SyncApiDeps {
   const hub = hubFromNamespace(bindings.VERSION_HUB);
   return {
-    env,
+    env: { ...env, CPO_SHELL_REALTIME_ENABLED: hub && (bindings.CPO_SHELL_REALTIME_ENABLED ?? env.CPO_SHELL_REALTIME_ENABLED) === "true" ? "true" : "false" },
     async withSync(fn) {
       const url = readDatabaseUrl(env);
       if (!url) throw new DatabaseUnavailableError();

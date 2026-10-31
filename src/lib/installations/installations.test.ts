@@ -3,7 +3,8 @@ import { sharedLoginActor } from "./actor";
 import { MemoryStore } from "./__tests__/memory-store";
 import {
   SaveInstallationInput,
-  connectionAddress,
+  chargerAddress,
+  cpoAddress,
   effectiveAllowanceAmps,
   isReservedRoutingLabel,
   newInstallationKey,
@@ -62,6 +63,13 @@ describe("input contract", () => {
     expect(parsed.circuits[0].ratingAmps).toBeNull();
     expect(parsed.circuits[0].phaseCount).toBeNull();
     expect(parsed.circuits[1].ratingAmps).toBe(0);
+  });
+
+  it("treats a vendor reference and a vendor import as optional, so a manual save is unchanged", () => {
+    const parsed = input({ circuits: [circuit("new-a", null), circuit("new-b", null, { vendorRef: " 11 " })] });
+    expect(parsed.circuits[0].vendorRef).toBeNull();
+    expect(parsed.circuits[1].vendorRef).toBe("11");
+    expect(parsed.vendorImport).toBeUndefined();
   });
 
   it("makes OEM, model and serial optional", () => {
@@ -155,7 +163,9 @@ describe("saveInstallation", () => {
       deps(),
     );
     expect(renamed.snapshot.installation).toMatchObject({ id, key: "abcdefghjkmn", displayName: "Renamed", revision: 2 });
-    expect(connectionAddress("nordic-charge-ehf", renamed.snapshot.installation.key)).toBe("wss://nordic-charge-ehf.straumvakt.org/abcdefghjkmn/{charge-point-id}");
+    // The address is the CPO's, plus the charger's own id; the installation key is not part of it and a rename changes nothing.
+    expect(cpoAddress("nordic-charge-ehf")).toBe("wss://nordic-charge-ehf.straumvakt.org/");
+    expect(chargerAddress("nordic-charge-ehf", "CP-001")).toBe("wss://nordic-charge-ehf.straumvakt.org/CP-001");
   });
 
   it("builds a tree with a sub-circuit and several chargers in one save, parents before children", async () => {

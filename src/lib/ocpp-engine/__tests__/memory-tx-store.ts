@@ -31,15 +31,14 @@ export function memoryTxStore(opts: { facts?: (idTag: string) => AuthorizationFa
   const store: TransactionStore = {
     async read(fn) {
       stats.reads++;
-      return fn(reader);
-    },
-    captureTerms: opts.terms || opts.failCapture
+      return fn(reader, opts.terms || opts.failCapture
       ? async ({ userId }) => {
           opts.captureLog?.push(userId);
           if (opts.failCapture?.()) throw new Error("terms lookup failed");
           return opts.terms!(userId);
         }
-      : undefined,
+      : undefined);
+    },
     async findReceipt(deviceId, messageId, requestHash) {
       const r = state.receipts.find((x) => x.key === `${deviceId}|${messageId}|${requestHash}`);
       return r ? { id: r.id, response: r.response ?? null } : null;

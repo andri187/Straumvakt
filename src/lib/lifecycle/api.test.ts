@@ -75,6 +75,22 @@ describe("lifecycle endpoint behaviour", () => {
     expect(await r.json()).toMatchObject({ error: "stop_unavailable" });
     expect(world.w.requests.size).toBe(0);
   });
+  it("progress sends ONE attempt-keyed stop through the bound port; a repeated call inside the backoff sends nothing more, and the attempt is visible in the response", async () => {
+    world.w.txs.push({ transactionNo: 1, transactionId: "tx1", deviceId: DEV, stoppedReceivedAt: null, authorized: true, costingState: "not_needed" });
+    const sent: { attemptId: string; requestId: string; placementId: string; transactionNo: number; deadlineMs: number }[] = [];
+    deps = {
+      env: ENV,
+      withLifecycle: async (fn) => fn({
+        store: world.store, stop: { requestStop: async (i) => { sent.push(i); return "accepted"; } }, costing: null, authorise: () => false, now: () => new Date("2026-10-30T10:00:00Z"),
+      }),
+    };
+    const id = ((await (await post({ action: "remove", deviceId: DEV, requestKey: KEY })).json()) as { id: string }).id;
+    const first = (await (await post({ action: "progress", requestId: id })).json()) as { state: string; sessions: { stop: { attempts: number; inFlight?: unknown; everAccepted: boolean } }[] };
+    await post({ action: "progress", requestId: id });
+    expect(sent).toEqual([{ deviceId: DEV, transactionNo: 1, requestId: id, attemptId: `${id}:1:1`, placementId: "p1", deadlineMs: Date.parse("2026-10-30T10:01:00Z") }]);
+    expect(first).toMatchObject({ state: "stopping", sessions: [{ stop: { attempts: 1, everAccepted: true } }] });
+    expect(first.sessions[0]!.stop.inFlight).toBeUndefined();
+  });
   it("another organisation's device and an unknown device are the same 404", async () => {
     world.w.placements.set("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", { deviceId: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", placementId: "p9", orgId: "99999999-9999-4999-8999-999999999999", installationId: INST, circuitId: null, label: "x", chargePointId: "CP-9" });
     // the shared login administers every organisation today (platform operator), so isolation is demonstrated at the service layer; here: unknown id

@@ -7,12 +7,13 @@ import type { Route } from "next";
 import type { ReactNode } from "react";
 import type { Action, ShellPage, ShellTab, TabContent } from "./sections";
 
-export function ContextBar() {
+/** `organisation` replaces the generic "none selected" text on pages that know better; absent keeps it. */
+export function ContextBar({ organisation }: { organisation?: string } = {}) {
   return (
     <div className="ws-context">
       <span>
         <i className="ws-context-dot" aria-hidden="true" />
-        Shared test login · no organisation selected
+        Shared test login · {organisation ?? "no organisation selected"}
       </span>
       <span>Charge point operator workspace</span>
     </div>

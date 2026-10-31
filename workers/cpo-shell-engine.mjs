@@ -9,13 +9,33 @@
 // without loading the generated OpenNext worker.
 import { WorkerEntrypoint } from 'cloudflare:workers';
 import { liveEngineDeps, runCosting } from '../src/lib/ocpp-engine/live.ts';
-import { rpcAdmit, rpcCall } from '../src/lib/ocpp-engine/rpc.ts';
+import { rpcAdmit, rpcCall, rpcCallBatch, rpcPendingOp } from '../src/lib/ocpp-engine/rpc.ts';
 import { hubFromNamespace } from '../src/lib/sync/live.ts';
+import { validLiveDevice } from '../src/lib/ocpp-engine/live-projection.ts';
 
 export class EngineEntrypoint extends WorkerEntrypoint {
+  async publishLiveV1(value) {
+    if (this.env.CPO_SHELL_REALTIME_ENABLED !== 'true' || !this.env.VERSION_HUB || !validLiveDevice(value)) return { ok: false };
+    const stub = this.env.VERSION_HUB.get(this.env.VERSION_HUB.idFromName(`live:${value.installationId}`));
+    return stub.publishLive(value);
+  }
+  /** Bounded asynchronous ingestion on the existing internal binding. */
+  async callBatchV1(input) {
+    const outcomes = await rpcCallBatch(liveEngineDeps(this.env, undefined, hubFromNamespace(this.env.VERSION_HUB)), input);
+    return outcomes.map((outcome, index) => ({ messageId: input[index]?.messageId, outcome }));
+  }
   /** @param {{host: string, pathname: string, authorization: string | null}} input */
   async admit(input) {
     return rpcAdmit(liveEngineDeps(this.env, undefined, hubFromNamespace(this.env.VERSION_HUB)), input);
+  }
+
+  /**
+   * Pending onboarding for an unregistered charger: store its complete BootNotification, re-check registration, or
+   * note a close. Grants nothing and registers nothing.
+   * @param {{op: 'boot' | 'check' | 'closed', routingId: string, chargePointId: string}} input
+   */
+  async pending(input) {
+    return rpcPendingOp(liveEngineDeps(this.env), input);
   }
 
   /** @param {{ctx: object, messageId: string, action: string, payload: unknown, receivedAt: string}} input */

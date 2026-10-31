@@ -29,7 +29,7 @@ export const NAV_GROUPS: readonly { heading: string; items: readonly NavItem[] }
         key: "overview",
         label: "Overview",
         href: "/cpo",
-        summary: "Setup progress, charger activity and items needing attention.",
+        summary: "Key indicators for the shared test login.",
       },
       {
         key: "people",

@@ -26,7 +26,9 @@
  */
 import { authenticate } from "./auth";
 import { admit } from "./engine-client";
+import { guardIngress, type IngressGuardEnv } from "./ingress-guard";
 import { ENGINE_CTX_HEADER } from "./engine-mode";
+import { PENDING_ATTEMPT_HEADER, PENDING_CTX_HEADER } from "./pending-mode";
 import { IdentityDurableObject } from "./identity-do";
 import { versionResponseBody } from "./version";
 
@@ -34,7 +36,7 @@ export { IdentityDurableObject };
 // Named entrypoint for commands from the shell Worker (service binding only; not a route).
 export { CommandEntrypoint } from "./command-entrypoint";
 
-interface Env {
+interface Env extends IngressGuardEnv {
   IDENTITY_DO: DurableObjectNamespace;
   MAIN_APP: { fetch: (req: Request) => Promise<Response> };
   OCPP_INGEST_SECRET: string;
@@ -49,6 +51,12 @@ interface Env {
    */
   LEGACY_OCPP_ENABLED?: string;
   /**
+   * Pending onboarding switch. Only the exact string "true" lets an UNKNOWN charge point id of an active CPO keep a
+   * restricted waiting socket; anything else keeps today's plain 401. Retired, ambiguous and credential-failing
+   * identities are refused regardless.
+   */
+  PENDING_ONBOARDING?: string;
+  /**
    * Populated by Cloudflare when `version_metadata` is declared. Optional
    * because the binding is still commented out in wrangler.jsonc pending
    * approval — the runtime half is built so that enabling it is a config
@@ -60,6 +68,18 @@ interface Env {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+
+    // Generic engine route: wss://{cpo-routing-id}.straumvakt.org/{charge-point-id}. The CPO is the host and the
+    // charger's own OCPP identity is the single path segment; there is no installation segment. Host and path are
+    // resolved TOGETHER by the engine (admission), which derives the installation from the charger's registered
+    // placement; this Worker never decides tenancy. A WebSocket upgrade on this shape is claimed first, so a charger
+    // whose id happens to be "health" or "version" is still routed to the engine; a plain GET still reaches those
+    // routes below. The old two-segment form /{installation-key}/{charge-point-id} matches nothing and is a 404.
+    // The legacy /ocpp/<id> route further down is excluded from the adopted release.
+    const isEngineRoute = url.hostname.endsWith(".straumvakt.org") && /^\/[^/]+$/.test(url.pathname);
+    if (isEngineRoute && request.headers.get("upgrade") === "websocket") {
+      return handleEngineUpgrade(request, env, url);
+    }
 
     if (url.pathname === "/health") {
       // Exactly the bytes "ok". The alert policy specifies a synthetic probe
@@ -126,25 +146,67 @@ export default {
       );
     }
 
-    // Generic engine route: wss://{cpo-routing-id}.straumvakt.org/{installation-key}/{charge-point-id}.
-    // Host and path are resolved TOGETHER by the engine (admission); this Worker never
-    // decides tenancy. The legacy /ocpp/<id> route above is excluded from the adopted release.
-    if (/^\/[A-Za-z0-9]{12}\/[^/]+$/.test(url.pathname) && url.hostname.endsWith(".straumvakt.org")) {
-      if (request.headers.get("upgrade") !== "websocket") {
-        return new Response("expected websocket upgrade", { status: 426 });
-      }
-      return handleEngineUpgrade(request, env, url);
-    }
+    // A CPO host and a single segment, but not a WebSocket upgrade.
+    if (isEngineRoute) return new Response("expected websocket upgrade", { status: 426 });
 
     return new Response("not found", { status: 404 });
   },
 } satisfies ExportedHandler<Env>;
 
 async function handleEngineUpgrade(request: Request, env: Env, url: URL): Promise<Response> {
-  const decision = await admit(env, url.hostname, url.pathname, request.headers.get("authorization"));
+  const refused = await guardIngress(request, env, url);
+  if (refused) return refused;
+  // Pending onboarding is a deliberate switch: only the exact string "true" lets a genuinely unknown charger wait.
+  const acceptPending = env.PENDING_ONBOARDING === "true";
+  const decision = await admit(env, url.hostname, url.pathname, request.headers.get("authorization"), acceptPending);
   // Every refusal looks the same to the charger; the reason stays inside the engine.
   if (decision.kind === "deny") return new Response("unauthorized", { status: 401 });
   if (decision.kind === "unavailable") return new Response("service unavailable", { status: 503 });
+  if (decision.kind === "pending") {
+    // Per-CPO admission gate: a lease is taken BEFORE any pending state is allocated, so the number of waiting sockets per CPO
+    // is bounded. Fail closed: an unreachable gate is a 503, a CPO at its cap is a 429.
+    const gateStub = env.IDENTITY_DO.get(env.IDENTITY_DO.idFromName(`pending-gate:${decision.orgId}`));
+    // One token per upgrade attempt. It is the upgrade's claim at the gate (one unconfirmed claim per id at a time) and, handed
+    // on to the pending object, the owner token of the connection this upgrade creates. A refused upgrade can therefore give
+    // back exactly its own unconfirmed claim and never the slot of a surviving or newer connection.
+    const attempt = crypto.randomUUID();
+    let granted = false;
+    try {
+      const res = await gateStub.fetch(new Request("https://do.internal/gate/acquire", { method: "POST", body: JSON.stringify({ id: decision.chargePointId, attempt }) }));
+      granted = ((await res.json()) as { ok?: unknown }).ok === true;
+    } catch {
+      return new Response("service unavailable", { status: 503 });
+    }
+    if (!granted) return new Response("retry later", { status: 429, headers: { "retry-after": "60" } });
+    const giveBackAttempt = async () => {
+      try {
+        await gateStub.fetch(new Request("https://do.internal/gate/release", { method: "POST", body: JSON.stringify({ id: decision.chargePointId, attempt }) }));
+      } catch {
+        /* best effort: an unconfirmed claim lapses by itself within the first-boot deadline */
+      }
+    };
+    // A restricted object per CPO + charge point id. It has no device, placement or credential context.
+    const pendingStub = env.IDENTITY_DO.get(env.IDENTITY_DO.idFromName(`pending:${decision.orgId}:${decision.chargePointId}`));
+    const pendingHeaders: Record<string, string> = {
+      upgrade: "websocket",
+      [PENDING_CTX_HEADER]: JSON.stringify({ orgId: decision.orgId, routingId: decision.routingId, chargePointId: decision.chargePointId }),
+      [PENDING_ATTEMPT_HEADER]: attempt,
+    };
+    const offeredPending = request.headers.get("sec-websocket-protocol");
+    if (offeredPending) pendingHeaders["x-straumvakt-ws-protocol"] = offeredPending;
+    let upgraded: Response;
+    try {
+      upgraded = await pendingStub.fetch(new Request("https://do.internal/pending/ws", { method: "GET", headers: pendingHeaders }));
+    } catch {
+      // The outcome is unknown: the object may have accepted the socket before the error. Do NOT give the claim back, or an
+      // accepted connection could be left without its slot. A socket confirms its own claim on its first boot (or gives it back
+      // at its first-boot deadline); if there is no socket the claim lapses within that deadline.
+      return new Response("service unavailable", { status: 503 });
+    }
+    // A definite refusal (unsupported subprotocol, bad context, object error) leaves no socket: give back this claim only.
+    if (upgraded.status !== 101) await giveBackAttempt();
+    return upgraded;
+  }
 
   // One Durable Object per PERMANENT device, so a reconnect under a new placement supersedes the old socket.
   const stub = env.IDENTITY_DO.get(env.IDENTITY_DO.idFromName(`device:${decision.context.deviceId}`));

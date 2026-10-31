@@ -4,10 +4,16 @@ import { redirect } from "next/navigation";
 import { SHELL_SIGN_IN } from "@/lib/cpo-shell-policy";
 import { DatabaseUnavailableError } from "@/lib/installations/api";
 import { openDb, readDatabaseUrl } from "@/lib/installations/db";
+import type { IncomingCharger } from "@/lib/installations/discovery";
 import { listChargers } from "@/lib/installations/drizzle-store";
+import { shellDeps } from "@/lib/installations/live-bindings";
 import { currentActor } from "@/lib/installations/session";
+import "../installations/installation-editor.css";
 import { ContextBar } from "../workspace-ui";
-import { LiveConnection, LiveStatusProvider } from "./live-status";
+import { OverviewRefresh } from "../overview-refresh";
+import { GroupedChargers } from "./grouped-table";
+import { Incoming } from "./incoming-table";
+import { LiveStatusProvider } from "./live-status";
 
 export const metadata = { title: "Chargers" };
 export const dynamic = "force-dynamic";
@@ -24,7 +30,19 @@ function State({ title, children }: { title: string; children: React.ReactNode }
 }
 
 export default async function Page() {
-  if (!(await currentActor())) redirect(SHELL_SIGN_IN as Route);
+  const actor = await currentActor();
+  if (!actor) redirect(SHELL_SIGN_IN as Route);
+  const deps = shellDeps();
+  const ctx = deps.contextOrgId ?? null;
+  let incoming: IncomingCharger[] | null = null;
+  const incomingAsOf = new Date().toISOString();
+  const incomingRead = (async () => { if (ctx) {
+    try {
+      incoming = await deps.withRepo((r) => r.listIncoming(ctx, actor));
+    } catch {
+      incoming = null;
+    }
+  } })();
   let body: React.ReactNode;
   try {
     const url = readDatabaseUrl();
@@ -39,37 +57,8 @@ export default async function Page() {
           </State>
         ) : (
           <LiveStatusProvider>
-          <div className="ws-table-wrap">
-            <table className="ws-table">
-              <thead>
-                <tr>
-                  {["Charger", "Charge point id", "Installation", "Circuit", "Equipment", "Connection"].map((c) => (
-                    <th key={c} scope="col">
-                      {c}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => (
-                  <tr key={r.deviceId}>
-                    <td>{r.label}</td>
-                    <td>
-                      <code>{r.chargePointId}</code>
-                    </td>
-                    <td>
-                      <Link href={`/cpo/installations?id=${r.installationId}` as Route}>{r.installationName}</Link>
-                    </td>
-                    <td>{r.circuitName ?? "—"}</td>
-                    <td>{[r.vendor, r.model].filter(Boolean).join(" ") || "Not recorded"}</td>
-                    <td>
-                      <LiveConnection deviceId={r.deviceId} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <GroupedChargers rows={rows} />
+          {rows.length >= 100 ? <p className="cg-note">Showing the first 100 registered chargers.</p> : null}
           </LiveStatusProvider>
         );
     } finally {
@@ -83,21 +72,21 @@ export default async function Page() {
         <State title="Could not load chargers">The database did not answer. Reload to try again.</State>
       );
   }
+  await incomingRead;
   return (
     <>
       <ContextBar />
-      <p className="ws-banner" role="note">
-        Registered chargers only. Chargers cannot connect yet, so no live status, session or limit is shown or confirmed.
-      </p>
       <div className="ws-title">
         <div>
           <h1>Chargers</h1>
           <p>Equipment registered inside installations.</p>
         </div>
+        <div className="ie-buttons"><OverviewRefresh />
         <Link className="ws-button ws-primary" href={"/cpo/installations" as Route}>
           Choose installation to add a charger
-        </Link>
+        </Link></div>
       </div>
+      <Incoming key={incomingAsOf} rows={incoming} context={ctx !== null} asOf={incomingAsOf} />
       {body}
     </>
   );

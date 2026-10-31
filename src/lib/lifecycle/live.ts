@@ -12,8 +12,14 @@ import type { LifecycleApiDeps } from "./api";
 import { drizzleLifecycleStore } from "./drizzle-store";
 import type { StopPort } from "./service";
 
-/** What the gateway's command entrypoint offers (see gateway/src/command-entrypoint.ts). */
-export type GatewayCommandBinding = { requestStop(i: { deviceId: string; transactionNo: number; requestId: string }): Promise<{ outcome: "accepted" | "rejected" | "offline" | "timeout" | "unavailable" }> };
+/**
+ * What the gateway's command entrypoint offers (see gateway/src/command-entrypoint.ts). The call carries the reserved
+ * attempt id, the placement fence and the attempt deadline, forwarded unchanged to the device's Durable Object. The reply
+ * may carry a diagnostic `reason`; only `outcome` is used.
+ */
+export type GatewayCommandBinding = {
+  requestStop(i: { deviceId: string; transactionNo: number; requestId: string; attemptId: string; placementId: string; deadlineMs: number }): Promise<{ outcome: "accepted" | "rejected" | "offline" | "timeout" | "unavailable"; reason?: string }>;
+};
 
 export function stopPortFrom(binding: GatewayCommandBinding | undefined | null): StopPort | null {
   if (!binding) return null;

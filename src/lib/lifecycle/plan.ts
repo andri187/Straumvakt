@@ -2,7 +2,7 @@
 // evidence, it says what is due next and what state the request is in. It never
 // performs an effect and never infers "stopped" from a command result.
 
-import { MAX_STOP_ATTEMPTS, STOP_BACKOFF_MS, type LifecycleRequest, type LifecycleState, type SessionStep } from "./model";
+import { MAX_STOP_ATTEMPTS, STOP_BACKOFF_MS, stopAttemptId, type LifecycleRequest, type LifecycleState, type SessionStep } from "./model";
 
 export type ObservedSession = {
   transactionNo: number;
@@ -16,8 +16,14 @@ export type ObservedSession = {
 
 export type Observed = { sessions: ObservedSession[]; placementOpen: boolean };
 
+/**
+ * `attemptId` is stable for a given (request, transaction, attempt number). `resume` = the attempt was already reserved
+ * (an earlier call reserved it and did not record an outcome): ask the device again BY THE SAME ID, which returns the
+ * retained outcome rather than sending a second command. A resume is not subject to backoff; it ends when an outcome
+ * is recorded, so it cannot repeat on every refresh.
+ */
 export type Action =
-  | { type: "request_stop"; transactionNo: number; transactionId: string }
+  | { type: "request_stop"; transactionNo: number; transactionId: string; attemptId: string; resume: boolean }
   | { type: "close_placement" }
   | { type: "run_costing"; transactionId: string };
 
@@ -51,8 +57,11 @@ export function planNext(req: LifecycleRequest, seen: Observed, now: Date): Plan
     const prev = byNo.get(o.transactionNo);
     const base: SessionStep = prev ?? { transactionNo: o.transactionNo, transactionId: o.transactionId, stop: { attempts: 0, lastOutcome: null, lastAt: null, everAccepted: false }, stopConfirmedAt: null, settlement: { state: "pending", reason: null } };
     const unconfirmedSuperseded = !o.stoppedReceivedAt && o.superseded === true;
+    // A confirmed stop settles the question: a reservation that was never recorded is moot.
+    const { inFlight: _moot, ...stopWithoutAttempt } = base.stop;
     return {
       ...base,
+      ...(o.stoppedReceivedAt ? { stop: stopWithoutAttempt } : {}),
       stopConfirmedAt: o.stoppedReceivedAt ? (base.stopConfirmedAt ?? o.stoppedReceivedAt.toISOString()) : null,
       superseded: unconfirmedSuperseded,
       settlement: settlementFor(o.authorized, o.costingState, unconfirmedSuperseded),
@@ -72,7 +81,11 @@ export function planNext(req: LifecycleRequest, seen: Observed, now: Date): Plan
         attention = `Stop for transaction ${s.transactionNo} was not accepted after ${MAX_STOP_ATTEMPTS} attempts (last: ${s.stop.lastOutcome ?? "none"}). The session is NOT confirmed stopped.`;
       } else if (s.stop.attempts >= MAX_STOP_ATTEMPTS) {
         attention = `Stop for transaction ${s.transactionNo} was accepted but no StopTransaction arrived. The session is NOT confirmed stopped.`;
-      } else if (nextStopDue(s, now)) actions.push({ type: "request_stop", transactionNo: s.transactionNo, transactionId: s.transactionId });
+      } else if (s.stop.inFlight) {
+        actions.push({ type: "request_stop", transactionNo: s.transactionNo, transactionId: s.transactionId, attemptId: s.stop.inFlight.attemptId, resume: true });
+      } else if (nextStopDue(s, now)) {
+        actions.push({ type: "request_stop", transactionNo: s.transactionNo, transactionId: s.transactionId, attemptId: stopAttemptId(req.id, s.transactionNo, s.stop.attempts + 1), resume: false });
+      }
     }
     return { state: attention ? "needs_attention" : "stopping", actions: attention ? [] : actions, attention, sessions: steps };
   }

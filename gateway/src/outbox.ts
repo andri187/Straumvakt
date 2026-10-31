@@ -41,6 +41,9 @@ export type OutboxEntry = {
   nextAt: number;
   dead?: boolean;
   lastError?: string;
+  retryStartedAt?: number;
+  replayCount?: number;
+  lastReplay?: { requestId: string; actor: string; at: number };
 };
 
 export type OutboxLimits = {
@@ -78,12 +81,12 @@ export class Outbox {
     return (await this.storage.get<Meta>(META)) ?? { nextSeq: 1, count: 0, bytes: 0 };
   }
 
-  async enqueue(kind: OutboxKind, body: string, now: number): Promise<EnqueueResult> {
+  async enqueue(kind: OutboxKind, body: string, now: number, nextAt = now): Promise<EnqueueResult> {
     const size = enc.encode(body).length;
     if (size > this.limits.MAX_BODY_BYTES) return { ok: false, reason: "too_large" };
     const m = await this.meta();
     if (m.count >= this.limits.MAX_ENTRIES || m.bytes + size > this.limits.MAX_BYTES) return { ok: false, reason: "full" };
-    const entry: OutboxEntry = { seq: m.nextSeq, kind, body, attempts: 0, enqueuedAt: now, nextAt: now };
+    const entry: OutboxEntry = { seq: m.nextSeq, kind, body, attempts: 0, enqueuedAt: now, nextAt };
     await this.storage.put(key(entry.seq), entry);
     await this.storage.put(META, { nextSeq: m.nextSeq + 1, count: m.count + 1, bytes: m.bytes + size } satisfies Meta);
     return { ok: true, seq: entry.seq };
@@ -127,7 +130,7 @@ export class Outbox {
         continue;
       }
       const attempts = entry.attempts + 1;
-      const exhausted = verdict === "poison" || attempts >= this.limits.MAX_ATTEMPTS || now - entry.enqueuedAt >= this.limits.MAX_AGE_MS;
+      const exhausted = verdict === "poison" || attempts >= this.limits.MAX_ATTEMPTS || now - (entry.retryStartedAt ?? entry.enqueuedAt) >= this.limits.MAX_AGE_MS;
       const next: OutboxEntry = exhausted
         ? { ...entry, attempts, dead: true, lastError: error ?? verdict }
         : { ...entry, attempts, nextAt: now + Math.min(this.limits.CAP_BACKOFF_MS, this.limits.BASE_BACKOFF_MS * 2 ** (attempts - 1)), lastError: error };
@@ -136,13 +139,20 @@ export class Outbox {
     await this.storage.put(META, m);
   }
 
-  /** Return dead-lettered entries to the live set for another bounded round (explicit operator/replay action). */
-  async replayDead(now: number): Promise<number> {
-    const all = await this.storage.list<OutboxEntry>({ prefix: P });
+  /** Metadata only. Original charger payload never leaves the repair surface. */
+  async inspect(after = 0): Promise<{ entries: Omit<OutboxEntry, "body">[]; hasMore: boolean }> {
+    const all = [...(await this.storage.list<OutboxEntry>({ prefix: P })).values()].filter(e => e.seq > after);
+    return { entries: all.slice(0, this.limits.BATCH).map(({ body: _body, ...metadata }) => metadata), hasMore: all.length > this.limits.BATCH };
+  }
+
+  /** Selected IDs only, one bounded retry round. Keep original evidence age/body and the latest explicit replay audit. */
+  async replayDead(now: number, selected: number[], audit: { requestId: string; actor: string }): Promise<number> {
+    if (selected.length < 1 || selected.length > this.limits.BATCH || selected.some(n => !Number.isSafeInteger(n) || n < 1)) throw new Error("invalid replay selection");
     let n = 0;
-    for (const e of all.values()) {
-      if (!e.dead) continue;
-      await this.storage.put(key(e.seq), { ...e, dead: false, attempts: 0, nextAt: now, enqueuedAt: now });
+    for (const seq of new Set(selected)) {
+      const e = await this.storage.get<OutboxEntry>(key(seq));
+      if (!e?.dead || e.lastReplay?.requestId === audit.requestId) continue;
+      await this.storage.put(key(e.seq), { ...e, dead: false, attempts: 0, nextAt: now, retryStartedAt: now, replayCount: (e.replayCount ?? 0) + 1, lastReplay: { ...audit, at: now } });
       n++;
     }
     return n;

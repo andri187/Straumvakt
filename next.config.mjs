@@ -31,6 +31,10 @@ const nextConfig = {
     ];
   },
   experimental: {
+    // Short, per-browser navigation cache; no shared server/data cache.
+    // Mutations explicitly refresh the router. This is a temporary navigation
+    // improvement, not the structural revision/live-push implementation.
+    staleTimes: { dynamic: 30 },
     workerThreads: false,
     cpus: 2,
   },

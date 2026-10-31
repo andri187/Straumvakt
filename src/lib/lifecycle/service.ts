@@ -11,8 +11,8 @@
 // Repeating a request with the same key, or for a device that already has an open
 // request, RESUMES that request instead of creating a second effect.
 
-import { OPEN_STATES, type LifecycleKind, type LifecycleRequest, type SessionStep, type StopOutcome } from "./model";
-import { planNext, type Observed } from "./plan";
+import { MAYBE_SENT_OUTCOMES, OPEN_STATES, STOP_ATTEMPT_WINDOW_MS, stopMayHaveReachedCharger, type LifecycleKind, type LifecycleRequest, type SessionStep, type StopOutcome } from "./model";
+import { planNext, type Observed, type Plan } from "./plan";
 
 /** Thrown by the port when a session is open at close time. Not a failure: the placement simply stays open. */
 export class SessionOpenError extends Error {
@@ -57,12 +57,25 @@ export interface LifecycleTx {
   detachedHere(installationId: string): Promise<{ deviceId: string; label: string; vendor: string | null; model: string | null; lastCircuitId: string | null; retired: boolean }[]>;
   deviceHistory(deviceId: string): Promise<{ orgId: string; installationId: string; retired: boolean } | null>;
   openPlacement(input: { deviceId: string; orgId: string; installationId: string; circuitId: string; label: string; chargePointId: string; actor: ActorRef; at: Date }): Promise<void>;
+  /** Recovery only: initialise and lock the singleton cursor until this transaction ends. */
+  lockRecoveryCursor?(): Promise<string | null>;
+  /** Open requests in device-id order, strictly after the cursor; bounded indexed keyset query. */
+  listOpen?(input: { limit: number; afterDeviceId: string | null }): Promise<LifecycleRequest[]>;
+  /** Persist only the examined prefix, in the transaction holding the cursor lock. */
+  advanceRecoveryCursor?(afterDeviceId: string): Promise<void>;
+  /** OPTIONAL, recovery only: `observed()` for several requests at once (same meaning per request, a constant number of queries). */
+  observedMany?(reqs: Pick<LifecycleRequest, "id" | "deviceId" | "sessions">[]): Promise<Map<string, Observed>>;
 }
 export interface LifecycleStore {
   run<T>(fn: (tx: LifecycleTx) => Promise<T>): Promise<T>;
 }
 export interface StopPort {
-  requestStop(i: { deviceId: string; transactionNo: number; requestId: string }): Promise<StopOutcome>;
+  /**
+   * Idempotent on `attemptId`: delivering the same attempt again never sends a second command (the device returns the
+   * retained outcome). `placementId` fences the command to the placement the request was made under; `deadlineMs` is the
+   * epoch time after which an attempt the device has not seen is refused rather than sent.
+   */
+  requestStop(i: { deviceId: string; transactionNo: number; requestId: string; attemptId: string; placementId: string; deadlineMs: number }): Promise<StopOutcome>;
 }
 export interface CostingPort {
   runFor(transactionId: string): Promise<void>;
@@ -164,6 +177,62 @@ export async function requestRemoval(
   }
 }
 
+export type DueRemoval = {
+  requestId: string;
+  version: number;
+  state: LifecycleRequest["state"];
+  /** The next step would send a stop command. */
+  needsStop: boolean;
+  /** Every planned action is a costing run (nothing else would move), so the caller may defer it when it has no costing budget left. */
+  onlyCosting: boolean;
+};
+export type DueSelection = {
+  /** False when the store cannot list open requests (the optional methods are absent): nothing was selected. */
+  supported: boolean;
+  scanned: number;
+  /** This window left rows unexamined. Not a count of the entire backlog. */
+  scanTruncated: boolean;
+  due: DueRemoval[];
+};
+
+/**
+ * A request is worth a progress call only if the pure planner, given CURRENT durable evidence, would change something:
+ * it has an action to take or its state would move. An exhausted needs_attention request, or a stop still inside its
+ * backoff, plans to the same state with no action and is skipped, so it cannot occupy a bounded batch ahead of real work.
+ * Late real StopTransaction evidence changes the plan, so such a request becomes due again without any reset.
+ */
+export async function selectDueRemovals(deps: Pick<Deps, "store" | "now">, input: { scanLimit: number; maxDue?: number }): Promise<DueSelection> {
+  const now = deps.now();
+  return deps.store.run(async (tx): Promise<DueSelection> => {
+    if (!tx.listOpen || !tx.observedMany || !tx.lockRecoveryCursor || !tx.advanceRecoveryCursor) return { supported: false, scanned: 0, scanTruncated: false, due: [] };
+    const afterDeviceId = await tx.lockRecoveryCursor();
+    let listed = await tx.listOpen({ limit: input.scanLimit + 1, afterDeviceId });
+    // One wrap query, never an unbounded loop. The cursor is a position, not a foreign key.
+    if (listed.length === 0 && afterDeviceId !== null) listed = await tx.listOpen({ limit: input.scanLimit + 1, afterDeviceId: null });
+    const open = listed.slice(0, input.scanLimit);
+    const seen = await tx.observedMany(open);
+    const due: DueRemoval[] = [];
+    let examined = 0;
+    for (const req of open) {
+      if (due.length >= (input.maxDue ?? 5)) break;
+      const observed = seen.get(req.id);
+      if (!observed) throw new Error("Recovery observation missing");
+      examined++;
+      const plan = planNext(req, observed, now);
+      if (plan.actions.length > 0 || plan.state !== req.state) {
+        due.push({
+          requestId: req.id, version: req.version, state: req.state,
+          needsStop: plan.actions.some((a) => a.type === "request_stop"),
+          onlyCosting: plan.actions.length > 0 && plan.actions.every((a) => a.type === "run_costing") && plan.state === req.state,
+        });
+      }
+    }
+    if (examined > 0) await tx.advanceRecoveryCursor(open[examined - 1]!.deviceId);
+    // Count the whole evidence window read, even when the work cap stops planning earlier.
+    return { supported: true, scanned: open.length, scanTruncated: listed.length > examined, due };
+  });
+}
+
 /** Advances ONE step toward completion. Safe to call repeatedly and concurrently. */
 export async function progressRemoval(deps: Deps, requestId: string): Promise<Result<LifecycleRequest>> {
   const now = deps.now();
@@ -175,14 +244,32 @@ export async function progressRemoval(deps: Deps, requestId: string): Promise<Re
     return { req, plan: planNext(req, seen, now) };
   });
   if (!snap) return refuse("not_found", "Request not found");
-  const { req, plan } = snap;
+  let { req } = snap;
+  const { plan } = snap;
   if (!OPEN_STATES.includes(req.state)) return { ok: true, value: req };
+  // Losing a binding is not a stop attempt. Preserve both fresh and in-flight attempts for a working command path.
+  if (!deps.stop && plan.actions.some((a) => a.type === "request_stop")) return refuse("stop_unavailable", "The stop command path is unavailable; the request remains pending.");
 
-  // 2. effects outside the database transaction; results are recorded, not assumed
-  const stopResults = new Map<number, StopOutcome>();
+  // 2a. RESERVE every NEW stop attempt durably BEFORE any external effect. The reservation is version-guarded, so of
+  // several concurrent callers exactly one wins and sends; the others return the current state without sending.
+  if (deps.stop && plan.actions.some((a) => a.type === "request_stop" && !a.resume)) {
+    const reserved = await reserveStopAttempts(deps, req, plan, now);
+    if (reserved.kind === "lost") return reserved.result;
+    req = reserved.req;
+  }
+
+  // 2b. effects outside the database transaction; results are recorded, not assumed
+  const stopResults = new Map<number, StopResult>();
   for (const a of plan.actions) {
     if (a.type === "request_stop") {
-      stopResults.set(a.transactionNo, deps.stop ? await deps.stop.requestStop({ deviceId: req.deviceId, transactionNo: a.transactionNo, requestId: req.id }).catch((): StopOutcome => "unavailable") : "unavailable");
+      const attempt = req.sessions.find((s) => s.transactionNo === a.transactionNo)?.stop.inFlight ?? null;
+      if (!deps.stop) { stopResults.set(a.transactionNo, { outcome: "unavailable", attemptId: attempt?.attemptId ?? null }); continue; }
+      if (!attempt) continue; // not reachable: every request is reserved (or resumes a reservation) before it is sent
+      // Same attempt id on every delivery: a retry or a concurrent resume returns the device's retained outcome.
+      const outcome = await deps.stop
+        .requestStop({ deviceId: req.deviceId, transactionNo: a.transactionNo, requestId: req.id, attemptId: attempt.attemptId, placementId: req.placementId, deadlineMs: Date.parse(attempt.deadlineAt) })
+        .catch((): StopOutcome => "unavailable");
+      stopResults.set(a.transactionNo, { outcome, attemptId: attempt.attemptId });
     } else if (a.type === "run_costing" && deps.costing) {
       await deps.costing.runFor(a.transactionId).catch(() => undefined); // failure leaves the session pending/held visibly
     }
@@ -199,7 +286,38 @@ export async function progressRemoval(deps: Deps, requestId: string): Promise<Re
   }
 }
 
-async function advanceInTx(deps: Deps, req: LifecycleRequest, plan: ReturnType<typeof planNext>, stopResults: Map<number, StopOutcome>, now: Date): Promise<Result<LifecycleRequest>> {
+type StopResult = { outcome: StopOutcome; /** The reserved attempt this answers; null when nothing was reserved (no stop path). */ attemptId: string | null };
+
+type Reservation = { kind: "reserved"; req: LifecycleRequest } | { kind: "lost"; result: Result<LifecycleRequest> };
+
+/**
+ * Records, in ONE version-guarded save, the attempt ids this call is about to send. Only the caller whose save wins may
+ * send; a caller that finds the version moved (another worker reserved or advanced first) returns the current request
+ * and sends nothing, so a concurrent conflict can never be discovered only AFTER a duplicate command went out.
+ */
+async function reserveStopAttempts(deps: Deps, req: LifecycleRequest, plan: Plan, now: Date): Promise<Reservation> {
+  const fresh = new Map<number, string>();
+  for (const a of plan.actions) if (a.type === "request_stop" && !a.resume) fresh.set(a.transactionNo, a.attemptId);
+  const reservedAt = now.toISOString();
+  const deadlineAt = new Date(now.getTime() + STOP_ATTEMPT_WINDOW_MS).toISOString();
+  return deps.store.run(async (tx): Promise<Reservation> => {
+    const cur = await tx.byId(req.id);
+    if (!cur) return { kind: "lost", result: refuse("not_found", "Request not found") };
+    if (cur.version !== req.version) return { kind: "lost", result: { ok: true, value: cur } };
+    const sessions: SessionStep[] = plan.sessions.map((s) => {
+      const attemptId = fresh.get(s.transactionNo);
+      return attemptId ? { ...s, stop: { ...s.stop, inFlight: { attemptId, reservedAt, deadlineAt } } } : s;
+    });
+    const next: LifecycleRequest = { ...cur, state: plan.state, attention: plan.attention, sessions, version: cur.version + 1 };
+    if (!(await tx.save(next, cur.version))) {
+      const again = await tx.byId(req.id);
+      return { kind: "lost", result: again ? { ok: true, value: again } : refuse("not_found", "Request not found") };
+    }
+    return { kind: "reserved", req: next };
+  });
+}
+
+async function advanceInTx(deps: Deps, req: LifecycleRequest, plan: ReturnType<typeof planNext>, stopResults: Map<number, StopResult>, now: Date): Promise<Result<LifecycleRequest>> {
   const requestId = req.id;
   return deps.store.run(async (tx) => {
     const cur = await tx.byId(requestId);
@@ -209,7 +327,12 @@ async function advanceInTx(deps: Deps, req: LifecycleRequest, plan: ReturnType<t
     const seen = await tx.observed(cur);
     const sessions: SessionStep[] = cur.sessions.map((s) => {
       const r = stopResults.get(s.transactionNo);
-      return r ? { ...s, stop: { attempts: s.stop.attempts + 1, lastOutcome: r, lastAt: now.toISOString(), everAccepted: s.stop.everAccepted || r === "accepted" } } : s;
+      if (!r) return s;
+      // Another worker already recorded this very attempt: never count it twice.
+      if (r.attemptId !== null && s.stop.inFlight?.attemptId !== r.attemptId) return s;
+      const { inFlight: _recorded, ...stop } = s.stop;
+      const maybeSent = stop.maybeSent === true || (r.attemptId !== null && MAYBE_SENT_OUTCOMES.includes(r.outcome));
+      return { ...s, stop: { ...stop, attempts: stop.attempts + 1, lastOutcome: r.outcome, lastAt: now.toISOString(), everAccepted: stop.everAccepted || r.outcome === "accepted", ...(maybeSent ? { maybeSent: true } : {}) } };
     });
     const merged: LifecycleRequest = { ...cur, sessions };
     let after = planNext(merged, seen, now);
@@ -243,7 +366,8 @@ export async function cancelRemoval(deps: Deps, input: { requestId: string; acto
     if (!req || !deps.authorise(input.actor, req.orgId, req.kind)) return refuse("not_found", "Request not found");
     if (!OPEN_STATES.includes(req.state)) return refuse("conflict", `Request is already ${req.state}.`);
     if (req.state === "closing" || req.state === "settling") return refuse("conflict", "The placement is already being closed; it cannot be undone from here (use return to service).");
-    if (req.sessions.some((s) => s.stop.everAccepted || s.stopConfirmedAt)) return refuse("conflict", "A session is already being stopped; the removal can no longer be cancelled.");
+    // Not only an accepted command: one that timed out, was ambiguous or is still in flight may have reached the charger.
+    if (req.sessions.some((s) => stopMayHaveReachedCharger(s.stop) || s.stopConfirmedAt)) return refuse("conflict", "A stop command may already have reached the charger; the removal can no longer be cancelled.");
     const next = { ...req, state: "cancelled" as const, version: req.version + 1 };
     return (await tx.save(next, req.version)) ? { ok: true as const, value: next } : refuse("conflict", "The request changed; reload.");
   });

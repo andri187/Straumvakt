@@ -120,15 +120,13 @@ export interface TransactionTx {
   quarantine(input: { ctx: ConnectionContext; receiptId: string; reason: string; transactionNo: number | null; receivedAt: Date }): Promise<void>;
 }
 
+export type TermsReader = (input: { userId: string; installationId: string; orgId: string; at: Date }) => Promise<AgreementFacts>;
 export interface TransactionStore {
-  read<T>(fn: (store: AuthorizationStore) => Promise<T>): Promise<T>;
+  /** Optional compatible-meter fast path. False means no effects: use the existing per-event handler. */
+  tryIngestMeters?(items: import("./meter").MeterRequest[]): Promise<boolean>;
+  /** Authorization and terms use ONE coherent read snapshot. Missing capture is explicitly held, never read separately. */
+  read<T>(fn: (store: AuthorizationStore, captureTerms?: TermsReader) => Promise<T>): Promise<T>;
   run<T>(fn: (tx: TransactionTx) => Promise<T>): Promise<T>;
-  /**
-   * Reads the applicable terms ONCE, as of the session's server start time (agreement, clauses, rules, rate references,
-   * membership). Optional: a store without it records a snapshot saying the terms were not captured. A failure here
-   * never blocks charging; it is recorded honestly and the session is costed as an explicit unresolved state.
-   */
-  captureTerms?(input: { userId: string; installationId: string; orgId: string; at: Date }): Promise<AgreementFacts>;
   /** Replay lookup outside the write transaction: cheap, avoids a redundant authorization query on retransmits. */
   findReceipt(deviceId: string, messageId: string, requestHash: string): Promise<Receipt | null>;
 }
@@ -202,20 +200,22 @@ export async function handleStartTransaction(env: Env, r: Req<Payload<"StartTran
     const replay = await env.store.findReceipt(r.ctx.deviceId, r.messageId, r.requestHash);
     if (replay?.response) return { kind: "reply", payload: replay.response as { transactionId: number; idTagInfo: IdTagInfo } };
 
-    const decision = await env.store.read((a) => decideAuthorization(a, { idTag: r.payload.idTag, installationId: r.ctx.installationId, at: r.receivedAt }));
-    if (decision.kind === "unavailable") return { kind: "unavailable" };
-
-    // Capture the terms ONCE, before the write transaction (a read; keeps the transaction short). Only for a start that
-    // the driver's entitlement accepts: refused and unauthorized starts are never costed, so they carry no snapshot.
-    let termsSnapshot: TermsSnapshot | null = null;
-    if (decision.status === "Accepted" && decision.userId) {
-      try {
-        const facts = env.store.captureTerms ? await env.store.captureTerms({ userId: decision.userId, installationId: r.ctx.installationId, orgId: r.ctx.orgId, at: r.receivedAt }) : null;
-        termsSnapshot = await buildSnapshot({ facts, at: r.receivedAt, capturedAt: env.now(), missingReason: "capture_not_available" });
-      } catch {
-        termsSnapshot = await buildSnapshot({ facts: null, at: r.receivedAt, capturedAt: env.now(), missingReason: "capture_failed" });
+    // One read snapshot covers token/access, membership, agreement, rules and rates. The later placement-locked write
+    // remains READ COMMITTED: it must see removal/closure committed while waiting for the placement lock.
+    const { decision, termsSnapshot } = await env.store.read(async (a, captureTerms) => {
+      const decision = await decideAuthorization(a, { idTag: r.payload.idTag, installationId: r.ctx.installationId, at: r.receivedAt });
+      let termsSnapshot: TermsSnapshot | null = null;
+      if (decision.kind === "decided" && decision.status === "Accepted" && decision.userId) {
+        try {
+          const facts = captureTerms ? await captureTerms({ userId: decision.userId, installationId: r.ctx.installationId, orgId: r.ctx.orgId, at: r.receivedAt }) : null;
+          termsSnapshot = await buildSnapshot({ facts, at: r.receivedAt, capturedAt: env.now(), missingReason: "capture_not_available" });
+        } catch {
+          termsSnapshot = await buildSnapshot({ facts: null, at: r.receivedAt, capturedAt: env.now(), missingReason: "capture_failed" });
+        }
       }
-    }
+      return { decision, termsSnapshot };
+    });
+    if (decision.kind === "unavailable") return { kind: "unavailable" };
 
     return await env.store.run(async (tx) => {
       const rec = await tx.receipt({ ctx: r.ctx, action: "StartTransaction", messageId: r.messageId, requestHash: r.requestHash, payload: r.payload, receivedAt: r.receivedAt });

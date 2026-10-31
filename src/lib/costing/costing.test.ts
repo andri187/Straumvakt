@@ -126,6 +126,38 @@ describe("costPending: durable, idempotent, retryable", () => {
   });
 });
 
+describe("costPending: cooperative stop and honest limit/unavailable flags", () => {
+  const rows = async (n: number) => Promise.all(Array.from({ length: n }, (_, i) => withTerms(tx({ id: `r${i}`, placementId: `p${i}` }), agr())));
+
+  it("flags appear only when true, so an ordinary run keeps its previous shape", async () => {
+    const w = memoryCostingStore({ rows: await rows(2) });
+    const rep = await costPending(w.store, { limit: 20 });
+    expect(rep).toEqual({ processed: 2, costed: 2, unresolved: {}, failed: 0 });
+  });
+  it("reports limitReached when every allowed attempt found work, so more may remain", async () => {
+    const w = memoryCostingStore({ rows: await rows(3) });
+    const rep = await costPending(w.store, { limit: 2 });
+    expect(rep).toMatchObject({ processed: 2, limitReached: true });
+    expect(w.state.rows.filter((r) => r.state === "needed")).toHaveLength(1);
+  });
+  it("shouldStop is checked between attempts and ends the run without abandoning a started one", async () => {
+    const w = memoryCostingStore({ rows: await rows(5) });
+    let asked = 0;
+    const rep = await costPending(w.store, { limit: 20, shouldStop: () => ++asked > 2 });
+    expect(rep).toMatchObject({ processed: 2, deadlineReached: true });
+    expect(rep.limitReached).toBeUndefined();
+    expect(w.state.rows.filter((r) => r.state === "needed")).toHaveLength(3);
+  });
+  it("an outage while claiming is flagged unavailable (distinct from an empty queue) and changes nothing", async () => {
+    const w = memoryCostingStore({ rows: await rows(1) });
+    const broken = { ...w.store, run: async () => { throw new Error("db down"); } };
+    const rep = await costPending(broken as never);
+    expect(rep).toMatchObject({ processed: 0, failed: 1, unavailable: true });
+    expect(w.state.rows[0]!.state).toBe("needed");
+    expect(await costPending((await memoryCostingStore({ rows: [] })).store)).not.toHaveProperty("unavailable");
+  });
+});
+
 describe("immutable terms snapshot: what applied at start is what is priced", () => {
   // `book` stands for the MUTABLE term tables. Costing must never read it: only the snapshot taken at start.
   it("an in-place rate edit BETWEEN start and first costing cannot change the price or the payer", async () => {

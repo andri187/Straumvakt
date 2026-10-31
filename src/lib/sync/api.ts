@@ -41,7 +41,7 @@ export async function handleSync(request: Request, deps: SyncApiDeps): Promise<R
       const r = await readSnapshot(d, actor, request.headers.get("if-none-match"));
       if (r.kind === "forbidden") return j({ error: "forbidden" }, 403, { "cache-control": "no-store" });
       if (r.kind === "too_many") return j({ error: "scope_too_large" }, 413, { "cache-control": "no-store" });
-      const headers = { etag: r.etag, "cache-control": "private, no-cache", vary: "cookie" };
+      const headers = { etag: r.etag, "cache-control": "private, no-cache", vary: "cookie", "x-straumvakt-realtime": deps.env?.CPO_SHELL_REALTIME_ENABLED === "true" ? "1" : "0" };
       if (r.kind === "not_modified") return new Response(null, { status: 304, headers });
       return j(r.body, 200, headers);
     });

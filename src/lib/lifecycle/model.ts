@@ -27,11 +27,23 @@ export const OPEN_STATES: readonly LifecycleState[] = ["requested", "stopping", 
 
 export type StopOutcome = "accepted" | "rejected" | "offline" | "timeout" | "unavailable";
 
+/**
+ * A stop attempt that was durably RESERVED before any external effect. Its id is derived from (request, transaction,
+ * attempt number), so concurrent or retried progress reserves the SAME attempt and the device object sends at most once.
+ * It is cleared when the attempt's outcome is recorded.
+ */
+export type StopAttempt = { attemptId: string; reservedAt: string; deadlineAt: string };
+
 export type SessionStep = {
   transactionNo: number;
   transactionId: string;
-  /** Number of stop commands attempted and the last outcome. An ACCEPTED command is not a stopped session. */
-  stop: { attempts: number; lastOutcome: StopOutcome | null; lastAt: string | null; everAccepted: boolean };
+  /**
+   * Number of stop commands attempted and the last outcome. An ACCEPTED command is not a stopped session.
+   * `inFlight`: reserved and not yet recorded (absent on rows written before reservations existed).
+   * `maybeSent`: some attempt MAY have reached the charger (accepted, timed out or ambiguous), so the removal can no
+   * longer be cancelled as if nothing had been sent. Absent = false.
+   */
+  stop: { attempts: number; lastOutcome: StopOutcome | null; lastAt: string | null; everAccepted: boolean; inFlight?: StopAttempt; maybeSent?: boolean };
   /** Confirmed only by a durable StopTransaction (ocpp_transactions.stopped_received_at), never by a command result. */
   stopConfirmedAt: string | null;
   /**
@@ -69,6 +81,19 @@ export type LifecycleRequest = {
   version: number;
 };
 
+/** How long a reserved attempt may still be sent. Past it the device object refuses to send it (it reports "unavailable"). */
+export const STOP_ATTEMPT_WINDOW_MS = 60_000;
+
+export const stopAttemptId = (requestId: string, transactionNo: number, attemptNo: number): string => `${requestId}:${transactionNo}:${attemptNo}`;
+
+/** Outcomes after which a stop command may have reached the charger. offline/rejected: provably not acted on. */
+export const MAYBE_SENT_OUTCOMES: readonly StopOutcome[] = ["accepted", "timeout", "unavailable"];
+
+/** True when cancelling the removal could leave a session being stopped. Conservative on purpose. */
+export function stopMayHaveReachedCharger(stop: SessionStep["stop"]): boolean {
+  return !!stop.inFlight || stop.everAccepted || stop.maybeSent === true;
+}
+
 export const MAX_STOP_ATTEMPTS = 5;
 /** Backoff between stop attempts (ms): 10 s, 30 s, 2 min, 5 min, then needs_attention. */
 export const STOP_BACKOFF_MS = [10_000, 30_000, 120_000, 300_000] as const;
@@ -86,12 +111,12 @@ export type TransitionRow = {
 export const TRANSITIONS: readonly TransitionRow[] = [
   { from: "(none)", action: "request remove/retire", actor: "shared login (platform operator) today; scoped installer/admin later", effects: "block new starts on the placement immediately; record reason + request time; snapshot open sessions", success: "request row exists", pendingOrFailure: "refused when a stop is needed and no stop command path exists (action unavailable); refused for an unknown/already-detached device; repeating the same request key resumes the same request" },
   { from: "requested", action: "evaluate", actor: "system", effects: "no open sessions -> closing; open sessions -> stopping", success: "state advances", pendingOrFailure: "none" },
-  { from: "stopping", action: "request stop", actor: "system (bounded retries)", effects: "RemoteStopTransaction per open session; outcome recorded; ACCEPTED is NOT confirmation", success: "StopTransaction received for the session (durable)", pendingOrFailure: "rejected/offline/timeout: retry with backoff up to 5 attempts, then needs_attention; never reported as stopped" },
+  { from: "stopping", action: "request stop", actor: "system (bounded retries)", effects: "an attempt id is RESERVED durably first (version-guarded), then RemoteStopTransaction is requested once per attempt; outcome recorded; ACCEPTED is NOT confirmation; a repeated delivery of the same attempt never sends again", success: "StopTransaction received for the session (durable)", pendingOrFailure: "rejected/offline/timeout: a NEW attempt only after backoff, up to 5 attempts, then needs_attention; an unrecorded reserved attempt is resumed by id (the device returns its retained outcome); never reported as stopped" },
   { from: "stopping", action: "late StopTransaction", actor: "charger", effects: "correlates by transaction number to the original device/placement; confirms the session", success: "stopConfirmedAt set", pendingOrFailure: "duplicate stops are idempotent; a conflicting stop is flagged by the engine" },
   { from: "closing", action: "close placement + identity", actor: "system", effects: "close placement period, close connection-identity period, bump installation revision, write history; the device row and ALL history are kept; service end = actual completion", success: "placement closed, history row written", pendingOrFailure: "failure rolls back wholly and stays closing (retry)" },
   { from: "settling", action: "settle", actor: "system", effects: "costing consumer decides each session: costed | held(reason) | not_applicable", success: "every session is settled, held or not applicable", pendingOrFailure: "pending while costing is undecided; a held session stays visible and does not block completion" },
   { from: "needs_attention", action: "operator retry / reconcile", actor: "authorised operator", effects: "resume the same request", success: "back to stopping/closing", pendingOrFailure: "audited reconciliation of a stale session is a separate action (not built)" },
-  { from: "requested", action: "cancel", actor: "authorised operator", effects: "unblock starts", success: "state cancelled", pendingOrFailure: "refused once any stop command was accepted (the session is already being ended)" },
+  { from: "requested", action: "cancel", actor: "authorised operator", effects: "unblock starts", success: "state cancelled", pendingOrFailure: "refused once any stop command may have reached the charger (accepted, timed out, ambiguous or still in flight): the session may already be ending" },
 ];
 
 /** Completion, stated once so code and tests share it. */

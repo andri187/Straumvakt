@@ -1,0 +1,27 @@
+{
+  // Controlled Test CPO deployment of the adopted engine; legacy routes disabled.
+  "name": "straumvakt-ocpp-s1",
+  "main": "src/index.ts",
+  "account_id": "1b2fc4c163e8544e9cd472baa5a19c74",
+  "compatibility_date": "2026-10-27",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [{ "pattern": "test-cpo.straumvakt.org", "custom_domain": true }],
+  // PENDING_ONBOARDING lets an UNKNOWN charge point id of an active CPO wait (BootNotification -> Pending). Remove the
+  // variable (or set anything but "true") to return to a plain 401 for unknown chargers.
+  "vars": { "OCPP_ALLOWED_HOSTS": "test-cpo.straumvakt.org", "PENDING_ONBOARDING": "true" },
+  // Conservative first-connection limits. Approximate, per Cloudflare location.
+  // They gate new upgrades only, not messages on an established charger socket.
+  "ratelimits": [
+    { "name": "OCPP_HOST_LIMITER", "namespace_id": "2026103001", "simple": { "limit": 6, "period": 60 } },
+    { "name": "OCPP_IDENTITY_LIMITER", "namespace_id": "2026103002", "simple": { "limit": 1, "period": 60 } }
+  ],
+  "limits": { "cpu_ms": 50 },
+  "durable_objects": {
+    "bindings": [{ "name": "IDENTITY_DO", "class_name": "IdentityDurableObject" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["IdentityDurableObject"] }],
+  "services": [{ "binding": "ENGINE", "service": "straumvakt-cpo-shell", "entrypoint": "EngineEntrypoint" }],
+  "observability": { "enabled": true, "head_sampling_rate": 0.01, "traces": { "enabled": true, "head_sampling_rate": 0.01 } }
+}

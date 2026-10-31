@@ -8,6 +8,8 @@
 // per-row endpoints and a half-saved tree cannot exist.
 
 import { z } from "zod";
+import { CHARGE_POINT_ID } from "./address";
+import { VendorImportInput } from "./vendor-import";
 
 export const MAX_TREE_DEPTH = 8; // implementation bound, not an electrical or OCPP limit
 export const MAX_CIRCUITS = 200;
@@ -20,6 +22,8 @@ export const NEW_ID_PREFIX = "new-";
 /** Null is "unknown". It is never coerced to 0 and never to a default. */
 export type Amps = number | null;
 export type Phases = 1 | 2 | 3 | null;
+/** Supply system. Null = not specified. Never inferred from voltage or phase count. */
+export type Grid = "TN" | "IT" | null;
 
 export type Electrician = {
   name: string | null;
@@ -44,7 +48,7 @@ export type ChargerState = {
   placementId: string;
   circuitId: string;
   label: string;
-  /** Only the charge-point part; the installation key prefix is added for the stored OCPP identity. */
+  /** The charger's own OCPP id, exactly as it sends it. Stored with the CPO organisation (see identityRow); never derived from the serial. */
   chargePointId: string;
   vendor: string | null;
   model: string | null;
@@ -61,6 +65,7 @@ export type InstallationState = {
   mainDeviceType: string | null;
   mainRatingAmps: Amps;
   mainPhaseCount: Phases;
+  mainGridType: Grid;
   electrician: Electrician;
   electricianChangedRevision: number;
   responsibleConfirmedRevision: number | null;
@@ -72,6 +77,11 @@ export type Snapshot = {
   installation: InstallationState;
   circuits: CircuitState[];
   chargers: ChargerState[];
+  /**
+   * Stored circuit id → the vendor's own circuit reference, present only for circuits that came from a vendor import. Lets a
+   * retry of an import attach a charger to the right circuit. Not part of any API view; a reference, never an identity.
+   */
+  vendorCircuitRefs?: Record<string, string>;
 };
 
 // ── Input contract ─────────────────────────────────────────────────────────
@@ -111,8 +121,7 @@ const phone = text(32).refine(
   "Not a valid phone number",
 );
 
-/** OCPP charge-point id: a single URL path segment, conservative on purpose. */
-export const CHARGE_POINT_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,47}$/;
+export { CHARGE_POINT_ID };
 
 const circuitInput = z.object({
   id: z.string().min(1).max(64),
@@ -120,6 +129,8 @@ const circuitInput = z.object({
   displayName: z.string().trim().min(1, "Name is required").max(120),
   ratingAmps: amps,
   phaseCount: phases,
+  /** The vendor's own circuit reference when the circuit comes from a vendor import. Create only; never an identity. */
+  vendorRef: z.string().trim().max(100).nullish().transform((v) => (v ? v : null)),
 });
 
 const chargerInput = z.object({
@@ -149,6 +160,11 @@ export const SaveInstallationInput = z.object({
   /** Required on create; on update it is checked against the stored record, never trusted. */
   orgId: z.string().uuid().optional(),
   siteId: z.string().uuid().optional(),
+  /**
+   * Create only: the unfinished-form draft this installation is created from. It is closed in the same
+   * transaction, and a draft that was discarded or already used refuses the create. Absent = no draft.
+   */
+  draftId: z.string().uuid().optional(),
   /** Required on update. */
   expectedRevision: z.number().int().min(1).optional(),
   /** One per user action; a replay of the same key is answered, not re-applied. */
@@ -160,13 +176,77 @@ export const SaveInstallationInput = z.object({
     mainDeviceType: text(60),
     mainRatingAmps: amps,
     mainPhaseCount: phases,
+    mainGridType: z.enum(["TN", "IT"]).nullable().optional().transform((v) => v ?? null),
   }),
   electrician: z.object({ name: text(120), email, phone }),
   password: PasswordInput.default({ action: "keep" }),
   circuits: z.array(circuitInput).max(MAX_CIRCUITS),
   chargers: z.array(chargerInput).max(MAX_CHARGERS),
+  /**
+   * Create only: this installation comes from a selected vendor installation. The durable identity is the CPO + vendor +
+   * the vendor's installation reference; a second create for the same one returns the first instead of making another.
+   */
+  vendorImport: VendorImportInput.optional(),
 });
 export type SaveInstallationInput = z.infer<typeof SaveInstallationInput>;
+
+// ── Draft document ─────────────────────────────────────────────────────────
+
+const typed = (max: number) => z.string().max(max).default("");
+
+/**
+ * What an unfinished form keeps: the fields exactly as typed, so values may be
+ * empty, unparsed or invalid; required-field validation belongs to creation. The
+ * shape is STRICT and has no password field, so a payload carrying one is refused
+ * rather than stored. Only the fact that a password had been typed is kept (pwPending), so a resumed form
+ * can ask for it again; the value itself is never stored here.
+ */
+export const DraftPayload = z
+  .object({
+    name: typed(120),
+    siteId: typed(64),
+    mainType: typed(60),
+    mainAmps: typed(8),
+    mainPhases: z.enum(["", "1", "2", "3"]).default(""),
+    mainGrid: z.enum(["", "TN", "IT"]).default(""),
+    eName: typed(120),
+    eEmail: typed(254),
+    ePhone: typed(32),
+    effectiveAt: typed(40),
+    pwPending: z.boolean().default(false),
+    circuits: z
+      .array(
+        z
+          .object({
+            id: z.string().min(1).max(64),
+            parentId: z.string().min(1).max(64).nullable().default(null),
+            displayName: typed(120),
+            ratingAmps: typed(8),
+            phaseCount: z.enum(["", "1", "2", "3"]).default(""),
+          })
+          .strict(),
+      )
+      .max(MAX_CIRCUITS)
+      .default([]),
+    chargers: z
+      .array(
+        z
+          .object({
+            id: z.string().min(1).max(64),
+            circuitId: z.string().min(1).max(64),
+            label: typed(120),
+            chargePointId: typed(48),
+            vendor: typed(80),
+            model: typed(80),
+            serialNumber: typed(80),
+          })
+          .strict(),
+      )
+      .max(MAX_CHARGERS)
+      .default([]),
+  })
+  .strict();
+export type DraftPayload = z.infer<typeof DraftPayload>;
 
 export type FieldProblem = { path: string; message: string };
 
@@ -231,17 +311,16 @@ export function newInstallationKey(random: (n: number) => Uint8Array = (n) => cr
   return out;
 }
 
-export const CONNECTION_DOMAIN = "straumvakt.org";
+// The address helpers live in ./address so a client component can use them
+// without importing this module's validation dependencies.
+export { CONNECTION_DOMAIN, chargerAddress, cpoAddress } from "./address";
 
 /**
- * The address a charger will use once the gateway supports it. The password is
- * never part of it. `chargePointId` stays a placeholder until chosen.
+ * The identity row written for a charger: the CPO organisation and the charge point id as columns (what admission
+ * resolves by), plus the same pair as one string for readers of `identity_string`. The string is
+ * `{cpo-org-id}/{charge-point-id}`. Rows written before the CPO-only URL hold `{installation-key}/{charge-point-id}`
+ * and are left as written; nothing parses either form back into a charge point id.
  */
-export function connectionAddress(routingId: string | null, installationKey: string, chargePointId = "{charge-point-id}"): string {
-  return `wss://${routingId ?? "{cpo-id}"}.${CONNECTION_DOMAIN}/${installationKey}/${chargePointId}`;
-}
-
-/** The identity string stored in assets.device_identities: the path the gateway will resolve. */
-export function storedIdentity(installationKey: string, chargePointId: string): string {
-  return `${installationKey}/${chargePointId}`;
+export function identityRow(cpoOrgId: string, chargePointId: string): { cpoOrgId: string; chargePointId: string; identityString: string } {
+  return { cpoOrgId, chargePointId, identityString: `${cpoOrgId}/${chargePointId}` };
 }

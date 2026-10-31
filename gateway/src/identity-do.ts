@@ -67,6 +67,8 @@
 import type { DurableObjectState } from "@cloudflare/workers-types";
 import { parseFrame, serializeCallResult, serializeCall } from "./ocpp-frame";
 import { EngineMode, ENGINE_CTX_HEADER, readTag } from "./engine-mode";
+import { PendingMode, PENDING_CTX_HEADER, readPendingTag, type PendingContext } from "./pending-mode";
+import { isOwnerToken, PendingGate } from "./pending-gate";
 import { enqueueOrPost, type IngestEvent } from "./ingest-client";
 import {
   bypassesIngest,
@@ -351,11 +353,31 @@ export class IdentityDurableObject {
   private meta: SessionMeta | null = null;
 
   private readonly engine: EngineMode;
+  private readonly pending: PendingMode;
+  private readonly gate: PendingGate;
 
   constructor(state: DurableObjectState, env: GatewayEnv) {
     this.state = state;
     this.env = env;
     this.engine = new EngineMode(state, env, selectSubprotocol);
+    // The admission gate is another object of this same class (`pending-gate:{cpo}`): no new binding. Without the namespace
+    // (tests, a direct construction) the lease calls are no-ops.
+    const ns = (env as unknown as { IDENTITY_DO?: DurableObjectNamespace }).IDENTITY_DO;
+    // Every call names the connection by its owner token, so the gate applies it only while that token still owns the slot.
+    const gateCall = async (action: "acquire" | "release", c: PendingContext, owner: string, create: boolean): Promise<boolean> => {
+      if (!ns) return true;
+      const res = await ns.get(ns.idFromName(`pending-gate:${c.orgId}`)).fetch(new Request(`https://do.internal/gate/${action}`, { method: "POST", body: JSON.stringify({ id: c.chargePointId, owner, create }) }));
+      // Only a renewal carries a verdict. `false` means "not held by this token"; a throw means the gate could not be asked at
+      // all. PendingMode treats the two differently.
+      return action === "acquire" ? ((await res.json()) as { ok?: unknown }).ok === true : true;
+    };
+    this.pending = new PendingMode(state, env, selectSubprotocol, () => Date.now(), {
+      renew: (c, owner, create) => gateCall("acquire", c, owner, create),
+      release: async (c, owner) => {
+        await gateCall("release", c, owner, false);
+      },
+    });
+    this.gate = new PendingGate(state);
   }
 
   // ───────────────────────────────────────────────────────────────
@@ -372,12 +394,55 @@ export class IdentityDurableObject {
       return this.handleUpgrade(request);
     }
 
+    // Pending onboarding (unregistered charger). The upgrade carries the engine's `pending` verdict; promote/presence are
+    // reached only through the gateway's named CommandEntrypoint (no public route leads here).
+    if (url.pathname === "/pending/ws" && request.headers.get("upgrade") === "websocket" && request.headers.get(PENDING_CTX_HEADER)) {
+      return this.pending.upgrade(request);
+    }
+    // Admission gate for pending sockets (one object per CPO). Reached only from the entry Worker and pending objects.
+    if ((url.pathname === "/gate/acquire" || url.pathname === "/gate/release") && request.method === "POST") {
+      let id = "";
+      let attempt: string | undefined;
+      let owner: string | undefined;
+      let create = false;
+      try {
+        const body = (await request.json()) as { id?: unknown; attempt?: unknown; owner?: unknown; create?: unknown };
+        id = String(body.id ?? "");
+        // `attempt`: the entry Worker's token for an upgrade in flight. `owner`: the pending object's token for its connection.
+        // Anything that is not a short token is treated as absent, and a call without either token changes nothing.
+        if (isOwnerToken(body.attempt)) attempt = body.attempt;
+        if (isOwnerToken(body.owner)) owner = body.owner;
+        create = body.create === true;
+      } catch { /* handled as an empty id */ }
+      if (url.pathname === "/gate/release") {
+        if (attempt) await this.gate.releaseAttempt(id, attempt);
+        else if (owner) await this.gate.releaseOwner(id, owner);
+        return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      const ok = attempt ? await this.gate.acquire(id, attempt) : owner ? await this.gate.renew(id, owner, create) : false;
+      return new Response(JSON.stringify({ ok }), { status: 200, headers: { "content-type": "application/json" } });
+    }
+    if (url.pathname === "/pending/promote" && request.method === "POST") {
+      return new Response(JSON.stringify({ outcome: await this.pending.promote() }), { status: 200, headers: { "content-type": "application/json" } });
+    }
+    if (url.pathname === "/pending/presence" && request.method === "GET") {
+      return new Response(JSON.stringify(await this.pending.presence()), { status: 200, headers: { "content-type": "application/json" } });
+    }
+
     // Engine-mode stop command (reached only via the gateway's named CommandEntrypoint; no public route leads here).
+    // The body is a durable attempt (attemptId, requestId, placementId, transactionNo, deadlineMs); EngineMode validates it
+    // and an ill-formed one is "unavailable" without sending anything.
+    if (url.pathname === "/command/outbox" && request.method === "POST") {
+      let body: unknown;
+      try { body = await request.json(); } catch { return new Response("bad input", { status: 400 }); }
+      if (!body || typeof body !== "object") return new Response("bad input", { status: 400 });
+      return Response.json(await this.engine.repairOutbox(body as never));
+    }
     if (url.pathname === "/command/stop" && request.method === "POST") {
-      let body: { transactionNo?: unknown } = {};
-      try { body = (await request.json()) as typeof body; } catch { /* handled below */ }
-      const outcome = typeof body.transactionNo === "number" ? await this.engine.requestStop({ transactionNo: body.transactionNo }) : "unavailable";
-      return new Response(JSON.stringify({ outcome }), { status: 200, headers: { "content-type": "application/json" } });
+      let body: unknown = null;
+      try { body = await request.json(); } catch { /* validated (and refused) inside */ }
+      const result = await this.engine.requestStop(body as never);
+      return new Response(JSON.stringify(result), { status: 200, headers: { "content-type": "application/json" } });
     }
 
     // Outbound command injection from main-app dispatcher.
@@ -455,6 +520,12 @@ export class IdentityDurableObject {
   // ───────────────────────────────────────────────────────────────
 
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
+    // Pending sockets (unregistered chargers) have their own restricted handler and never reach the legacy path.
+    const pendingTag = readPendingTag(ws);
+    if (pendingTag) {
+      await this.pending.message(ws, pendingTag, message);
+      return;
+    }
     if (typeof message !== "string") {
       ws.send(
         JSON.stringify([4, "malformed", "ProtocolError", "binary frames not supported", {}]),
@@ -500,6 +571,11 @@ export class IdentityDurableObject {
   }
 
   async webSocketClose(ws: WebSocket, code: number, reason: string, _wasClean: boolean): Promise<void> {
+    const pendingTag = readPendingTag(ws);
+    if (pendingTag) {
+      await this.pending.closed(ws, pendingTag, code);
+      return;
+    }
     const engineTag = readTag(ws);
     if (engineTag) {
       // A stale socket's close, or one with a current sibling still open, changes nothing about the device.
@@ -531,6 +607,11 @@ export class IdentityDurableObject {
    * same sweep (P4.16).
    */
   async webSocketError(ws: WebSocket, error: unknown): Promise<void> {
+    const pendingTag = readPendingTag(ws);
+    if (pendingTag) {
+      await this.pending.closed(ws, pendingTag);
+      return;
+    }
     const engineTag = readTag(ws);
     if (engineTag) {
       await this.engine.closed(ws, engineTag);
@@ -551,8 +632,14 @@ export class IdentityDurableObject {
    * rather than one per tick.
    */
   async alarm(): Promise<void> {
-    // Engine outbox first: a durable delivery attempt, re-arming only for the next due entry.
-    await this.engine.drainOutbox();
+    // A pending object has only the first-boot deadline; it has no outbox and no outbound commands.
+    if (await this.pending.isPending()) {
+      await this.pending.alarm();
+      return;
+    }
+    // Engine alarm first: expired stop attempts are resolved durably, then the outbox is delivered; the engine re-arms
+    // for the earliest of what remains (never later than an already-armed alarm).
+    await this.engine.onAlarm();
     await this.ensureMeta();
     const now = Date.now();
     const pending = await this.state.storage.list<OutboundPending>({
@@ -585,7 +672,10 @@ export class IdentityDurableObject {
       });
     }
 
-    if (nextDueAt !== null) await this.state.storage.setAlarm(nextDueAt);
+    if (nextDueAt !== null) {
+      const existing = await this.state.storage.getAlarm();
+      if (existing === null || existing <= now || nextDueAt < existing) await this.state.storage.setAlarm(nextDueAt);
+    }
   }
 
   /**

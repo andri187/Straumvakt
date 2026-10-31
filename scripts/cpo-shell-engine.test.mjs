@@ -21,18 +21,18 @@ const KEY = 'abcdefghijk1';
 describe('EngineEntrypoint (local harness)', () => {
   it('without DATABASE_URL, admission is `unavailable` and never admits', async () => {
     const e = new EngineEntrypoint({}, {});
-    expect(await e.admit({ host: 'cpoa.straumvakt.org', pathname: `/${KEY}/CP-1`, authorization: null })).toEqual({ kind: 'unavailable' });
+    expect(await e.admit({ host: 'cpoa.straumvakt.org', pathname: '/CP-1', authorization: null })).toEqual({ kind: 'unavailable' });
   });
 
   it('without DATABASE_URL, calls are `unavailable` (retryable), not accepted', async () => {
     const e = new EngineEntrypoint({}, {});
-    const ctx = { orgId: 'o', installationId: 'i', installationKey: KEY, chargePointId: 'CP-1', identityString: `${KEY}/CP-1`, deviceId: 'd', placementId: 'p', credentialMode: 'none', credentialEpoch: 'e' };
+    const ctx = { orgId: 'o', installationId: 'i', chargePointId: 'CP-1', identityString: 'o/CP-1', deviceId: 'd', placementId: 'p', credentialMode: 'none', credentialEpoch: 'e' };
     expect(await e.call({ ctx, messageId: 'm', action: 'Authorize', payload: { idTag: 'T' }, receivedAt: new Date().toISOString() })).toEqual({ kind: 'unavailable' });
   });
 
   it('refuses malformed admission input before any database is considered', async () => {
     const e = new EngineEntrypoint({}, { DATABASE_URL: 'postgres://never-opened.invalid/db' });
-    expect(await e.admit({ host: 'evil.example.com', pathname: `/${KEY}/CP-1` })).toEqual({ kind: 'deny' });
+    expect(await e.admit({ host: 'evil.example.com', pathname: '/CP-1' })).toEqual({ kind: 'deny' });
     expect(await e.call({ ctx: {}, messageId: 'm', action: 'Authorize', payload: {}, receivedAt: 'x' })).toEqual({ kind: 'rejected', status: 400 });
   });
 });

@@ -18,8 +18,27 @@
   ],
   "vars": {
     "CPO_SHELL_USERNAME": "Straumvakt",
+    "CPO_SHELL_ORG_ID": "17a168ae-4d54-4ae4-b741-c2145825de5a",
+    "CPO_VENDOR_CONNECT": "easee,zaptec",
+    // Bounded independent recovery (costing + pending removals). OFF: only the exact string "true" enables it, and it also
+    // needs a cron trigger below. Disabled does no database work.
+    "CPO_SHELL_RECOVERY_ENABLED": "false",
     "NEXT_PUBLIC_APP_NAME": "Straumvakt"
   },
+  // No cron ships. PROPOSED release setting, to be enabled only after review and approved live validation, together with
+  // CPO_SHELL_RECOVERY_ENABLED = "true":   "crons": ["0 * * * *"]   (hourly; each pass is bounded to 20 costing attempts,
+  // 5 lifecycle requests and a 20 s cooperative budget). Each enabled pass can wake the Neon compute. Rollback: set the
+  // variable back to "false" (pending work then waits; it is not lost) and remove the cron.
+  "triggers": { "crons": [] },
+  // Both bindings name the gateway's CommandEntrypoint. OCPP_PENDING: pending-charger calls only (presence read, post-save
+  // signal). GATEWAY: the binding the lifecycle endpoint reads for remote stop (durable, attempt-keyed). LOCAL CONFIGURATION
+  // ONLY until released: deploying it ENABLES removal of a charger with a session in progress, which needs the gateway
+  // version that carries the attempt-keyed requestStop. Release the gateway FIRST; the target Worker and entrypoint must
+  // already exist when this configuration is deployed. The two bindings are the same target by design, not a second service.
+  "services": [
+    { "binding": "OCPP_PENDING", "service": "straumvakt-ocpp-s1", "entrypoint": "CommandEntrypoint" },
+    { "binding": "GATEWAY", "service": "straumvakt-ocpp-s1", "entrypoint": "CommandEntrypoint" }
+  ],
   "ratelimits": [{
     "name": "SHELL_LOGIN_LIMITER",
     "namespace_id": "2026102701",

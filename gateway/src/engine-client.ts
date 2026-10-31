@@ -15,6 +15,7 @@
  * existing single `ops` key and no service-binding call).
  */
 import type { EngineContext } from "./connection-ownership";
+import type { LiveDevice } from "@engine/live-projection";
 
 export type CallAnswer =
   | { kind: "result"; payload: Record<string, unknown> }
@@ -26,9 +27,29 @@ export type CallAnswer =
  * has no public route (see src/lib/ocpp-engine/rpc.ts for the decision).
  */
 export interface EngineBinding {
-  admit(input: { host: string; pathname: string; authorization: string | null }): Promise<AdmitOutcome>;
+  publishLiveV1?(value: LiveDevice): Promise<{ ok: boolean }>;
+  admit(input: { host: string; pathname: string; authorization: string | null; acceptPending?: boolean }): Promise<AdmitOutcome>;
   call(input: EngineCallBody): Promise<EngineOutcome>;
+  callBatchV1?(input: EngineCallBody[]): Promise<{ messageId: string; outcome: EngineOutcome }[]>;
+  /** Pending onboarding of an unregistered charger (boot capture, registration check, close note). */
+  pending?(input: PendingCall): Promise<PendingAnswer>;
 }
+
+export async function publishLive(env: EngineEnv, value: LiveDevice): Promise<boolean> {
+  if (!env.ENGINE?.publishLiveV1) return false;
+  try {
+    const out = await withTimeout(env.ENGINE.publishLiveV1(value), 1000); // disposable projection must not monopolize command/evidence work
+    return out !== "timeout" && out?.ok === true;
+  } catch { return false; }
+}
+
+export type PendingCall = { op: "boot" | "check" | "closed"; routingId: string; chargePointId: string; messageId?: string; receivedAt?: string; frameBytes?: number; payload?: unknown };
+export type PendingAnswer =
+  | { kind: "state"; state: "unregistered" | "registered" | "known" | "inactive"; hasCapture?: boolean }
+  | { kind: "captured"; result: "stored" | "unchanged" | "full" }
+  | { kind: "ok" }
+  | { kind: "unavailable" }
+  | { kind: "rejected"; status: number };
 
 export interface EngineEnv {
   ENGINE?: EngineBinding;
@@ -68,18 +89,57 @@ export async function callEngine(env: EngineEnv, body: EngineCallBody, timeoutMs
   }
 }
 
+/** Missing/old bindings and uncertain replies leave ALL original events retryable.
+ * Never fall back to individual calls after a timeout: those commits may still finish.
+ */
+export async function callEngineBatch(env: EngineEnv, bodies: EngineCallBody[], timeoutMs = ENGINE_TIMEOUT_MS): Promise<EngineOutcome[]> {
+  const unavailable = (): EngineOutcome[] => bodies.map(() => ({ kind: "unavailable" }));
+  if (!env.ENGINE?.callBatchV1 || bodies.length < 1 || bodies.length > 20) return unavailable();
+  try {
+    const out = await withTimeout(env.ENGINE.callBatchV1(bodies), timeoutMs);
+    if (!Array.isArray(out) || out.length !== bodies.length) return unavailable();
+    if (!out.every((item, index) => {
+      const v = item?.outcome;
+      return item?.messageId === bodies[index]?.messageId && v && (v.kind === "unavailable" || (v.kind === "answer" && isAnswer(v.answer)) || (v.kind === "rejected" && typeof v.status === "number"));
+    })) return unavailable();
+    return out.map(item => item.outcome);
+  } catch { return unavailable(); }
+}
+
 export const INTERNAL_ERROR: CallAnswer = { kind: "error", code: "InternalError", description: "backend unavailable; retry" };
 
-export type AdmitOutcome = { kind: "admit"; context: EngineContext } | { kind: "deny" } | { kind: "unavailable" };
+export type AdmitOutcome =
+  | { kind: "admit"; context: EngineContext }
+  | { kind: "pending"; orgId: string; routingId: string; chargePointId: string }
+  | { kind: "deny" }
+  | { kind: "unavailable" };
 
-/** Asks the engine to admit an upgrade. The raw Authorization header crosses the binding only. */
-export async function admit(env: EngineEnv, host: string, pathname: string, authorization: string | null): Promise<AdmitOutcome> {
+/**
+ * Asks the engine to admit an upgrade. The raw Authorization header crosses the binding only. `acceptPending` asks
+ * the engine to answer `pending` for a genuinely unknown charger instead of `deny`; without it nothing changes.
+ */
+export async function admit(env: EngineEnv, host: string, pathname: string, authorization: string | null, acceptPending = false): Promise<AdmitOutcome> {
   if (!env.ENGINE) return { kind: "unavailable" };
   try {
-    const out = await withTimeout(env.ENGINE.admit({ host, pathname, authorization }), ENGINE_TIMEOUT_MS);
+    const out = await withTimeout(env.ENGINE.admit({ host, pathname, authorization, ...(acceptPending ? { acceptPending: true } : {}) }), ENGINE_TIMEOUT_MS);
     if (out === "timeout" || !out || typeof out !== "object") return { kind: "unavailable" };
     if (out.kind === "admit" && out.context) return out;
+    if (out.kind === "pending" && acceptPending && typeof out.orgId === "string" && typeof out.routingId === "string" && typeof out.chargePointId === "string") return out;
     if (out.kind === "deny") return { kind: "deny" };
+    return { kind: "unavailable" };
+  } catch {
+    return { kind: "unavailable" };
+  }
+}
+
+/** Pending onboarding call. Never throws; a missing binding, timeout or malformed answer is `unavailable`. */
+export async function callPending(env: EngineEnv, input: PendingCall): Promise<PendingAnswer> {
+  if (!env.ENGINE?.pending) return { kind: "unavailable" };
+  try {
+    const out = await withTimeout(env.ENGINE.pending(input), ENGINE_TIMEOUT_MS);
+    if (out === "timeout" || !out || typeof out !== "object") return { kind: "unavailable" };
+    const k = (out as { kind?: unknown }).kind;
+    if (k === "state" || k === "captured" || k === "ok" || k === "rejected") return out;
     return { kind: "unavailable" };
   } catch {
     return { kind: "unavailable" };

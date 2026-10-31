@@ -8,11 +8,13 @@
 // locked FOR UPDATE for the whole close, so a concurrent edit or a second close
 // serialises behind it, and the optimistic request `version` backs that up.
 
-import { and, asc, desc, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
-import { deviceIdentities, installationChanges, installations, lifecycleRequests, placements } from "@straumvakt/shared/db/assets";
+import { and, asc, desc, eq, gt, inArray, isNull, notInArray, or, sql } from "drizzle-orm";
+import { deviceIdentities, installationChanges, installations, lifecycleRequests, lifecycleRecoveryCursor, placements } from "@straumvakt/shared/db/assets";
 import { ocppTransactions } from "@straumvakt/shared/db/charging";
 import type { Db, Executor } from "@/lib/installations/db";
+import { identityRow } from "@/lib/installations/model";
 import type { LifecycleRequest, SessionStep } from "./model";
+import type { Observed } from "./plan";
 import { SUPERSEDED_FLAG } from "@/lib/ocpp-engine/transactions";
 import { OpenRequestConflict, SessionOpenError, type DeviceView, type LifecycleStore, type LifecycleTx } from "./service";
 
@@ -31,15 +33,14 @@ function port(x: Executor): LifecycleTx {
   return {
     async currentPlacement(deviceId): Promise<DeviceView | null> {
       const [p] = await x
-        .select({ placementId: placements.id, orgId: placements.orgId, installationId: placements.installationId, circuitId: placements.circuitId, label: placements.label, identity: deviceIdentities.identityString, key: installations.installationKey })
+        .select({ placementId: placements.id, orgId: placements.orgId, installationId: placements.installationId, circuitId: placements.circuitId, label: placements.label, chargePointId: deviceIdentities.chargePointId, identity: deviceIdentities.identityString })
         .from(placements)
         .innerJoin(installations, eq(installations.id, placements.installationId))
         .leftJoin(deviceIdentities, and(eq(deviceIdentities.deviceId, placements.deviceId), openIdentity))
         .where(and(eq(placements.deviceId, deviceId), openPlacement))
         .limit(1);
       if (!p) return null;
-      const prefix = `${p.key ?? ""}/`;
-      return { deviceId, placementId: p.placementId, orgId: p.orgId, installationId: p.installationId, circuitId: p.circuitId, label: p.label ?? "", chargePointId: p.identity?.startsWith(prefix) ? p.identity.slice(prefix.length) : (p.identity ?? "") };
+      return { deviceId, placementId: p.placementId, orgId: p.orgId, installationId: p.installationId, circuitId: p.circuitId, label: p.label ?? "", chargePointId: p.chargePointId ?? p.identity ?? "" };
     },
 
     async byKey(key) { const [r] = await x.select().from(lifecycleRequests).where(eq(lifecycleRequests.requestKey, key)); return r ? toReq(r) : null; },
@@ -90,6 +91,48 @@ function port(x: Executor): LifecycleTx {
         .orderBy(asc(ocppTransactions.transactionNo));
       const [open] = await x.select({ id: placements.id }).from(placements).where(and(eq(placements.deviceId, req.deviceId), openPlacement)).limit(1);
       return { sessions: rows.map(({ reconcileFlag, ...r }) => ({ ...r, superseded: reconcileFlag === SUPERSEDED_FLAG && r.stoppedReceivedAt === null })), placementOpen: !!open };
+    },
+    // This short-lived lock is released before any command or costing effect.
+    async lockRecoveryCursor() {
+      await x.insert(lifecycleRecoveryCursor).values({ id: 1 }).onConflictDoNothing();
+      const [cursor] = await x.select().from(lifecycleRecoveryCursor).where(eq(lifecycleRecoveryCursor.id, 1)).for("update");
+      if (!cursor) throw new Error("Recovery cursor unavailable");
+      return cursor.afterDeviceId;
+    },
+    async advanceRecoveryCursor(afterDeviceId) {
+      await x.update(lifecycleRecoveryCursor).set({ afterDeviceId }).where(eq(lifecycleRecoveryCursor.id, 1));
+    },
+    // Predicate and order match the existing partial unique device index; no hash sort or OFFSET.
+    async listOpen({ limit, afterDeviceId }) {
+      const rows = await x
+        .select()
+        .from(lifecycleRequests)
+        .where(and(sql`${lifecycleRequests.state} NOT IN ('completed','cancelled')`, afterDeviceId === null ? undefined : gt(lifecycleRequests.deviceId, afterDeviceId)))
+        .orderBy(asc(lifecycleRequests.deviceId))
+        .limit(limit);
+      return rows.map(toReq);
+    },
+    async observedMany(reqs) {
+      const out = new Map<string, Observed>();
+      if (reqs.length === 0) return out;
+      const deviceIds = [...new Set(reqs.map((r) => r.deviceId))];
+      const tracked = [...new Set(reqs.flatMap((r) => r.sessions.map((s) => s.transactionNo)))];
+      // transaction_no is globally unique, so matching the tracked numbers alone is safe; the other arm is each device's open sessions.
+      const rows = await x
+        .select({ deviceId: ocppTransactions.deviceId, transactionNo: ocppTransactions.transactionNo, transactionId: ocppTransactions.id, stoppedReceivedAt: ocppTransactions.stoppedReceivedAt, authorized: ocppTransactions.authorized, costingState: ocppTransactions.costingState, reconcileFlag: ocppTransactions.reconcileFlag })
+        .from(ocppTransactions)
+        .where(or(and(inArray(ocppTransactions.deviceId, deviceIds), isNull(ocppTransactions.stoppedReceivedAt)), tracked.length ? inArray(ocppTransactions.transactionNo, tracked) : undefined))
+        .orderBy(asc(ocppTransactions.transactionNo));
+      const openPlacements = await x.select({ deviceId: placements.deviceId }).from(placements).where(and(inArray(placements.deviceId, deviceIds), openPlacement));
+      const placed = new Set(openPlacements.map((p) => p.deviceId));
+      for (const req of reqs) {
+        const mine = new Set(req.sessions.map((s) => s.transactionNo));
+        const sessions = rows
+          .filter((r) => r.deviceId === req.deviceId && (r.stoppedReceivedAt === null || mine.has(r.transactionNo)))
+          .map(({ reconcileFlag, deviceId: _device, ...r }) => ({ ...r, superseded: reconcileFlag === SUPERSEDED_FLAG && r.stoppedReceivedAt === null }));
+        out.set(req.id, { sessions, placementOpen: placed.has(req.deviceId) });
+      }
+      return out;
     },
     async openSessionCount(deviceId) {
       // Supersession is not stop evidence: every unconfirmed session blocks closure.
@@ -144,11 +187,11 @@ function port(x: Executor): LifecycleTx {
       return { orgId: p.orgId, installationId: p.installationId, retired: lr?.kind === "retire" };
     },
     async openPlacement(i) {
-      const [inst] = await x.select({ key: installations.installationKey, revision: installations.revision, siteId: installations.siteId }).from(installations).where(eq(installations.id, i.installationId)).for("update").limit(1);
-      if (!inst?.key) throw new Error("installation not found");
+      const [inst] = await x.select({ revision: installations.revision, siteId: installations.siteId }).from(installations).where(eq(installations.id, i.installationId)).for("update").limit(1);
+      if (!inst) throw new Error("installation not found");
       try {
         await x.insert(placements).values({ deviceId: i.deviceId, orgId: i.orgId, installationId: i.installationId, siteId: inst.siteId, circuitId: i.circuitId, label: i.label, period: sql`tstzrange(${i.at.toISOString()}::timestamptz, NULL, '[)')` as unknown as string });
-        await x.insert(deviceIdentities).values({ deviceId: i.deviceId, identityString: `${inst.key}/${i.chargePointId}`, period: sql`tstzrange(${i.at.toISOString()}::timestamptz, NULL, '[)')` as unknown as string, note: "returned to service" });
+        await x.insert(deviceIdentities).values({ deviceId: i.deviceId, ...identityRow(i.orgId, i.chargePointId), period: sql`tstzrange(${i.at.toISOString()}::timestamptz, NULL, '[)')` as unknown as string, note: "returned to service" });
       } catch (e) {
         const code = (e as { code?: string; cause?: { code?: string } }).code ?? (e as { cause?: { code?: string } }).cause?.code;
         if (code === "23P01" || code === "23505") throw new Error("identity_in_use"); // exclusion / unique: the id or the open placement is taken

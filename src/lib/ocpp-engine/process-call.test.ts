@@ -7,7 +7,6 @@ import { memoryTxStore } from "./__tests__/memory-tx-store";
 const ctx: ConnectionContext = {
   orgId: "11111111-1111-4111-8111-111111111111",
   installationId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-  installationKey: "abcdefghijk1",
   chargePointId: "CP-1",
   identityString: "abcdefghijk1/CP-1",
   deviceId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
@@ -24,11 +23,19 @@ const mk = (over: Parameters<typeof memoryTxStore>[0] = {}) => {
 const call = (action: string, payload: unknown, messageId = "m1") => ({ ctx, messageId, action, payload, receivedAt: T });
 
 describe("processCall: one generic path", () => {
-  it("answers Boot with an interval but grants no charging permission and writes nothing", async () => {
+  it("records reported equipment details without SIM identifiers or granting charging permission", async () => {
     const { m, env } = mk();
-    expect(await processCall(env, call("BootNotification", { chargePointVendor: "AnyMaker", chargePointModel: "X1" }))).toEqual({ kind: "result", payload: { status: "Accepted", currentTime: T.toISOString(), interval: 3600 } });
-    expect(m.state.receipts).toHaveLength(0);
+    const boot = call("BootNotification", { chargePointVendor: "AnyMaker", chargePointModel: "X1", chargePointSerialNumber: "serial-1", firmwareVersion: "1.2", iccid: "private-sim" });
+    expect(await processCall(env, boot)).toEqual({ kind: "result", payload: { status: "Accepted", currentTime: T.toISOString(), interval: 3600 } });
+    expect(await processCall(env, boot)).toEqual({ kind: "result", payload: { status: "Accepted", currentTime: T.toISOString(), interval: 3600 } });
+    expect(m.state.receipts).toHaveLength(1);
+    expect(m.state.receipts[0].payload).toEqual({ chargePointVendor: "AnyMaker", chargePointModel: "X1", chargePointSerialNumber: "serial-1", firmwareVersion: "1.2" });
     expect(m.state.txs).toHaveLength(0);
+  });
+  it("does not acknowledge a boot when storing its evidence fails", async () => {
+    const { env } = mk();
+    const bad = { ...env, store: { ...env.store, run: async () => { throw new Error("db"); } } };
+    expect(await processCall(bad, call("BootNotification", { chargePointVendor: "AnyMaker", chargePointModel: "X1" }))).toMatchObject({ kind: "error", code: "InternalError" });
   });
   it("rejects malformed payloads with a protocol error instead of a successful empty reply", async () => {
     const { env } = mk();

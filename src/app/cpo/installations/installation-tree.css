@@ -1,0 +1,43 @@
+/* Compact continuous tree: site > installation > circuit > charger. Shares colours with the grouped charger table. */
+.it-tree { border-top: 1px solid #1a273a; border-bottom: 1px solid #1a273a; margin-bottom: 14px; }
+.it-list { list-style: none; margin: 0; padding: 0; }
+.it-site + .it-site { border-top: 1px solid #1a273a; }
+.it-line { display: flex; align-items: center; gap: 9px; min-height: 34px; padding: 3px 6px; min-width: 0; font-size: 12px; }
+.it-line:hover, .it-charger:hover { background: #101b2b; }
+.it-siteline { min-height: 44px; padding: 6px 10px; font-weight: 600; font-size: 13px; }
+.it-sitebody { padding: 0 8px 12px 27px; }
+.it-installation + .it-installation { margin-top: 6px; }
+.it-body { padding-left: 27px; }
+.it-body .it-list .it-list { padding-left: 22px; }
+.it-toggle { display: inline-flex; align-items: center; gap: 9px; min-height: 30px; padding: 0 2px; border: 0; background: transparent; color: inherit; font: inherit; font-weight: inherit; cursor: pointer; text-align: left; min-width: 0; }
+.it-toggle.it-arrow-only { min-width: 24px; justify-content: center; }
+.it-toggle:focus-visible, .it-link:focus-visible, .it-edit:focus-visible, .it-retry:focus-visible { outline: 2px solid #6fdcea; outline-offset: 1px; border-radius: 3px; }
+.it-arrow { width: 7px; height: 7px; flex-shrink: 0; border-right: 1.5px solid #607a97; border-bottom: 1.5px solid #607a97; transform: rotate(-45deg); transition: transform 0.12s; margin: 0 2px; }
+.it-arrow.it-open { transform: rotate(45deg); }
+.it-name { color: #e3edf9; overflow-wrap: anywhere; }
+.it-sitename { font-weight: 600; }
+.it-installation > .it-line .it-name { font-weight: 600; }
+.it-circuit .it-name { font-weight: 400; }
+.it-link { text-decoration: none; }
+.it-link:hover { text-decoration: underline; }
+.it-leaf { padding-left: 24px; }
+.it-elec { font-family: ui-monospace, Consolas, monospace; font-size: 10px; color: #70859f; font-weight: 400; white-space: nowrap; }
+.it-badge { font-size: 10px; padding: 2px 6px; border: 1px solid #22354b; border-radius: 4px; color: #91bbdc; background: #102033; }
+.it-dim { color: #788da6; font-size: 11px; font-weight: 400; }
+.it-right { margin-left: auto; display: flex; gap: 12px; align-items: center; color: #788da6; font-size: 10px; font-weight: 400; white-space: nowrap; }
+.it-edit { color: #8caac5; text-decoration: none; padding: 6px 2px; }
+.it-edit:hover { text-decoration: underline; }
+.it-charger { display: flex; align-items: center; gap: 10px; min-height: 30px; padding: 4px 6px 4px 29px; font-size: 12px; border-radius: 3px; }
+.it-id { color: #627b97; font-size: 10px; font-family: ui-monospace, Consolas, monospace; }
+.it-device { width: 10px; height: 13px; border: 1px solid #496078; border-radius: 2px; flex-shrink: 0; }
+.it-empty { margin: 0; padding: 8px 6px 8px 27px; font-size: 11px; color: #70859f; }
+.it-error { color: #e6b0a8; }
+.it-retry { margin-left: 6px; padding: 4px 10px; border: 1px solid #2d4056; border-radius: 5px; background: #111e2e; color: #cbd9e9; font-size: 11px; cursor: pointer; }
+.it-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+@media (max-width: 650px) {
+  .it-sitebody { padding-left: 12px; padding-right: 0; }
+  .it-body { padding-left: 17px; }
+  .it-line { flex-wrap: wrap; gap: 4px 8px; }
+  .it-right { gap: 8px; }
+  .it-charger { flex-wrap: wrap; padding-left: 24px; gap: 4px 8px; }
+}

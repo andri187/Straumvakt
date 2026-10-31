@@ -7,6 +7,8 @@
 // the whole thing back, so success is never reported for a failed write.
 
 import { mayAdminister, type Actor } from "./actor";
+import { discoveryEvidence } from "./discovery";
+import { closedDraftError, mayUseDraft, UNKNOWN_DRAFT } from "./drafts";
 import {
   isReservedRoutingLabel,
   newInstallationKey,
@@ -18,6 +20,7 @@ import {
 import { generateInstallationPassword, hashInstallationPassword } from "./password";
 import { planSave, type Diff, type Plan } from "./plan";
 import { SaveError, type ChangeRow, type Store, type TxPort } from "./store";
+import { importKey, importMetadata } from "./vendor-import";
 
 export type SaveResult = {
   snapshot: Snapshot;
@@ -25,9 +28,16 @@ export type SaveResult = {
   replayed: boolean;
   /** True when the submitted state equalled the stored one and no revision was created. */
   unchanged: boolean;
+  /**
+   * True when this CPO had already imported this vendor installation: the EXISTING installation is returned, nothing was
+   * written, and nothing of the operator's edits was touched. `unchanged` is also true then.
+   */
+  alreadyImported?: boolean;
   /** A generated password, returned exactly once and never stored in clear. */
   generatedPassword?: string;
   responsibleStatus: ResponsibleStatus;
+  /** Charge point ids attached to a circuit by THIS commit (typed or picked from Incoming). Used to signal a waiting charger after the commit. */
+  attachedChargePointIds?: string[];
 };
 
 export type ServiceDeps = {
@@ -78,6 +88,9 @@ export async function saveInstallation(
     }
 
     const isCreate = input.installationId === undefined;
+    if (!isCreate && input.vendorImport) {
+      throw new SaveError("validation", "A vendor import creates a new installation; it cannot be applied to an existing one", [{ path: "vendorImport", message: "Create only" }]);
+    }
     let current: Snapshot | null = null;
     let orgId: string;
     let siteId: string;
@@ -132,10 +145,35 @@ export async function saveInstallation(
     if (isCreate) {
       const site = await tx.loadSite(siteId, orgId);
       if (!site) throw new SaveError("not_found", "Site not found for this organisation");
+      if (input.vendorImport) {
+        // Serialised per (CPO, vendor, vendor installation) and checked under that lock, so two concurrent imports, a retry with a
+        // new idempotency key after a lost response, and a re-import all find the first one instead of making another. A match by
+        // name is never used and a manually created installation is never merged. The earlier result is returned untouched.
+        const { vendor, externalRef } = importKey(input.vendorImport);
+        const existing = await tx.lockVendorImport(orgId, vendor, externalRef);
+        if (existing) {
+          if (existing.archived) {
+            throw new SaveError("validation", "This vendor installation was imported before and that installation is archived. Resolve it explicitly; it is not re-created automatically.", [
+              { path: "vendorImport", message: "Previously imported (archived)" },
+            ]);
+          }
+          const snapshot = await tx.loadSnapshot(existing.id);
+          if (!snapshot) throw new SaveError("unavailable", "The earlier import could not be read back");
+          return { snapshot, replayed: false, unchanged: true, alreadyImported: true, responsibleStatus: responsibleStatus(snapshot.installation) };
+        }
+      }
       const routing = site.routingId ?? (await tx.ensureRoutingId(orgId, site.orgDisplayName));
       if (isReservedRoutingLabel(routing)) throw new SaveError("unavailable", "Organisation routing label is reserved");
       installationId = newId();
       installationKey = (deps.newKey ?? newInstallationKey)();
+      if (input.draftId) {
+        // Locked so a discard or a second create from the same draft waits for this one; a discarded or used draft
+        // refuses the create outright rather than being quietly ignored.
+        const draft = await tx.lockDraft(input.draftId);
+        if (!draft || !mayUseDraft(actor, draft.orgId)) throw new SaveError("not_found", UNKNOWN_DRAFT);
+        if (draft.state !== "open") throw await closedDraftError(tx, actor, draft);
+        await tx.closeDraft(draft.id, "consumed", installationId);
+      }
       const e = input.electrician;
       await tx.insertInstallation({
         id: installationId,
@@ -146,13 +184,17 @@ export async function saveInstallation(
         mainDeviceType: input.installation.mainDeviceType,
         mainRatingAmps: input.installation.mainRatingAmps,
         mainPhaseCount: input.installation.mainPhaseCount,
+        mainGridType: input.installation.mainGridType,
         electricianName: e.name,
         electricianEmail: e.email,
         electricianPhone: e.phone,
         electricianChangedRevision: plan.electricianChanged ? 1 : 0,
+        vendorImport: input.vendorImport
+          ? { ...importKey(input.vendorImport), metadata: importMetadata(input.vendorImport, now()) }
+          : null,
       });
       const { installation, electrician } = split(plan.installationDiff);
-      changes.push(row(installationId, { entityType: "installation", entityId: installationId, action: "create", diff: installation }));
+      changes.push(row(installationId, { entityType: "installation", entityId: installationId, action: "create", diff: input.vendorImport ? { ...installation, vendorImport: { from: null, to: `${input.vendorImport.package.vendor}:${input.vendorImport.package.site.ref}` } } : installation }));
       if (Object.keys(electrician).length > 0) {
         changes.push(row(installationId, { entityType: "electrician", entityId: installationId, action: "update", diff: electrician }));
       }
@@ -170,6 +212,7 @@ export async function saveInstallation(
           mainDeviceType: input.installation.mainDeviceType,
           mainRatingAmps: input.installation.mainRatingAmps,
           mainPhaseCount: input.installation.mainPhaseCount,
+          mainGridType: input.installation.mainGridType,
           electricianName: e.name,
           electricianEmail: e.email,
           electricianPhone: e.phone,
@@ -184,7 +227,10 @@ export async function saveInstallation(
       }
     }
 
-    await applyTree(tx, plan, { installationId, installationKey, orgId, siteId, newId, changes, row });
+    const attached: string[] = [];
+    // Vendor references of circuits created by this save, looked up by the client id the plan keeps for each new circuit.
+    const vendorRefs = new Map(input.circuits.map((c) => [c.id, c.vendorRef]));
+    await applyTree(tx, plan, { installationId, orgId, siteId, newId, changes, row, attached, at: now(), vendorRefs });
 
     if (passwordChanging) {
       const prior = isCreate ? "unset" : current!.installation.passwordMode;
@@ -207,22 +253,25 @@ export async function saveInstallation(
 
     const snapshot = await tx.loadSnapshot(installationId);
     if (!snapshot) throw new SaveError("unavailable", "Saved installation could not be read back");
-    return { snapshot, replayed: false, unchanged: false, generatedPassword: generated, responsibleStatus: responsibleStatus(snapshot.installation) };
+    return { snapshot, replayed: false, unchanged: false, generatedPassword: generated, responsibleStatus: responsibleStatus(snapshot.installation), attachedChargePointIds: attached };
   });
 }
 
 type ApplyCtx = {
   installationId: string;
-  installationKey: string;
   orgId: string;
   siteId: string;
   newId: () => string;
   changes: ChangeRow[];
   row: (installationId: string, body: RowBody) => ChangeRow;
+  attached: string[];
+  at: Date;
+  /** Client circuit id → the vendor's own circuit reference, for circuits that came from a vendor import. */
+  vendorRefs: Map<string, string | null>;
 };
 
 async function applyTree(tx: TxPort, plan: Plan, ctx: ApplyCtx): Promise<void> {
-  const { installationId, installationKey, orgId, siteId, changes, row } = ctx;
+  const { installationId, orgId, siteId, changes, row } = ctx;
   const circuitIds = new Map<string, string>(); // client id → stored id
   const resolve = (ref: string | null) => (ref === null ? null : (circuitIds.get(ref) ?? ref));
 
@@ -231,7 +280,7 @@ async function applyTree(tx: TxPort, plan: Plan, ctx: ApplyCtx): Promise<void> {
     const id = ctx.newId();
     circuitIds.set(op.clientId, id);
     const parentId = resolve(op.parentRef);
-    await tx.insertCircuit({ id, orgId, siteId, installationId, parentId, displayName: op.displayName, ratingAmps: op.ratingAmps, phaseCount: op.phaseCount, sortOrder: op.sortOrder });
+    await tx.insertCircuit({ id, orgId, siteId, installationId, parentId, displayName: op.displayName, ratingAmps: op.ratingAmps, phaseCount: op.phaseCount, sortOrder: op.sortOrder, vendorRef: ctx.vendorRefs.get(op.clientId) ?? null });
     changes.push(
       row(installationId, {
         entityType: "circuit",
@@ -270,12 +319,18 @@ async function applyTree(tx: TxPort, plan: Plan, ctx: ApplyCtx): Promise<void> {
       await tx.moveCharger({ deviceId: op.id, placementId: op.placementId, orgId, siteId, installationId, circuitId: to, label: op.before.label });
       changes.push(row(installationId, { entityType: "charger", entityId: op.id, action: "move", diff: { circuitId: { from: op.fromCircuitId, to } } }));
     } else if (op.kind === "update") {
-      await tx.updateCharger({ deviceId: op.id, placementId: op.before.placementId, installationKey, patch: op.patch });
+      await tx.updateCharger({ deviceId: op.id, placementId: op.before.placementId, orgId, patch: op.patch });
       changes.push(row(installationId, { entityType: "charger", entityId: op.id, action: "update", diff: op.diff }));
     } else {
       const deviceId = ctx.newId();
       const circuitId = resolve(op.circuitRef)!;
-      await tx.attachCharger({ deviceId, orgId, siteId, installationId, installationKey, circuitId, label: op.label, chargePointId: op.chargePointId, vendor: op.vendor, model: op.model, serialNumber: op.serialNumber });
+      await tx.attachCharger({ deviceId, orgId, siteId, installationId, circuitId, label: op.label, chargePointId: op.chargePointId, vendor: op.vendor, model: op.model, serialNumber: op.serialNumber });
+      ctx.attached.push(op.chargePointId);
+      // Durable intent, committed or rolled back WITH the attach: the waiting charger must be told, and a lost signal is visible and retried.
+      await tx.markPromotion(orgId, op.chargePointId, ctx.at);
+      // The same operation whether the id was typed or picked from the incoming list. If this CPO had recorded it knocking,
+      // that is part of the audit; the operator's save is the explicit acceptance.
+      const knock = await tx.loadDiscovery(orgId, op.chargePointId);
       changes.push(
         row(installationId, {
           entityType: "charger",
@@ -288,6 +343,7 @@ async function applyTree(tx: TxPort, plan: Plan, ctx: ApplyCtx): Promise<void> {
             vendor: { from: null, to: op.vendor },
             model: { from: null, to: op.model },
             serialNumber: { from: null, to: op.serialNumber },
+            ...(knock ? { acceptedFromIncoming: { from: null, to: discoveryEvidence(knock) } } : {}),
           },
         }),
       );

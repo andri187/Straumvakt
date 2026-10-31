@@ -143,6 +143,7 @@ export function planSave(current: Snapshot | null, input: SaveInstallationInput)
   pushDiff(installationDiff, "mainDeviceType", inst?.mainDeviceType ?? null, input.installation.mainDeviceType);
   pushDiff(installationDiff, "mainRatingAmps", inst?.mainRatingAmps ?? null, input.installation.mainRatingAmps);
   pushDiff(installationDiff, "mainPhaseCount", inst?.mainPhaseCount ?? null, input.installation.mainPhaseCount);
+  pushDiff(installationDiff, "mainGridType", inst?.mainGridType ?? null, input.installation.mainGridType);
 
   const e = input.electrician;
   const before = inst?.electrician ?? { name: null, email: null, phone: null };

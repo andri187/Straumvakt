@@ -2,17 +2,23 @@ import Link from "next/link";
 import type { Route } from "next";
 import { redirect } from "next/navigation";
 import { SHELL_SIGN_IN } from "@/lib/cpo-shell-policy";
-import { toView } from "@/lib/installations/api";
+import { draftSummary, draftView, toView } from "@/lib/installations/api";
+import type { IncomingCharger } from "@/lib/installations/discovery";
 import { DatabaseUnavailableError } from "@/lib/installations/api";
-import { liveDeps } from "@/lib/installations/repo";
+import { attachQuery as toAttachQuery, parseAttachParams, resolveAttach } from "@/lib/installations/attachment-selection";
+import { shellDeps } from "@/lib/installations/live-bindings";
 import { currentActor } from "@/lib/installations/session";
 import { ContextBar } from "../workspace-ui";
-import { InstallationEditor } from "./installation-editor";
+import { OverviewRefresh } from "../overview-refresh";
+import { enabledVendors } from "@/lib/installations/vendor-onboarding";
+import { InstallationEditor, RequiredNote } from "./installation-editor";
+import { InstallationTree } from "./installation-tree";
+import { VendorOnboarding } from "./vendor-onboarding";
 
 export const metadata = { title: "Installations" };
 export const dynamic = "force-dynamic";
 
-type Search = Promise<{ id?: string | string[]; new?: string | string[] }>;
+type Search = Promise<{ id?: string | string[]; new?: string | string[]; draft?: string | string[]; attach?: string | string[]; onboard?: string | string[] }>;
 const first = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
 
 function State({ title, children }: { title: string; children: React.ReactNode }) {
@@ -27,18 +33,38 @@ function State({ title, children }: { title: string; children: React.ReactNode }
 }
 
 export default async function Page({ searchParams }: { searchParams: Search }) {
-  if (!(await currentActor())) redirect(SHELL_SIGN_IN as Route);
+  const actor = await currentActor();
+  if (!actor) redirect(SHELL_SIGN_IN as Route);
   const sp = await searchParams;
   const id = first(sp.id);
-  const wantsNew = first(sp.new) !== undefined;
-  const deps = liveDeps();
+  const draftParam = first(sp.draft);
+  const wantsNew = first(sp.new) !== undefined || draftParam !== undefined;
+  const wantsOnboard = !id && !wantsNew && first(sp.onboard) !== undefined;
+  const deps = shellDeps();
+  // The charger being attached, if the operator came from the Chargers page. Only an id the server still lists as incoming
+  // for the workspace CPO is honoured; the rest of the request cannot name a CPO.
+  const ctxOrg = deps.contextOrgId ?? null;
+  // Several may be selected (repeated `attach`), bounded and de-duplicated. They are hints only.
+  const attachParams = parseAttachParams(Array.isArray(sp.attach) ? sp.attach : [sp.attach]);
+  const loadCandidates = async (): Promise<IncomingCharger[]> =>
+    ctxOrg ? (await deps.withRepo((r) => r.listIncoming(ctxOrg, actor)).catch(() => [] as IncomingCharger[])).filter((c) => c.state === "incoming") : [];
+  const attachNote = (list: IncomingCharger[]) => {
+    const { stale } = resolveAttach(attachParams, list);
+    return stale.length > 0 ? (
+      <p className="ws-note" role="note">{stale.join(", ")} {stale.length === 1 ? "is" : "are"} not listed as incoming any more and {stale.length === 1 ? "was" : "were"} not added. {stale.length === 1 ? "It" : "They"} may already be registered, or have not knocked recently. You can still enter an identity by hand.</p>
+    ) : null;
+  };
+  const attachFor = (list: IncomingCharger[]) => resolveAttach(attachParams, list).matched;
 
   let body: React.ReactNode;
   let title = "Installations";
   let subtitle = "Locations, electrical structure and chargers.";
+  let contextOrg = "all CPOs";
+  let editorShown = false;
   try {
     if (id) {
-      const found = /^[0-9a-f-]{36}$/i.test(id) ? await deps.withRepo((r) => r.get(id)) : null;
+      const loaded = /^[0-9a-f-]{36}$/i.test(id) ? await deps.withRepo(async (r) => [await r.get(id), await r.directory()] as const) : null;
+      const found = loaded?.[0] ?? null;
       if (!found) {
         body = (
           <State title="Installation not found">
@@ -48,48 +74,81 @@ export default async function Page({ searchParams }: { searchParams: Search }) {
       } else {
         title = found.snapshot.installation.displayName;
         subtitle = "Edit this installation, its electrical structure and its chargers on one page.";
-        body = <InstallationEditor initial={toView(found.snapshot, found.routingId, found.history)} directory={null} />;
+        contextOrg = `CPO: ${loaded![1].organisations.find((o) => o.id === found.snapshot.installation.orgId)?.displayName ?? "unknown"}`;
+        editorShown = true;
+        const cands = found.snapshot.installation.orgId === ctxOrg ? await loadCandidates() : [];
+        body = <>{attachNote(cands)}<InstallationEditor key={`edit:${id}`} initial={toView(found.snapshot, found.routingId, found.history)} directory={loaded![1]} incoming={cands} attachIds={attachFor(cands)} /></>;
       }
     } else if (wantsNew) {
       title = "Add installation";
-      subtitle = "An installation can be saved with no chargers; add them now or later.";
-      const directory = await deps.withRepo((r) => r.directory());
-      body = <InstallationEditor initial={null} directory={directory} />;
+      subtitle = "";
+      const contextOrgId = deps.contextOrgId ?? null;
+      const resumed = !contextOrgId ? null : draftParam && /^[0-9a-f-]{36}$/i.test(draftParam) ? await deps.withRepo((r) => r.getDraft(draftParam, actor)) : null;
+      if (!contextOrgId) {
+        // The shared login belongs to no CPO. The association is made outside this form, never by choosing or creating one here.
+        contextOrg = "no CPO associated";
+        body = (
+          <State title="No CPO is set for this workspace">
+            The shared login does not belong to a CPO, so an operator has to associate it with one (server setting CPO_SHELL_ORG_ID) before installations can be added. Existing installations stay viewable.{" "}
+            <Link href={"/cpo/installations" as Route}>All installations</Link>
+          </State>
+        );
+      } else if (draftParam && resumed?.state !== "open") {
+        // Used, discarded or unknown: say so, and never present it as an editable draft.
+        body = (
+          <State title={resumed?.state === "consumed" ? "That draft was already used" : "Draft not found"}>
+            {resumed?.state === "consumed" && resumed.installationId ? (
+              <>It was used to create an installation. <Link href={`/cpo/installations?id=${resumed.installationId}` as Route}>Open it</Link></>
+            ) : (
+              <>It was discarded or never existed. <Link href={"/cpo/installations?new=1" as Route}>Start a new installation</Link></>
+            )}
+          </State>
+        );
+      } else {
+        const [directory, open] = await deps.withRepo(async (r) => [await r.contextDirectory(contextOrgId), resumed ? [] : await r.listDrafts(actor)] as const);
+        // Keyed by what it was opened from: moving between a blank form, a resumed draft and an installation must remount,
+        // or the previous form's typed text would survive under the new page.
+        if (!directory) {
+          contextOrg = "CPO not found";
+          body = <State title="The CPO set for this workspace was not found">It does not exist or is not an active CPO organisation. Correct the association (CPO_SHELL_ORG_ID) outside this form.</State>;
+        } else {
+          contextOrg = `CPO: ${directory.organisations[0].displayName}`;
+          editorShown = true;
+          const cands = await loadCandidates();
+          body = <>{attachNote(cands)}<InstallationEditor key={`new:${resumed ? resumed.id : "blank"}`} initial={null} directory={directory} initialDraft={resumed ? draftView(resumed) : null} openDrafts={open.map(draftSummary)} incoming={cands} attachIds={attachFor(cands)} /></>;
+        }
+      }
+    } else if (wantsOnboard) {
+      // The CPO is the workspace's. The page reads no OEM: connecting and onboarding are explicit actions on the installations
+      // endpoint. Only the CPO's sites (database) and the list of switched-on OEMs (a setting) are read here.
+      title = "Onboard from OEM";
+      subtitle = "Add installations read directly from an OEM account.";
+      if (!ctxOrg) {
+        contextOrg = "no CPO associated";
+        body = <State title="No CPO is set for this workspace">An operator has to associate the shared login with a CPO (server setting CPO_SHELL_ORG_ID) before installations can be onboarded.</State>;
+      } else {
+        const directory = await deps.withRepo((r) => r.contextDirectory(ctxOrg));
+        if (!directory) {
+          contextOrg = "CPO not found";
+          body = <State title="The CPO set for this workspace was not found">It does not exist or is not an active CPO organisation. Correct the association (CPO_SHELL_ORG_ID) outside this form.</State>;
+        } else {
+          contextOrg = `CPO: ${directory.organisations[0].displayName}`;
+          body = <VendorOnboarding directory={directory} vendors={enabledVendors(deps.env)} />;
+        }
+      }
     } else {
       const rows = await deps.withRepo((r) => r.list(50, 0));
+      const attachQuery = toAttachQuery(attachParams);
       body =
         rows.length === 0 ? (
           <State title="No installations yet">None have been added. This describes the database, not any charger connection.</State>
         ) : (
-          <div className="ws-table-wrap">
-            <table className="ws-table">
-              <thead>
-                <tr>
-                  {["Installation", "Organisation", "Site", "Circuits", "Chargers", "Revision"].map((c) => (
-                    <th key={c} scope="col">
-                      {c}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => (
-                  <tr key={r.id}>
-                    <td>
-                      <Link href={`/cpo/installations?id=${r.id}` as Route}>{r.displayName}</Link>
-                    </td>
-                    <td>{r.orgName}</td>
-                    <td>{r.siteName}</td>
-                    <td>{r.circuitCount}</td>
-                    <td>{r.chargerCount}</td>
-                    <td>{r.revision}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {rows.length === 50 ? <p className="ws-muted">Showing the 50 most recently changed installations.</p> : null}
-          </div>
+          <>
+            <InstallationTree key={Date.now()} rows={rows} attachQuery={attachQuery} />
+            {rows.length === 50 ? <p className="ws-muted">Showing the 50 most recently changed installations; a site may list only some of its installations, and counts are of those shown.</p> : null}
+          </>
         );
+      if (attachParams.length > 0) body = <><p className="ws-note" role="note">Assign {attachParams.map((a, i) => <span key={a}>{i > 0 ? ", " : ""}<code>{a}</code></span>)}: choose the installation, then drag each charger to a circuit. Nothing is registered until you save. Any id the server no longer lists as incoming is reported and left out.</p>{body}</>;
     }
   } catch (error) {
     body =
@@ -104,19 +163,22 @@ export default async function Page({ searchParams }: { searchParams: Search }) {
 
   return (
     <>
-      <ContextBar />
-      <p className="ws-banner" role="note">
-        Connected to the Straumvakt database. Chargers cannot connect yet: connection addresses are not active, and no charger&apos;s status or limits are confirmed.
-      </p>
+      <ContextBar organisation={contextOrg} />
       <div className="ws-title">
         <div>
-          <h1>{title}</h1>
-          <p>{subtitle}</p>
+          {editorShown ? <div className="ie-title-line"><h1>{title}</h1><RequiredNote /></div> : <h1>{title}</h1>}
+          {subtitle ? <p>{subtitle}</p> : null}
         </div>
-        {!id && !wantsNew ? (
-          <Link className="ws-button ws-primary" href={"/cpo/installations?new=1" as Route}>
-            Add installation
-          </Link>
+        {!id && !wantsNew && !wantsOnboard ? (
+          <div className="ie-buttons">
+            <OverviewRefresh />
+            <Link className="ws-button" href={"/cpo/installations?onboard=1" as Route}>
+              Onboard from OEM
+            </Link>
+            <Link className="ws-button ws-primary" href={`/cpo/installations?new=1${toAttachQuery(attachParams)}` as Route}>
+              Add installation
+            </Link>
+          </div>
         ) : (
           <Link className="ws-button" href={"/cpo/installations" as Route}>
             All installations

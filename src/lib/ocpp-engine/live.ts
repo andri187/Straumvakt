@@ -5,7 +5,7 @@
 // "unavailable"), never a guess.
 
 import { openDb, readDatabaseUrl, type ShellDbEnv } from "@/lib/installations/db";
-import { drizzleAdmissionStore } from "./drizzle-admission-store";
+import { drizzleAdmissionStore, drizzlePendingStore } from "./drizzle-admission-store";
 import { drizzleTransactionStore } from "./drizzle-tx-store";
 import { notifyCommitted, type HubClient } from "@/lib/sync/hub";
 import { drizzleCostingStore } from "@/lib/costing/drizzle-costing-store";
@@ -37,6 +37,7 @@ export function liveEngineDeps(env: ShellDbEnv, now: () => Date = () => new Date
     ...(afterStop ? { afterStop } : {}),
     onStatusCommitted: async (installationId, seq) => void (await notifyCommitted(hub, installationId, { sv: seq })),
     withAdmission: (fn) => withDbOrNull((db) => fn(drizzleAdmissionStore(db))),
+    withPending: (fn) => withDbOrNull((db) => fn(drizzlePendingStore(db))),
     withEngine: (fn) => withDbOrNull((db) => fn({ store: drizzleTransactionStore(db) })),
   };
 }

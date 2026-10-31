@@ -13,8 +13,9 @@
 // A deterministic exception is counted per row and, after MAX_ATTEMPTS, parked
 // as `unresolved_context` so one poison row can never starve the rest.
 //
-// No cron here. `costPending` is invoked explicitly (after a stop, best-effort,
-// and by a deliberate operator/service call); its work per call is bounded.
+// No timer here. `costPending` is invoked explicitly (after a stop, best-effort,
+// by a deliberate operator/service call, and by the bounded recovery pass in
+// ocpp-engine/recovery.ts when that is enabled); its work per call is bounded.
 
 import type { BillingLineDraft } from "@straumvakt/commercial/agreement/types";
 import { decideCosting, type CostingOutcome, type CostingTxFacts, type PlacementFacts } from "./cost-session";
@@ -39,14 +40,23 @@ export interface CostingStore {
   recordFailure(id: string, message: string, at: Date): Promise<void>;
 }
 
-export type CostingReport = { processed: number; costed: number; unresolved: Record<string, number>; failed: number };
+/**
+ * The three optional flags are present ONLY when true, so existing consumers and assertions see the same shape as before.
+ *   limitReached     every allowed attempt was used and the last one still found work: more may remain.
+ *   deadlineReached  `shouldStop` asked the run to stop before the limit (cooperative: an attempt already started finishes).
+ *   unavailable      a claim or failure-recording operation failed; the run stops without starting another attempt.
+ */
+export type CostingReport = { processed: number; costed: number; unresolved: Record<string, number>; failed: number; limitReached?: true; deadlineReached?: true; unavailable?: true };
 
-export async function costPending(store: CostingStore, opts: { limit?: number; now?: () => Date; onlyId?: string } = {}): Promise<CostingReport> {
+export async function costPending(store: CostingStore, opts: { limit?: number; now?: () => Date; onlyId?: string; shouldStop?: () => boolean } = {}): Promise<CostingReport> {
   const limit = opts.limit ?? DEFAULT_COSTING_BATCH;
   const now = opts.now ?? (() => new Date());
   const report: CostingReport = { processed: 0, costed: 0, unresolved: {}, failed: 0 };
+  let ended = false; // true when the loop ended for a reason other than using every allowed attempt
 
   for (let i = 0; i < limit; i++) {
+    // Cooperative deadline, checked only BETWEEN attempts: it never abandons a transaction that is already running.
+    if (opts.shouldStop?.()) { report.deadlineReached = true; ended = true; break; }
     let claimedId: string | null = null;
     try {
       const done = await store.run(async (tx) => {
@@ -73,16 +83,26 @@ export async function costPending(store: CostingStore, opts: { limit?: number; n
         await tx.mark(t.id, outcome.state, outcome.detail, now());
         return outcome.state;
       });
-      if (done === null) break; // nothing left to claim
+      if (done === null) { ended = true; break; } // nothing left to claim
       report.processed++;
       if (done === "costed") report.costed++;
       else report.unresolved[done] = (report.unresolved[done] ?? 0) + 1;
-      if (opts.onlyId) break;
+      if (opts.onlyId) { ended = true; break; }
     } catch (e) {
       report.failed++;
-      if (claimedId) await store.recordFailure(claimedId, e instanceof Error ? e.message : String(e), now()).catch(() => undefined);
-      else break; // could not even claim (database down): stop; everything stays `needed`
+      if (claimedId) {
+        try {
+          await store.recordFailure(claimedId, e instanceof Error ? e.message : String(e), now());
+        } catch {
+          // Without a durable retry count, retrying the same row can consume the whole batch without parking it.
+          report.unavailable = true;
+          ended = true;
+          break;
+        }
+      }
+      else { report.unavailable = true; ended = true; break; } // could not even claim (database down): stop; everything stays `needed`
     }
   }
+  if (!ended && limit > 0) report.limitReached = true;
   return report;
 }

@@ -9,7 +9,7 @@
 // leaves a GAP in transaction numbers. That is acceptable (ids are unique and
 // monotonic, not dense) and is the price of never reusing one.
 
-import { and, eq, isNull, notInArray, sql, type SQL } from "drizzle-orm";
+import { and, eq, inArray, isNull, notInArray, sql, type SQL } from "drizzle-orm";
 import { deviceOperationalState, installations, lifecycleRequests, placements } from "@straumvakt/shared/db/assets";
 import { ocppTransactionReadings, ocppTransactions } from "@straumvakt/shared/db/charging";
 import { protocolReceipts, quarantinedEvents } from "@straumvakt/shared/db/protocol";
@@ -17,6 +17,7 @@ import type { Db, Executor } from "@/lib/installations/db";
 import { loadAgreementFacts } from "@/lib/costing/drizzle-costing-store";
 import { drizzleAuthorizationStore } from "./drizzle-admission-store";
 import { mergeConnector, type ConnectorMap } from "./status";
+import { readingsFrom } from "./meter";
 import { TransactionIdExhausted, type TransactionRow, type TransactionStore, type TransactionTx } from "./transactions";
 
 const upperInf = (period: unknown): SQL => sql`upper_inf(${period})`;
@@ -196,8 +197,28 @@ function txPort(x: Executor): TransactionTx {
 
 export function drizzleTransactionStore(db: Db): TransactionStore {
   return {
-    read: (fn) => fn(drizzleAuthorizationStore(db)),
-    captureTerms: (i) => loadAgreementFacts(db, i),
+    async tryIngestMeters(items) {
+      if (!items.length || items.length > 20) return false;
+      const first = items[0]!;
+      if (items.some(item => item.ctx.deviceId !== first.ctx.deviceId || item.ctx.orgId !== first.ctx.orgId || item.ctx.placementId !== first.ctx.placementId)) return false;
+      const metered = items.filter(item => item.payload.transactionId !== undefined);
+      if (!metered.length) return true; // existing policy: non-transaction telemetry is not billing evidence
+      return db.transaction(async tx => {
+        const references = await tx.select({ id: ocppTransactions.id, number: ocppTransactions.transactionNo, deviceId: ocppTransactions.deviceId, orgId: ocppTransactions.orgId })
+          .from(ocppTransactions).where(inArray(ocppTransactions.transactionNo, [...new Set(metered.map(item => item.payload.transactionId!))]));
+        const byNumber = new Map(references.map(row => [row.number, row]));
+        // Unknown/foreign references retain the established receipt + quarantine path. No effects yet.
+        if (metered.some(item => { const row = byNumber.get(item.payload.transactionId!); return !row || row.deviceId !== item.ctx.deviceId || row.orgId !== item.ctx.orgId; })) return false;
+        const rows = metered.flatMap(item => readingsFrom(item.payload).map(reading => ({ ...reading, transactionId: byNumber.get(item.payload.transactionId!)!.id, receivedAt: item.receivedAt })));
+        if (rows.length) await tx.insert(ocppTransactionReadings).values(rows).onConflictDoNothing();
+        // Only return after commit. Any insert/commit failure retries the whole chunk using its original keys.
+        return true;
+      });
+    },
+    read: (fn) => db.transaction(
+      (tx) => fn(drizzleAuthorizationStore(tx), (i) => tx.transaction((termsTx) => loadAgreementFacts(termsTx, i))),
+      { isolationLevel: "repeatable read", accessMode: "read only" },
+    ),
     run: (fn) => db.transaction((tx) => fn(txPort(tx))),
     async findReceipt(deviceId, messageId, requestHash) {
       const [r] = await db

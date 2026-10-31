@@ -19,7 +19,7 @@
 // cascade behaviour.
 
 import { sql } from "drizzle-orm";
-import { bigint, boolean, customType, date, index, integer, jsonb, numeric, pgSchema, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { bigint, boolean, check, customType, date, index, integer, jsonb, numeric, pgSchema, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 export const assetsSchema = pgSchema("assets");
 export const energySchema = pgSchema("energy");
@@ -151,6 +151,8 @@ export const installations = propertiesSchema.table(
     mainDeviceType: text("main_device_type"),
     mainRatingAmps: integer("main_rating_amps"),
     mainPhaseCount: integer("main_phase_count"),
+    /** Supply system, "TN" or "IT". NULL = not specified; never inferred from anything else (not voltage, not phase count). */
+    mainGridType: text("main_grid_type"),
     /** On-site electrician. Not a Straumvakt user and not the signed-in account. */
     electricianName: text("electrician_name"),
     electricianEmail: text("electrician_email"),
@@ -539,6 +541,16 @@ export const deviceIdentities = assetsSchema.table(
     id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
     deviceId: uuid("device_id").notNull(),
     identityString: text("identity_string").notNull(),
+    /**
+     * The CPO organisation this connection identity belongs to, and the charge point id exactly as the
+     * charger sends it (migration 0008). A charger connects to wss://{cpo-id}.straumvakt.org/{charge-point-id}
+     * and is resolved by THESE two columns, so the same charge point id in two CPOs is two identities and
+     * one CPO cannot hold the same id twice at the same time (exclusion constraint in 0008). NULL only on a
+     * row whose old installation-key prefix could not be matched to an installation when 0008 ran; such a
+     * row is never admitted. `identity_string` is kept as written for history and is no longer the lookup key.
+     */
+    cpoOrgId: uuid("cpo_org_id"),
+    chargePointId: text("charge_point_id"),
     /** `[from, until)`. Open-ended is `[from,)`, never NULL. */
     period: tstzrange("period").notNull(),
     /** Who set it and why, so a change is answerable afterwards. */
@@ -549,6 +561,8 @@ export const deviceIdentities = assetsSchema.table(
   (t) => [
     index().on(t.deviceId),
     index().on(t.identityString),
+    // Admission: one CPO, one charge point id, compared ignoring case so a case-only difference is refused explicitly.
+    index("device_identities_cpo_org_id_lower_charge_point_id_index").on(t.cpoOrgId, sql`lower(${t.chargePointId})`),
   ],
 );
 
@@ -687,6 +701,55 @@ export const installationChanges = propertiesSchema.table(
 );
 
 /**
+ * properties.installation_drafts — an unfinished "add installation" form, kept so it can be resumed (migration 0008).
+ *
+ * A draft is only a saved copy of what the operator typed. It is NOT an
+ * installation and creates nothing the engine can see: no installation, device,
+ * identity or placement exists until the installation is really created, so a
+ * draft can never admit a connection, hold a charger identity or start billing.
+ * Validation of required fields happens at creation, not here: a draft may be
+ * as incomplete as the form is.
+ *
+ * `payload` is the form document and NEVER contains a password: the API
+ * validates it against a strict shape that has no password field at all, so a
+ * plaintext password is refused rather than stored.
+ *
+ * `state`: 'open' while it can be resumed; 'consumed' once the installation was
+ * created from it (`installation_id` set, in the same transaction as the
+ * installation); 'discarded' when the operator threw it away. A closed draft is
+ * kept as a tombstone and never reopened. Discarding touches only this row:
+ * organisations, sites, installations, chargers, sessions and CDRs are separate.
+ *
+ * `id` is chosen by the browser, which is what makes a double click or a retry
+ * create one row. `revision` is bumped by every change and every update names
+ * the revision it started from, so a late response or a second tab cannot
+ * silently overwrite newer text.
+ */
+export const installationDrafts = propertiesSchema.table(
+  "installation_drafts",
+  {
+    id: uuid("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    /** The CPO organisation chosen so far; NULL until chosen. */
+    orgId: uuid("org_id"),
+    state: text("state").notNull().default("open"),
+    payload: jsonb("payload").notNull().default({}),
+    revision: integer("revision").notNull().default(1),
+    /** Set exactly when state = 'consumed'. */
+    installationId: uuid("installation_id"),
+    actorKind: text("actor_kind").notNull(),
+    actorLabel: text("actor_label").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
+    /** When it became consumed or discarded. */
+    closedAt: timestamp("closed_at", { withTimezone: true, precision: 6, mode: "date" }),
+  },
+  (t) => [
+    uniqueIndex("installation_drafts_one_per_installation").on(t.installationId).where(sql`${t.installationId} IS NOT NULL`),
+    index().on(t.state, t.updatedAt),
+  ],
+);
+
+/**
  * assets.device_operational_state — latest reported state per device (S1 deltas, migration 0004).
  *
  * One row per PERMANENT device (it follows the device across placements; the
@@ -730,6 +793,14 @@ export const deviceOperationalState = assetsSchema.table(
  * but never counts as the session being stopped. The actor is the shared login,
  * stated as such.
  */
+// One durable position for recovery over the existing open-device index.
+// No session, money, command or charger state is owned here.
+export const lifecycleRecoveryCursor = assetsSchema.table(
+  "lifecycle_recovery_cursor",
+  { id: integer("id").primaryKey(), afterDeviceId: uuid("after_device_id") },
+  (t) => [check("lifecycle_recovery_cursor_singleton", sql`${t.id} = 1`)],
+);
+
 export const lifecycleRequests = assetsSchema.table(
   "lifecycle_requests",
   {

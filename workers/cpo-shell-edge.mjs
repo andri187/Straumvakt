@@ -4,6 +4,7 @@
 // when it is added here (scripts/prepare-cpo-shell-assets.mjs reads this list)
 // and in src/lib/cpo-shell-policy.ts; scripts/cpo-shell-edge.test.mjs checks both.
 // Files that exist in the generated assets directory and are served by ASSETS.
+import { realtimeUpgrade } from './cpo-shell-realtime.mjs';
 export const PUBLIC_ASSET_PATHS = [
   '/landing/straumvakt-logo-icon.png',
   '/landing/straumvakt-car.avif',
@@ -35,6 +36,7 @@ export function createShellEdge(application) {
       return Response.redirect(url.toString(), 308);
     }
     const { pathname } = url;
+    if (pathname === '/api/cpo/sync' && request.headers.get('upgrade')?.toLowerCase() === 'websocket') return realtimeUpgrade(request, env);
     const asset = assets.has(pathname) || pathname.startsWith('/_next/static/');
     if (!asset && !pages.has(pathname) && !api.has(pathname) && !appPublic.has(pathname)) {
       return new Response('Not found', { status: 404, headers: { 'cache-control': 'no-store' } });

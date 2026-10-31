@@ -22,7 +22,7 @@ function memStorage(): StoragePort & { dump(): Map<string, unknown> } {
 }
 
 const ctx = (placementId = "p1"): EngineContext => ({
-  orgId: "o", installationId: "i", installationKey: "abcdefghijk1", chargePointId: "CP-1", identityString: "abcdefghijk1/CP-1",
+  orgId: "o", installationId: "i", chargePointId: "CP-1", identityString: "o/CP-1",
   deviceId: "d", placementId, credentialMode: "none", credentialEpoch: "e",
 });
 
@@ -100,7 +100,7 @@ describe("outbox", () => {
     await o.settle([{ entry: q, verdict: "retry" }], OUTBOX_LIMITS.BASE_BACKOFF_MS); // second attempt reaches MAX_ATTEMPTS
     expect(await o.stats()).toMatchObject({ live: 0, dead: 2 });
     expect(await o.nextDueAt()).toBeNull(); // no alarm for dead letters
-    expect(await o.replayDead(99)).toBe(2);
+    expect(await o.replayDead(99, [1, 2], { requestId: "repair1", actor: "test operator" })).toBe(2);
     expect(await o.due(99)).toHaveLength(2);
   });
   it("entries older than the retention window are dead-lettered, not retried forever", async () => {

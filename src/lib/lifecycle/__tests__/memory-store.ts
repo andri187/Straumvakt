@@ -9,6 +9,7 @@ import type { Observed, ObservedSession } from "../plan";
 type Tx = { transactionNo: number; transactionId: string; deviceId: string; stoppedReceivedAt: Date | null; authorized: boolean; costingState: string; superseded?: boolean };
 type Hist = { orgId: string; installationId: string; retired: boolean };
 export type World = {
+  recoveryCursor: string | null;
   placements: Map<string, DeviceView>; // deviceId -> OPEN placement
   history: Map<string, Hist>;
   txs: Tx[];
@@ -27,7 +28,7 @@ export type World = {
 export function memoryLifecycle(init: Partial<World> = {}, opts: { serialize?: boolean } = {}) {
   let chain: Promise<unknown> = Promise.resolve();
   let w: World = {
-    placements: new Map(), history: new Map(), txs: [], requests: new Map(), closed: [], opened: [], identitiesInUse: new Set(), revisionBumps: 0, ...init,
+    recoveryCursor: null, placements: new Map(), history: new Map(), txs: [], requests: new Map(), closed: [], opened: [], identitiesInUse: new Set(), revisionBumps: 0, ...init,
   };
   const hooks = {
     failCloseOnce: false,
@@ -71,6 +72,22 @@ export function memoryLifecycle(init: Partial<World> = {}, opts: { serialize?: b
           const tracked = new Set(req.sessions.map((s) => s.transactionNo));
           const sessions: ObservedSession[] = w.txs.filter((t) => t.deviceId === req.deviceId && (t.stoppedReceivedAt === null || tracked.has(t.transactionNo))).map((t) => ({ ...t }));
           return { sessions, placementOpen: w.placements.has(req.deviceId) };
+        },
+        async lockRecoveryCursor() { return w.recoveryCursor; },
+        async advanceRecoveryCursor(afterDeviceId) { w.recoveryCursor = afterDeviceId; },
+        async listOpen({ limit, afterDeviceId }) {
+          return [...w.requests.values()].map((r) => structuredClone(r.req))
+            .filter((r) => !["completed", "cancelled"].includes(r.state) && (afterDeviceId === null || r.deviceId > afterDeviceId))
+            .sort((a, b) => a.deviceId < b.deviceId ? -1 : a.deviceId > b.deviceId ? 1 : 0).slice(0, limit);
+        },
+        async observedMany(reqs) {
+          hooks.log.push("observeMany");
+          const out = new Map<string, Observed>();
+          for (const req of reqs) {
+            const tracked = new Set(req.sessions.map((s) => s.transactionNo));
+            out.set(req.id, { sessions: w.txs.filter((t) => t.deviceId === req.deviceId && (t.stoppedReceivedAt === null || tracked.has(t.transactionNo))).map((t) => ({ ...t })), placementOpen: w.placements.has(req.deviceId) });
+          }
+          return out;
         },
         async openSessionCount(deviceId) { return w.txs.filter((t) => t.deviceId === deviceId && t.stoppedReceivedAt === null).length; },
         async closePlacement({ req, at }) {

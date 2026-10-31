@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { MAX_STOP_ATTEMPTS, STOP_BACKOFF_MS, TRANSITIONS } from "./model";
-import { OpenRequestConflict, cancelRemoval, listReturnable, previewRemoval, progressRemoval, requestRemoval, returnDevice, type CostingPort, type Deps, type StopPort } from "./service";
+import { MAX_STOP_ATTEMPTS, STOP_ATTEMPT_WINDOW_MS, STOP_BACKOFF_MS, TRANSITIONS } from "./model";
+import { OpenRequestConflict, cancelRemoval, listReturnable, previewRemoval, progressRemoval, requestRemoval, returnDevice, selectDueRemovals, type CostingPort, type Deps, type StopPort } from "./service";
 import { ACTOR, memoryLifecycle } from "./__tests__/memory-store";
 import type { StopOutcome } from "./model";
 
@@ -14,6 +14,7 @@ let clock: Date;
 let world: ReturnType<typeof memoryLifecycle>;
 let stopOutcome: StopOutcome;
 let stopCalls: { transactionNo: number }[];
+let stopInputs: Parameters<StopPort["requestStop"]>[0][];
 let costingCalls: string[];
 let stop: StopPort | null;
 
@@ -34,7 +35,8 @@ beforeEach(() => {
   stopOutcome = "accepted";
   stopCalls = [];
   costingCalls = [];
-  stop = { requestStop: async (i) => { stopCalls.push({ transactionNo: i.transactionNo }); return stopOutcome; } };
+  stopInputs = [];
+  stop = { requestStop: async (i) => { stopCalls.push({ transactionNo: i.transactionNo }); stopInputs.push(i); return stopOutcome; } };
   world = memoryLifecycle();
   world.w.placements.set(DEV, { deviceId: DEV, placementId: "p1", orgId: ORG, installationId: INST, circuitId: "c1", label: "Bay 1", chargePointId: "CP-1" });
   world.w.history.set(DEV, { orgId: ORG, installationId: INST, retired: false });
@@ -259,6 +261,139 @@ describe("return of a known device", () => {
   });
 });
 
+describe("durable stop attempts (reserve before sending, resume by the same id)", () => {
+  const ATTEMPT = (reqId: string, no: number, n: number) => `${reqId}:${no}:${n}`;
+  const stored = (id: string) => world.w.requests.get(id)!.req;
+  const open = async () => {
+    startSession();
+    return ((await remove()) as { value: { id: string } }).value.id;
+  };
+
+  it("the attempt is RESERVED durably BEFORE the command is sent, and carries request, attempt, placement and deadline", async () => {
+    const id = await open();
+    let reservedWhenSent: unknown = null;
+    stop = { requestStop: async (i) => { reservedWhenSent = structuredClone(stored(id).sessions[0]!.stop.inFlight ?? null); stopInputs.push(i); return "accepted"; } };
+    await advance(id);
+    expect(reservedWhenSent).toMatchObject({ attemptId: ATTEMPT(id, 7, 1), reservedAt: T0.toISOString(), deadlineAt: new Date(T0.getTime() + STOP_ATTEMPT_WINDOW_MS).toISOString() });
+    expect(stopInputs).toEqual([{ deviceId: DEV, transactionNo: 7, requestId: id, attemptId: ATTEMPT(id, 7, 1), placementId: "p1", deadlineMs: T0.getTime() + STOP_ATTEMPT_WINDOW_MS }]);
+    // once the outcome is recorded the reservation is cleared and the attempt counted exactly once
+    expect(stored(id).sessions[0]!.stop).toEqual({ attempts: 1, lastOutcome: "accepted", lastAt: T0.toISOString(), everAccepted: true, maybeSent: true });
+  });
+  it("concurrent progress reserves ONE attempt and sends ONCE; the loser sends nothing (the conflict is seen before, not after, a duplicate)", async () => {
+    world = memoryLifecycle({}, { serialize: true });
+    world.w.placements.set(DEV, { deviceId: DEV, placementId: "p1", orgId: ORG, installationId: INST, circuitId: "c1", label: "Bay 1", chargePointId: "CP-1" });
+    world.w.history.set(DEV, { orgId: ORG, installationId: INST, retired: false });
+    const id = await open();
+    await Promise.all([progressRemoval(deps(), id), progressRemoval(deps(), id), progressRemoval(deps(), id)]);
+    expect(stopInputs).toHaveLength(1);
+    expect(stored(id).sessions[0]!.stop).toMatchObject({ attempts: 1, lastOutcome: "accepted" });
+  });
+  it("a crash after the reservation (or after the send) leaves the attempt resumable: the SAME id is delivered again and counted once", async () => {
+    const id = await open();
+    // Fail the transaction that would record the outcome (reads+plan = run 1, reserve = run 2, record = run 3).
+    let runs = 0;
+    const crashing: Deps = { ...deps(), store: { run: (fn) => { runs++; if (runs === 3) throw new Error("process died"); return world.store.run(fn); } } };
+    await expect(progressRemoval(crashing, id)).rejects.toThrow("process died");
+    expect(stopInputs).toHaveLength(1);
+    expect(stored(id).sessions[0]!.stop).toMatchObject({ attempts: 0, inFlight: { attemptId: ATTEMPT(id, 7, 1) } });
+    const cur = await advance(id, 1); // well inside the backoff: a resume is not a new attempt and is not delayed by it
+    expect(stopInputs.map((i) => i.attemptId)).toEqual([ATTEMPT(id, 7, 1), ATTEMPT(id, 7, 1)]);
+    expect(cur.sessions[0]!.stop).toMatchObject({ attempts: 1, lastOutcome: "accepted" });
+    expect(cur.sessions[0]!.stop.inFlight).toBeUndefined();
+    await advance(id, 1000); // and a refresh afterwards does not send again
+    expect(stopInputs).toHaveLength(2);
+  });
+  it("a real StopTransaction after a lost outcome closes the removal without another command; the stale reservation is dropped", async () => {
+    const id = await open();
+    let runs = 0;
+    const crashing: Deps = { ...deps(), store: { run: (fn) => { runs++; if (runs === 3) throw new Error("process died"); return world.store.run(fn); } } };
+    await expect(progressRemoval(crashing, id)).rejects.toThrow();
+    stopSession(7, "needed");
+    const cur = await advance(id, 1000);
+    expect(stopInputs).toHaveLength(1);
+    expect(["settling", "completed"]).toContain(cur.state);
+    expect(cur.sessions[0]!.stop.inFlight).toBeUndefined();
+    expect(cur.sessions[0]!.stopConfirmedAt).not.toBeNull();
+  });
+  it("a deliberate retry is a NEW attempt (next number) and only after the backoff", async () => {
+    stopOutcome = "timeout";
+    const id = await open();
+    await advance(id);
+    await advance(id, 1000); // inside the 10 s backoff: nothing is sent
+    expect(stopInputs).toHaveLength(1);
+    await advance(id, 10_000);
+    expect(stopInputs.map((i) => i.attemptId)).toEqual([ATTEMPT(id, 7, 1), ATTEMPT(id, 7, 2)]);
+    expect(stored(id).sessions[0]!.stop).toMatchObject({ attempts: 2, lastOutcome: "timeout", maybeSent: true });
+  });
+  it("an ACCEPTED command is still not a stop, and the removal stays pending after any number of refreshes", async () => {
+    const id = await open();
+    const cur = await advance(id);
+    expect(cur).toMatchObject({ state: "stopping", sessions: [{ stopConfirmedAt: null }] });
+    expect(world.w.closed).toHaveLength(0);
+  });
+  it("cancel is refused whenever a command MAY have reached the charger (accepted, timed out, ambiguous, in flight) but allowed after a provable non-send", async () => {
+    for (const outcome of ["accepted", "timeout", "unavailable"] as const) {
+      world = memoryLifecycle();
+      world.w.placements.set(DEV, { deviceId: DEV, placementId: "p1", orgId: ORG, installationId: INST, circuitId: "c1", label: "Bay 1", chargePointId: "CP-1" });
+      startSession();
+      stopOutcome = outcome;
+      const id = ((await remove({ requestKey: `k-${outcome}` })) as { value: { id: string } }).value.id;
+      await advance(id);
+      expect(await cancelRemoval(deps(), { requestId: id, actor: ACTOR }), outcome).toMatchObject({ ok: false, refusal: "conflict" });
+    }
+    for (const outcome of ["offline", "rejected"] as const) {
+      world = memoryLifecycle();
+      world.w.placements.set(DEV, { deviceId: DEV, placementId: "p1", orgId: ORG, installationId: INST, circuitId: "c1", label: "Bay 1", chargePointId: "CP-1" });
+      startSession();
+      stopOutcome = outcome;
+      const id = ((await remove({ requestKey: `k-${outcome}` })) as { value: { id: string } }).value.id;
+      await advance(id);
+      expect(await cancelRemoval(deps(), { requestId: id, actor: ACTOR }), outcome).toMatchObject({ ok: true, value: { state: "cancelled" } });
+    }
+    // reserved but not yet recorded counts as "may have been sent"
+    world = memoryLifecycle();
+    world.w.placements.set(DEV, { deviceId: DEV, placementId: "p1", orgId: ORG, installationId: INST, circuitId: "c1", label: "Bay 1", chargePointId: "CP-1" });
+    startSession();
+    const id = ((await remove({ requestKey: "k-fly" })) as { value: { id: string } }).value.id;
+    let runs = 0;
+    const crashing: Deps = { ...deps(), store: { run: (fn) => { runs++; if (runs === 3) throw new Error("process died"); return world.store.run(fn); } } };
+    await expect(progressRemoval(crashing, id)).rejects.toThrow();
+    expect(await cancelRemoval(deps(), { requestId: id, actor: ACTOR })).toMatchObject({ ok: false, refusal: "conflict" });
+  });
+  it("rows written before reservations existed (no inFlight / maybeSent) still progress, retry and cancel as before", async () => {
+    startSession();
+    const id = ((await remove()) as { value: { id: string } }).value.id;
+    const row = world.w.requests.get(id)!;
+    row.req.sessions = [{ transactionNo: 7, transactionId: "tx-7", stop: { attempts: 1, lastOutcome: "offline", lastAt: T0.toISOString(), everAccepted: false }, stopConfirmedAt: null, settlement: { state: "pending", reason: null } }];
+    row.req.state = "stopping";
+    row.req.version = 2;
+    expect(await cancelRemoval(deps(), { requestId: id, actor: ACTOR })).toMatchObject({ ok: true, value: { state: "cancelled" } });
+    world.w.requests.get(id)!.req.state = "stopping"; // the save replaced the stored object: re-fetch it
+    const cur = await advance(id, 10_000);
+    expect(stopInputs.map((i) => i.attemptId)).toEqual([ATTEMPT(id, 7, 2)]);
+    expect(cur.sessions[0]!.stop).toMatchObject({ attempts: 2, lastOutcome: "accepted", everAccepted: true });
+  });
+  it("without a stop path nothing is reserved and nothing is claimed as possibly sent", async () => {
+    const id = await open();
+    stop = null;
+    expect(await progressRemoval(deps(), id)).toMatchObject({ ok: false, refusal: "stop_unavailable" });
+    const cur = world.w.requests.get(id)!.req;
+    expect(stopInputs).toHaveLength(0);
+    expect(cur.sessions[0]!.stop).toEqual({ attempts: 0, lastOutcome: null, lastAt: null, everAccepted: false });
+    expect(cur.sessions[0]!.stop.inFlight).toBeUndefined();
+  });
+  it("a request that moved on while this call reserved is returned as it stands; this call sends nothing", async () => {
+    const id = await open();
+    // The first run (read + plan) happens, then another worker advances the request before this call's reservation.
+    let runs = 0;
+    // Replace the committed row: a real SQL update cannot mutate an earlier caller's materialized snapshot.
+    const racing: Deps = { ...deps(), store: { run: async (fn) => { runs++; if (runs === 2) { const r = world.w.requests.get(id)!; r.req = { ...r.req, version: r.req.version + 1 }; } return world.store.run(fn); } } };
+    const r = await progressRemoval(racing, id);
+    expect(r).toMatchObject({ ok: true, value: { version: 2 } });
+    expect(stopInputs).toHaveLength(0);
+  });
+});
+
 describe("transition table", () => {
   it("covers every state a request can be in, so the published table cannot silently drift", () => {
     const states = new Set(TRANSITIONS.map((t) => t.from));
@@ -390,5 +525,59 @@ describe("superseded sessions (a new start on the same connector while an older 
     const r = await remove();
     expect(r).toMatchObject({ ok: false, refusal: "stop_unavailable" });
     expect(world.w.placements.has(DEV)).toBe(true);
+  });
+});
+
+describe("selecting due removals for the bounded recovery pass (selectDueRemovals)", () => {
+  it("does not burn stop attempts if the API loses its command binding after a removal was requested", async () => {
+    startSession();
+    const result = await remove();
+    if (!result.ok) throw new Error("fixture rejected");
+    const before = structuredClone(world.w.requests.get(result.value.id)!.req);
+    stop = null;
+    for (let i = 0; i < MAX_STOP_ATTEMPTS + 1; i++) {
+      expect(await progressRemoval(deps(), result.value.id)).toMatchObject({ ok: false, refusal: "stop_unavailable" });
+    }
+    expect(world.w.requests.get(result.value.id)!.req).toEqual(before);
+    expect(stopCalls).toEqual([]);
+  });
+  const select = (over: Partial<{ scanLimit: number; maxDue: number }> = {}) => selectDueRemovals(deps(), { scanLimit: 100, ...over });
+
+  it("selects only requests whose next step would change something: not a stop inside its backoff, not an exhausted one", async () => {
+    startSession();
+    const id = ((await remove()) as { value: { id: string } }).value.id;
+    expect(await select()).toMatchObject({ supported: true, scanned: 1, due: [{ requestId: id, needsStop: true, onlyCosting: false }] });
+    await advance(id); // stop sent and accepted; the next attempt is inside the backoff
+    expect((await select()).due).toEqual([]);
+    clock = new Date(clock.getTime() + STOP_BACKOFF_MS[0] + 1);
+    expect((await select()).due).toMatchObject([{ requestId: id, needsStop: true }]);
+  });
+  it("a real stop makes a stopping request due for closing, with no stop to send", async () => {
+    startSession();
+    const id = ((await remove()) as { value: { id: string } }).value.id;
+    await advance(id);
+    stopSession(7, "needed");
+    expect((await select()).due).toMatchObject([{ requestId: id, state: "stopping", needsStop: false }]);
+  });
+  it("a settling request that only waits for costing is marked onlyCosting; finished requests are never listed", async () => {
+    startSession();
+    const id = ((await remove()) as { value: { id: string } }).value.id;
+    await advance(id);
+    stopSession(7, "needed");
+    await advance(id, 11_000); // placement closed, settlement pending
+    expect((await select()).due).toMatchObject([{ requestId: id, state: "settling", onlyCosting: true }]);
+    await advance(id); // costing runs, completed
+    expect(await select()).toMatchObject({ scanned: 0, due: [] });
+  });
+  it("reports truncation when more requests are open than the scan window, and a store without the optional methods as unsupported", async () => {
+    startSession();
+    await remove();
+    const two = memoryLifecycle();
+    expect(await selectDueRemovals({ store: two.store, now: () => clock }, { scanLimit: 5 })).toMatchObject({ supported: true, scanned: 0, scanTruncated: false });
+    const open = world.w.requests.size;
+    expect(open).toBe(1);
+    expect(await select({ scanLimit: 0 })).toMatchObject({ scanned: 0, scanTruncated: true });
+    const bare = { run: (fn: never) => world.store.run(((tx: object) => (fn as (t: object) => unknown)({ ...tx, listOpen: undefined, observedMany: undefined })) as never) } as never;
+    expect(await selectDueRemovals({ store: bare, now: () => clock }, { scanLimit: 5 })).toMatchObject({ supported: false, due: [] });
   });
 });

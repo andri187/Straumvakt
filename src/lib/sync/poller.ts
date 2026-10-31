@@ -22,7 +22,7 @@ export const POLL_MAX_MS = 120_000;
 export const POLL_MAX_ERROR_MS = 300_000;
 export const MAX_CATCHUP_STEPS = 5;
 
-export type SnapshotReply = { status: number; etag?: string | null; body?: SnapshotResponse };
+export type SnapshotReply = { status: number; etag?: string | null; body?: SnapshotResponse; realtime?: boolean };
 export type ChangesReply = { status: number; body?: ChangesResponse };
 export interface Fetchers {
   snapshot(ifNoneMatch: string | null): Promise<SnapshotReply>;

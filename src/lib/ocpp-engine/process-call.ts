@@ -12,6 +12,7 @@
 
 import type { ConnectionContext } from "./admission";
 import { handleMeterValues } from "./meter";
+import { canonicalJson, sha256Hex } from "./canonical";
 import { handleStatus } from "./status";
 import { bootResponse, isExercised, rejectionForUnknownAction, validatePayload, type CallErrorCode } from "./protocol";
 import { handleAuthorize, handleStartTransaction, handleStopTransaction, type TransactionStore } from "./transactions";
@@ -31,18 +32,7 @@ export type EngineEnv = {
   now: () => Date;
 };
 
-async function sha256Hex(text: string): Promise<string> {
-  const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
-  return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-/** Key-order-independent JSON so the same request hashes the same however the charger orders its fields. */
-export function canonicalJson(v: unknown): string {
-  if (v === null || typeof v !== "object") return JSON.stringify(v);
-  if (Array.isArray(v)) return `[${v.map(canonicalJson).join(",")}]`;
-  const o = v as Record<string, unknown>;
-  return `{${Object.keys(o).sort().map((k) => `${JSON.stringify(k)}:${canonicalJson(o[k])}`).join(",")}}`;
-}
+export { canonicalJson };
 
 const unavailable: CallAnswer = { kind: "error", code: "InternalError", description: "backend unavailable; retry" };
 
@@ -58,9 +48,30 @@ export async function processCall(env: EngineEnv, call: CallInput): Promise<Call
   const requestHash = await sha256Hex(`${call.action}:${canonicalJson(call.payload)}`);
 
   switch (call.action) {
-    case "BootNotification":
-      // Accepting a boot says the registered, placed device may talk. It is not charging permission.
-      return { kind: "result", payload: bootResponse(env.now(), env.heartbeatIntervalSeconds) };
+    case "BootNotification": {
+      // Store only equipment details, not SIM identifiers or arbitrary payloads.
+      // An observation never changes ownership, physical identity or access.
+      const p = v.value as { chargePointVendor: string; chargePointModel: string; chargePointSerialNumber?: string; chargeBoxSerialNumber?: string; firmwareVersion?: string; meterType?: string; meterSerialNumber?: string };
+      const payload = {
+        chargePointVendor: p.chargePointVendor, chargePointModel: p.chargePointModel,
+        ...(p.chargePointSerialNumber !== undefined ? { chargePointSerialNumber: p.chargePointSerialNumber } : {}),
+        ...(p.chargeBoxSerialNumber !== undefined ? { chargeBoxSerialNumber: p.chargeBoxSerialNumber } : {}),
+        ...(p.firmwareVersion !== undefined ? { firmwareVersion: p.firmwareVersion } : {}),
+        ...(p.meterType !== undefined ? { meterType: p.meterType } : {}),
+        ...(p.meterSerialNumber !== undefined ? { meterSerialNumber: p.meterSerialNumber } : {}),
+      };
+      try {
+        return await env.store.run(async (tx) => {
+          const rec = await tx.receipt({ ...base, action: "BootNotification", requestHash, payload });
+          if (!rec.created && rec.response) return { kind: "result", payload: rec.response as Record<string, unknown> } as const;
+          const response = bootResponse(env.now(), env.heartbeatIntervalSeconds);
+          await tx.setReceiptOutcome(rec.id, { disposition: "boot_observed" }, response, call.receivedAt);
+          return { kind: "result", payload: response } as const;
+        });
+      } catch {
+        return unavailable;
+      }
+    }
     case "Heartbeat":
       return { kind: "result", payload: { currentTime: env.now().toISOString() } };
     case "StatusNotification": {

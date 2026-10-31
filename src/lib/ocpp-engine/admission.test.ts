@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { hashInstallationPassword } from "@/lib/installations/password";
-import { decideAdmission, wireStatus, type AdmissionLookup, type AdmissionStore } from "./admission";
+import { decideAdmission, wireStatus, type AdmissionInstallation, type AdmissionLookup, type AdmissionStore } from "./admission";
 import { decideAuthorization, type AuthorizationFacts } from "./authorization";
 import { parseBasic, parseRoute } from "./route";
 
@@ -8,10 +8,10 @@ const AT = new Date("2026-10-29T12:00:00Z");
 const ORG_A = "11111111-1111-4111-8111-111111111111";
 const ORG_B = "22222222-2222-4222-8222-222222222222";
 const INST_A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const INST_A2 = "a2a2a2a2-a2a2-4a2a-8a2a-a2a2a2a2a2a2"; // a second installation of the SAME CPO
 const INST_B = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const DEV = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
-const KEY_A = "abcdefghijk1";
-const KEY_B = "zyxwvutsrqp2";
+const OLD_KEY = "abcdefghijk1"; // an installation key as it appeared in the retired URL form
 
 function route(host: string, path: string) {
   const r = parseRoute(host, path);
@@ -19,26 +19,34 @@ function route(host: string, path: string) {
   return r.route;
 }
 
+type Identity = { orgId: string; chargePointId: string; deviceId: string; identityString: string; current: boolean; placements: { id: string; orgId: string; installationId: string; current: boolean }[] };
+
 type World = {
   orgs: Record<string, { id: string; active: boolean }>; // by routing id
-  installations: Record<string, NonNullable<AdmissionLookup["installation"]>>; // by key
-  identities: { key: string; deviceId: string; identityString: string; current: boolean; placements: AdmissionLookup["identities"][number]["placements"] }[];
+  installations: Record<string, AdmissionInstallation>; // by installation id
+  identities: Identity[];
 };
 
-function store(world: World, calls: { lookups: number; discoveries: unknown[] } = { lookups: 0, discoveries: [] }, fail = false): AdmissionStore & { calls: typeof calls } {
+type Calls = { lookups: number; lookupArgs: unknown[]; discoveries: unknown[] };
+
+/** Mirrors the Drizzle lookup: scoped to the CPO named by the host, matched by charge point id ignoring case, installation attached from the placement. */
+function store(world: World, calls: Calls = { lookups: 0, lookupArgs: [], discoveries: [] }, fail = false): AdmissionStore & { calls: Calls } {
   return {
     calls,
     async lookup(r) {
       calls.lookups++;
+      calls.lookupArgs.push(r);
       if (fail) throw new Error("db down");
       const org = world.orgs[r.routingId] ?? null;
-      const inst = world.installations[r.installationKey] ?? null;
+      if (!org) return { org: null, identities: [] };
       return {
         org,
-        installation: inst && org && inst.orgId === org.id ? inst : null,
         identities: world.identities
-          .filter((i) => i.key === r.installationKey && i.identityString.toLowerCase() === `${r.installationKey}/${r.chargePointId}`.toLowerCase())
-          .map(({ key: _k, ...rest }) => rest),
+          .filter((i) => i.orgId === org.id && i.chargePointId.toLowerCase() === r.chargePointId.toLowerCase())
+          .map(({ orgId: _o, ...rest }): AdmissionLookup["identities"][number] => ({
+            ...rest,
+            placements: rest.placements.map((p) => ({ ...p, installation: world.installations[p.installationId] ?? null })),
+          })),
       };
     },
     async recordDiscovery(input) {
@@ -56,30 +64,45 @@ function baseWorld(mode: "unset" | "none" | "password" = "none"): World {
   return {
     orgs: { cpoa: { id: ORG_A, active: true }, cpob: { id: ORG_B, active: true } },
     installations: {
-      [KEY_A]: { id: INST_A, orgId: ORG_A, archived: false, passwordMode: mode, passwordVerifier: mode === "password" ? verifier : null, credentialEpoch: "e1" },
-      [KEY_B]: { id: INST_B, orgId: ORG_B, archived: false, passwordMode: "none", passwordVerifier: null, credentialEpoch: "e1" },
+      [INST_A]: { id: INST_A, orgId: ORG_A, archived: false, passwordMode: mode, passwordVerifier: mode === "password" ? verifier : null, credentialEpoch: "e1" },
+      [INST_A2]: { id: INST_A2, orgId: ORG_A, archived: false, passwordMode: "none", passwordVerifier: null, credentialEpoch: "e2" },
+      [INST_B]: { id: INST_B, orgId: ORG_B, archived: false, passwordMode: "none", passwordVerifier: null, credentialEpoch: "e1" },
     },
     identities: [
-      { key: KEY_A, deviceId: DEV, identityString: `${KEY_A}/CP-1`, current: true, placements: [{ id: "p1", orgId: ORG_A, installationId: INST_A, current: true }] },
+      { orgId: ORG_A, chargePointId: "CP-1", deviceId: DEV, identityString: `${ORG_A}/CP-1`, current: true, placements: [{ id: "p1", orgId: ORG_A, installationId: INST_A, current: true }] },
     ],
   };
 }
 
+const HOST_A = "cpoa.straumvakt.org";
+
 describe("route parsing", () => {
-  it("normalises host and key but never the charge-point id", () => {
-    expect(route("CpoA.Straumvakt.ORG:443", `/${KEY_A.toUpperCase()}/CP-1`)).toEqual({ routingId: "cpoa", installationKey: KEY_A, chargePointId: "CP-1" });
-    expect(route("cpoa.straumvakt.org", `/${KEY_A}/cp-1`).chargePointId).toBe("cp-1");
+  it("normalises the host but never the charge-point id, and takes only that id from the path", () => {
+    expect(route("CpoA.Straumvakt.ORG:443", "/CP-1")).toEqual({ routingId: "cpoa", chargePointId: "CP-1" });
+    expect(route(HOST_A, "/cp-1").chargePointId).toBe("cp-1");
+    expect(route(HOST_A, "/CP%2D1").chargePointId).toBe("CP-1");
   });
-  it("rejects foreign hosts, nested labels, versions prefixes, extra or encoded segments", () => {
-    expect(parseRoute("cpoa.example.com", `/${KEY_A}/CP-1`)).toMatchObject({ ok: false, problem: "bad_host" });
-    expect(parseRoute("a.b.straumvakt.org", `/${KEY_A}/CP-1`)).toMatchObject({ ok: false, problem: "bad_host" });
-    expect(parseRoute("straumvakt.org", `/${KEY_A}/CP-1`)).toMatchObject({ ok: false, problem: "bad_host" });
-    expect(parseRoute("cpoa.straumvakt.org", `/ocpp/1.6/${KEY_A}/CP-1`)).toMatchObject({ ok: false, problem: "bad_path" });
-    expect(parseRoute("cpoa.straumvakt.org", `/${KEY_A}/CP-1/CP-1`)).toMatchObject({ ok: false, problem: "bad_path" });
-    expect(parseRoute("cpoa.straumvakt.org", `/${KEY_A}`)).toMatchObject({ ok: false, problem: "bad_path" });
-    expect(parseRoute("cpoa.straumvakt.org", `/${KEY_A}/..%2Fx`)).toMatchObject({ ok: false, problem: "bad_charge_point_id" });
-    expect(parseRoute("cpoa.straumvakt.org", `/short/CP-1`)).toMatchObject({ ok: false, problem: "bad_key" });
-    expect(parseRoute("cpoa.straumvakt.org", `/${KEY_A}/%E0%A4%A`)).toMatchObject({ ok: false, problem: "bad_path" });
+  it("rejects foreign hosts, nested labels, a missing or empty path, and any extra segment", () => {
+    expect(parseRoute("cpoa.example.com", "/CP-1")).toMatchObject({ ok: false, problem: "bad_host" });
+    expect(parseRoute("a.b.straumvakt.org", "/CP-1")).toMatchObject({ ok: false, problem: "bad_host" });
+    expect(parseRoute("straumvakt.org", "/CP-1")).toMatchObject({ ok: false, problem: "bad_host" });
+    expect(parseRoute(HOST_A, "/")).toMatchObject({ ok: false, problem: "bad_path" });
+    expect(parseRoute(HOST_A, "")).toMatchObject({ ok: false, problem: "bad_path" });
+    expect(parseRoute(HOST_A, "/CP-1/")).toMatchObject({ ok: false, problem: "bad_path" });
+    expect(parseRoute(HOST_A, "/ocpp/1.6/CP-1")).toMatchObject({ ok: false, problem: "bad_path" });
+    expect(parseRoute(HOST_A, "/CP-1/CP-1")).toMatchObject({ ok: false, problem: "bad_path" });
+  });
+  it("refuses the retired /{installation-key}/{charge-point-id} form: it is never read as a charge point id", () => {
+    expect(parseRoute(HOST_A, `/${OLD_KEY}/CP-1`)).toMatchObject({ ok: false, problem: "bad_path" });
+    // ...and a bare key is just a charge point id like any other, resolved against the CPO's own registrations.
+    expect(route(HOST_A, `/${OLD_KEY}`)).toEqual({ routingId: "cpoa", chargePointId: OLD_KEY });
+  });
+  it("refuses encoded separators, traversal, malformed escapes and ids the save path would not accept", () => {
+    expect(parseRoute(HOST_A, "/..%2Fx")).toMatchObject({ ok: false, problem: "bad_charge_point_id" });
+    expect(parseRoute(HOST_A, "/a%2Fb")).toMatchObject({ ok: false, problem: "bad_charge_point_id" });
+    expect(parseRoute(HOST_A, "/%E0%A4%A")).toMatchObject({ ok: false, problem: "bad_path" });
+    expect(parseRoute(HOST_A, "/-lead")).toMatchObject({ ok: false, problem: "bad_charge_point_id" });
+    expect(parseRoute(HOST_A, `/${"a".repeat(49)}`)).toMatchObject({ ok: false, problem: "bad_charge_point_id" });
   });
   it("parses Basic and refuses malformed or empty-password headers", () => {
     const h = "Basic " + btoa("CP-1:s3cret:with:colons");
@@ -94,48 +117,67 @@ describe("route parsing", () => {
 
 describe("admission", () => {
   it("admits a registered, placed device in the deliberate no-password mode and says so", async () => {
-    const d = await decideAdmission(store(baseWorld("none")), route("cpoa.straumvakt.org", `/${KEY_A}/CP-1`), null, AT);
-    expect(d).toMatchObject({ kind: "admit", context: { orgId: ORG_A, installationId: INST_A, deviceId: DEV, placementId: "p1", identityString: `${KEY_A}/CP-1`, credentialMode: "none" } });
+    const d = await decideAdmission(store(baseWorld("none")), route(HOST_A, "/CP-1"), null, AT);
+    expect(d).toMatchObject({ kind: "admit", context: { orgId: ORG_A, installationId: INST_A, deviceId: DEV, placementId: "p1", chargePointId: "CP-1", identityString: `${ORG_A}/CP-1`, credentialMode: "none" } });
   });
 
-  it("the same wire identity under two CPOs resolves each to its own tenant and never crosses", async () => {
+  it("derives the installation from the registered placement: the lookup is given the CPO and the id, nothing else to choose by", async () => {
+    const s = store(baseWorld("none"));
+    const d = await decideAdmission(s, route(HOST_A, "/CP-1"), null, AT);
+    expect(s.calls.lookupArgs).toEqual([{ routingId: "cpoa", chargePointId: "CP-1" }]);
+    expect(d).toMatchObject({ kind: "admit", context: { installationId: INST_A } });
+    expect(JSON.stringify(d)).not.toContain(OLD_KEY);
+  });
+
+  it("the same charge point id in two CPOs resolves each to its own tenant and never crosses", async () => {
     const w = baseWorld("none");
-    w.identities.push({ key: KEY_B, deviceId: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", identityString: `${KEY_B}/CP-1`, current: true, placements: [{ id: "p2", orgId: ORG_B, installationId: INST_B, current: true }] });
-    const a = await decideAdmission(store(w), route("cpoa.straumvakt.org", `/${KEY_A}/CP-1`), null, AT);
-    const b = await decideAdmission(store(w), route("cpob.straumvakt.org", `/${KEY_B}/CP-1`), null, AT);
-    expect(a).toMatchObject({ kind: "admit", context: { orgId: ORG_A, placementId: "p1" } });
+    w.identities.push({ orgId: ORG_B, chargePointId: "CP-1", deviceId: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", identityString: `${ORG_B}/CP-1`, current: true, placements: [{ id: "p2", orgId: ORG_B, installationId: INST_B, current: true }] });
+    const a = await decideAdmission(store(w), route(HOST_A, "/CP-1"), null, AT);
+    const b = await decideAdmission(store(w), route("cpob.straumvakt.org", "/CP-1"), null, AT);
+    expect(a).toMatchObject({ kind: "admit", context: { orgId: ORG_A, placementId: "p1", deviceId: DEV } });
     expect(b).toMatchObject({ kind: "admit", context: { orgId: ORG_B, placementId: "p2", deviceId: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee" } });
   });
 
-  it("refuses a host and key that belong to different CPOs, and an unknown key or archived installation", async () => {
+  it("a charge point id registered only in another CPO is unknown here: unregistered, never admitted, never assigned", async () => {
     const w = baseWorld("none");
-    expect(await decideAdmission(store(w), route("cpob.straumvakt.org", `/${KEY_A}/CP-1`), null, AT)).toEqual({ kind: "deny", reason: "unknown_route" });
-    expect(await decideAdmission(store(w), route("cpoa.straumvakt.org", `/${KEY_B}/CP-1`), null, AT)).toEqual({ kind: "deny", reason: "unknown_route" });
-    expect(await decideAdmission(store(w), route("nobody.straumvakt.org", `/${KEY_A}/CP-1`), null, AT)).toEqual({ kind: "deny", reason: "unknown_route" });
-    w.installations[KEY_A]!.archived = true;
-    expect(await decideAdmission(store(w), route("cpoa.straumvakt.org", `/${KEY_A}/CP-1`), null, AT)).toEqual({ kind: "deny", reason: "unknown_route" });
-    w.installations[KEY_A]!.archived = false;
+    const s = store(w);
+    const d = await decideAdmission(s, route("cpob.straumvakt.org", "/CP-1"), null, AT);
+    expect(d).toEqual({ kind: "deny", reason: "unregistered" });
+    expect(s.calls.discoveries).toEqual([{ orgId: ORG_B, chargePointId: "CP-1", at: AT }]);
+  });
+
+  it("refuses an unknown or inactive CPO without writing anything", async () => {
+    const w = baseWorld("none");
+    const s = store(w);
+    expect(await decideAdmission(s, route("nobody.straumvakt.org", "/CP-1"), null, AT)).toEqual({ kind: "deny", reason: "unknown_route" });
     w.orgs.cpoa!.active = false;
-    expect(await decideAdmission(store(w), route("cpoa.straumvakt.org", `/${KEY_A}/CP-1`), null, AT)).toEqual({ kind: "deny", reason: "unknown_route" });
+    expect(await decideAdmission(s, route(HOST_A, "/CP-1"), null, AT)).toEqual({ kind: "deny", reason: "unknown_route" });
+    expect(s.calls.discoveries).toEqual([]);
+  });
+
+  it("refuses when the placed installation is archived, missing, or belongs to another CPO", async () => {
+    const w = baseWorld("none");
+    w.installations[INST_A]!.archived = true;
+    expect(await decideAdmission(store(w), route(HOST_A, "/CP-1"), null, AT)).toEqual({ kind: "deny", reason: "installation_unavailable" });
+    w.installations[INST_A]!.archived = false;
+    w.installations[INST_A]!.orgId = ORG_B;
+    expect(await decideAdmission(store(w), route(HOST_A, "/CP-1"), null, AT)).toEqual({ kind: "deny", reason: "installation_unavailable" });
+    w.installations[INST_A]!.orgId = ORG_A;
+    delete w.installations[INST_A];
+    expect(await decideAdmission(store(w), route(HOST_A, "/CP-1"), null, AT)).toEqual({ kind: "deny", reason: "installation_unavailable" });
   });
 
   it("does not match identities case-insensitively: a case-only difference is its own refusal", async () => {
-    const d = await decideAdmission(store(baseWorld("none")), route("cpoa.straumvakt.org", `/${KEY_A}/cp-1`), null, AT);
+    const d = await decideAdmission(store(baseWorld("none")), route(HOST_A, "/cp-1"), null, AT);
     expect(d).toEqual({ kind: "deny", reason: "identity_case_mismatch" });
   });
 
   it("records an unregistered charger for discovery without admitting it or granting a placement", async () => {
     const s = store(baseWorld("none"));
-    const d = await decideAdmission(s, route("cpoa.straumvakt.org", `/${KEY_A}/NEW-ONE`), null, AT);
+    const d = await decideAdmission(s, route(HOST_A, "/NEW-ONE"), null, AT);
     expect(d).toEqual({ kind: "deny", reason: "unregistered" });
-    expect(s.calls.discoveries).toEqual([{ orgId: ORG_A, installationId: INST_A, installationKey: KEY_A, chargePointId: "NEW-ONE", at: AT }]);
-  });
-
-  it("does not record discovery for an unknown route (no write amplification by random URLs)", async () => {
-    const s = store(baseWorld("none"));
-    await decideAdmission(s, route("cpoa.straumvakt.org", `/${KEY_B}/X`), null, AT);
-    await decideAdmission(s, route("ghost.straumvakt.org", `/${KEY_A}/X`), null, AT);
-    expect(s.calls.discoveries).toEqual([]);
+    // Keyed by CPO and id only: an unknown connection is never attributed to an installation.
+    expect(s.calls.discoveries).toEqual([{ orgId: ORG_A, chargePointId: "NEW-ONE", at: AT }]);
   });
 
   it("a failing discovery write never changes the refusal", async () => {
@@ -143,38 +185,51 @@ describe("admission", () => {
     s.recordDiscovery = async () => {
       throw new Error("write failed");
     };
-    expect(await decideAdmission(s, route("cpoa.straumvakt.org", `/${KEY_A}/NEW-ONE`), null, AT)).toEqual({ kind: "deny", reason: "unregistered" });
+    expect(await decideAdmission(s, route(HOST_A, "/NEW-ONE"), null, AT)).toEqual({ kind: "deny", reason: "unregistered" });
   });
 
-  it("refuses an inactive placement, a placement at another installation, and ambiguous assignment", async () => {
+  it("refuses an inactive placement, a placement in another CPO, and ambiguous assignment", async () => {
     const w = baseWorld("none");
     w.identities[0]!.placements = [{ id: "p1", orgId: ORG_A, installationId: INST_A, current: false }];
-    expect(await decideAdmission(store(w), route("cpoa.straumvakt.org", `/${KEY_A}/CP-1`), null, AT)).toEqual({ kind: "deny", reason: "no_active_placement" });
+    expect(await decideAdmission(store(w), route(HOST_A, "/CP-1"), null, AT)).toEqual({ kind: "deny", reason: "no_active_placement" });
     w.identities[0]!.placements = [{ id: "p9", orgId: ORG_B, installationId: INST_B, current: true }];
-    expect(await decideAdmission(store(w), route("cpoa.straumvakt.org", `/${KEY_A}/CP-1`), null, AT)).toEqual({ kind: "deny", reason: "placement_elsewhere" });
+    expect(await decideAdmission(store(w), route(HOST_A, "/CP-1"), null, AT)).toEqual({ kind: "deny", reason: "placement_elsewhere" });
     w.identities[0]!.placements = [
       { id: "p1", orgId: ORG_A, installationId: INST_A, current: true },
       { id: "p2", orgId: ORG_A, installationId: INST_A, current: true },
     ];
-    expect(await decideAdmission(store(w), route("cpoa.straumvakt.org", `/${KEY_A}/CP-1`), null, AT)).toEqual({ kind: "deny", reason: "ambiguous_placement" });
-    // a second live placement elsewhere is also ambiguous: the device cannot be in two places
+    expect(await decideAdmission(store(w), route(HOST_A, "/CP-1"), null, AT)).toEqual({ kind: "deny", reason: "ambiguous_placement" });
+    // a second live placement elsewhere is also ambiguous: the device cannot be in two places, even in two installations of one CPO
     w.identities[0]!.placements = [
       { id: "p1", orgId: ORG_A, installationId: INST_A, current: true },
-      { id: "p9", orgId: ORG_B, installationId: INST_B, current: true },
+      { id: "p3", orgId: ORG_A, installationId: INST_A2, current: true },
     ];
-    expect(await decideAdmission(store(w), route("cpoa.straumvakt.org", `/${KEY_A}/CP-1`), null, AT)).toEqual({ kind: "deny", reason: "ambiguous_placement" });
+    expect(await decideAdmission(store(w), route(HOST_A, "/CP-1"), null, AT)).toEqual({ kind: "deny", reason: "ambiguous_placement" });
+  });
+
+  it("a charger moved to another installation of the SAME CPO keeps its URL and is admitted under the new installation's own credential policy", async () => {
+    const w = baseWorld("password");
+    const before = await decideAdmission(store(w), route(HOST_A, "/CP-1"), { username: "CP-1", password: "correct horse battery staple" }, AT);
+    expect(before).toMatchObject({ kind: "admit", context: { installationId: INST_A, credentialMode: "password" } });
+    // The old placement closes and a new one opens at the CPO's other installation (INST_A2 has no password by choice).
+    w.identities[0]!.placements = [
+      { id: "p1", orgId: ORG_A, installationId: INST_A, current: false },
+      { id: "p7", orgId: ORG_A, installationId: INST_A2, current: true },
+    ];
+    const after = await decideAdmission(store(w), route(HOST_A, "/CP-1"), null, AT);
+    expect(after).toMatchObject({ kind: "admit", context: { installationId: INST_A2, placementId: "p7", credentialMode: "none", credentialEpoch: "e2" } });
   });
 
   it("records a REMOVED or RETIRED device that keeps connecting (expired identity, closed placement) for the operator, throttled, and still refuses it", async () => {
     const w = baseWorld("none");
     w.identities[0]!.current = false;
     const s1 = store(w);
-    expect(await decideAdmission(s1, route("cpoa.straumvakt.org", `/${KEY_A}/CP-1`), null, AT)).toEqual({ kind: "deny", reason: "identity_not_current" });
-    expect(s1.calls.discoveries).toEqual([expect.objectContaining({ chargePointId: "CP-1", reason: "identity_not_current" })]);
+    expect(await decideAdmission(s1, route(HOST_A, "/CP-1"), null, AT)).toEqual({ kind: "deny", reason: "identity_not_current" });
+    expect(s1.calls.discoveries).toEqual([expect.objectContaining({ orgId: ORG_A, chargePointId: "CP-1", reason: "identity_not_current" })]);
     const w2 = baseWorld("none");
     w2.identities[0]!.placements = [{ id: "p1", orgId: ORG_A, installationId: INST_A, current: false }];
     const s2 = store(w2);
-    await decideAdmission(s2, route("cpoa.straumvakt.org", `/${KEY_A}/CP-1`), null, AT);
+    await decideAdmission(s2, route(HOST_A, "/CP-1"), null, AT);
     expect(s2.calls.discoveries).toEqual([expect.objectContaining({ reason: "no_active_placement" })]);
   });
   it("a failing discovery write for a closed identity never changes the refusal", async () => {
@@ -182,41 +237,50 @@ describe("admission", () => {
     w.identities[0]!.current = false;
     const s = store(w);
     s.recordDiscovery = async () => { throw new Error("write failed"); };
-    expect(await decideAdmission(s, route("cpoa.straumvakt.org", `/${KEY_A}/CP-1`), null, AT)).toEqual({ kind: "deny", reason: "identity_not_current" });
+    expect(await decideAdmission(s, route(HOST_A, "/CP-1"), null, AT)).toEqual({ kind: "deny", reason: "identity_not_current" });
   });
-  it("refuses an expired identity period and two current identities for one string", async () => {
+  it("refuses an expired identity period and two current identities for one id, but history does not block a successor", async () => {
     const w = baseWorld("none");
     w.identities[0]!.current = false;
-    expect(await decideAdmission(store(w), route("cpoa.straumvakt.org", `/${KEY_A}/CP-1`), null, AT)).toEqual({ kind: "deny", reason: "identity_not_current" });
+    expect(await decideAdmission(store(w), route(HOST_A, "/CP-1"), null, AT)).toEqual({ kind: "deny", reason: "identity_not_current" });
+    // A different device later took over the same id in the same CPO: the retired row is history, the current one is admitted.
+    const successor = "ffffffff-ffff-4fff-8fff-ffffffffffff";
+    w.identities.push({ orgId: ORG_A, chargePointId: "CP-1", deviceId: successor, identityString: `${ORG_A}/CP-1`, current: true, placements: [{ id: "p5", orgId: ORG_A, installationId: INST_A2, current: true }] });
+    expect(await decideAdmission(store(w), route(HOST_A, "/CP-1"), null, AT)).toMatchObject({ kind: "admit", context: { deviceId: successor, installationId: INST_A2 } });
+    // Two CURRENT rows for one id in one CPO cannot be told apart: refused (the database also forbids it).
     w.identities[0]!.current = true;
-    w.identities.push({ ...w.identities[0]!, deviceId: "ffffffff-ffff-4fff-8fff-ffffffffffff" });
-    expect(await decideAdmission(store(w), route("cpoa.straumvakt.org", `/${KEY_A}/CP-1`), null, AT)).toEqual({ kind: "deny", reason: "ambiguous_identity" });
+    expect(await decideAdmission(store(w), route(HOST_A, "/CP-1"), null, AT)).toEqual({ kind: "deny", reason: "ambiguous_identity" });
+  });
+  it("an identity written before the CPO-only URL still resolves through its CPO columns, and keeps its stored string for history", async () => {
+    const w = baseWorld("none");
+    w.identities[0]!.identityString = `${OLD_KEY}/CP-1`;
+    expect(await decideAdmission(store(w), route(HOST_A, "/CP-1"), null, AT)).toMatchObject({ kind: "admit", context: { identityString: `${OLD_KEY}/CP-1`, chargePointId: "CP-1" } });
   });
 
   describe("credential modes", () => {
     it("unset is not permission", async () => {
-      const d = await decideAdmission(store(baseWorld("unset")), route("cpoa.straumvakt.org", `/${KEY_A}/CP-1`), null, AT);
+      const d = await decideAdmission(store(baseWorld("unset")), route(HOST_A, "/CP-1"), null, AT);
       expect(d).toEqual({ kind: "deny", reason: "credentials_not_configured" });
     });
     it("password mode requires Basic with the charge-point id as username", async () => {
       const w = baseWorld("password");
-      const r = route("cpoa.straumvakt.org", `/${KEY_A}/CP-1`);
+      const r = route(HOST_A, "/CP-1");
       expect(await decideAdmission(store(w), r, null, AT)).toEqual({ kind: "deny", reason: "credentials_required" });
       expect(await decideAdmission(store(w), r, { username: "CP-1", password: "wrong wrong wrong" }, AT)).toEqual({ kind: "deny", reason: "bad_credentials" });
-      // the composite path is not a valid username
-      expect(await decideAdmission(store(w), r, { username: `${KEY_A}/CP-1`, password: "correct horse battery staple" }, AT)).toEqual({ kind: "deny", reason: "username_mismatch" });
+      // a composite or CPO-qualified name is not a valid username
+      expect(await decideAdmission(store(w), r, { username: `${ORG_A}/CP-1`, password: "correct horse battery staple" }, AT)).toEqual({ kind: "deny", reason: "username_mismatch" });
       expect(await decideAdmission(store(w), r, { username: "CP-2", password: "correct horse battery staple" }, AT)).toEqual({ kind: "deny", reason: "username_mismatch" });
       expect(await decideAdmission(store(w), r, { username: "CP-1", password: "correct horse battery staple" }, AT)).toMatchObject({ kind: "admit", context: { credentialMode: "password" } });
     });
     it("password mode with a missing verifier fails closed", async () => {
       const w = baseWorld("password");
-      w.installations[KEY_A]!.passwordVerifier = null;
-      const d = await decideAdmission(store(w), route("cpoa.straumvakt.org", `/${KEY_A}/CP-1`), { username: "CP-1", password: "correct horse battery staple" }, AT);
+      w.installations[INST_A]!.passwordVerifier = null;
+      const d = await decideAdmission(store(w), route(HOST_A, "/CP-1"), { username: "CP-1", password: "correct horse battery staple" }, AT);
       expect(d).toEqual({ kind: "deny", reason: "credentials_not_configured" });
     });
     it("none mode admits without credentials, but refuses a header naming a different charger", async () => {
       const w = baseWorld("none");
-      const r = route("cpoa.straumvakt.org", `/${KEY_A}/CP-1`);
+      const r = route(HOST_A, "/CP-1");
       expect(await decideAdmission(store(w), r, null, AT)).toMatchObject({ kind: "admit" });
       expect(await decideAdmission(store(w), r, { username: "CP-1", password: "anything" }, AT)).toMatchObject({ kind: "admit" });
       expect(await decideAdmission(store(w), r, { username: "CP-9", password: "anything" }, AT)).toEqual({ kind: "deny", reason: "username_mismatch" });
@@ -225,13 +289,13 @@ describe("admission", () => {
       const w = baseWorld("password");
       w.identities[0]!.placements = [];
       // A wrong password with no placement must report the placement: had the hash been checked first it would say bad_credentials.
-      const d = await decideAdmission(store(w), route("cpoa.straumvakt.org", `/${KEY_A}/CP-1`), { username: "CP-1", password: "definitely the wrong one" }, AT);
+      const d = await decideAdmission(store(w), route(HOST_A, "/CP-1"), { username: "CP-1", password: "definitely the wrong one" }, AT);
       expect(d).toEqual({ kind: "deny", reason: "no_active_placement" });
     });
   });
 
   it("reports a database failure as unavailable (503), distinct from every refusal (401)", async () => {
-    const d = await decideAdmission(store(baseWorld("none"), undefined, true), route("cpoa.straumvakt.org", `/${KEY_A}/CP-1`), null, AT);
+    const d = await decideAdmission(store(baseWorld("none"), undefined, true), route(HOST_A, "/CP-1"), null, AT);
     expect(d).toEqual({ kind: "unavailable" });
     expect(wireStatus(d as never)).toBe(503);
     expect(wireStatus({ kind: "deny", reason: "unknown_route" })).toBe(401);
@@ -239,7 +303,7 @@ describe("admission", () => {
 
   it("admission is one lookup; a refusal never leaks which check failed on the wire status", async () => {
     const s = store(baseWorld("none"));
-    await decideAdmission(s, route("cpoa.straumvakt.org", `/${KEY_A}/CP-1`), null, AT);
+    await decideAdmission(s, route(HOST_A, "/CP-1"), null, AT);
     expect(s.calls.lookups).toBe(1);
   });
 });

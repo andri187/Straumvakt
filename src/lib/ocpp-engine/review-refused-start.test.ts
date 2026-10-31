@@ -6,7 +6,7 @@ import type { ConnectionContext } from "./admission";
 it("a start refused during removal must not mark the existing active session as superseded", async () => {
   const deviceId = "device-1";
   const blockedDevices = new Set<string>();
-  const ctx: ConnectionContext = { orgId: "org-1", installationId: "installation-1", installationKey: "abcdefghijk1", chargePointId: "CP-1", identityString: "abcdefghijk1/CP-1", deviceId, placementId: "placement-1", credentialMode: "none", credentialEpoch: "e1" };
+  const ctx: ConnectionContext = { orgId: "org-1", installationId: "installation-1", chargePointId: "CP-1", identityString: "abcdefghijk1/CP-1", deviceId, placementId: "placement-1", credentialMode: "none", credentialEpoch: "e1" };
   const now = new Date("2026-10-30T12:00:00Z");
   const m = memoryTxStore({ blockedDevices, facts: () => ({ token: { id: "token", userId: "driver", status: "active", expiresAt: null, scopeInstallationId: null }, userActive: true, hasInstallationAccess: true }) });
   const start = (messageId: string) => handleStartTransaction({ store: m.store, now: () => now }, { ctx, messageId, requestHash: messageId, payload: { connectorId: 1, idTag: "GOOD", meterStart: 1000, timestamp: now.toISOString() }, receivedAt: now });
@@ -19,7 +19,7 @@ it("a start refused during removal must not mark the existing active session as 
 });
 
 it("an invalid token does not supersede an existing authorized session", async () => {
-  const ctx: ConnectionContext = { orgId: "org-1", installationId: "installation-1", installationKey: "abcdefghijk1", chargePointId: "CP-1", identityString: "abcdefghijk1/CP-1", deviceId: "device-1", placementId: "placement-1", credentialMode: "none", credentialEpoch: "e1" };
+  const ctx: ConnectionContext = { orgId: "org-1", installationId: "installation-1", chargePointId: "CP-1", identityString: "abcdefghijk1/CP-1", deviceId: "device-1", placementId: "placement-1", credentialMode: "none", credentialEpoch: "e1" };
   const now = new Date("2026-10-30T12:00:00Z");
   const m = memoryTxStore({ facts: (tag) => tag === "GOOD" ? { token: { id: "token", userId: "driver", status: "active", expiresAt: null, scopeInstallationId: null }, userActive: true, hasInstallationAccess: true } : { token: null, userActive: false, hasInstallationAccess: false } });
   const start = (messageId: string, idTag: string) => handleStartTransaction({ store: m.store, now: () => now }, { ctx, messageId, requestHash: messageId, payload: { connectorId: 1, idTag, meterStart: 1000, timestamp: now.toISOString() }, receivedAt: now });

@@ -86,7 +86,7 @@ export const ocppIdentities = ocppSchema.table(
 export const pendingDiscoveries = ocppSchema.table(
   "pending_discoveries",
   {
-    identityString: varchar("identity_string", { length: 64 }).primaryKey(),
+    identityString: varchar("identity_string", { length: 128 }).primaryKey(),
     firstSeenAt: timestamp("first_seen_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true, precision: 6, mode: "date" }).notNull().defaultNow(),
     attemptCount: integer("attempt_count").notNull().default(0),

@@ -9,7 +9,6 @@ const INST = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const ctxFor = (over: Partial<ConnectionContext> = {}): ConnectionContext => ({
   orgId: "11111111-1111-4111-8111-111111111111",
   installationId: INST,
-  installationKey: "abcdefghijk1",
   chargePointId: "CP-1",
   identityString: "abcdefghijk1/CP-1",
   deviceId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",

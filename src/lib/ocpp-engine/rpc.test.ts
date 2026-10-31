@@ -6,14 +6,21 @@ import { heartbeatSeconds } from "./live";
 import { MAX_PAYLOAD_JSON_BYTES, rpcAdmit, rpcCall, type EngineRpcDeps } from "./rpc";
 
 const T = new Date("2026-10-30T09:00:00Z");
-const KEY = "abcdefghijk1";
+const OLD_KEY = "abcdefghijk1"; // the retired URL form's installation segment
 const lookup: AdmissionLookup = {
   org: { id: "o1", active: true },
-  installation: { id: "i1", orgId: "o1", archived: false, passwordMode: "none", passwordVerifier: null, credentialEpoch: "e1" },
-  identities: [{ deviceId: "dev1", identityString: `${KEY}/CP-1`, current: true, placements: [{ id: "p1", orgId: "o1", installationId: "i1", current: true }] }],
+  identities: [
+    {
+      deviceId: "dev1",
+      chargePointId: "CP-1",
+      identityString: "o1/CP-1",
+      current: true,
+      placements: [{ id: "p1", orgId: "o1", installationId: "i1", current: true, installation: { id: "i1", orgId: "o1", archived: false, passwordMode: "none", passwordVerifier: null, credentialEpoch: "e1" } }],
+    },
+  ],
 };
 const good: AuthorizationFacts = { token: { id: "t", userId: "u", status: "active", expiresAt: null, scopeInstallationId: null }, userActive: true, hasInstallationAccess: true };
-const ctx = { orgId: "o1", installationId: "i1", installationKey: KEY, chargePointId: "CP-1", identityString: `${KEY}/CP-1`, deviceId: "dev1", placementId: "p1", credentialMode: "none", credentialEpoch: "e1" };
+const ctx = { orgId: "o1", installationId: "i1", chargePointId: "CP-1", identityString: "o1/CP-1", deviceId: "dev1", placementId: "p1", credentialMode: "none", credentialEpoch: "e1" };
 
 function deps(over: Partial<EngineRpcDeps> = {}, opts: { failLookup?: boolean; mem?: ReturnType<typeof memoryTxStore> } = {}): EngineRpcDeps {
   const mem = opts.mem ?? memoryTxStore({ facts: () => good });
@@ -24,22 +31,24 @@ const call = (over: Record<string, unknown> = {}) => ({ ctx, messageId: "m1", ac
 
 describe("rpcAdmit", () => {
   it("returns the resolved context for a registered device", async () => {
-    expect(await rpcAdmit(deps(), { host: "cpoa.straumvakt.org", pathname: `/${KEY}/CP-1`, authorization: null })).toMatchObject({ kind: "admit", context: { deviceId: "dev1", placementId: "p1" } });
+    expect(await rpcAdmit(deps(), { host: "cpoa.straumvakt.org", pathname: "/CP-1", authorization: null })).toMatchObject({ kind: "admit", context: { deviceId: "dev1", placementId: "p1", installationId: "i1" } });
   });
   it("denies malformed input, foreign hosts and every refusal identically", async () => {
-    const bad = [null, {}, { host: 5, pathname: "/x" }, { host: "evil.example.com", pathname: `/${KEY}/CP-1` }, { host: "cpoa.straumvakt.org", pathname: `/${KEY}/CP-1/x` }];
+    const bad = [null, {}, { host: 5, pathname: "/x" }, { host: "evil.example.com", pathname: "/CP-1" }, { host: "cpoa.straumvakt.org", pathname: `/CP-1/x` }];
     for (const b of bad) expect(await rpcAdmit(deps(), b)).toEqual({ kind: "deny" });
     const none = deps({ withAdmission: async (fn) => fn({ lookup: async () => ({ ...lookup, identities: [] }), recordDiscovery: async () => undefined }) });
-    expect(await rpcAdmit(none, { host: "cpoa.straumvakt.org", pathname: `/${KEY}/CP-1` })).toEqual({ kind: "deny" });
+    expect(await rpcAdmit(none, { host: "cpoa.straumvakt.org", pathname: "/CP-1" })).toEqual({ kind: "deny" });
   });
   it("reports unavailable when the database is down or not configured, never admit", async () => {
-    expect(await rpcAdmit(deps({}, { failLookup: true }), { host: "cpoa.straumvakt.org", pathname: `/${KEY}/CP-1` })).toEqual({ kind: "unavailable" });
-    expect(await rpcAdmit(deps({ withAdmission: async () => null }), { host: "cpoa.straumvakt.org", pathname: `/${KEY}/CP-1` })).toEqual({ kind: "unavailable" });
-    expect(await rpcAdmit(deps({ withAdmission: async () => { throw new Error("boom"); } }), { host: "cpoa.straumvakt.org", pathname: `/${KEY}/CP-1` })).toEqual({ kind: "unavailable" });
+    expect(await rpcAdmit(deps({}, { failLookup: true }), { host: "cpoa.straumvakt.org", pathname: "/CP-1" })).toEqual({ kind: "unavailable" });
+    expect(await rpcAdmit(deps({ withAdmission: async () => null }), { host: "cpoa.straumvakt.org", pathname: "/CP-1" })).toEqual({ kind: "unavailable" });
+    expect(await rpcAdmit(deps({ withAdmission: async () => { throw new Error("boom"); } }), { host: "cpoa.straumvakt.org", pathname: "/CP-1" })).toEqual({ kind: "unavailable" });
   });
   it("password mode reaches the verifier: no header is refused", async () => {
-    const w = deps({ withAdmission: async (fn) => fn({ lookup: async () => ({ ...lookup, installation: { ...lookup.installation!, passwordMode: "password", passwordVerifier: "x" } }), recordDiscovery: async () => undefined }) });
-    expect(await rpcAdmit(w, { host: "cpoa.straumvakt.org", pathname: `/${KEY}/CP-1`, authorization: null })).toEqual({ kind: "deny" });
+    const w = deps({ withAdmission: async (fn) => fn({ lookup: async () => ({ ...lookup, identities: lookup.identities.map((i) => ({ ...i, placements: i.placements.map((p) => ({ ...p, installation: { ...p.installation!, passwordMode: "password" as const, passwordVerifier: "x" } })) })) }), recordDiscovery: async () => undefined }) });
+    expect(await rpcAdmit(w, { host: "cpoa.straumvakt.org", pathname: "/CP-1", authorization: null })).toEqual({ kind: "deny" });
+    // The retired /{installation-key}/{charge-point-id} form is refused outright.
+    expect(await rpcAdmit(deps(), { host: "cpoa.straumvakt.org", pathname: `/${OLD_KEY}/CP-1`, authorization: null })).toEqual({ kind: "deny" });
   });
 });
 

@@ -19,7 +19,6 @@
 export type EngineContext = {
   orgId: string;
   installationId: string;
-  installationKey: string;
   chargePointId: string;
   identityString: string;
   deviceId: string;
