@@ -1,5 +1,9 @@
 # WORKSPACE.md — Straumvakt structural snapshot
 
+## Stage A release — 2026-11-02
+
+Commit `a0a4930` is pushed to `origin/codex/core-checkpoint-2026-10-31`. The approved gateway and shell packages are live as versions `d1d4fc7f-3f85-4cc4-8175-eb23e299a65b` and `0503225a-4130-43a5-920b-015c5d13a5f4` respectively. Realtime, recovery, hub binding and migrations remain off/unapplied. See `docs/agent-runs/2026-11-02/2026-11-02-stage-a-release.md` for checks and remaining gaps.
+
 ## Remaining-core structure — 2026-11-02
 
 New local structure from the remaining-core completion (not deployed): `src/lib/sync/{gate,live-fanout,driver-live}.ts` (shared admission, role-scoped live fanout, driver grant), the live room's removal reconcile and placement tombstones, `gateway/src/engine-client.ts` batch compatibility fallback, `CommandEntrypoint.requestStopV1`, migration `apps/api/drizzle/0011_driver_open_session_index.sql`, Flutter `apps/mobile/lib/live/live_client.dart`, and test-only tooling in `tools/browser-rig/`, `tools/release-checks/` and the opt-in real-PostgreSQL suite `src/lib/pg-concurrency/`. Evidence and release manifest: `docs/agent-runs/2026-11-01/2026-11-01-remaining-core-completion-handoff.md`.
