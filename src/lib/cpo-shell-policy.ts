@@ -30,6 +30,17 @@ export const SHELL_PUBLIC_ASSETS: readonly string[] = [
   "/landing/straumvakt-logo-icon.png",
   "/landing/straumvakt-car.avif",
   "/landing/straumvakt-car.webp",
+  "/oem-models/easee-charge-72bf555c.webp",
+  "/oem-models/zaptec-pro-1f7fbd29.webp",
+  "/oem-models/alfen-eve-double-pro-line-586466c3.webp",
+  "/oem-models/alfen-eve-single-pro-line-a4f78743.webp",
+  "/oem-models/autel-maxicharger-ac-wallbox-f1774b29.webp",
+  "/oem-models/charge-amps-aura-a9f3a303.webp",
+  "/oem-models/charge-amps-dawn-9bbacca4.webp",
+  "/oem-models/charge-amps-halo-bc0afd5e.webp",
+  "/oem-models/charge-amps-luna-a0b003a9.webp",
+  "/oem-models/nexblue-edge-9f25d218.webp",
+  "/oem-models/zaptec-go-45a04b3f.webp",
 ];
 
 const PUBLIC_ASSETS = new Set(SHELL_PUBLIC_ASSETS);

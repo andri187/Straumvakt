@@ -13,12 +13,13 @@ import { OverviewRefresh } from "../overview-refresh";
 import { enabledVendors } from "@/lib/installations/vendor-onboarding";
 import { InstallationEditor, RequiredNote } from "./installation-editor";
 import { InstallationsOverview } from "./installations-overview";
+import { ModelPicker } from "./model-picker";
 import { VendorOnboarding } from "./vendor-onboarding";
 
 export const metadata = { title: "Installations" };
 export const dynamic = "force-dynamic";
 
-type Search = Promise<{ id?: string | string[]; new?: string | string[]; draft?: string | string[]; attach?: string | string[]; onboard?: string | string[] }>;
+type Search = Promise<{ id?: string | string[]; new?: string | string[]; draft?: string | string[]; attach?: string | string[]; onboard?: string | string[]; add?: string | string[]; model?: string | string[] }>;
 const first = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
 
 function State({ title, children }: { title: string; children: React.ReactNode }) {
@@ -40,6 +41,8 @@ export default async function Page({ searchParams }: { searchParams: Search }) {
   const draftParam = first(sp.draft);
   const wantsNew = first(sp.new) !== undefined || draftParam !== undefined;
   const wantsOnboard = !id && !wantsNew && first(sp.onboard) !== undefined;
+  // Add installation starts at the model board (?add=1); ?new=1 is the manual editor and ?onboard=1[&model=] the OEM flow.
+  const wantsAdd = !id && !wantsNew && !wantsOnboard && first(sp.add) !== undefined;
   const deps = shellDeps();
   // The charger being attached, if the operator came from the Chargers page. Only an id the server still lists as incoming
   // for the workspace CPO is honoured; the rest of the request cannot name a CPO.
@@ -133,8 +136,19 @@ export default async function Page({ searchParams }: { searchParams: Search }) {
           body = <State title="The CPO set for this workspace was not found">It does not exist or is not an active CPO organisation. Correct the association (CPO_SHELL_ORG_ID) outside this form.</State>;
         } else {
           contextOrg = `CPO: ${directory.organisations[0].displayName}`;
-          body = <VendorOnboarding directory={directory} vendors={enabledVendors(deps.env)} />;
+          body = <VendorOnboarding directory={directory} vendors={enabledVendors(deps.env)} initialVendor={first(sp.model) ?? null} />;
         }
+      }
+    } else if (wantsAdd) {
+      // No database read: the board needs only the deployment's list of switched-on OEMs. The manual editor (and its directory,
+      // draft and incoming-charger reads) loads only if the operator chooses it.
+      title = "Add installation";
+      subtitle = "";
+      if (!ctxOrg) {
+        contextOrg = "no CPO associated";
+        body = <State title="No CPO is set for this workspace">An operator has to associate the shared login with a CPO (server setting CPO_SHELL_ORG_ID) before installations can be added.</State>;
+      } else {
+        body = <ModelPicker enabledVendors={enabledVendors(deps.env)} manualHref={`/cpo/installations?new=1${toAttachQuery(attachParams)}`} />;
       }
     } else {
       // The list is not read here: the shell renders at once and the list loads through the shared structural store, which keeps
@@ -161,13 +175,10 @@ export default async function Page({ searchParams }: { searchParams: Search }) {
           {editorShown ? <div className="ie-title-line"><h1>{title}</h1><RequiredNote /></div> : <h1>{title}</h1>}
           {subtitle ? <p>{subtitle}</p> : null}
         </div>
-        {!id && !wantsNew && !wantsOnboard ? (
+        {!id && !wantsNew && !wantsOnboard && !wantsAdd ? (
           <div className="ie-buttons">
             <OverviewRefresh />
-            <Link className="ws-button" href={"/cpo/installations?onboard=1" as Route}>
-              Onboard from OEM
-            </Link>
-            <Link className="ws-button ws-primary" href={`/cpo/installations?new=1${toAttachQuery(attachParams)}` as Route}>
+            <Link className="ws-button ws-primary" href={`/cpo/installations?add=1${toAttachQuery(attachParams)}` as Route} prefetch={false}>
               Add installation
             </Link>
           </div>

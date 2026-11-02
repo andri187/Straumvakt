@@ -113,7 +113,7 @@ function describe(r: Reply, what: string): string {
 const clock = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-export function VendorOnboarding({ directory, vendors }: { directory: Directory; vendors: string[] }) {
+export function VendorOnboarding({ directory, vendors, initialVendor = null }: { directory: Directory; vendors: string[]; initialVendor?: string | null }) {
   const router = useRouter();
   const org = directory.organisations[0] ?? null;
   const [sites, setSites] = useState(directory.sites);
@@ -230,6 +230,14 @@ export function VendorOnboarding({ directory, vendors }: { directory: Directory;
       }
     });
   }
+
+  // Arriving from the model board (?model=): continue as if that model's button had just been pressed. Only a model this
+  // deployment has switched on is honoured. The zero-delay timer makes development's mount/unmount/mount run it once.
+  useEffect(() => {
+    if (!initialVendor || !vendors.includes(initialVendor) || !OEMS.some((o) => o.slug === initialVendor)) return;
+    const t = setTimeout(() => void chooseModel(initialVendor), 0);
+    return () => clearTimeout(t);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function connect(event: React.FormEvent) {
     event.preventDefault();

@@ -7,6 +7,7 @@ import { currentActor } from "@/lib/installations/session";
 import "../installations/installation-editor.css";
 import { ContextBar } from "../workspace-ui";
 import { OverviewRefresh } from "../overview-refresh";
+import { parseChargerTab } from "./charger-tab";
 import { ChargersOverview } from "./chargers-overview";
 
 export const metadata = { title: "Chargers" };
@@ -14,10 +15,11 @@ export const dynamic = "force-dynamic";
 
 // The page itself reads nothing from the database: it checks the signed session (no I/O), renders the shell, and the lists load
 // through the shared structural store (src/lib/sync/structural-store.ts) from the existing endpoints, which authorise every request.
-export default async function Page() {
+export default async function Page({ searchParams }: { searchParams: Promise<{ tab?: string | string[] }> }) {
   const actor = await currentActor();
   if (!actor) redirect(SHELL_SIGN_IN as Route);
   const context = readContextOrgId() !== null;
+  const tab = (await searchParams).tab;
   return (
     <>
       <ContextBar />
@@ -31,7 +33,7 @@ export default async function Page() {
           Choose installation to add a charger
         </Link></div>
       </div>
-      <ChargersOverview context={context} />
+      <ChargersOverview context={context} initialTab={parseChargerTab(tab)} />
     </>
   );
 }

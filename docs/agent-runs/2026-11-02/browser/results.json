@@ -1,0 +1,624 @@
+{
+  "startedAt": "2026-11-02T20:07:20.968Z",
+  "chrome": "Chrome/156.0.8078.74",
+  "scenarios": [
+    {
+      "name": "desktop: Add installation model board",
+      "checks": [
+        {
+          "name": "renders with no API read and no database connection",
+          "ok": true,
+          "detail": {
+            "browser": {},
+            "connections": 0
+          }
+        },
+        {
+          "name": "11 model cards",
+          "ok": true
+        },
+        {
+          "name": "exactly Easee Charge and Zaptec Pro are actionable, into the OEM flow",
+          "ok": true,
+          "detail": [
+            "/cpo/installations?onboard=1&model=easee",
+            "/cpo/installations?onboard=1&model=zaptec"
+          ]
+        },
+        {
+          "name": "the 9 other cards are inert (not links, not buttons, not focusable)",
+          "ok": true
+        },
+        {
+          "name": "keyboard order: Easee, Zaptec, then manual entry",
+          "ok": true,
+          "detail": [
+            "All installations",
+            "AvailableEaseeCharge↗",
+            "AvailableZaptecPro↗",
+            "Enter installation manually"
+          ]
+        },
+        {
+          "name": "manual entry is kept as the secondary path",
+          "ok": true,
+          "detail": "/cpo/installations?new=1"
+        },
+        {
+          "name": "all 11 pictures serve as WebP",
+          "ok": true,
+          "detail": [
+            "image/webp",
+            "image/webp",
+            "image/webp",
+            "image/webp",
+            "image/webp",
+            "image/webp",
+            "image/webp",
+            "image/webp",
+            "image/webp",
+            "image/webp",
+            "image/webp"
+          ]
+        },
+        {
+          "name": "picture payload stays small (< 150 KB for all 11)",
+          "ok": true,
+          "detail": 87898
+        },
+        {
+          "name": "no horizontal overflow",
+          "ok": true
+        },
+        {
+          "name": "no console errors or failed requests",
+          "ok": true,
+          "detail": []
+        },
+        {
+          "name": "the focused card shows a focus ring (outline)",
+          "ok": true
+        },
+        {
+          "name": "overview: 'Add installation' leads to the board; no separate 'Onboard from OEM' entry",
+          "ok": true,
+          "detail": [
+            [
+              "Add installation",
+              "/cpo/installations?add=1"
+            ]
+          ]
+        },
+        {
+          "name": "Add installation opens the board (client navigation)",
+          "ok": true
+        },
+        {
+          "name": "choosing Easee Charge continues into the OEM flow with the model carried",
+          "ok": true
+        }
+      ],
+      "measurements": {
+        "browserRequests": {},
+        "server": {
+          "requests": {},
+          "sqlByClass": {},
+          "connections": 0,
+          "dataQueries": 0,
+          "structuralQueries": 0
+        },
+        "imagePayloadBytes": 87898
+      }
+    },
+    {
+      "name": "desktop: Chargers tabs and waiting count",
+      "checks": [
+        {
+          "name": "opens on Already onboarded with the registered list",
+          "ok": true,
+          "detail": {
+            "selected": "cg-tab-registered",
+            "badge": null,
+            "panels": {
+              "registered": false,
+              "knocking": true
+            },
+            "banner": null,
+            "knockRows": 0,
+            "registeredRows": 80,
+            "selectedText": null,
+            "search": ""
+          }
+        },
+        {
+          "name": "nobody knocking: no badge and no notice (and not a misleading zero)",
+          "ok": true,
+          "detail": {
+            "selected": "cg-tab-registered",
+            "badge": null,
+            "panels": {
+              "registered": false,
+              "knocking": true
+            },
+            "banner": null,
+            "knockRows": 0,
+            "registeredRows": 80,
+            "selectedText": null,
+            "search": ""
+          }
+        },
+        {
+          "name": "badge counts the visible knocks only (3: A, B, SOON; the 45-minute-old one is outside the window)",
+          "ok": true,
+          "detail": {
+            "selected": "cg-tab-registered",
+            "badge": "3 not onboarded",
+            "panels": {
+              "registered": false,
+              "knocking": true
+            },
+            "banner": "3 chargers are knocking and not onboarded yet. Review",
+            "knockRows": 3,
+            "registeredRows": 80,
+            "selectedText": "None selected",
+            "search": ""
+          }
+        },
+        {
+          "name": "the notice shows on the OTHER tab",
+          "ok": true,
+          "detail": {
+            "selected": "cg-tab-registered",
+            "badge": "3 not onboarded",
+            "panels": {
+              "registered": false,
+              "knocking": true
+            },
+            "banner": "3 chargers are knocking and not onboarded yet. Review",
+            "knockRows": 3,
+            "registeredRows": 80,
+            "selectedText": "None selected",
+            "search": ""
+          }
+        },
+        {
+          "name": "Knocking tab: its table lists the same 3 and the registered panel is only hidden",
+          "ok": true,
+          "detail": {
+            "selected": "cg-tab-knocking",
+            "badge": "3 not onboarded",
+            "panels": {
+              "registered": true,
+              "knocking": false
+            },
+            "banner": null,
+            "knockRows": 3,
+            "registeredRows": 80,
+            "selectedText": "None selected",
+            "search": "?tab=knocking"
+          }
+        },
+        {
+          "name": "selection survives switching away and back",
+          "ok": true,
+          "detail": "1 selected"
+        },
+        {
+          "name": "switching tabs made no API request",
+          "ok": true,
+          "detail": {}
+        },
+        {
+          "name": "ArrowLeft selects and focuses Already onboarded",
+          "ok": true,
+          "detail": "cg-tab-registered"
+        },
+        {
+          "name": "roving tabindex: only the selected tab is in the tab order",
+          "ok": true
+        },
+        {
+          "name": "Review in the notice opens Knocking",
+          "ok": true,
+          "detail": {
+            "selected": "cg-tab-knocking",
+            "badge": "3 not onboarded",
+            "panels": {
+              "registered": true,
+              "knocking": false
+            },
+            "banner": null,
+            "knockRows": 3,
+            "registeredRows": 80,
+            "selectedText": "1 selected",
+            "search": "?tab=knocking"
+          }
+        },
+        {
+          "name": "?tab=knocking opens straight on Knocking",
+          "ok": true,
+          "detail": {
+            "selected": "cg-tab-knocking",
+            "badge": "3 not onboarded",
+            "panels": {
+              "registered": true,
+              "knocking": false
+            },
+            "banner": null,
+            "knockRows": 3,
+            "registeredRows": 80,
+            "selectedText": "None selected",
+            "search": "?tab=knocking"
+          }
+        },
+        {
+          "name": "the expiring knock leaves the count while the Knocking tab is inactive, with no request",
+          "ok": true,
+          "detail": {
+            "st": {
+              "selected": "cg-tab-registered",
+              "badge": "2 not onboarded",
+              "panels": {
+                "registered": false,
+                "knocking": true
+              },
+              "banner": "2 chargers are knocking and not onboarded yet. Review",
+              "knockRows": 2,
+              "registeredRows": 80,
+              "selectedText": "None selected",
+              "search": ""
+            },
+            "req": {}
+          }
+        },
+        {
+          "name": "no console errors or failed requests before the revoke step",
+          "ok": true,
+          "detail": []
+        },
+        {
+          "name": "after access is lost the badge is never a number 0 and the notice does not claim a count",
+          "ok": true,
+          "detail": {
+            "selected": "cg-tab-registered",
+            "badge": null,
+            "panels": {
+              "registered": false,
+              "knocking": true
+            },
+            "banner": null,
+            "knockRows": 0,
+            "registeredRows": 0,
+            "selectedText": null,
+            "search": ""
+          }
+        }
+      ],
+      "measurements": {
+        "afterRevoke": {
+          "selected": "cg-tab-registered",
+          "badge": null,
+          "panels": {
+            "registered": false,
+            "knocking": true
+          },
+          "banner": null,
+          "knockRows": 0,
+          "registeredRows": 0,
+          "selectedText": null,
+          "search": ""
+        }
+      }
+    },
+    {
+      "name": "narrow: Add installation model board",
+      "checks": [
+        {
+          "name": "renders with no API read and no database connection",
+          "ok": true,
+          "detail": {
+            "browser": {},
+            "connections": 0
+          }
+        },
+        {
+          "name": "11 model cards",
+          "ok": true
+        },
+        {
+          "name": "exactly Easee Charge and Zaptec Pro are actionable, into the OEM flow",
+          "ok": true,
+          "detail": [
+            "/cpo/installations?onboard=1&model=easee",
+            "/cpo/installations?onboard=1&model=zaptec"
+          ]
+        },
+        {
+          "name": "the 9 other cards are inert (not links, not buttons, not focusable)",
+          "ok": true
+        },
+        {
+          "name": "keyboard order: Easee, Zaptec, then manual entry",
+          "ok": true,
+          "detail": [
+            "All installations",
+            "AvailableEaseeCharge↗",
+            "AvailableZaptecPro↗",
+            "Enter installation manually"
+          ]
+        },
+        {
+          "name": "manual entry is kept as the secondary path",
+          "ok": true,
+          "detail": "/cpo/installations?new=1"
+        },
+        {
+          "name": "all 11 pictures serve as WebP",
+          "ok": true,
+          "detail": [
+            "image/webp",
+            "image/webp",
+            "image/webp",
+            "image/webp",
+            "image/webp",
+            "image/webp",
+            "image/webp",
+            "image/webp",
+            "image/webp",
+            "image/webp",
+            "image/webp"
+          ]
+        },
+        {
+          "name": "picture payload stays small (< 150 KB for all 11)",
+          "ok": true,
+          "detail": 87898
+        },
+        {
+          "name": "no horizontal overflow",
+          "ok": true
+        },
+        {
+          "name": "no console errors or failed requests",
+          "ok": true,
+          "detail": []
+        },
+        {
+          "name": "the focused card shows a focus ring (outline)",
+          "ok": true
+        },
+        {
+          "name": "overview: 'Add installation' leads to the board; no separate 'Onboard from OEM' entry",
+          "ok": true,
+          "detail": [
+            [
+              "Add installation",
+              "/cpo/installations?add=1"
+            ]
+          ]
+        },
+        {
+          "name": "Add installation opens the board (client navigation)",
+          "ok": true
+        },
+        {
+          "name": "choosing Easee Charge continues into the OEM flow with the model carried",
+          "ok": true
+        }
+      ],
+      "measurements": {
+        "browserRequests": {},
+        "server": {
+          "requests": {},
+          "sqlByClass": {},
+          "connections": 0,
+          "dataQueries": 0,
+          "structuralQueries": 0
+        },
+        "imagePayloadBytes": 87898
+      }
+    },
+    {
+      "name": "narrow: Chargers tabs and waiting count",
+      "checks": [
+        {
+          "name": "opens on Already onboarded with the registered list",
+          "ok": true,
+          "detail": {
+            "selected": "cg-tab-registered",
+            "badge": null,
+            "panels": {
+              "registered": false,
+              "knocking": true
+            },
+            "banner": null,
+            "knockRows": 0,
+            "registeredRows": 80,
+            "selectedText": null,
+            "search": ""
+          }
+        },
+        {
+          "name": "nobody knocking: no badge and no notice (and not a misleading zero)",
+          "ok": true,
+          "detail": {
+            "selected": "cg-tab-registered",
+            "badge": null,
+            "panels": {
+              "registered": false,
+              "knocking": true
+            },
+            "banner": null,
+            "knockRows": 0,
+            "registeredRows": 80,
+            "selectedText": null,
+            "search": ""
+          }
+        },
+        {
+          "name": "badge counts the visible knocks only (3: A, B, SOON; the 45-minute-old one is outside the window)",
+          "ok": true,
+          "detail": {
+            "selected": "cg-tab-registered",
+            "badge": "3 not onboarded",
+            "panels": {
+              "registered": false,
+              "knocking": true
+            },
+            "banner": "3 chargers are knocking and not onboarded yet. Review",
+            "knockRows": 3,
+            "registeredRows": 80,
+            "selectedText": "None selected",
+            "search": ""
+          }
+        },
+        {
+          "name": "the notice shows on the OTHER tab",
+          "ok": true,
+          "detail": {
+            "selected": "cg-tab-registered",
+            "badge": "3 not onboarded",
+            "panels": {
+              "registered": false,
+              "knocking": true
+            },
+            "banner": "3 chargers are knocking and not onboarded yet. Review",
+            "knockRows": 3,
+            "registeredRows": 80,
+            "selectedText": "None selected",
+            "search": ""
+          }
+        },
+        {
+          "name": "Knocking tab: its table lists the same 3 and the registered panel is only hidden",
+          "ok": true,
+          "detail": {
+            "selected": "cg-tab-knocking",
+            "badge": "3 not onboarded",
+            "panels": {
+              "registered": true,
+              "knocking": false
+            },
+            "banner": null,
+            "knockRows": 3,
+            "registeredRows": 80,
+            "selectedText": "None selected",
+            "search": "?tab=knocking"
+          }
+        },
+        {
+          "name": "selection survives switching away and back",
+          "ok": true,
+          "detail": "1 selected"
+        },
+        {
+          "name": "switching tabs made no API request",
+          "ok": true,
+          "detail": {}
+        },
+        {
+          "name": "ArrowLeft selects and focuses Already onboarded",
+          "ok": true,
+          "detail": "cg-tab-registered"
+        },
+        {
+          "name": "roving tabindex: only the selected tab is in the tab order",
+          "ok": true
+        },
+        {
+          "name": "Review in the notice opens Knocking",
+          "ok": true,
+          "detail": {
+            "selected": "cg-tab-knocking",
+            "badge": "3 not onboarded",
+            "panels": {
+              "registered": true,
+              "knocking": false
+            },
+            "banner": null,
+            "knockRows": 3,
+            "registeredRows": 80,
+            "selectedText": "1 selected",
+            "search": "?tab=knocking"
+          }
+        },
+        {
+          "name": "?tab=knocking opens straight on Knocking",
+          "ok": true,
+          "detail": {
+            "selected": "cg-tab-knocking",
+            "badge": "3 not onboarded",
+            "panels": {
+              "registered": true,
+              "knocking": false
+            },
+            "banner": null,
+            "knockRows": 3,
+            "registeredRows": 80,
+            "selectedText": "None selected",
+            "search": "?tab=knocking"
+          }
+        },
+        {
+          "name": "the expiring knock leaves the count while the Knocking tab is inactive, with no request",
+          "ok": true,
+          "detail": {
+            "st": {
+              "selected": "cg-tab-registered",
+              "badge": "2 not onboarded",
+              "panels": {
+                "registered": false,
+                "knocking": true
+              },
+              "banner": "2 chargers are knocking and not onboarded yet. Review",
+              "knockRows": 2,
+              "registeredRows": 80,
+              "selectedText": "None selected",
+              "search": ""
+            },
+            "req": {}
+          }
+        },
+        {
+          "name": "no console errors or failed requests before the revoke step",
+          "ok": true,
+          "detail": []
+        },
+        {
+          "name": "after access is lost the badge is never a number 0 and the notice does not claim a count",
+          "ok": true,
+          "detail": {
+            "selected": "cg-tab-registered",
+            "badge": null,
+            "panels": {
+              "registered": false,
+              "knocking": true
+            },
+            "banner": null,
+            "knockRows": 0,
+            "registeredRows": 0,
+            "selectedText": null,
+            "search": ""
+          }
+        }
+      ],
+      "measurements": {
+        "afterRevoke": {
+          "selected": "cg-tab-registered",
+          "badge": null,
+          "panels": {
+            "registered": false,
+            "knocking": true
+          },
+          "banner": null,
+          "knockRows": 0,
+          "registeredRows": 0,
+          "selectedText": null,
+          "search": ""
+        }
+      }
+    }
+  ],
+  "failures": [],
+  "finishedAt": "2026-11-02T20:08:23.971Z"
+}

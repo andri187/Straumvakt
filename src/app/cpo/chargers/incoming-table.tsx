@@ -5,7 +5,8 @@ import Link from "next/link";
 import type { Route } from "next";
 import type { IncomingCharger } from "@/lib/installations/discovery";
 import { MAX_BULK_ATTACH, attachSearch, pruneSelection, selectAllIds, toggleSelected } from "@/lib/installations/attachment-selection";
-import { INCOMING_WINDOW_MS, incomingExpiresAtMs, incomingVisible } from "@/lib/installations/incoming-window";
+import { INCOMING_WINDOW_MS, incomingExpiresAtMs } from "@/lib/installations/incoming-window";
+import { visibleIncoming } from "@/lib/installations/incoming-visible";
 import "./chargers.css";
 
 const when = (iso: string) => new Date(iso).toLocaleString("en-GB", { timeZone: "UTC", dateStyle: "medium", timeStyle: "short" }) + " UTC";
@@ -70,7 +71,7 @@ function BootPanel({ id, state }: { id: string; state: BootState | undefined }) 
  * open the rows are also hidden locally at their deadline using the clock offset learned from the response, with one
  * timeout and no network work. Refresh is the only read, one explicit request per click.
  */
-export function Incoming({ rows, context, asOf, fetchImpl }: { rows: IncomingCharger[] | null; context: boolean; asOf?: string; fetchImpl?: typeof fetch }) {
+export function Incoming({ rows, context, asOf, fetchImpl, onCount }: { rows: IncomingCharger[] | null; context: boolean; asOf?: string; fetchImpl?: typeof fetch; onCount?: (waiting: number | null) => void }) {
   const [snap, setSnap] = useState<Snapshot>({ rows, asOf: asOf ?? new Date(0).toISOString() });
   const [problem, setProblem] = useState<Problem>(null);
   const [pending, setPending] = useState(false);
@@ -102,10 +103,19 @@ export function Incoming({ rows, context, asOf, fetchImpl }: { rows: IncomingCha
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, [asOf, clock, learnOffset]);
 
-  const incomingAll = (snap.rows ?? []).filter((r) => r.state === "incoming");
   // A row the gateway reported with an open pending socket stays until the next read, however old its last boot is.
   const stays = (r: IncomingCharger) => r.socket === true;
-  const visible = nowMs === null ? incomingAll : incomingAll.filter((r) => stays(r) || incomingVisible(Date.parse(r.lastSeenAt), nowMs));
+  const visible = visibleIncoming(snap.rows, nowMs);
+
+  // Tell the page how many are waiting, from exactly the rows shown below. Not before the browser clock is read (the first
+  // render applies no window), and null when no list could be read, so "unavailable" is never reported as zero.
+  const countRef = useRef(onCount);
+  countRef.current = onCount;
+  const waiting = snap.rows === null ? null : visible.length;
+  useEffect(() => {
+    if (snap.rows !== null && nowMs === null) return;
+    countRef.current?.(waiting);
+  }, [waiting, snap.rows, nowMs]);
 
   const visibleIds = visible.map((r) => r.chargePointId);
   const visibleKey = visibleIds.join("|");

@@ -333,6 +333,141 @@ async function scenarioRevocation(p) {
   await p.screenshot("revoked.png");
 }
 
+// ── Add installation model board + Chargers tabs (ONLY=picker-tabs node tools/browser-rig/drive.mjs <outDir>) ──────────────────
+// Run against a rig started with CPO_VENDOR_CONNECT=easee,zaptec. The model board must render with no database and no API read.
+async function scenarioPicker(p, narrow) {
+  const tag = narrow ? "narrow" : "desktop";
+  const s = { name: `${tag}: Add installation model board`, checks: [], measurements: {} };
+  results.scenarios.push(s);
+  if (narrow) await p.viewport(390, 844, true); else await p.viewport(1280, 900);
+  const m = p.mark();
+  const doc = await serverDelta(async () => { await p.goto(`${RIG}/cpo/installations?add=1`); await p.waitFor(`document.querySelectorAll('.mp-card').length > 0`, 20000, "model cards"); });
+  s.measurements = { browserRequests: p.since(m), server: doc.server };
+  check(s, "renders with no API read and no database connection", Object.keys(p.since(m)).length === 0 && doc.server.connections === 0 && !doc.server.dataQueries, { browser: p.since(m), connections: doc.server.connections });
+  check(s, "11 model cards", (await p.eval(`document.querySelectorAll('.mp-card').length`)) === 11);
+  const links = await p.eval(`[...document.querySelectorAll('a.mp-on')].map((a) => a.getAttribute('href'))`);
+  check(s, "exactly Easee Charge and Zaptec Pro are actionable, into the OEM flow", JSON.stringify(links) === JSON.stringify(["/cpo/installations?onboard=1&model=easee", "/cpo/installations?onboard=1&model=zaptec"]), links);
+  const inert = await p.eval(`[...document.querySelectorAll('.mp-card:not(.mp-on)')].every((c) => c.tagName === 'DIV' && c.getAttribute('aria-disabled') === 'true' && !c.closest('a,button') && c.getAttribute('tabindex') === null && !c.querySelector('a,button'))`);
+  check(s, "the 9 other cards are inert (not links, not buttons, not focusable)", inert);
+  const focusables = await p.eval(`[...document.querySelectorAll('main a, main button')].map((e) => e.textContent.trim().replace(/\\s+/g,' ')).filter((t) => t)`);
+  check(s, "keyboard order: Easee, Zaptec, then manual entry", focusables.some((t) => /Easee/.test(t)) && focusables.some((t) => /Zaptec/.test(t)) && focusables.includes("Enter installation manually"), focusables);
+  const manual = await p.eval(`[...document.querySelectorAll('a')].find((a) => a.textContent.trim() === 'Enter installation manually')?.getAttribute('href')`);
+  check(s, "manual entry is kept as the secondary path", manual === "/cpo/installations?new=1", manual);
+  const img = await p.eval(`(async () => { const out = []; for (const i of document.querySelectorAll('.mp-card img')) { const r = await fetch(i.src); const b = await r.blob(); out.push({ ok: r.ok, type: r.headers.get('content-type'), bytes: b.size }); } return out; })()`);
+  const total = img.reduce((a, x) => a + x.bytes, 0);
+  check(s, "all 11 pictures serve as WebP", img.length === 11 && img.every((x) => x.ok && /webp/.test(x.type ?? "")), img.map((x) => x.type));
+  s.measurements.imagePayloadBytes = total;
+  check(s, "picture payload stays small (< 150 KB for all 11)", total < 150 * 1024, total);
+  check(s, "no horizontal overflow", await p.eval(`document.documentElement.scrollWidth <= window.innerWidth`));
+  check(s, "no console errors or failed requests", p.console.length === 0, p.console.slice(-5));
+  await p.eval(`document.querySelector('a.mp-on')?.scrollIntoView()`);
+  await p.eval(`document.querySelector('a.mp-on')?.focus()`);
+  await p.screenshot(`${tag}-model-board.png`);
+  check(s, "the focused card shows a focus ring (outline)", (await p.eval(`getComputedStyle(document.activeElement).outlineStyle`)) !== "none");
+  // The overview now has ONE entry for adding.
+  await p.goto(`${RIG}/cpo/installations`);
+  await p.waitFor(`!!document.querySelector('.ws-title a.ws-primary')`, 20000);
+  const header = await p.eval(`[...document.querySelectorAll('.ws-title a')].map((a) => [a.textContent.trim(), a.getAttribute('href')])`);
+  check(s, "overview: 'Add installation' leads to the board; no separate 'Onboard from OEM' entry", header.some(([t, h]) => t === "Add installation" && h === "/cpo/installations?add=1") && !header.some(([t]) => /Onboard from OEM/.test(t)), header);
+  await p.eval(`document.querySelector('.ws-title a.ws-primary').click()`);
+  await p.waitFor(`location.search === '?add=1' && document.querySelectorAll('.mp-card').length > 0`, 10000, "board after click");
+  check(s, "Add installation opens the board (client navigation)", true);
+  await p.click("a.mp-on");
+  await p.waitFor(`location.search === '?onboard=1&model=easee'`, 10000, "onboard url");
+  check(s, "choosing Easee Charge continues into the OEM flow with the model carried", true);
+}
+
+const tabState = (p) => p.eval(`(() => {
+  const t = (id) => document.getElementById('cg-tab-' + id);
+  const badge = t('knocking')?.querySelector('.cg-badge');
+  return {
+    selected: [...document.querySelectorAll('[role=tab]')].find((x) => x.getAttribute('aria-selected') === 'true')?.id ?? null,
+    badge: badge ? badge.textContent.trim() : null,
+    panels: { registered: document.getElementById('cg-panel-registered')?.hidden, knocking: document.getElementById('cg-panel-knocking')?.hidden },
+    banner: document.querySelector('.cg-waiting')?.innerText ?? null,
+    knockRows: document.querySelectorAll('table.cg-incoming tbody tr.cg-row').length,
+    registeredRows: document.querySelectorAll('#cg-panel-registered tr.cg-row').length,
+    selectedText: document.querySelector('.cg-bulk [role=status]')?.textContent ?? null,
+    search: location.search,
+  };
+})()`);
+
+async function scenarioChargerTabs(p, narrow) {
+  const tag = narrow ? "narrow" : "desktop";
+  const s = { name: `${tag}: Chargers tabs and waiting count`, checks: [], measurements: {} };
+  results.scenarios.push(s);
+  if (narrow) await p.viewport(390, 844, true); else await p.viewport(1280, 900);
+  const fixture = await rig.fixture();
+  await fetch(`${RIG}/__rig/clear-knocks`, { method: "POST" });
+
+  // No one knocking: no count is shown, and the notice is absent.
+  await p.goto(`${RIG}/cpo/chargers`);
+  await p.waitFor(`document.querySelectorAll('#cg-panel-registered tr.cg-row').length > 0 && !!document.querySelector('#cg-panel-knocking .cg-section')`, 20000, "both lists");
+  let st = await tabState(p);
+  check(s, "opens on Already onboarded with the registered list", st.selected === "cg-tab-registered" && st.registeredRows === fixture.chargers && st.panels.knocking === true, st);
+  check(s, "nobody knocking: no badge and no notice (and not a misleading zero)", st.badge === null && st.banner === null, st);
+
+  // Three knocks: two fresh, one beyond the 30-minute window, plus one that expires in ~4 s.
+  for (const [id, ageMin] of [["KNOCK-A", 1], ["KNOCK-B", 5], ["KNOCK-OLD", 45], ["KNOCK-SOON", 29.93]]) await fetch(`${RIG}/__rig/knock?id=${id}&ageMin=${ageMin}`, { method: "POST" });
+  await p.goto(`${RIG}/cpo/chargers`);
+  await p.waitFor(`!!document.querySelector('#cg-tab-knocking .cg-badge')`, 20000, "badge");
+  st = await tabState(p);
+  check(s, "badge counts the visible knocks only (3: A, B, SOON; the 45-minute-old one is outside the window)", st.badge?.startsWith("3"), st);
+  check(s, "the notice shows on the OTHER tab", /3 chargers are knocking/.test(st.banner ?? "") && st.selected === "cg-tab-registered", st);
+  await p.screenshot(`${tag}-chargers-registered-notice.png`);
+
+  // Switching tabs makes no request and keeps a selection.
+  let m = p.mark();
+  await p.click("#cg-tab-knocking");
+  st = await tabState(p);
+  check(s, "Knocking tab: its table lists the same 3 and the registered panel is only hidden", st.selected === "cg-tab-knocking" && st.knockRows === 3 && st.panels.registered === true && st.search === "?tab=knocking", st);
+  await p.eval(`document.querySelector('table.cg-incoming tbody input[type=checkbox]').click()`);
+  await p.click("#cg-tab-registered");
+  await p.click("#cg-tab-knocking");
+  st = await tabState(p);
+  check(s, "selection survives switching away and back", /1 selected/.test(st.selectedText ?? ""), st.selectedText);
+  check(s, "switching tabs made no API request", Object.keys(p.since(m)).length === 0, p.since(m));
+  await p.screenshot(`${tag}-chargers-knocking.png`);
+
+  // Keyboard: arrow keys move between tabs, focus follows.
+  await p.eval(`document.getElementById('cg-tab-knocking').focus()`);
+  await p.eval(`document.getElementById('cg-tab-knocking').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }))`);
+  st = await tabState(p);
+  check(s, "ArrowLeft selects and focuses Already onboarded", st.selected === "cg-tab-registered" && (await p.eval(`document.activeElement.id`)) === "cg-tab-registered", st.selected);
+  check(s, "roving tabindex: only the selected tab is in the tab order", (await p.eval(`[...document.querySelectorAll('[role=tab]')].map((t) => t.tabIndex).join()`)) === "0,-1");
+
+  // The notice's Review button, and a reload that keeps the tab.
+  await p.click(".cg-waiting button");
+  st = await tabState(p);
+  check(s, "Review in the notice opens Knocking", st.selected === "cg-tab-knocking", st);
+  await p.goto(`${RIG}/cpo/chargers?tab=knocking`);
+  await p.waitFor(`!!document.querySelector('#cg-tab-knocking .cg-badge')`, 20000);
+  st = await tabState(p);
+  check(s, "?tab=knocking opens straight on Knocking", st.selected === "cg-tab-knocking" && st.panels.knocking === false, st);
+
+  // Expiry on the INACTIVE tab: no request, no new timer from this feature; the count drops when the row's window ends.
+  await p.click("#cg-tab-registered");
+  m = p.mark();
+  await p.waitFor(`document.querySelector('#cg-tab-knocking .cg-badge')?.textContent.trim().startsWith('2')`, 20000, "count falls to 2 at expiry");
+  st = await tabState(p);
+  check(s, "the expiring knock leaves the count while the Knocking tab is inactive, with no request", st.badge?.startsWith("2") && Object.keys(p.since(m)).length === 0 && /2 chargers are knocking/.test(st.banner ?? ""), { st, req: p.since(m) });
+
+  check(s, "no console errors or failed requests before the revoke step", p.console.length === 0, p.console.slice(-5).map((x) => x.slice(0, 120)));
+
+  // Unavailable is not zero. (The 401s this step causes are expected and are not counted above.)
+  await rig.post("/__rig/revoke");
+  await p.waitFor(`!!document.querySelector('.ie-refresh button') && document.querySelector('.ie-refresh button').innerText === 'Refresh'`, 40000, "refresh enabled");
+  await p.click(".ie-refresh button");
+  await p.waitFor(`/Access was lost/.test(document.body.innerText)`, 15000, "access lost");
+  st = await tabState(p);
+  s.measurements.afterRevoke = st;
+  check(s, "after access is lost the badge is never a number 0 and the notice does not claim a count", st.badge !== "0" && !/\b0 chargers/.test(st.banner ?? ""), st);
+  await p.screenshot(`${tag}-chargers-access-lost.png`);
+  await rig.post("/__rig/unrevoke");
+  await fetch(`${RIG}/__rig/clear-knocks`, { method: "POST" });
+  p.console.length = 0; // the expected 401s must not leak into the next scenario's check
+}
+
 async function scenarioEditorKeepsEdits() {
   // NOT EXERCISED. The editor page loads its data in a server component, which needs a Neon-compatible database path; this rig
   // gives the Next server none (an attempt to bridge Neon's WebSocket transport to PGlite failed on the pipelined connect and was
@@ -344,6 +479,14 @@ async function scenarioEditorKeepsEdits() {
 (async () => {
   const p = await launch();
   try {
+    if (process.env.ONLY === "picker-tabs") {
+      await login(p);
+      await scenarioPicker(p, false);
+      await scenarioChargerTabs(p, false);
+      await login(p);
+      await scenarioPicker(p, true);
+      await scenarioChargerTabs(p, true);
+    } else {
     await scenarioDesktop(p, false);
     await scenarioSignOut(p);
     await login(p);
@@ -354,6 +497,7 @@ async function scenarioEditorKeepsEdits() {
     // Narrow viewport: the same behaviours on a phone-width layout (fresh document so the store starts cold).
     await login(p);
     await scenarioDesktop(p, true);
+    }
   } catch (e) {
     results.failures.push(`driver error: ${e.message}`);
     console.error(e);

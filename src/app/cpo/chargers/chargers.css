@@ -57,3 +57,17 @@
 .cg-boot-body:focus-visible { outline: 2px solid #6fdcea; outline-offset: 2px; }
 .cg-socket { color: #8fe0c0; }
 @media (max-width: 680px) { .cg-incoming .cg-boot-row td { padding-left: 10px; padding-right: 10px; } .cg-actions-row { flex-direction: column; align-items: flex-end; } }
+
+/* Chargers tabs and the waiting notice. */
+.cg-tabs { display: flex; gap: 22px; margin: 0 0 18px; border-bottom: 1px solid #243247; overflow-x: auto; }
+.cg-tab { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 0 12px; border: 0; border-bottom: 2px solid transparent; background: none; color: #8e9fb5; font: inherit; font-size: 14px; white-space: nowrap; cursor: pointer; }
+.cg-tab:hover { color: #dfeaf5; }
+.cg-tab[aria-selected="true"] { color: #79dbc8; border-bottom-color: #3ee9a7; }
+.cg-tab:focus-visible { outline: 2px solid #6fdcea; outline-offset: 3px; }
+.cg-badge { min-width: 20px; padding: 1px 7px; border-radius: 10px; background: #174c44; border: 1px solid #2d8e75; color: #c5ffea; font-size: 11px; line-height: 16px; text-align: center; }
+.cg-badge-unknown { background: #2a2230; border-color: #6b4f7a; color: #e3c9f0; }
+.cg-waiting { margin: 0 0 16px; padding: 9px 12px; border: 1px solid #21544c; border-radius: 7px; background: rgba(16, 43, 43, 0.5); font-size: 13px; color: #a3cfca; }
+.cg-waiting-unknown { border-color: #5a4a68; background: rgba(42, 34, 48, 0.5); color: #cbb8d6; }
+.cg-review { margin-left: 6px; padding: 4px 12px; border: 1px solid #2d8e75; border-radius: 6px; background: #174c44; color: #c5ffea; font-size: 12px; cursor: pointer; }
+.cg-review:hover { border-color: #3ee9a7; color: #fff; }
+.cg-review:focus-visible { outline: 2px solid #6fdcea; outline-offset: 2px; }

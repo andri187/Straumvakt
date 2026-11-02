@@ -139,6 +139,21 @@ const server = http.createServer(async (req, res) => {
       await hub.bump(id, { sv: v.statusVersion });
       return void res.writeHead(200).end("ok");
     }
+    // A charger "knocking" at the CPO address: a row in ocpp.pending_discoveries last seen `ageMin` minutes ago (default 1).
+    if (url.pathname === "/__rig/knock") {
+      const id = url.searchParams.get("id") ?? `KNOCK-${Date.now()}`;
+      const age = Number(url.searchParams.get("ageMin") ?? 1);
+      await fx.pg.query(
+        `INSERT INTO ocpp.pending_discoveries (identity_string, first_seen_at, last_seen_at, attempt_count) VALUES ($1, now() - ($2 || ' minutes')::interval, now() - ($2 || ' minutes')::interval, 3)
+         ON CONFLICT (identity_string) DO UPDATE SET last_seen_at = EXCLUDED.last_seen_at`,
+        [`${fx.orgId}/${id}`, String(age)], // identity strings are "<orgId>/<chargePointId>"
+      );
+      return void res.writeHead(200).end("ok");
+    }
+    if (url.pathname === "/__rig/clear-knocks") {
+      await fx.pg.query(`DELETE FROM ocpp.pending_discoveries`);
+      return void res.writeHead(200).end("ok");
+    }
     if (url.pathname === "/__rig/fixture") {
       return void res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ installations: fx.installationIds.length, circuits: fx.size.installations * fx.size.circuitsPer, chargers: fx.size.installations * fx.size.chargersPer, size: fx.size }));
     }
