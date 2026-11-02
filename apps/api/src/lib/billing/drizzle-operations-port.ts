@@ -33,19 +33,19 @@ import {
   makeActivitySourcePort,
   type ActivityAccess,
 } from "../../repositories/activity-month";
-import { makeDrizzleNumberStore } from "./number-store";
 import {
   applyPeriodEventAndPersist,
   makePeriodStateReader,
   readPeriodState,
 } from "./period-repository";
-import type {
-  BillingAccess,
-  BillingOperationsPort,
-  IssuedDocument,
-  MutationReceipt,
-  ReceiptLookup,
-  StatementSummary,
+import {
+  ISSUANCE_NOT_IMPLEMENTED,
+  type BillingAccess,
+  type BillingOperationsPort,
+  type IssuedDocument,
+  type MutationReceipt,
+  type ReceiptLookup,
+  type StatementSummary,
 } from "./operations-port";
 
 /** Receipts expire, so a key cannot be replayed forever. Seven days matches
@@ -197,49 +197,19 @@ export function makeDrizzleOperationsPort(
       }));
     },
 
-    async issueDocument(input): Promise<
+    async issueDocument(): Promise<
       { kind: "issued"; document: IssuedDocument } | { kind: "refused"; reason: string }
     > {
-      // ROUND 3'S LAST BLOCKER, CLOSED BY MIGRATION 0004.
+      // Issuance is not implemented: there is no statement writer or renderer.
+      // This refuses BEFORE touching the number store, because the store
+      // commits an allocation in its own transaction and nothing here could
+      // write the statement that allocation must belong to. An allocation
+      // with no statement is a number marked issued for a document that does
+      // not exist, and there is no release.
       //
-      // This used to refuse with document_sequence_table_not_yet_created:
-      // neither 0002 nor 0003 created a store for the sequence, and inventing
-      // one unapplied and untested would have been worse than naming the gap.
-      // 0004 creates it, and the allocation now runs through
-      // DocumentNumberStorePort.
-      //
-      // The allocation is transactional with the issue INSIDE the store, and
-      // it takes the counter row FOR UPDATE — a number is never allocated by a
-      // read, never reserved and abandoned, and never taken outside the
-      // transaction that writes the statement. A crash between allocation and
-      // commit consumes nothing.
-      const numbers = makeDrizzleNumberStore(db);
-      const outcome = await numbers.allocate({
-        orgId: input.period.orgId,
-        series: "SV",
-        year: input.period.year,
-        purpose: "invoice",
-        // The statement for this period. Until the statement writer lands, the
-        // period's natural key stands in — it is stable and unique per period,
-        // which is what the (statement, purpose) uniqueness needs.
-        statementId: `${input.period.orgId}:${input.period.year}:${input.period.month}`,
-        idempotencyKey: input.idempotencyKey,
-        issuedByUserId: input.actorUserId,
-        issuedAt: new Date(),
-      });
-
-      if (outcome.kind === "refused") {
-        return { kind: "refused", reason: outcome.reason };
-      }
-
-      // Rendering is the statement writer's job and is not built here; the
-      // document's NUMBER is what this round unblocked. Returning the number
-      // with an empty rendering would be a lie about what exists, so this
-      // refuses the render half explicitly and names it.
-      return {
-        kind: "refused",
-        reason: `number_allocated_${outcome.documentNumber}_but_statement_renderer_not_built`,
-      };
+      // When issuance is built, the allocation must run inside the same
+      // transaction that writes the statement; see number-store.ts.
+      return { kind: "refused", reason: ISSUANCE_NOT_IMPLEMENTED };
     },
 
     async fetchDocument() {

@@ -115,3 +115,23 @@ describe('public shell deployment boundary', () => {
     expect(s.app.fetch).toHaveBeenCalledOnce();
   });
 });
+
+describe('shared live socket route', () => {
+  it('routes a websocket upgrade and a driver bearer GET of /api/cpo/sync to the realtime module, never to the application', async () => {
+    const s = setup();
+    const off = await s.fetch(new Request('https://www.straumvakt.org/api/cpo/sync?installation=x', { headers: { upgrade: 'websocket' } }), s.env, {});
+    expect(off.status).toBe(404); // not enabled: indistinguishable from an absent route
+    const offBearer = await s.fetch(new Request('https://www.straumvakt.org/api/cpo/sync', { headers: { authorization: 'Bearer abc' } }), s.env, {});
+    expect(offBearer.status).toBe(404);
+    expect(s.app.fetch).not.toHaveBeenCalled();
+    const enabled = { ...s.env, CPO_SHELL_REALTIME_ENABLED: 'true', VERSION_HUB: { idFromName: (n) => n, get: () => ({ fetch: vi.fn() }) } };
+    const bad = await s.fetch(new Request('https://www.straumvakt.org/api/cpo/sync', { headers: { authorization: 'Bearer abc' } }), enabled, {});
+    expect(bad.status).toBe(503); // enabled but no driver secret configured: the driver path is off, still not the application
+    expect(s.app.fetch).not.toHaveBeenCalled();
+  });
+  it('an ordinary cookie GET (snapshot, check, status) still reaches the application', async () => {
+    const s = setup();
+    await s.fetch(new Request('https://www.straumvakt.org/api/cpo/sync?check=1', { headers: { cookie: 'straumvakt_cpo_shell=x' } }), s.env, {});
+    expect(s.app.fetch).toHaveBeenCalledTimes(1);
+  });
+});

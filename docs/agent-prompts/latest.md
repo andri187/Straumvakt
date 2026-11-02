@@ -1,4 +1,10 @@
-# Latest Agent Prompts
+# Historical Agent Prompts (2026-08-28)
+
+> **Retired as an active dispatch board on 2026-10-26.** The roles, ready
+> statuses, and parallel-lane instructions below document the August 28 state;
+> they do not authorize new agent work. Claude in VS Code is the default coding
+> agent under the current root `CLAUDE.md`. Read `TASKS.md` and current Git
+> state before selecting work. Preserve this page as historical handoff evidence.
 
 This index points each active worker window at the prompt it should read when
 Andri says "go".
@@ -10,10 +16,11 @@ Andri says "go".
 | Claude C | `claude-c` | `2026-08-28\2026-08-28-1900-claude-c-mobile-reconciliation-and-money-unit.md` | **ready if a window is free** | Establish the money unit, land the cost fix stranded on a branch since 2026-08-09, collapse four driver-app states into one trunk |
 | Codex Work | `codex-work` | `2026-08-28\2026-08-28-1900-codex-work-money-screens-visual-design.md` | ready | **Visual only.** The money screens: every state of a cost, the held period, the provenance block, Icelandic formatting, the empty states |
 
-**A, B and Codex run in parallel.** C dispatches only if a third Claude Code
-window is free; nothing waits on it, though the bug it fixes is live.
+**Historical dispatch, 2026-08-28:** A, B and Codex ran in parallel. C was
+conditional on a third Claude Code window. This is no longer an active staffing
+or task instruction.
 
-## Who owns what
+## Historical ownership, 2026-08-28
 
 | Lane | Tool | Owns |
 |---|---|---|

@@ -11,7 +11,9 @@ import { CHARGE_POINT_ID } from "./address";
 import { isSameOriginRequest } from "@/lib/cpo-shell-handlers";
 import { readShellCookie } from "@/lib/cpo-shell-policy";
 import { readShellConfig, verifyShellSession, type ShellEnv } from "@/lib/cpo-shell-session";
-import { sharedLoginActor, type Actor } from "./actor";
+import { permissionPartition, permissionScopeKey, sharedLoginActor, type Actor } from "./actor";
+import { READ_LIMITS, type Gate, type ReadKind } from "@/lib/sync/gate";
+import type { SingleFlight } from "@/lib/sync/single-flight";
 import {
   SaveInstallationInput,
   cpoAddress,
@@ -24,7 +26,7 @@ import type { DiscardOutcome, SaveDraftInput } from "./drafts";
 import type { IncomingCharger } from "./discovery";
 import type { BootCaptureRow } from "./store";
 import { INCOMING_WINDOW_MS } from "./incoming-window";
-import type { Directory, HistoryEntry, InstallationListRow } from "./drizzle-store";
+import type { ChargerListRow, Directory, HistoryEntry, InstallationListRow } from "./drizzle-store";
 import type { SaveResult } from "./service";
 import type { Fetcher } from "./vendor-read.mjs";
 import { vendorLabel, type MapResult, type ResolvedCharger } from "./vendor-import";
@@ -47,6 +49,12 @@ export interface Repo {
   save(input: SaveInstallationInput, actor: Actor): Promise<SaveResult>;
   get(id: string): Promise<{ snapshot: Snapshot; routingId: string | null; history: HistoryEntry[] } | null>;
   list(limit: number, offset: number): Promise<InstallationListRow[]>;
+  /** Registered chargers with their installation and circuit, for the Chargers overview. */
+  listChargers(limit: number): Promise<ChargerListRow[]>;
+  /** Current structure revision of every non-archived installation: the same domain the sync check reports on. */
+  revisions(): Promise<Record<string, number>>;
+  /** Structure only (installation, circuits, chargers): no change history, no routing id. What an expanded tree row needs. */
+  getTree(id: string): Promise<Snapshot | null>;
   directory(): Promise<Directory>;
   /** Chargers knocking at the given CPO (the workspace CPO, never taken from the request). */
   listIncoming(orgId: string, actor: Actor): Promise<IncomingCharger[]>;
@@ -70,7 +78,22 @@ export type ApiDeps = {
   vendor?: { fetcher?: Fetcher; now?: () => number };
   /** Opens a request-scoped repository; throws DatabaseUnavailableError when the database is not configured. */
   withRepo<T>(fn: (repo: Repo) => Promise<T>): Promise<T>;
+  /** Process-wide: simultaneous identical reads (same permission scope) share one repository call. Absent = every read runs. */
+  flight?: SingleFlight;
+  /** Server-enforced limit on the expensive GETs (shared across isolates when hub-backed). Absent = unlimited. */
+  gate?: Gate;
 };
+
+const MAX_CHARGER_LIST = 100;
+
+/** What an expanded installation row renders. `revision` lets the client's cache know which version it holds. */
+export function toTreeView(s: Snapshot) {
+  return {
+    installation: { id: s.installation.id, revision: s.installation.revision, mainRatingAmps: s.installation.mainRatingAmps, mainPhaseCount: s.installation.mainPhaseCount, mainGridType: s.installation.mainGridType },
+    circuits: s.circuits.map((c) => ({ id: c.id, parentId: c.parentId, displayName: c.displayName, ratingAmps: c.ratingAmps, phaseCount: c.phaseCount })),
+    chargers: s.chargers.map((c) => ({ id: c.id, circuitId: c.circuitId, label: c.label, chargePointId: c.chargePointId, vendor: c.vendor, model: c.model })),
+  };
+}
 
 export class DatabaseUnavailableError extends Error {
   constructor() {
@@ -213,6 +236,16 @@ export async function handleInstallations(request: Request, deps: ApiDeps): Prom
   try {
     if (request.method === "GET") {
       if (url.searchParams.has("draft") || url.searchParams.has("drafts")) return await draftsGet(url, deps, g.actor);
+      // Authorization has already run (guard). This bounds how much expensive work one actor can cause, BEFORE any of it starts:
+      // the cost is one admission take, far cheaper than the repository read it prevents. A refusal carries `retry-after`;
+      // the browser keeps showing what it holds and asks again later.
+      const admit = async (kind: ReadKind): Promise<Response | null> => {
+        if (!deps.gate) return null;
+        const { windowMs, limit } = READ_LIMITS[kind];
+        const d = await deps.gate.take(`read|${kind}|${permissionPartition(g.actor)}`, windowMs, limit);
+        if (d.allow) return null;
+        return json({ error: "rate_limited", retryAfterMs: d.retryAfterMs }, 429, { "retry-after": String(Math.max(1, Math.ceil(d.retryAfterMs / 1000))), "cache-control": "no-store" });
+      };
       if (url.searchParams.has("incoming")) {
         // The CPO is the workspace's. Any organisation named in the request is ignored, and without a workspace CPO there is no list.
         const ctx = deps.contextOrgId;
@@ -225,21 +258,38 @@ export async function handleInstallations(request: Request, deps: ApiDeps): Prom
           const capture = await deps.withRepo((repo) => repo.getBootCapture(ctx, g.actor, bootId));
           return json({ chargePointId: bootId, capture });
         }
+        const limited = await admit("incoming");
+        if (limited) return limited;
         // asOf/windowMs let the page expire rows locally without another read; they are not a new service.
         const incoming = await deps.withRepo((repo) => repo.listIncoming(ctx, g.actor));
         return json({ incoming, asOf: new Date().toISOString(), windowMs: INCOMING_WINDOW_MS });
       }
+      // Simultaneous identical reads inside one permission scope share one repository call (one connection, one set of queries).
+      const shared = <T,>(key: string, load: () => Promise<T>): Promise<T> => (deps.flight ? deps.flight.run(`${permissionScopeKey(g.actor)}|${key}`, load) : load());
       const id = url.searchParams.get("id");
       if (id) {
         if (!/^[0-9a-f-]{36}$/i.test(id)) return json({ error: "not_found" }, 404);
+        const limited = await admit(url.searchParams.get("shape") === "tree" ? "tree" : "detail");
+        if (limited) return limited;
+        if (url.searchParams.get("shape") === "tree") {
+          const tree = await shared(`tree|${id.toLowerCase()}`, () => deps.withRepo((repo) => repo.getTree(id)));
+          if (!tree) return json({ error: "not_found" }, 404);
+          return json(toTreeView(tree));
+        }
         const found = await deps.withRepo((repo) => repo.get(id));
         if (!found) return json({ error: "not_found" }, 404);
         return json(toView(found.snapshot, found.routingId, found.history));
       }
+      const listLimited = await admit("list");
+      if (listLimited) return listLimited;
+      if (url.searchParams.get("view") === "chargers") {
+        const out = await shared("chargers", () => deps.withRepo(async (repo) => ({ chargers: await repo.listChargers(MAX_CHARGER_LIST), revisions: await repo.revisions() })));
+        return json({ chargers: out.chargers, limit: MAX_CHARGER_LIST, revisions: out.revisions, fetchedAt: Date.now() });
+      }
       const limit = Math.min(Math.max(Number(url.searchParams.get("limit") ?? MAX_LIST) || MAX_LIST, 1), MAX_LIST);
       const offset = Math.max(Number(url.searchParams.get("offset") ?? 0) || 0, 0);
-      const rows = await deps.withRepo((repo) => repo.list(limit, offset));
-      return json({ installations: rows, limit, offset });
+      const out = await shared(`list|${limit}|${offset}`, () => deps.withRepo(async (repo) => ({ rows: await repo.list(limit, offset), revisions: await repo.revisions() })));
+      return json({ installations: out.rows, limit, offset, revisions: out.revisions, fetchedAt: Date.now() });
     }
 
     const body = await readJson(request);

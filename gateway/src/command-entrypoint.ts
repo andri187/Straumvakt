@@ -96,6 +96,14 @@ export class CommandEntrypoint extends WorkerEntrypoint<Env> {
       return await (await stub.fetch(new Request("https://do.internal/command/outbox", { method: "POST", body: JSON.stringify(input) }))).json();
     } catch { return { error: "unavailable" }; }
   }
+  /**
+   * Durable, attempt-keyed stop (contract version 1). A caller that needs these semantics calls THIS name: an older gateway
+   * has no such method, so the call fails ("does not implement") and the caller treats it as unavailable. The unversioned
+   * `requestStop` below is the same implementation, kept only so an existing caller of this gateway keeps working.
+   */
+  async requestStopV1(input: RequestStopInput) {
+    return requestStopVia(this.env, input);
+  }
   async requestStop(input: RequestStopInput) {
     return requestStopVia(this.env, input);
   }

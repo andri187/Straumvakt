@@ -15,6 +15,7 @@
 //   one structure edit     + 1 history query + 1 query per changed entity TYPE (not per row)
 
 import { StructureCache } from "./cache";
+import type { SingleFlight } from "./single-flight";
 import {
   CURSOR_MAX_AGE_MS,
   MAX_CHANGES_PER_INSTALLATION,
@@ -34,6 +35,7 @@ import {
   type Position,
   type Projection,
   type SnapshotResponse,
+  type StatusResponse,
   type Structure,
 } from "./model";
 
@@ -54,6 +56,8 @@ export interface SyncRepo {
   circuitsByIds(installationId: string, ids: string[]): Promise<CircuitView[]>;
   chargersByIds(installationId: string, ids: string[]): Promise<ChargerView[]>;
   operationalSince(id: string, afterSeq: number, limit: number): Promise<DeviceStateView[]>;
+  /** Device states for several installations in ONE query, grouped by installation. */
+  operationalMany(ids: string[]): Promise<Map<string, DeviceStateView[]>>;
 }
 
 export type SyncDeps<Actor> = {
@@ -63,6 +67,8 @@ export type SyncDeps<Actor> = {
   now: () => number;
   /** 0 = always probe (default). >0 = serve a structure validated this recently without a probe. */
   trustStructureForMs?: number;
+  /** Process-wide. Simultaneous status reads for the same version state share one device-state query. Absent = each runs its own. */
+  flight?: SingleFlight;
 };
 
 const PROJECTION: Projection = "cpo-admin";
@@ -105,6 +111,32 @@ export async function readSnapshot<Actor>(deps: SyncDeps<Actor>, actor: Actor, i
   }
   const cursor: Cursor = { v: SYNC_SCHEMA, scope, at: deps.now(), pos };
   return { kind: "snapshot", etag, body: { schema: SYNC_SCHEMA, projection: PROJECTION, cursor: encodeCursor(cursor), installations } };
+}
+
+export type StatusResult = { kind: "status"; body: StatusResponse; etag: string } | { kind: "not_modified"; etag: string } | { kind: "forbidden" } | { kind: "too_many" };
+
+/**
+ * Lean operational snapshot (cost: 1 access + 1 version probe + ONE batched device-state query, zero structure reads).
+ * Same ordering rule as readSnapshot: versions are read before the data, so the cursor can only be older than the data and
+ * `readChanges` replays anything in between. Access is resolved on every call; a 304 never short-circuits it.
+ */
+export async function readStatus<Actor>(deps: SyncDeps<Actor>, actor: Actor, ifNoneMatch?: string | null): Promise<StatusResult> {
+  const vis = await deps.access.visible(actor);
+  if (!vis) return { kind: "forbidden" };
+  const ids = [...new Set(vis.installationIds)].sort();
+  if (ids.length > MAX_SCOPE_INSTALLATIONS) return { kind: "too_many" };
+  const scope = await scopeHash(PROJECTION, ids);
+  const versions = ids.length ? await deps.repo.versions(ids) : new Map();
+  const etag = etagFor(scope, versions, ids);
+  if (ifNoneMatch && ifNoneMatch === etag) return { kind: "not_modified", etag };
+  const present = ids.filter((id) => versions.has(id));
+  const pos: Record<string, Position> = {};
+  for (const id of present) pos[id] = { rev: versions.get(id)!.revision, sv: versions.get(id)!.statusVersion };
+  const readStates = () => deps.repo.operationalMany(present);
+  // Keyed by the exact version state, so a viewer arriving after a change can never be handed the earlier answer.
+  const grouped = !present.length ? new Map<string, DeviceStateView[]>() : deps.flight ? await deps.flight.run(`status|${etag}`, readStates) : await readStates();
+  const cursor: Cursor = { v: SYNC_SCHEMA, scope, at: deps.now(), pos };
+  return { kind: "status", etag, body: { schema: SYNC_SCHEMA, projection: PROJECTION, cursor: encodeCursor(cursor), installations: present.map((id) => ({ id, devices: grouped.get(id) ?? [] })) } };
 }
 
 export type ChangesResult = { kind: "changes"; body: ChangesResponse; etag?: string } | { kind: "forbidden" };

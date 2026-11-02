@@ -68,6 +68,25 @@ export const PENDING_CAPTURE_EVICT_AFTER_DAYS = 14;
 export const PENDING_SUPERSEDED_CLOSE = 4001;
 export const PENDING_REGISTERED_CLOSE = 4002;
 
+/**
+ * Activation of an ADMITTED, registered connection that has not sent a BootNotification (gateway/src/boot-activation.ts).
+ *
+ * Gateway side, per connection: the charger gets ACTIVATION_PROBE_AFTER_MS to boot by itself; if it has not, ONE correlated
+ * TriggerMessage(BootNotification) is sent on the same socket, and the attempt is given up (recorded as incomplete) at
+ * ACTIVATION_CONNECTION_WINDOW_MS after the connection. Only an Accepted BootNotification the engine committed completes it.
+ */
+export const ACTIVATION_PROBE_AFTER_MS = 10_000;
+export const ACTIVATION_CONNECTION_WINDOW_MS = 60_000;
+
+/**
+ * Operator side, measured from the save (the retained promotion timestamp): how long a DELIVERED "you are registered" signal may
+ * wait for an accepted BootNotification before the list says so. It is longer than the connection window above because it also
+ * covers the charger's own reconnect delay, which Straumvakt does not control (the first real trial reconnected about six
+ * minutes after the save). Computed at read time from stored timestamps: no timer, no write, no polling. A late accepted
+ * boot still clears the row. Limit: a signal that was only delivered later, by a retried read, is still measured from the save.
+ */
+export const ACTIVATION_WAIT_MS = 15 * 60_000;
+
 export function pendingBootResponse(now: Date, intervalSeconds: number = PENDING_RETRY_SECONDS) {
   return { status: "Pending" as const, currentTime: now.toISOString(), interval: intervalSeconds };
 }

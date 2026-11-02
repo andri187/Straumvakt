@@ -16,7 +16,7 @@ import { identityRow } from "@/lib/installations/model";
 import type { LifecycleRequest, SessionStep } from "./model";
 import type { Observed } from "./plan";
 import { SUPERSEDED_FLAG } from "@/lib/ocpp-engine/transactions";
-import { OpenRequestConflict, SessionOpenError, type DeviceView, type LifecycleStore, type LifecycleTx } from "./service";
+import { OpenRequestConflict, PlacementAlreadyClosed, SessionOpenError, type DeviceView, type LifecycleStore, type LifecycleTx } from "./service";
 
 const openPlacement = sql`upper_inf(${placements.period})`;
 const openIdentity = sql`upper_inf(${deviceIdentities.period})`;
@@ -154,7 +154,7 @@ function port(x: Executor): LifecycleTx {
         .set({ period: sql`tstzrange(lower(${placements.period}), GREATEST(${at.toISOString()}::timestamptz, lower(${placements.period}) + interval '1 millisecond'), '[)')`, detachReason: `${req.kind}: ${req.reason}`.slice(0, 200) })
         .where(and(eq(placements.id, req.placementId), eq(placements.deviceId, req.deviceId), openPlacement))
         .returning({ id: placements.id });
-      if (closed.length === 0) throw new Error("placement is no longer open");
+      if (closed.length === 0) throw new PlacementAlreadyClosed();
       await x
         .update(deviceIdentities)
         .set({ period: sql`tstzrange(lower(${deviceIdentities.period}), GREATEST(${at.toISOString()}::timestamptz, lower(${deviceIdentities.period}) + interval '1 millisecond'), '[)')` })

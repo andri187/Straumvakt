@@ -1,20 +1,73 @@
 # FOCUS — Straumvakt active canon
 
-**This is the document you read to start. Read this and CLAUDE.md's safety
-rules (1–4). Nothing else is required.**
+**Read this for product principles and `CLAUDE.md` for current development,
+Git, Cloudflare, Neon, and secret-safety instructions.**
 
 Adopted 2026-08-07. Supersedes the ADR corpus and the architecture planning
 documents as *active* canon — see [Legacy](#legacy) at the bottom. Nothing was
 deleted; the lineage of every rule below is cited.
 
+Operational cross-references updated 2026-10-26. Drizzle is the active schema
+authority; remaining Prisma references describe transition cleanup. The product
+principles remain active, but dated workstream and progress descriptions below
+are not current task assignments or live-state verification.
+
+**Scope rebaseline, 2026-10-26:** Andri retired the August market SOW as the
+active plan. Treat the principles below as design hypotheses to check against
+current code, relevant tests and controlled hardware evidence. Preserve earned
+behaviour, but revise a principle when evidence shows that it is wrong or
+cannot support the agreed lifecycle. See
+`docs/notes/2026-10-26-market-scope-reconciliation.md`.
+
+**Milestone boundary, confirmed 2026-10-27:** the current to-market milestone
+is S1, a working pre-commercial product with connected web/mobile journeys,
+controlled charging, reliable evidence and explainable test costs/payers.
+S2 covers sustained validation and invoice-engine development/testing; S3 is
+commercial release under a separate decision. A paying customer, real invoice,
+payment collection or completed invoice engine is not an S1 prerequisite.
+Keep later requirements visible and stage every task/acceptance criterion;
+historical first-invoice/first-revenue wording does not override this boundary.
+
 ---
 
 ## The eight focus rules
 
+**Project-wide operating-cost principle, confirmed by Andri 2026-10-30:**
+Straumvakt is a purpose-built CPMS whose overall architecture must remain
+inexpensive to operate. Low cloud and human operational OPEX is a standing
+product constraint across the web/mobile apps, APIs, OCPP gateway, database,
+telemetry, storage and supporting services, not just a gateway optimization.
+Prefer the smallest maintainable implementation that meets the actual product
+need; reuse existing capabilities and avoid speculative platforms, duplicate
+services and unnecessary always-on work. Assess idle cost, cost per connected
+charger/session, fleet growth, retries/abuse, retention and operator effort
+when a change materially affects them. State assumptions and tradeoffs; new
+services need a concrete benefit relative to their full operating cost.
+Avoid unnecessary polling, writes and logs while preserving required charging,
+security, tenant isolation and CDR/settlement evidence. This is not permission
+to discard necessary evidence or build a complex cost-saving subsystem whose
+maintenance costs exceed its benefit.
+
+**Unit-cost target clarified by Andri, 2026-10-31:** total recurring operating
+cost must be **well below USD 1 per connector per month**, not merely cloud
+hosting below that amount. Include attributable cloud, storage, invoicing and
+collection fees for Straumvakt's service fees, email, domain, support,
+accounting and other recurring operating services/tooling. State the fleet
+size, number of billed CPOs, activity, retention and labour assumptions; do not
+silently exclude operating work or present fixed-cost dilution as measured
+scalability. Exact headroom below $1 and the fleet/workload where it must be
+met remain to be quantified. This is a design/acceptance target, not a proven
+current result, spending authorisation, total monthly budget or provider cap.
+This target concerns Straumvakt's own cost of operating the service. It is
+independent of customer pricing, invoicing arrangements and the revenue model;
+it does not set or change what a CPO or driver pays.
+
 ### 1. The current code is the baseline
 
-Build forward on what exists. **Architecture is not re-litigated.** If a
-question is already answered by working code, the code is the answer.
+Build forward from what exists. Working code is evidence of current behaviour,
+not proof that its architecture fits the next product. Re-evaluate a decision
+when current source, tests or hardware contradict its stated rationale; do not
+rebuild proven parts without a concrete reason and a parity plan.
 
 > **Why:** `SCOPE_2026-08-04.md` measured the failure mode. In one session,
 > **nine things were found already built that nobody knew about**, and three
@@ -26,18 +79,32 @@ question is already answered by working code, the code is the answer.
 > *Extracted from: `docs/architecture/SCOPE_2026-08-04.md` §the discovery
 > problem.*
 
-#### Exception — Prisma is not part of the baseline
+#### Exception — replace Prisma in the adopted application
 
 **Touch it, convert it.** Anything you edit on the way to market moves from
 Prisma to Drizzle in the same change. Not a scheduled big-bang port, and not
 "leave it, it works" either.
 
+**Confirmed 2026-10-27:** the adopted application must not depend on Prisma
+at runtime or on its generated client. Port the behaviour needed by retained
+workflows to Drizzle/reviewed SQL; exclude retired paths. Prisma material may
+remain as historical reference outside the adopted application, not as an
+unresolved runtime option. Scope the conversion and prove the relevant
+behaviour before removing a dependency.
+
+**Do not restore blindly.** Historical schemas, constraints and business rules
+are evidence, not a restoration checklist. For each affected guarantee, record
+whether the new design retains, replaces or rejects it and test the chosen
+contract. Replacing old machinery does not waive integrity, tenant isolation
+or explainable financial history.
+
 This is a deliberate, standing exception to rules 1 and 8, decided once so it
 never has to be decided again:
 
-- It **contradicts rule 1** because Prisma *is* working code — and we are
-  going to change it anyway. **We no longer define ourselves by Prisma.** It
-  is a migration in flight, not a baseline to accept.
+- It **contradicts rule 1** because some Prisma code and scripts remain in the
+  tree — and we are going to change them when their owning surface is touched.
+  **We no longer define ourselves by Prisma.** Drizzle is the schema authority;
+  legacy Prisma is transition material, not a baseline to extend.
 - It **contradicts rule 8** only in appearance. This is one standing decision,
   not a decision per file. Nobody re-argues it at the top of each file.
 
@@ -81,19 +148,28 @@ There is no parity cliff and no big-bang cutover.
 > that could never drain a backlog. None of that is visible in the source. It
 > is only visible in the fact that the code now works.
 
-### 2. The four safety rules stand, unchanged
+### 2. Operational safety rules are mandatory
 
 Branch and deploy safety · secrets · database operations · fragile
-infrastructure files. **They never relax**, and when a rule's application is
-ambiguous the default is always stop-and-ask.
+infrastructure files. The current rules are maintained in `CLAUDE.md`; when a
+critical rule's application is ambiguous, stop and ask.
 
-They live in CLAUDE.md and are quoted nowhere else on purpose — one copy, no
-drift.
+They are quoted nowhere else on purpose — one copy, no drift. Dated deploy maps
+and database descriptions in older files are not evidence of current external
+state.
 
-> *Extracted from: `CLAUDE.md` Rules 1–4 (all CRITICAL) and the
-> "If you're unsure" clause.*
+> *See `CLAUDE.md` for the current operational rules.*
 
 ### 3. One money ENGINE — but two money lines, and only one of them is ours
+
+**Funds-flow clarification, Andri, 2026-10-31:** Straumvakt supplies the
+húsfélag/CPO with a monthly batch of driver-usage invoices for its existing
+resident billing/collection process. The húsfélag handles collection.
+Straumvakt collects only its own monthly service fees from the CPO; it does
+not collect, hold or remit driver money. This overrides historical remittance
+or direct-driver-collection wording. Exact prices, the service-fee payment
+method and the invoice-batch format remain to be specified. CPO agreement
+acceptance belongs in registration; driver card collection does not.
 
 **One pipeline shape: CDR → priced ledger → invoice, on the agreements
 engine.** There is never a second billing path, and never a "temporary" one.
@@ -103,7 +179,7 @@ this rule exists to prevent:**
 
 | line | whose money | Straumvakt's posture | market phase |
 |---|---|---|---|
-| **host ↔ driver** | **the host's** | **agent** — Straumvakt presents the claim *on the host's behalf* (kröfuhafi is the host, rendered "Straumvakt f.h. \<host\>") and remits | **deferred** — needs attribution |
+| **host ↔ driver** | **the host's** | Straumvakt supplies the host's driver-usage invoice batch; the host collects through its existing process. No Straumvakt collection or remittance. | S1 cost/payer evidence; S2 batch development/testing; S3 real use |
 | **Straumvakt ↔ host** | **Straumvakt's** | principal, on its own invoice | **this is the market line** |
 
 **The flat connector fee is the second line.** Straumvakt → host, per
@@ -143,8 +219,8 @@ record is never rewritten to make an invoice come out right.
 `org_id` on the row, `org_id` in the query. Every repository function takes
 tenant scope. A query without it is a bug, not a shortcut.
 
-> *Extracted from: Architecture V3 principle 3; CLAUDE.md Rule 7
-> (repository + mapper).*
+> *Extracted from: Architecture V3 principle 3; the current tenant-scope
+> requirement is retained in `CLAUDE.md`.*
 
 ### 6. Vendors stay at the edge; OCPP stays generic
 
@@ -184,7 +260,7 @@ is genuinely load-bearing and irreversible — and expect that to be rare.
 > being retired. 51 documents nobody can hold is not a memory aid.
 >
 > *Extracted from: the failure mode named in `SCOPE_2026-08-04.md`;
-> supersedes CLAUDE.md Rule 11 (sprint discipline / ADR-per-scope-change) for
+> supersedes the legacy sprint discipline / ADR-per-scope-change rule for
 > the market phase.*
 
 ---

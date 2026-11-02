@@ -52,7 +52,14 @@ export const KPIS: readonly Kpi[] = [
       "Committed stop evidence that was not priced, because a trigger was lost, is found and settled exactly once by an independent recovery pass.",
     method:
       "Oldest age and count of sessions waiting for pricing, plus held and failed outcomes, per window.",
-    source: "Unavailable: independent recovery is not built, so nothing is collected.",
+    source: "Unavailable: independent recovery is built but disabled by default (no schedule, flag off), so no production pass has run and nothing is collected.",
+    evidence: {
+      label: "Local test · real PostgreSQL 17 · 2026-11-02 UTC",
+      lines: [
+        "6 concurrent consumers over 12 stopped sessions waiting for pricing processed 12 in total (no session twice), left none waiting and recorded no failed attempts.",
+        "Racing close attempts on one removal request closed the placement once and advanced the installation revision by one. Local server, not Neon; no production volumes.",
+      ],
+    },
   },
   {
     key: "ui-db",
@@ -63,7 +70,14 @@ export const KPIS: readonly Kpi[] = [
       "Additional viewers of an unchanged installation must not add periodic database reads of the same data.",
     method:
       "Compare source-side query counts with 1, 10 and 100 viewers over 30 minutes. Count initial loads, authorization and shared repair reads separately.",
-    source: "Unavailable: shared live updates are not built; current views poll.",
+    source: "Unavailable: shared live updates are built but off (realtime flags false, VERSION_HUB not bound). Production views use a browser-held cache and conditional checks; no production count is collected.",
+    evidence: {
+      label: "Local test · real browser · 2026-11-02 UTC",
+      lines: [
+        "Fixture of 20 installations, 60 circuits and 80 chargers. Cold Installations page: 1 list read, no detail read. Warm return from another page: 0 requests and 0 structural queries.",
+        "An unchanged check is 1 small request and 0 structural queries. A first expansion reads only that installation. In-process database; not Neon, not production traffic.",
+      ],
+    },
   },
   {
     key: "freshness",
@@ -74,7 +88,14 @@ export const KPIS: readonly Kpi[] = [
       "Delivery delay from gateway receipt to rendered status or progress. Observation age is tracked separately; a gap is shown as stale, never as current.",
     method:
       "Correlate gateway receipt with UI render, accounting for clock offset. Report p50, p95 and p99, sample count and window; keep charger-clock age separate.",
-    source: "Unavailable: no latency samples are collected.",
+    source: "Unavailable: no latency samples are collected; the live path is off in production.",
+    evidence: {
+      label: "Local test · workerd + Durable Object storage · 2026-11-02 UTC",
+      lines: [
+        "One source publication reached 100 operator and 20 driver sockets (120 deliveries) in 22 ms inside one local runtime, with no database in that runtime.",
+        "This is delivery inside one process, not gateway-to-screen p95 over a network, and it says nothing about charger clocks.",
+      ],
+    },
   },
   {
     key: "efficiency",
@@ -85,7 +106,7 @@ export const KPIS: readonly Kpi[] = [
       "Work needed to store meter events with identical evidence. Stage 4a batches transport and reuses a client but keeps per-event transactions. Stage 4b separately evaluates SQL batching.",
     method:
       "Compare the same 20-event chunk: 95% fewer RPCs/client constructions at full occupancy; proposed practical target at least 80%. Report SQL transactions separately, along with batch occupancy, retries and failures.",
-    source: "Unavailable: batched ingestion is not built and no baseline is recorded.",
+    source: "Unavailable: batched ingestion is built (transport batch and compatible meter SQL batch) but not live; no production occupancy, retry or failure data is collected.",
     evidence: {
       label: "Local unit fixture · 2026-10-31 20:12 UTC",
       lines: [

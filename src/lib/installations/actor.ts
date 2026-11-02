@@ -26,3 +26,17 @@ export function sharedLoginActor(username: string): Actor {
 export function mayAdminister(actor: Actor, _orgId: string): boolean {
   return actor.kind === "shared_login" && actor.platformOperator === true;
 }
+
+/**
+ * The permission component of every shared cache and cooldown key. Today there is one permission scope (the platform
+ * operator); when per-CPO accounts exist this is the ONE place that must return a key that differs between actors whose
+ * visible data differs (e.g. the sorted organisation set), so no cache entry, repair or cooldown is ever shared across them.
+ */
+export function permissionScopeKey(actor: Actor): string {
+  return actor.platformOperator === true ? "platform-operator" : "none";
+}
+
+/** Cooldowns are per actor within a permission scope. */
+export function permissionPartition(actor: Actor): string {
+  return `${permissionScopeKey(actor)}|${actor.label}`;
+}

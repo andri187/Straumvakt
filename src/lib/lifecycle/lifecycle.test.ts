@@ -581,3 +581,60 @@ describe("selecting due removals for the bounded recovery pass (selectDueRemoval
     expect(await selectDueRemovals({ store: bare, now: () => clock }, { scanLimit: 5 })).toMatchObject({ supported: false, due: [] });
   });
 });
+
+describe("placement-closed notification (shared live room)", () => {
+  type Closed = { installationId: string; deviceId: string; placementId: string };
+  const withNotice = (calls: Closed[], over: Partial<Deps> = {}) => deps({ onPlacementClosed: async (i) => { calls.push(i); }, ...over });
+  const request = async (d: Deps) => ((await requestRemoval(d, { deviceId: DEV, kind: "remove", reason: "", requestKey: "k1", actor: ACTOR } as never)) as { value: { id: string } }).value.id;
+
+  it("fires once, AFTER the placement is closed, with the placement that was closed", async () => {
+    const calls: Closed[] = [];
+    const d = withNotice(calls);
+    const id = await request(d);
+    expect(calls).toHaveLength(0); // requesting a removal closes nothing
+    const seenAtNotice: boolean[] = [];
+    const notified: Deps = { ...d, onPlacementClosed: async (i) => { seenAtNotice.push(world.w.placements.has(DEV)); calls.push(i); } };
+    const r = await progressRemoval(notified, id);
+    expect(r).toMatchObject({ ok: true, value: { state: "completed", identityClosed: true } });
+    expect(seenAtNotice).toEqual([false]); // the commit had already happened when the room was told
+    expect(calls).toEqual([{ installationId: INST, deviceId: DEV, placementId: "p1" }]);
+    await progressRemoval(notified, id); // a repeated step on a completed request tells nobody again
+    expect(calls).toHaveLength(1);
+  });
+
+  it("is silent while a session is still open: nothing is announced for a placement that has not closed", async () => {
+    startSession();
+    const calls: Closed[] = [];
+    const d = withNotice(calls);
+    const id = await request(d);
+    stopOutcome = "accepted"; // Accepted is not a stop
+    await progressRemoval(d, id);
+    expect(world.w.placements.has(DEV)).toBe(true);
+    expect(calls).toHaveLength(0);
+    stopSession();
+    for (let i = 0; i < 3; i++) await progressRemoval(d, id);
+    expect(calls).toEqual([{ installationId: INST, deviceId: DEV, placementId: "p1" }]);
+  });
+
+  it("a failing notification never fails or undoes the removal", async () => {
+    const d = withNotice([], { onPlacementClosed: async () => { throw new Error("room unreachable"); } });
+    const id = await request(d);
+    const r = await progressRemoval(d, id);
+    expect(r).toMatchObject({ ok: true, value: { state: "completed", identityClosed: true } });
+    expect(world.w.placements.has(DEV)).toBe(false);
+  });
+});
+
+describe("a lost race to close the placement", () => {
+  it("is a lost race, not a failure: the loser rolls back and returns the current request instead of throwing", async () => {
+    const r = await remove();
+    const id = (r as { value: { id: string } }).value.id;
+    // Another worker closes the placement between this one's check and its close. (The in-memory store rolls the loser's whole
+    // transaction back, including this simulated winner; the two-connection proof against real row locks is in
+    // src/lib/pg-concurrency, where the winner's commit is genuinely visible.)
+    world.hooks.beforeClose = () => { world.hooks.beforeClose = null; world.w.placements.delete(DEV); };
+    const out = await progressRemoval(deps(), id);
+    expect(out.ok).toBe(true); // before the fix this threw "placement is no longer open"
+    expect(world.w.closed).toHaveLength(0); // the loser closed nothing
+  });
+});

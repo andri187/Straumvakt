@@ -6,6 +6,19 @@
 specification. Preflights return **counts**, never rows — a preflight that dumps
 customer rows into a terminal is a data incident, not a check.
 
+> **Clarification added 2026-10-26 — historical packet, not a current runbook.**
+> This appendix describes the migration chain as it stood when it was written:
+> a 2-entry journal (`0000_baseline`, `0001_regular_talos`). Those names, hashes
+> and counts (including "2" in MP-03) are preserved as historical evidence and are
+> **not** current operational instructions. The journal was since collapsed into
+> the cold baseline `0000_cold_hex` plus `0001_restore_temporal_and_status_constraints`
+> (commit `1dad103` and the local, uncommitted follow-on). Current guidance is in
+> `docs/agent-runs/2026-10-26/2026-10-26-2100-restore-cold-migration-constraints.md` and
+> `docs/agent-runs/2026-10-26/2026-10-26-2125-baseline-script-safety.md`. Note that
+> `drizzle-baseline.mjs --verify` now checks the **baseline entry only**; whole-chain
+> ledger checking is `--verify-all`. Both check the migration ledger (recorded hashes
+> vs files), not that a migration's SQL ran or that any constraint exists.
+
 Three structural facts, verified in source:
 
 - **Two migration systems.** `prisma/migrations` has 47 directories plus
@@ -101,6 +114,8 @@ Neon branch discipline (staging `br-tiny-river-abgpqq37`) is a precondition for 
 - **Expected:** exactly two pending — `20260807003000_drop_issues_scaffold` and `20260807120000_drop_never_used_tables` — and the enum count is 3 on staging, 0 on test. · **If it fails:** a third pending name means an unreviewed migration reached the branch; block the release. An enum count of 0 on staging means someone dropped the types by hand and `migrate resolve --applied` is now the correct reconciliation instead of `migrate deploy` — record which was used, because the two are not interchangeable (the migration's own header says resolving without running "would record something untrue").
 
 **MP-03** — Drizzle ledger matches the 2-entry journal
+*(Historical as of 2026-10-26 — see the clarification at the top of this appendix; for the current chain use `--verify-all`.)*
+
 **Phase** preflight · **Owner** DBA · **Approval** Andri · **Blocking** yes
 - **Check:** `node apps/api/scripts/drizzle-baseline.mjs --verify` (the script's documented read path; `--apply` is the writing path and is NOT used here). It recomputes `sha256` of each file in `apps/api/drizzle/` and compares against `drizzle.__drizzle_migrations`. Equivalent count form: `SELECT count(*) FROM drizzle.__drizzle_migrations;`
 - **Expected:** 2, and both hashes match `0000_baseline` and `0001_regular_talos`. · **If it fails:** count 1 means `0001` (the `per_connector` `ALTER TYPE`) has never been applied — go to MP-04 and decide there which system applies it; do NOT let `drizzle-kit generate` run first, because it will diff against the snapshot and may emit a second `ALTER TYPE`. A hash mismatch means a committed migration file was edited after application — treat as a code incident, not a migration one.

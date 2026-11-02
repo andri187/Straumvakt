@@ -25,6 +25,8 @@ export type RecoveryPorts = {
   lifecycle: LifecycleStore | null;
   /** null = no stop command path. Requests that need a stop are skipped, never counted as attempts and never marked failed. */
   stop: StopPort | null;
+  /** Optional, best effort, AFTER the closing commit: the placement left the installation (see Deps.onPlacementClosed). */
+  onPlacementClosed?: Deps["onPlacementClosed"];
   now?: () => Date;
   /** Budget clock in ms. Injectable for tests. */
   nowMs?: () => number;
@@ -140,6 +142,7 @@ export async function runRecovery(ports: RecoveryPorts, overrides: Partial<Recov
     },
     authorise: () => false, // this pass can only PROGRESS an existing request; it can never request, cancel or return
     now,
+    ...(ports.onPlacementClosed ? { onPlacementClosed: ports.onPlacementClosed } : {}),
   };
 
   let selection;

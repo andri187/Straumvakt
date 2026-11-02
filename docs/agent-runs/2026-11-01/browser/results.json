@@ -1,0 +1,773 @@
+{
+  "startedAt": "2026-11-02T00:49:35.800Z",
+  "chrome": "Chrome/156.0.8078.74",
+  "scenarios": [
+    {
+      "name": "desktop: sign in (real form post, signed cookie)",
+      "checks": [
+        {
+          "name": "landed on the workspace",
+          "ok": true
+        }
+      ],
+      "measurements": {}
+    },
+    {
+      "name": "desktop: installations: cold document load",
+      "checks": [
+        {
+          "name": "navigation shell is present with the title",
+          "ok": true
+        },
+        {
+          "name": "lists the fixture's installations (20)",
+          "ok": true,
+          "detail": 20
+        },
+        {
+          "name": "collapsed by default: no tree was requested",
+          "ok": true,
+          "detail": {
+            "installations:list": 1
+          }
+        },
+        {
+          "name": "exactly one list read, no chargers/status read for this page",
+          "ok": true,
+          "detail": {
+            "installations:list": 1
+          }
+        }
+      ],
+      "measurements": {
+        "shellMs": 37,
+        "rowsMs": 156,
+        "browserRequests": {
+          "installations:list": 1
+        },
+        "server": {
+          "requests": {
+            "installations:list": 1
+          },
+          "sqlByClass": {
+            "installations:list": 2
+          },
+          "connections": 1,
+          "dataQueries": 2,
+          "structuralQueries": 2
+        }
+      }
+    },
+    {
+      "name": "desktop: installations: first expansion is lazy and cached",
+      "checks": [
+        {
+          "name": "one detail (tree) read for the one expanded row",
+          "ok": true,
+          "detail": {
+            "installations:tree": 1
+          }
+        },
+        {
+          "name": "the other rows were not preloaded",
+          "ok": true,
+          "detail": {
+            "installations:tree": 1
+          }
+        },
+        {
+          "name": "collapse + re-expand costs no request (cached)",
+          "ok": true,
+          "detail": {}
+        }
+      ],
+      "measurements": {
+        "browserRequests": {
+          "installations:tree": 1
+        },
+        "server": {
+          "requests": {
+            "installations:tree": 1
+          },
+          "sqlByClass": {
+            "installations:tree": 3
+          },
+          "connections": 1,
+          "dataQueries": 3,
+          "structuralQueries": 3
+        }
+      }
+    },
+    {
+      "name": "desktop: chargers: first visit via the sidebar",
+      "checks": [
+        {
+          "name": "client-side navigation (no new document)",
+          "ok": true
+        },
+        {
+          "name": "charger list shows the fixture's chargers (80)",
+          "ok": true,
+          "detail": 80
+        },
+        {
+          "name": "one chargers read + one lean status read; NO full tree and NO per-installation reads",
+          "ok": true,
+          "detail": {
+            "installations:chargers-list": 1,
+            "installations:incoming": 1,
+            "sync:status": 1
+          }
+        },
+        {
+          "name": "server did not read any installation tree for this page",
+          "ok": true,
+          "detail": {
+            "installations:chargers-list": 2,
+            "installations:incoming": 3,
+            "sync:status": 1
+          }
+        }
+      ],
+      "measurements": {
+        "ms": 377,
+        "browserRequests": {
+          "installations:chargers-list": 1,
+          "installations:incoming": 1,
+          "sync:status": 1
+        },
+        "server": {
+          "requests": {
+            "installations:chargers-list": 1,
+            "installations:incoming": 1,
+            "sync:status": 1
+          },
+          "sqlByClass": {
+            "installations:chargers-list": 2,
+            "installations:incoming": 3,
+            "sync:status": 1
+          },
+          "connections": 3,
+          "dataQueries": 4,
+          "structuralQueries": 2
+        }
+      }
+    },
+    {
+      "name": "desktop: installations: warm revisit via the sidebar",
+      "checks": [
+        {
+          "name": "ZERO list/tree/chargers/status reads on a warm revisit",
+          "ok": true,
+          "detail": {}
+        },
+        {
+          "name": "the row expanded earlier is still expanded",
+          "ok": true
+        },
+        {
+          "name": "server ran zero structural queries because of the revisit",
+          "ok": true,
+          "detail": {
+            "requests": {},
+            "sqlByClass": {},
+            "connections": 0,
+            "dataQueries": 0,
+            "structuralQueries": 0
+          }
+        }
+      ],
+      "measurements": {
+        "browserRequests": {},
+        "server": {
+          "requests": {},
+          "sqlByClass": {},
+          "connections": 0,
+          "dataQueries": 0,
+          "structuralQueries": 0
+        }
+      }
+    },
+    {
+      "name": "desktop: chargers: warm revisit",
+      "checks": [
+        {
+          "name": "ZERO full-list / tree / snapshot reads on a warm revisit",
+          "ok": true,
+          "detail": {}
+        },
+        {
+          "name": "no structural database query caused by the revisit",
+          "ok": true,
+          "detail": {
+            "requests": {},
+            "sqlByClass": {},
+            "connections": 0,
+            "dataQueries": 0,
+            "structuralQueries": 0
+          }
+        }
+      ],
+      "measurements": {
+        "browserRequests": {},
+        "server": {
+          "requests": {},
+          "sqlByClass": {},
+          "connections": 0,
+          "dataQueries": 0,
+          "structuralQueries": 0
+        }
+      }
+    },
+    {
+      "name": "desktop: refresh: server-enforced cooldown, mirrored by the button",
+      "checks": [
+        {
+          "name": "inside the cooldown the button shows a countdown and cannot be pressed",
+          "ok": true,
+          "detail": "Refresh in 28s"
+        },
+        {
+          "name": "the countdown moves with no request",
+          "ok": true,
+          "detail": {
+            "label": "Refresh in 28s",
+            "label2": "Refresh in 27s"
+          }
+        }
+      ],
+      "measurements": {
+        "buttonLabelInsideCooldown": "Refresh in 28s"
+      }
+    },
+    {
+      "name": "desktop: refresh: unchanged check, then an external change",
+      "checks": [
+        {
+          "name": "an unchanged check is ONE small request and reads no structure",
+          "ok": true,
+          "detail": {
+            "sync:check": 1
+          }
+        },
+        {
+          "name": "server: zero structural queries for the unchanged check",
+          "ok": true,
+          "detail": {
+            "requests": {
+              "sync:check": 1
+            },
+            "sqlByClass": {
+              "sync:check": 0
+            },
+            "connections": 1,
+            "dataQueries": 0,
+            "structuralQueries": 0
+          }
+        },
+        {
+          "name": "after a check the button is in its cooldown again",
+          "ok": true,
+          "detail": "Refresh in 30s"
+        }
+      ],
+      "measurements": {
+        "unchanged": {
+          "browserRequests": {
+            "sync:check": 1
+          },
+          "server": {
+            "requests": {
+              "sync:check": 1
+            },
+            "sqlByClass": {
+              "sync:check": 0
+            },
+            "connections": 1,
+            "dataQueries": 0,
+            "structuralQueries": 0
+          }
+        }
+      }
+    },
+    {
+      "name": "desktop: updates available: discovered on view entry, applied only by Refresh",
+      "checks": [
+        {
+          "name": "the entry check is one small request; no list or detail was re-read",
+          "ok": true,
+          "detail": {
+            "sync:changes": 1,
+            "installations:incoming": 1,
+            "sync:check": 1
+          }
+        },
+        {
+          "name": "'Updates available' is shown",
+          "ok": true
+        },
+        {
+          "name": "the list did NOT rearrange under the reader (old name still shown, new not)",
+          "ok": true
+        },
+        {
+          "name": "Refresh is available at once (known updates are not held back by the cooldown)",
+          "ok": true
+        },
+        {
+          "name": "Refresh applies it with a bounded re-read (held lists and the changed expanded detail only; no check, no other detail)",
+          "ok": true,
+          "detail": {
+            "installations:list": 1,
+            "installations:chargers-list": 1,
+            "installations:tree": 1
+          }
+        },
+        {
+          "name": "the banner is gone",
+          "ok": true
+        },
+        {
+          "name": "the row that was open is still open (expansion survived the refresh)",
+          "ok": true
+        }
+      ],
+      "measurements": {
+        "viewEntry": {
+          "sync:changes": 1,
+          "installations:incoming": 1,
+          "sync:check": 1
+        },
+        "applied": {
+          "installations:list": 1,
+          "installations:chargers-list": 1,
+          "installations:tree": 1
+        }
+      }
+    },
+    {
+      "name": "desktop: chargers: live status after an external status change",
+      "checks": [
+        {
+          "name": "status badges render (truthful default when nothing was reported)",
+          "ok": true,
+          "detail": 80
+        }
+      ],
+      "measurements": {
+        "note": "Status reaches the page through the established poller (push is flag-gated off here); no tree/list read is involved."
+      }
+    },
+    {
+      "name": "sign-out / sign-in leak check",
+      "checks": [
+        {
+          "name": "data is on screen before sign-out",
+          "ok": true
+        },
+        {
+          "name": "found the sign-out control",
+          "ok": true
+        },
+        {
+          "name": "an unauthenticated visit to the page is sent to sign-in",
+          "ok": true,
+          "detail": "/signin"
+        },
+        {
+          "name": "no data request was made and no previous data is on the page",
+          "ok": true,
+          "detail": {}
+        },
+        {
+          "name": "the new session starts empty: it reads its own list (nothing carried over)",
+          "ok": true,
+          "detail": {
+            "installations:list": 1
+          }
+        },
+        {
+          "name": "the previous session's expansion state is gone",
+          "ok": true
+        }
+      ],
+      "measurements": {}
+    },
+    {
+      "name": "revocation: access lost mid-session",
+      "checks": [
+        {
+          "name": "the page says access was lost",
+          "ok": true
+        },
+        {
+          "name": "no stale installation data remains visible",
+          "ok": true,
+          "detail": 0
+        }
+      ],
+      "measurements": {}
+    },
+    {
+      "name": "narrow: sign in (real form post, signed cookie)",
+      "checks": [
+        {
+          "name": "landed on the workspace",
+          "ok": true
+        }
+      ],
+      "measurements": {}
+    },
+    {
+      "name": "narrow: installations: cold document load",
+      "checks": [
+        {
+          "name": "navigation shell is present with the title",
+          "ok": true
+        },
+        {
+          "name": "lists the fixture's installations (20)",
+          "ok": true,
+          "detail": 20
+        },
+        {
+          "name": "collapsed by default: no tree was requested",
+          "ok": true,
+          "detail": {
+            "installations:list": 1
+          }
+        },
+        {
+          "name": "exactly one list read, no chargers/status read for this page",
+          "ok": true,
+          "detail": {
+            "installations:list": 1
+          }
+        }
+      ],
+      "measurements": {
+        "shellMs": 20,
+        "rowsMs": 135,
+        "browserRequests": {
+          "installations:list": 1
+        },
+        "server": {
+          "requests": {
+            "installations:list": 1
+          },
+          "sqlByClass": {
+            "installations:list": 2
+          },
+          "connections": 1,
+          "dataQueries": 2,
+          "structuralQueries": 2
+        }
+      }
+    },
+    {
+      "name": "narrow: installations: first expansion is lazy and cached",
+      "checks": [
+        {
+          "name": "one detail (tree) read for the one expanded row",
+          "ok": true,
+          "detail": {
+            "installations:tree": 1
+          }
+        },
+        {
+          "name": "the other rows were not preloaded",
+          "ok": true,
+          "detail": {
+            "installations:tree": 1
+          }
+        },
+        {
+          "name": "collapse + re-expand costs no request (cached)",
+          "ok": true,
+          "detail": {}
+        }
+      ],
+      "measurements": {
+        "browserRequests": {
+          "installations:tree": 1
+        },
+        "server": {
+          "requests": {
+            "installations:tree": 1
+          },
+          "sqlByClass": {
+            "installations:tree": 3
+          },
+          "connections": 1,
+          "dataQueries": 3,
+          "structuralQueries": 3
+        }
+      }
+    },
+    {
+      "name": "narrow: chargers: first visit via the sidebar",
+      "checks": [
+        {
+          "name": "client-side navigation (no new document)",
+          "ok": true
+        },
+        {
+          "name": "charger list shows the fixture's chargers (80)",
+          "ok": true,
+          "detail": 80
+        },
+        {
+          "name": "one chargers read + one lean status read; NO full tree and NO per-installation reads",
+          "ok": true,
+          "detail": {
+            "installations:chargers-list": 1,
+            "installations:incoming": 1,
+            "sync:status": 1
+          }
+        },
+        {
+          "name": "server did not read any installation tree for this page",
+          "ok": true,
+          "detail": {
+            "installations:chargers-list": 2,
+            "installations:incoming": 3,
+            "sync:status": 1
+          }
+        }
+      ],
+      "measurements": {
+        "ms": 62,
+        "browserRequests": {
+          "installations:chargers-list": 1,
+          "installations:incoming": 1,
+          "sync:status": 1
+        },
+        "server": {
+          "requests": {
+            "installations:chargers-list": 1,
+            "installations:incoming": 1,
+            "sync:status": 1
+          },
+          "sqlByClass": {
+            "installations:chargers-list": 2,
+            "installations:incoming": 3,
+            "sync:status": 1
+          },
+          "connections": 3,
+          "dataQueries": 4,
+          "structuralQueries": 2
+        }
+      }
+    },
+    {
+      "name": "narrow: installations: warm revisit via the sidebar",
+      "checks": [
+        {
+          "name": "ZERO list/tree/chargers/status reads on a warm revisit",
+          "ok": true,
+          "detail": {}
+        },
+        {
+          "name": "the row expanded earlier is still expanded",
+          "ok": true
+        },
+        {
+          "name": "server ran zero structural queries because of the revisit",
+          "ok": true,
+          "detail": {
+            "requests": {},
+            "sqlByClass": {},
+            "connections": 0,
+            "dataQueries": 0,
+            "structuralQueries": 0
+          }
+        }
+      ],
+      "measurements": {
+        "browserRequests": {},
+        "server": {
+          "requests": {},
+          "sqlByClass": {},
+          "connections": 0,
+          "dataQueries": 0,
+          "structuralQueries": 0
+        }
+      }
+    },
+    {
+      "name": "narrow: chargers: warm revisit",
+      "checks": [
+        {
+          "name": "ZERO full-list / tree / snapshot reads on a warm revisit",
+          "ok": true,
+          "detail": {}
+        },
+        {
+          "name": "no structural database query caused by the revisit",
+          "ok": true,
+          "detail": {
+            "requests": {},
+            "sqlByClass": {},
+            "connections": 0,
+            "dataQueries": 0,
+            "structuralQueries": 0
+          }
+        }
+      ],
+      "measurements": {
+        "browserRequests": {},
+        "server": {
+          "requests": {},
+          "sqlByClass": {},
+          "connections": 0,
+          "dataQueries": 0,
+          "structuralQueries": 0
+        }
+      }
+    },
+    {
+      "name": "narrow: refresh: server-enforced cooldown, mirrored by the button",
+      "checks": [
+        {
+          "name": "inside the cooldown the button shows a countdown and cannot be pressed",
+          "ok": true,
+          "detail": "Refresh in 29s"
+        },
+        {
+          "name": "the countdown moves with no request",
+          "ok": true,
+          "detail": {
+            "label": "Refresh in 29s",
+            "label2": "Refresh in 28s"
+          }
+        }
+      ],
+      "measurements": {
+        "buttonLabelInsideCooldown": "Refresh in 29s"
+      }
+    },
+    {
+      "name": "narrow: refresh: unchanged check, then an external change",
+      "checks": [
+        {
+          "name": "an unchanged check is ONE small request and reads no structure",
+          "ok": true,
+          "detail": {
+            "sync:check": 1
+          }
+        },
+        {
+          "name": "server: zero structural queries for the unchanged check",
+          "ok": true,
+          "detail": {
+            "requests": {
+              "sync:check": 1
+            },
+            "sqlByClass": {
+              "sync:check": 0
+            },
+            "connections": 1,
+            "dataQueries": 0,
+            "structuralQueries": 0
+          }
+        },
+        {
+          "name": "after a check the button is in its cooldown again",
+          "ok": true,
+          "detail": "Refresh in 30s"
+        }
+      ],
+      "measurements": {
+        "unchanged": {
+          "browserRequests": {
+            "sync:check": 1
+          },
+          "server": {
+            "requests": {
+              "sync:check": 1
+            },
+            "sqlByClass": {
+              "sync:check": 0
+            },
+            "connections": 1,
+            "dataQueries": 0,
+            "structuralQueries": 0
+          }
+        }
+      }
+    },
+    {
+      "name": "narrow: updates available: discovered on view entry, applied only by Refresh",
+      "checks": [
+        {
+          "name": "the entry check is one small request; no list or detail was re-read",
+          "ok": true,
+          "detail": {
+            "sync:changes": 1,
+            "installations:incoming": 1,
+            "sync:check": 1
+          }
+        },
+        {
+          "name": "'Updates available' is shown",
+          "ok": true
+        },
+        {
+          "name": "the list did NOT rearrange under the reader (old name still shown, new not)",
+          "ok": true
+        },
+        {
+          "name": "Refresh is available at once (known updates are not held back by the cooldown)",
+          "ok": true
+        },
+        {
+          "name": "Refresh applies it with a bounded re-read (held lists and the changed expanded detail only; no check, no other detail)",
+          "ok": true,
+          "detail": {
+            "installations:list": 1,
+            "installations:chargers-list": 1,
+            "installations:tree": 1
+          }
+        },
+        {
+          "name": "the banner is gone",
+          "ok": true
+        },
+        {
+          "name": "the row that was open is still open (expansion survived the refresh)",
+          "ok": true
+        }
+      ],
+      "measurements": {
+        "viewEntry": {
+          "sync:changes": 1,
+          "installations:incoming": 1,
+          "sync:check": 1
+        },
+        "applied": {
+          "installations:list": 1,
+          "installations:chargers-list": 1,
+          "installations:tree": 1
+        }
+      }
+    },
+    {
+      "name": "narrow: chargers: live status after an external status change",
+      "checks": [
+        {
+          "name": "status badges render (truthful default when nothing was reported)",
+          "ok": true,
+          "detail": 80
+        }
+      ],
+      "measurements": {
+        "note": "Status reaches the page through the established poller (push is flag-gated off here); no tree/list read is involved."
+      }
+    }
+  ],
+  "failures": [],
+  "notExercised": [
+    "installation editor unsaved-edit retention (server-rendered, needs a Neon-compatible database path)"
+  ],
+  "finishedAt": "2026-11-02T00:52:11.998Z"
+}

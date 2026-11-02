@@ -2,6 +2,9 @@
 
 **Status:** reference data, not schema. Notes from observed live behavior on a Zaptec Pro fleet (Dalvegur 10–14, Iceland, 20 chargers, ~3 years in service).
 **Last verified:** 2026-04-26 against Zaptec's public REST API (`api.zaptec.com`) and `straumvakt-ocpp.straumvakt.workers.dev` (the Sprint 1.5 Straumvakt CSMS gateway).
+**Public documentation refresh:** 2026-10-31. This updates published capabilities; it is not a new live API or charger probe. See the [2026-10-31 comparison](zaptec-api-review-2026-10-31.md) for sources, onboarding implications and remaining verification.
+
+> **Current implementation guidance:** Customer onboarding must use Zaptec's third-party consent flow, not a form collecting the customer's Zaptec password. API authentication uses an approved integration service account. Respect returned token expiry and current 429/Retry-After handling. Historical fleet observations and V3 examples below are evidence, not adopted architecture or current API guarantees. This correction also applies to the old TypeScript display profile in `src/lib/reference/zaptec-info.ts`, which has not been changed by this documentation review.
 **Primary use:**
 1. Source of truth for the **Technical Read tab** in the Straumvakt admin UI, which iframes `zaptec-test/` (running on port 3100, embedded mode via `?embedded=1`) — this doc captures what that scratch app reaches and how.
 2. Reference for building the production Zaptec adapter under the V3 hardware-catalog `credential_scope = installation` model (`properties.installations` + `assets.chargers`).
@@ -9,6 +12,81 @@
 
 > [!IMPORTANT]
 > Several published Zaptec sources disagree about which numeric `StateId` carries which observation. **The authoritative list is the live `/api/constants` endpoint.** This doc reflects what that endpoint actually returns; previous guesses (e.g. voltage at 719–721) have been corrected after probing real chargers — see §10.
+
+---
+
+## 0. Current scope and October 2026 corrections
+
+**First charger path:** configure **OCPP 1.6J Cloud** manually in Zaptec Portal,
+point its CSMS URL at Straumvakt, and use the shared Straumvakt claim,
+placement, commissioning and activation workflow. No Zaptec REST or
+Integrations API credential is required. The API can later enrich inventory or
+automate vendor configuration, while Straumvakt retains its own human-approved
+ownership, electrical placement and driver grants. Zaptec's
+[OCPP comparison](https://docs.zaptec.com/docs/ocpp-within-zaptec) says Cloud
+retains its phase/load balancing but does not expose standard OCPP Smart
+Charging profiles. Do not infer those profiles from OCPP 1.6J support.
+
+The [Portal cloud configuration guide](https://docs.zaptec.com/docs/configuring-your-installation-to-an-ocpp-server)
+allows an installation URL template containing `{deviceId}`, which is replaced
+with the charger serial, and permits charger-level URL/password/default-tag
+settings where permissions allow. The installation URL overrides a charger
+URL. The Portal's `Authorization required` setting is distinct from
+Straumvakt's `installation.enforceAuthorize`: when Zaptec authorisation is off,
+Cloud OCPP can skip `Authorize` and place the configured default ID tag (or an
+empty string) in `StartTransaction`. A known default tag can exercise session
+capture and **provisional test attribution**, but it does not identify the
+person who plugged in or prove a denied driver. An installation-wide tag maps
+all such sessions to one configured identity. Use a labelled test fixture,
+and prove individual allow/deny with real credentials separately. The
+[supported Cloud commands](https://docs.zaptec.com/docs/supported-ocpp16j-cloud-commands)
+describe `FreeCharging` and `FreeChargingIdTag`.
+
+The Portal also offers an optional initial device password, a legacy OCPP
+identity toggle, and an offline-authorisation toggle. Optional in Zaptec's UI
+does not mean an unauthenticated connection is acceptable for normal
+Straumvakt service: the first claim should lead to a credential verified at
+the gateway. Zaptec's [legacy identity guide](https://docs.zaptec.com/docs/legacy-ocpp-behavior)
+says the legacy toggle can make Basic-auth use the Device ID instead of a
+charger-level custom URL identity; keep the standard behavior unless a
+specific existing configuration requires otherwise. Andri observed the
+offline-authorisation control in Portal; its effect on this installation and
+the CSMS must be verified in the pilot rather than inferred from the label.
+
+**Hierarchy and rights for the pilot:** Andri describes the Zaptec Portal
+installation as the charging installation's main breaker, each Portal circuit
+as a downstream fuse, and chargers below each circuit. Zaptec's published
+[role guide](https://docs.zaptec.com/docs/roles-and-permissions) describes
+driver/user access at installation or charger level; it does not describe a
+circuit-level user grant. Straumvakt may define circuit-scoped grants in its
+own backend, but it must enforce them there and must not treat a Portal user
+grant as equivalent. The Portal hierarchy does not independently verify the
+physical wiring or power ratings; the technician confirms those facts.
+
+The [August 2026 OCPP API announcement](https://docs.zaptec.com/page/endpoints-added)
+adds a **separate Integrations API** at `https://integrations.api.prod.zaptec.com`:
+
+| Scope | Published operations | Future use |
+| --- | --- | --- |
+| Charger | `POST /chargers/{chargerId}/onboarding`; password or encoded authorization-key settings; `PUT /chargers/{chargerId}/ocpp-settings` | Automate charger OCPP onboarding, credentials or URL after the manual path works. |
+| Installation | `PUT /installations/{installationId}/mode/ocpp`, `/mode/ocpp-cloud`, `/mode/zaptec` | Change authentication mode with installation-wide impact; require a scoped plan and operator approval. |
+
+The announcement says the same access token currently works for both APIs but
+may change with a future OAuth flow. It does not establish that Straumvakt has
+permission to use these endpoints, nor that they are safe on the existing
+installation. Zaptec's [hierarchy API](https://docs.zaptec.com/reference/api_installation_id_hierarchy_get)
+requires owner/service permission and returns only basic properties. Inventory
+is evidence to reconcile, not proof of circuit wiring or Straumvakt access
+rights. Any write into Zaptec Portal/configuration remains optional work after
+the standard onboarding path and must use the same audit and readiness gates.
+
+**Session history drift:** Zaptec now marks
+[`GET /api/chargehistory`](https://docs.zaptec.com/reference/api_chargehistory_get)
+deprecated: since 2026-08-01 it omits closed sessions older than two years,
+and the documented sunset is 2027-01-01. The published replacement is
+`GET /api/sessions/archived`. Historical examples and any production adapter
+using `/api/chargehistory` need review before a CDR backfill or reconciliation;
+this public-doc check has not tested the replacement against live credentials.
 
 ---
 
@@ -50,7 +128,7 @@ Response:
 }
 ```
 
-Bearer token valid ~24 h. There is no separate refresh endpoint we need to call inside that window; the integration just re-runs the password grant when the token approaches expiry.
+The April observation returned approximately 24 hours; this is not a fixed API guarantee. The current authentication guide illustrates `expires_in: 3600`. Cache using the actual returned expiry with a safety margin; do not hardcode 23/24 hours or assume a refresh token is always present. Current ROPC credentials are for the integration service account, not customer passwords collected by Straumvakt. Authorization-code migration is announced, not established as available by this review. See the linked October 31 comparison.
 
 ### 2.2 Quirks observed against real credentials
 
@@ -60,17 +138,17 @@ Bearer token valid ~24 h. There is no separate refresh endpoint we need to call 
    ```
    ZAPTEC_PASSWORD="Turtles#187"
    ```
-4. **Aggressive rate limit on `/oauth/token`.** Hammering the endpoint in a tight loop returns `503 Service Temporarily Unavailable` from nginx with no `Retry-After`. Cache the bearer token; do not request a fresh one per call.
+4. **Historical rate-limit observation:** the April experiment returned `503` without `Retry-After`. Current documentation specifies `429` with `Retry-After`, general access at 10 requests/s per user (burst 15), and token requests at 1/s per IP without burst. Handle that documented contract; a 503 is not proof of throttling. Cache tokens and bound retries.
 
 ### 2.3 Credential scope
 
-Per V3 architecture §5, the Zaptec adapter binds **one credential set per `properties.installations` row**. The credential covers every charger below that installation. Do not create per-charger Zaptec credentials.
+The old V3 design bound credentials per installation. That is a historical Straumvakt storage choice, not Zaptec token scope. Current third-party onboarding grants installation access to an integration UserGroup; its service account can access the resources granted to that group. Keep each CPO's approved installation binding separate from shared vendor authentication. Never infer CPO access merely because the integration account can read an installation. Do not create per-charger credentials for the vendor API.
 
 ---
 
 ## 3. REST API surface
 
-The complete public OpenAPI spec is at `https://api.zaptec.com/swagger/v1/swagger.json` (~200 KB JSON). It documents **17 paths** — list below in invocation order for a typical fleet read. All require `Authorization: Bearer <token>`.
+The April 2026 **core Web API snapshot** at `https://api.zaptec.com/swagger/v1/swagger.json` (~200 KB JSON) documented 17 paths. The list below reflects that historical fleet read and excludes the newer, separate Integrations API described in §0. These operations require `Authorization: Bearer <token>` unless noted.
 
 | Method · Path | Purpose | Notes |
 |---|---|---|
@@ -85,7 +163,7 @@ The complete public OpenAPI spec is at `https://api.zaptec.com/swagger/v1/swagge
 | `POST /api/chargers/{id}/sendCommand/{commandId}` | Charger command | See §7 |
 | `POST /api/chargers/{id}/update` | Write charger config | Destructive |
 | `GET /api/chargerFirmware/installation/{id}` | Firmware status per charger in the installation | Each entry: `{ChargerId, DeviceId, IsOnline, CurrentVersion, AvailableVersion, DeviceType, IsUpToDate}` |
-| `GET /api/chargehistory` | Paginated session history | Filter by `ChargerId` or `InstallationId`. Each entry: `{Id, ChargerId, DeviceId, DeviceName, StartDateTime, EndDateTime, Energy, ChargerFirmwareVersion, SignedSession (full OCMF), ExternalId, ExternallyEnded}` |
+| `GET /api/chargehistory` | Historical paginated session read; **deprecated** | Filter by `ChargerId` or `InstallationId`. Each entry included `{Id, ChargerId, DeviceId, DeviceName, StartDateTime, EndDateTime, Energy, ChargerFirmwareVersion, SignedSession (full OCMF), ExternalId, ExternallyEnded}`. See §0 for the 2026 retention limit and replacement. |
 | `GET, POST /api/chargehistory/installationreport` | Aggregate energy report | Heavier; not used by Technical Read |
 | `GET /api/session/{id}` | Single session detail | Already embedded in chargehistory |
 | `POST /api/session/{id}/priority` | Set load-balancing priority | |
@@ -372,10 +450,10 @@ Other Zaptec command IDs in `/api/constants` (`Commands`) exist (e.g. 261 `Reset
 |---|---|---|---|
 | 0 | Native | Zaptec cloud | Uses local AuthList synced from portal |
 | 1 | Webhooks | Custom HTTP callback | External per-tap webhook |
-| 2 | **OCPP cloud-routed** | Zaptec cloud → CSMS via OCPP 1.6J | What Dalvegur 10–14 uses today |
+| 2 | **OCPP cloud-routed** | Zaptec cloud → CSMS via OCPP 1.6J | Observed on Dalvegur 10–14 in April 2026; selected for the first controlled pilot. |
 | 3 | OCPP Native | Charger ↔ CSMS direct (bypasses Zaptec cloud) | Populates `OcppNativeUrl` (StateId 861) |
 
-In modes 2 and 3, **Zaptec cloud-based authentication methods (Zaptec App, RFID tags registered in the Portal) are bypassed for charging operations.** The CSMS owns auth.
+In modes 2 and 3, **Zaptec cloud-based authentication methods (Zaptec App, RFID tags registered in the Portal) are bypassed for charging operations.** The CSMS owns driver authorization where it is required. `IsAuthorizationRequired`/the Portal's `Authorization required` setting is a separate per-installation or charger setting; disabling it in Cloud mode can cause `StartTransaction` with a default tag instead of an `Authorize` request. The human-readable Portal option “3. OCPP 1.6J cloud” corresponds to API enum value **2**, not enum value 3 (which is box-level/native OCPP). See §0.
 
 ### 8.2 OCPP cloud URL
 
@@ -387,7 +465,7 @@ wss://straumvakt-ocpp.straumvakt.workers.dev/ocpp/ZAP257533
 
 Previously (before Sprint 1.5) the same field returned `wss://beta.connect.longship.io/<tenant>/ZAP257533` — Longship was the upstream OCPP relay for Zaptec's Pro fleet. Switching `OcppCloudUrl` to the Straumvakt worker is what lets Sprint 1.5's Technical Read tab observe a live OCPP session against our own CSMS.
 
-The path tail (`ZAP257533`) is the **OCPP charge-box identifier** (one per installation; chargers within the installation share it). Stored separately as `installation.OcppCloudUrlVersion` (currently `1`).
+The path tail `ZAP257533` was the observed **OCPP charge-box identifier** for that April configuration. Do not generalise it to a one-identifier-per-installation rule: Zaptec's current [Cloud configuration guide](https://docs.zaptec.com/docs/configuring-your-installation-to-an-ocpp-server) supports an installation URL template with `{deviceId}` replaced by each charger's serial, and charger-level URL overrides when the installation URL is not set. Confirm the actual identifier emitted by each test charger before matching a staged knock or issuing credentials.
 
 ### 8.3 Local Auth List (OCPP 1.6J Appendix B keys)
 
@@ -1149,14 +1227,15 @@ receiver.on("message", (m) => {
 Before turning a Zaptec adapter loose against a real fleet:
 
 ### 16.1 Authentication
-- [ ] Bearer token cached in-process for ≥ 23 h; refresh proactively at the 23 h mark.
-- [ ] On `401 Unauthorized`, re-run the password grant exactly once before bubbling the error.
-- [ ] On `503 Service Temporarily Unavailable`, exponential backoff starting at 5 s, max 5 minutes, max 6 attempts.
-- [ ] Log a structured event when `503` happens (it indicates rate-limiting upstream, not a hard error).
+- [ ] Use the approved integration service account after third-party consent; never collect customer Zaptec passwords.
+- [ ] Cache bearer tokens according to returned `expires_in`, with an expiry margin and coalesced renewal.
+- [ ] On `401`, permit at most one controlled service-account token renewal; avoid repeating non-idempotent commands without reconciliation.
+- [ ] Handle `429` and respect `Retry-After`, with bounded backoff/jitter. Coordinate limits across installations sharing the same account and token-endpoint egress IP.
+- [ ] Handle `503` as a transient upstream error with bounded retries where safe; do not label it definitively as rate limiting.
 
 ### 16.2 Pagination
 - [ ] Always set explicit `PageSize` (don't rely on server default).
-- [ ] Drive iteration by `Pages`; do not assume `TotalCount` is populated.
+- [ ] Follow each endpoint's pagination contract. Historical list reads use `Pages`; the archived-session migration specifies cursor pagination and a required time window/resource filter. Do not reuse the page-count helper for that migration.
 - [ ] When page count > 100, use `Exclude` rather than re-fetching to deduplicate.
 
 ### 16.3 Error envelope

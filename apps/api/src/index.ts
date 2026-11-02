@@ -9,6 +9,7 @@
 
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { ALLOWED_ORIGINS, requireTrustedOrigin } from "./lib/origin-guard";
 import { adminAuth } from "./routes/admin/auth";
 import { adminOrgs } from "./routes/admin/orgs";
 import { adminProperties } from "./routes/admin/properties";
@@ -96,16 +97,7 @@ const app = new Hono<{ Bindings: Env }>();
 // fetches; that mandates Access-Control-Allow-Origin to echo the
 // request origin (not "*"). The list below is the operator's known
 // surfaces; new origins land here.
-const ALLOWED_ORIGINS = [
-  "http://localhost:3000",
-  "https://hlada-staging.straumvakt.workers.dev",
-  "https://hlada.straumvakt.workers.dev",
-  // Brand domain (Option B) — the UI runs on straumvakt.org and calls the
-  // API at api.straumvakt.org (same-site, credentialed).
-  "https://straumvakt.org",
-  "https://www.straumvakt.org",
-];
-
+// The list lives in lib/origin-guard.ts so the CSRF guard below shares it.
 app.use(
   "/api/*",
   cors({
@@ -118,6 +110,10 @@ app.use(
     allowHeaders: ["Content-Type", "Authorization"],
   }),
 );
+
+// CSRF: every cookie-authenticated route lives under /api/admin. Runs before
+// auth (login and logout included) and after CORS, which answers preflights.
+app.use("/api/admin/*", requireTrustedOrigin);
 
 app.get("/health", (c) => c.json({ ok: true, service: "hlada-api" }));
 

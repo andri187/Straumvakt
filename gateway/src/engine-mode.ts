@@ -29,6 +29,7 @@ import { parseFrame, serializeCall, serializeCallResult } from "./ocpp-frame";
 import { Outbox, type OutboxEntry } from "./outbox";
 import { StopCommandStore, validateStopInput, type StopCommandInput, type StopCommandOutcome, type StopCommandResult, type StopRecord, type StopVia } from "./stop-command";
 import { isExercised, validatePayload } from "@engine/protocol";
+import { abandonActivation, ACTIVATION_KEY, completeActivation, isOpenActivation, isProbeReply, recordProbeReply, seedActivation, stepActivation, type BootActivation, type ProbeReply } from "./boot-activation";
 
 export type { StopCommandOutcome, StopCommandResult, StopCommandInput } from "./stop-command";
 
@@ -67,7 +68,8 @@ export function dueAt(kind: "meter" | "status", nowMs: number, deviceId: string)
 }
 export const ENGINE_CTX_HEADER = "x-straumvakt-engine-ctx";
 
-type Env = EngineEnv & { OCPP_HEARTBEAT_INTERVAL_SECONDS?: string; OCPP_REALTIME_ENABLED?: string };
+/** `OCPP_ACTIVATION_PROBE=false` switches the missing-boot probe off (rollback switch); any other value, or none, leaves it on. */
+type Env = EngineEnv & { OCPP_HEARTBEAT_INTERVAL_SECONDS?: string; OCPP_REALTIME_ENABLED?: string; OCPP_ACTIVATION_PROBE?: string };
 type SendableSocket = WebSocket & { serializeAttachment(v: unknown): void; deserializeAttachment(): unknown };
 
 export function readTag(ws: WebSocket): SocketTag | null {
@@ -135,6 +137,15 @@ export class EngineMode {
     // higher generation with no socket (harmless), never a socket with no owner.
     await this.state.storage.put(OWNER_KEY, owner);
     this.ownerCache = owner;
+    // A fresh connection starts its own activation attempt (unless this placement already booted): persisted before the socket is
+    // accepted, with one alarm for the moment a silent charger would be asked for its BootNotification.
+    if (this.probeEnabled) {
+      const seeded = seedActivation((await this.state.storage.get<BootActivation>(ACTIVATION_KEY)) ?? null, ctx.placementId, owner.generation, this.now());
+      if (seeded) {
+        await this.state.storage.put(ACTIVATION_KEY, seeded);
+        await this.armAlarmAt(seeded.probeAt);
+      }
+    }
     for (const old of this.state.getWebSockets()) {
       try {
         old.close(SUPERSEDED_CLOSE_CODE, "superseded");
@@ -172,10 +183,12 @@ export class EngineMode {
       return;
     }
     const frame = parsed.frame;
-    // CallResult / CallError answer the RemoteStopTransaction we sent (the only command in engine mode).
-    // `Accepted` means the charger will TRY to stop; it is never treated as a stopped session.
+    // CallResult / CallError answer a command we sent: the activation TriggerMessage (matched first, by its own persisted
+    // id) or a RemoteStopTransaction. `Accepted` means the charger will TRY; it is never a stopped session or an accepted boot.
     if (frame.kind === "call_result" || frame.kind === "call_error") {
       await this.recordActivity("CommandReply");
+      const status = frame.kind === "call_result" ? (frame.payload as { status?: unknown })?.status : undefined;
+      if (await this.activationReply(tag, frame.uniqueId, frame.kind === "call_error" ? "error" : status === "Accepted" ? "accepted" : "rejected")) return;
       const outcome: StopCommandOutcome = frame.kind === "call_result" && (frame.payload as { status?: unknown })?.status === "Accepted" ? "accepted" : "rejected";
       await this.commandReply(tag, frame.uniqueId, outcome);
       return;
@@ -238,6 +251,11 @@ export class EngineMode {
     const out = await callEngine(this.env, { ctx, messageId: frame.uniqueId, action: frame.action, payload: frame.payload, receivedAt: new Date(nowMs).toISOString() });
     const answer: CallAnswer = out.kind === "answer" ? out.answer : INTERNAL_ERROR;
     if (frame.action === "BootNotification" && answer.kind === "result" && answer.payload.status === "Accepted" && standing(await this.owner(), tag) === "current") {
+      // The engine committed this boot: that, and only that, completes (or late-clears) the activation attempt. Durable before the reply.
+      if (this.probeEnabled) {
+        const done = completeActivation((await this.state.storage.get<BootActivation>(ACTIVATION_KEY)) ?? null, ctx.placementId, this.now());
+        if (done) await this.state.storage.put(ACTIVATION_KEY, done);
+      }
       const interval = answer.payload.interval;
       if (typeof interval === "number" && Number.isInteger(interval) && interval >= 60 && interval <= 86400) {
         const ops = await this.state.storage.get<OpsState>(OPS_KEY);
@@ -249,6 +267,46 @@ export class EngineMode {
       }
     }
     ws.send(answer.kind === "result" ? serializeCallResult(frame.uniqueId, answer.payload) : errFrame(frame.uniqueId, answer.code, answer.description));
+  }
+
+  private get probeEnabled(): boolean {
+    return this.env.OCPP_ACTIVATION_PROBE !== "false";
+  }
+
+  /**
+   * A reply to the activation TriggerMessage. Returns true when `uniqueId` is that probe's id (consumed, whatever its state, so it
+   * is never mistaken for a stop reply); the reply is only recorded for diagnosis and never completes the activation.
+   */
+  private async activationReply(tag: SocketTag, uniqueId: string, reply: ProbeReply): Promise<boolean> {
+    if (!this.probeEnabled) return false;
+    const a = (await this.state.storage.get<BootActivation>(ACTIVATION_KEY)) ?? null;
+    if (!isProbeReply(a, uniqueId)) return false;
+    const next = recordProbeReply(a, tag.generation, this.now(), reply);
+    if (next) await this.state.storage.put(ACTIVATION_KEY, next);
+    return true;
+  }
+
+  /**
+   * Alarm step of the activation attempt: after the grace period send the ONE persisted TriggerMessage on the attempt's own
+   * current socket, and at the deadline give up honestly (incomplete). Sharing the single alarm: it only ever moves earlier.
+   */
+  private async activationTick(): Promise<void> {
+    if (!this.probeEnabled) return;
+    const a = (await this.state.storage.get<BootActivation>(ACTIVATION_KEY)) ?? null;
+    if (!isOpenActivation(a)) return;
+    const owner = await this.owner();
+    const socket = owner ? this.state.getWebSockets().find((s) => standing(owner, readTag(s)) === "current") : undefined;
+    const step = stepActivation(a, this.now(), owner ? { generation: owner.generation, placementId: owner.context.placementId } : null, !!socket, () => crypto.randomUUID());
+    if (step.next) await this.state.storage.put(ACTIVATION_KEY, step.next); // the probe id is durable BEFORE the frame goes out
+    if (step.send && socket && step.next?.probe) {
+      try {
+        socket.send(serializeCall(step.next.probe.uniqueId, "TriggerMessage", { requestedMessage: "BootNotification" }));
+      } catch {
+        await this.state.storage.put(ACTIVATION_KEY, { ...step.next, phase: "incomplete", reason: "send_failed" } satisfies BootActivation);
+        return;
+      }
+    }
+    if (step.rearmAt !== null) await this.armAlarmAt(step.rearmAt);
   }
 
   private livenessDeadline(ops: OpsState): number {
@@ -413,6 +471,10 @@ export class EngineMode {
     await this.markOffline();
     // Commands sent on this generation can never be answered now. Uncertain (they may have arrived), so "timeout".
     for (const r of await this.stops.abandonGeneration(tag.generation, this.now())) this.settle(r.attemptId, { outcome: "timeout", reason: "disconnected" });
+    if (this.probeEnabled) {
+      const gone = abandonActivation((await this.state.storage.get<BootActivation>(ACTIVATION_KEY)) ?? null, tag.generation);
+      if (gone) await this.state.storage.put(ACTIVATION_KEY, gone);
+    }
     await this.state.storage.put("lastClosedAt", this.now());
     return true;
   }
@@ -427,6 +489,7 @@ export class EngineMode {
     const ops = await this.state.storage.get<OpsState>(OPS_KEY);
     if (ops?.liveness.online && this.livenessDeadline(ops) <= this.now()) await this.markOffline();
     for (const r of await this.stops.expireDue(this.now())) this.settle(r.attemptId, { outcome: "timeout", reason: "deadline" });
+    await this.activationTick();
     await this.flushLive();
     await this.drainOutbox();
     const next = await this.stops.nextExpiry();

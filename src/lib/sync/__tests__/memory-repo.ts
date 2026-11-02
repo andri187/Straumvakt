@@ -23,6 +23,7 @@ export function memorySync() {
     async installationView(id) { hit("installationView"); const i = installs.get(id); return i ? view(i) : null; },
     async circuitsByIds(id, ids) { hit("circuitsByIds"); return ids.map((x) => installs.get(id)!.circuits.get(x)).filter((x): x is CircuitView => !!x); },
     async chargersByIds(id, ids) { hit("chargersByIds"); return ids.map((x) => installs.get(id)!.chargers.get(x)).filter((x): x is ChargerView => !!x); },
+    async operationalMany(ids) { hit("operationalMany"); return new Map(ids.map((id) => [id, [...(installs.get(id)?.devices.values() ?? [])]])); },
     async operationalSince(id, after, limit) { hit("operationalSince"); return [...(installs.get(id)?.devices.values() ?? [])].filter((d) => d.seq > after).sort((a, b) => a.seq - b.seq).slice(0, limit); },
   };
 

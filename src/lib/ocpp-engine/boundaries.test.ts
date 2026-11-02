@@ -95,8 +95,8 @@ describe("migrations 0003, 0004 and 0005", () => {
   const journal = JSON.parse(readRaw("apps/api/drizzle/meta/_journal.json")) as { entries: { idx: number; tag: string }[] };
 
   it("are registered in order with snapshots", () => {
-    expect(journal.entries.map((e) => e.tag).slice(2)).toEqual(["0002_installation_management", "0003_ocpp_engine_transactions", "0004_sync_operational_state", "0005_ocpp_costing_handoff", "0006_charger_lifecycle", "0007_terms_snapshot", "0008_installation_drafts_and_cpo_identity", "0009_installation_main_grid_type", "0010_lifecycle_recovery_cursor"]);
-    for (const n of ["0003", "0004", "0005", "0006", "0007", "0008", "0009", "0010"]) expect(fs.existsSync(path.join(ROOT, `apps/api/drizzle/meta/${n}_snapshot.json`))).toBe(true);
+    expect(journal.entries.map((e) => e.tag).slice(2)).toEqual(["0002_installation_management", "0003_ocpp_engine_transactions", "0004_sync_operational_state", "0005_ocpp_costing_handoff", "0006_charger_lifecycle", "0007_terms_snapshot", "0008_installation_drafts_and_cpo_identity", "0009_installation_main_grid_type", "0010_lifecycle_recovery_cursor", "0011_driver_open_session_index"]);
+    for (const n of ["0003", "0004", "0005", "0006", "0007", "0008", "0009", "0010", "0011"]) expect(fs.existsSync(path.join(ROOT, `apps/api/drizzle/meta/${n}_snapshot.json`))).toBe(true);
   });
 
   it("are additive: no drops, no data writes, no destructive statement", () => {

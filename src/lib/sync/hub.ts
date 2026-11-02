@@ -26,6 +26,7 @@
 // `VersionHubCore`, so the logic below is the logic that runs there. Creating the
 // binding is a deployment step and is not done here.
 
+import { MAX_GATE_DATA_BYTES, MAX_GATE_KEYS, decide, type GateDecision } from "./gate";
 import type { AccessPort, SyncRepo } from "./service";
 
 export type Counter = { rev: number; sv: number };
@@ -38,6 +39,12 @@ export interface HubClient {
   prime(ids: string[], versions: Record<string, Counter>): Promise<void>;
   bump(installationId: string, patch: { rev?: number; sv?: number }): Promise<void>;
   invalidate(): Promise<void>;
+  /** Fixed-window admission shared by every isolate (see gate.ts). Optional: a hub without it simply cannot coordinate. */
+  gate?(key: string, windowMs: number, limit: number): Promise<Omit<GateDecision, "source">>;
+  gateRecord?(key: string, data: unknown): Promise<void>;
+  /** One isolate at a time repairs a lost or expired reading; the rest wait for its result instead of each querying Neon. */
+  claimRepair?(leaseMs: number): Promise<boolean>;
+  releaseRepair?(): Promise<void>;
 }
 
 export interface HubStorage {
@@ -47,6 +54,9 @@ export interface HubStorage {
 }
 
 const KEY = "hub";
+const GATE_PREFIX = "gate:";
+const GATE_INDEX = "gate-index";
+const REPAIR_KEY = "repair-until";
 export const MAX_HUB_INSTALLATIONS = 51;
 
 export class VersionHubCore implements HubClient {
@@ -55,13 +65,28 @@ export class VersionHubCore implements HubClient {
     private readonly now: () => number = Date.now,
   ) {}
 
+  /**
+   * Every read-modify-write below runs one at a time. A Durable Object's input gate already gives that while it only awaits
+   * its own storage; this makes the guarantee part of the logic, so the admission counts and the repair lease stay exact
+   * under any storage implementation (the unit-test fake interleaves; so would an await on something else added later).
+   */
+  private tail: Promise<unknown> = Promise.resolve();
+  private serial<T>(fn: () => Promise<T>): Promise<T> {
+    const run = this.tail.then(fn, fn);
+    this.tail = run.catch(() => undefined);
+    return run;
+  }
+
   async read(): Promise<HubReading | null> {
     const s = await this.storage.get<HubState>(KEY);
     return s ? { ids: s.ids, versions: s.versions, ageMs: this.now() - s.loadedAt } : null;
   }
 
   /** Merge a database reading in. Monotonic per counter, so a racing bump is never lost. */
-  async prime(ids: string[], versions: Record<string, Counter>): Promise<void> {
+  prime(ids: string[], versions: Record<string, Counter>): Promise<void> {
+    return this.serial(() => this.primeNow(ids, versions));
+  }
+  private async primeNow(ids: string[], versions: Record<string, Counter>): Promise<void> {
     if (ids.length > MAX_HUB_INSTALLATIONS) return; // an over-large scope is refused upstream; do not store it
     const cur = await this.storage.get<HubState>(KEY);
     const merged: Record<string, Counter> = {};
@@ -73,7 +98,10 @@ export class VersionHubCore implements HubClient {
     await this.storage.put(KEY, { ids: [...ids].sort(), versions: merged, loadedAt: this.now() } satisfies HubState);
   }
 
-  async bump(installationId: string, patch: { rev?: number; sv?: number }): Promise<void> {
+  bump(installationId: string, patch: { rev?: number; sv?: number }): Promise<void> {
+    return this.serial(() => this.bumpNow(installationId, patch));
+  }
+  private async bumpNow(installationId: string, patch: { rev?: number; sv?: number }): Promise<void> {
     const cur = await this.storage.get<HubState>(KEY);
     if (!cur) return; // nothing primed yet: the next read goes to the database, which is already current
     const c = cur.versions[installationId] ?? { rev: 0, sv: 0 };
@@ -85,6 +113,68 @@ export class VersionHubCore implements HubClient {
     }
     if (next.rev === c.rev && next.sv === c.sv) return; // duplicate: no write
     await this.storage.put(KEY, { ...cur, versions: { ...cur.versions, [installationId]: next } } satisfies HubState);
+    if (next.rev > c.rev) await this.foldCommit(installationId, next.rev);
+  }
+
+  // ── shared admission (gate.ts) ────────────────────────────────────────────
+  private async gateIndex(): Promise<string[]> {
+    return (await this.storage.get<string[]>(GATE_INDEX)) ?? [];
+  }
+
+  gate(key: string, windowMs: number, limit: number): Promise<Omit<GateDecision, "source">> {
+    return this.serial(() => this.gateNow(key, windowMs, limit));
+  }
+  private async gateNow(key: string, windowMs: number, limit: number): Promise<Omit<GateDecision, "source">> {
+    if (typeof key !== "string" || key.length < 1 || key.length > 200 || !(windowMs >= 1000 && windowMs <= 3_600_000) || !Number.isInteger(limit) || limit < 1 || limit > 1000) {
+      return { allow: false, retryAfterMs: 0, ageMs: 0 };
+    }
+    const k = GATE_PREFIX + key;
+    const { entry, decision } = decide(await this.storage.get(k), this.now(), windowMs, limit);
+    await this.storage.put(k, entry);
+    const index = await this.gateIndex();
+    const at = index.indexOf(key);
+    if (at === -1 || at !== index.length - 1) {
+      if (at >= 0) index.splice(at, 1);
+      index.push(key);
+      while (index.length > MAX_GATE_KEYS) await this.storage.delete(GATE_PREFIX + index.shift()!);
+      await this.storage.put(GATE_INDEX, index);
+    }
+    return decision;
+  }
+
+  gateRecord(key: string, data: unknown): Promise<void> {
+    return this.serial(() => this.gateRecordNow(key, data));
+  }
+  private async gateRecordNow(key: string, data: unknown): Promise<void> {
+    const k = GATE_PREFIX + key;
+    const e = await this.storage.get<{ w: number; n: number; data?: unknown }>(k);
+    if (e && JSON.stringify(data).length <= MAX_GATE_DATA_BYTES) await this.storage.put(k, { ...e, data });
+  }
+
+  /** A structure commit raises every remembered check answer at once, so a cooldown answer served to any isolate cannot hide it. */
+  private async foldCommit(installationId: string, rev: number): Promise<void> {
+    for (const key of await this.gateIndex()) {
+      if (!key.startsWith("check|")) continue;
+      const e = await this.storage.get<{ w: number; n: number; data?: { at: number; revisions: Record<string, number> } }>(GATE_PREFIX + key);
+      if (!e?.data?.revisions || (e.data.revisions[installationId] ?? 0) >= rev) continue;
+      await this.storage.put(GATE_PREFIX + key, { ...e, data: { ...e.data, revisions: { ...e.data.revisions, [installationId]: rev } } });
+    }
+  }
+
+  // ── repair lease ──────────────────────────────────────────────────────────
+  claimRepair(leaseMs: number): Promise<boolean> {
+    return this.serial(() => this.claimRepairNow(leaseMs));
+  }
+  private async claimRepairNow(leaseMs: number): Promise<boolean> {
+    const now = this.now();
+    const until = await this.storage.get<number>(REPAIR_KEY);
+    if (until !== undefined && until > now) return false;
+    await this.storage.put(REPAIR_KEY, now + Math.min(Math.max(leaseMs, 1000), 30_000));
+    return true;
+  }
+
+  async releaseRepair(): Promise<void> {
+    await this.storage.delete(REPAIR_KEY);
   }
 
   async invalidate(): Promise<void> {
@@ -107,19 +197,40 @@ export function hubBackedAccess<Actor>(inner: AccessPort<Actor>, hub: HubClient,
 }
 
 /** Repo decorator: answer `versions` from the hub when every requested id is fresh; otherwise the database, then re-prime. */
-export function hubBackedRepo(inner: SyncRepo, hub: HubClient, maxAgeMs = HUB_MAX_AGE_MS): SyncRepo {
+export const REPAIR_LEASE_MS = 10_000;
+export const REPAIR_WAIT_MS = 150;
+export const REPAIR_WAIT_TRIES = 4;
+
+export function hubBackedRepo(inner: SyncRepo, hub: HubClient, maxAgeMs = HUB_MAX_AGE_MS, sleep: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms))): SyncRepo {
+  const fromHub = (r: HubReading, ids: string[]) => new Map(ids.map((id) => [id, { revision: r.versions[id]!.rev, statusVersion: r.versions[id]!.sv }]));
+  const usable = (r: HubReading | null, ids: string[]): r is HubReading => !!r && r.ageMs < maxAgeMs && ids.every((id) => r.versions[id]);
   return {
     ...inner,
     async versions(ids) {
       const r = await hub.read().catch(() => null);
-      if (r && r.ageMs < maxAgeMs && ids.every((id) => r.versions[id])) {
-        return new Map(ids.map((id) => [id, { revision: r.versions[id]!.rev, statusVersion: r.versions[id]!.sv }]));
+      if (usable(r, ids)) return fromHub(r, ids);
+      // Lost or expired reading. ONE isolate repairs it from the database; the others wait a bounded time for that result,
+      // so K isolates cost one Neon read, not K. A hub that cannot grant the lease (or has no such method) changes nothing:
+      // the caller repairs for itself, exactly as before.
+      // Promise.resolve().then(): a stub whose method is missing or throws synchronously is "no lease service", not a failure.
+      const lease = hub.claimRepair ? await Promise.resolve().then(() => hub.claimRepair!(REPAIR_LEASE_MS)).catch(() => true) : true;
+      if (!lease) {
+        for (let i = 0; i < REPAIR_WAIT_TRIES; i++) {
+          await sleep(REPAIR_WAIT_MS);
+          const again = await hub.read().catch(() => null);
+          if (usable(again, ids)) return fromHub(again, ids);
+        }
+        // The repairing isolate did not finish in time (crashed, slow): read for ourselves rather than block indefinitely.
       }
-      const fresh = await inner.versions(ids);
-      const rec: Record<string, Counter> = {};
-      for (const [id, v] of fresh) rec[id] = { rev: v.revision, sv: v.statusVersion };
-      await hub.prime(ids, rec).catch(() => undefined); // best effort: failing to prime only costs a later database read
-      return fresh;
+      try {
+        const fresh = await inner.versions(ids);
+        const rec: Record<string, Counter> = {};
+        for (const [id, v] of fresh) rec[id] = { rev: v.revision, sv: v.statusVersion };
+        await hub.prime(ids, rec).catch(() => undefined); // best effort: failing to prime only costs a later database read
+        return fresh;
+      } finally {
+        if (lease && hub.releaseRepair) await Promise.resolve().then(() => hub.releaseRepair!()).catch(() => undefined);
+      }
     },
   };
 }

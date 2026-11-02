@@ -99,6 +99,10 @@ apps/api/prisma/generated/
 # Claude Code local config
 .claude/
 
+# Local-only handoffs between Codex, Claude Desktop (Opus) and VS Code (Sonnet).
+# Decisions and substantive work records belong in tracked project docs.
+.agent-mail/
+
 # Local Google Maps key for the DSO lookup POC. The browser-visible key must
 # be restricted by HTTP referrer and never committed. Match at any depth so
 # both the app copy and a standalone deployment bundle remain protected.
@@ -106,3 +110,13 @@ dso-lookup-config.js
 
 # Local repository-health preview. This is not a product route or release gate.
 src/app/(app)/admin/work/page.tsx
+
+# Local historical Documents consolidation, including private backups/keys.
+# Never stage, publish, or import into the application runtime.
+/archive/local-documents-2026-10-30/
+
+# Scratch space for dry runs, release bundles, preview projects and probes.
+# Regenerable build output; it is not a record. Evidence a handoff relies on
+# must be promoted into the matching docs/agent-runs/<date>/ folder instead,
+# because anything left here is untracked and has no backup.
+/.tmp/

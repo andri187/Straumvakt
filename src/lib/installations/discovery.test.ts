@@ -11,6 +11,7 @@ import { handleInstallations, type ApiDeps, type Repo } from "./api";
 import { bootCaptureFor, incomingChargers, MAX_PRESENCE_CALLS, MAX_PRESENCE_IDS, MAX_PROMOTE_ATTEMPTS, PROMOTE_RETRY_MIN_AGE_MS, signalAttached, type PresencePort, type PromotionPort } from "./discovery";
 import { MAX_PROMOTE_PER_CALL, pendingGatewayFrom } from "./pending-gateway";
 import { INCOMING_WINDOW_MS } from "./incoming-window";
+import { ACTIVATION_WAIT_MS } from "@/lib/ocpp-engine/pending";
 import { SaveInstallationInput } from "./model";
 import { saveInstallation } from "./service";
 
@@ -610,6 +611,33 @@ describe("activation after a save is durable, visible and retried without pollin
     expect(await rowFor(store, "CP-1", "2026-10-31T12:30:00Z")).toMatchObject({ state: "recovery" });
     store.bootAt.set(`${ORG}/cp-1`, new Date(T0.getTime() + 60_000));
     expect(await rowFor(store, "CP-1", "2026-10-31T12:30:00Z")).toBeUndefined();
+  });
+  it("a delivered signal with no accepted boot becomes 'incomplete' after the wait, from stored timestamps only, and a late boot clears it", async () => {
+    const store = world();
+    store.seedDiscovery(`${ORG}/CP-1`);
+    await saveAt(store);
+    const { p, calls } = portWith(() => ({ "CP-1": "reconnect_requested" }));
+    const later = new Date(T0.getTime() + PROMOTE_RETRY_MIN_AGE_MS).toISOString();
+    expect((await rowFor(store, "CP-1", later, p))!.activation).toBe("waiting"); // delivered by the retry
+    const justBefore = new Date(T0.getTime() + ACTIVATION_WAIT_MS - 1).toISOString();
+    expect((await rowFor(store, "CP-1", justBefore))!.activation).toBe("waiting");
+    const atLimit = new Date(T0.getTime() + ACTIVATION_WAIT_MS).toISOString();
+    const row = (await rowFor(store, "CP-1", atLimit))!;
+    expect(row).toMatchObject({ state: "recovery", activation: "incomplete" });
+    expect(row.note).toMatch(/no accepted BootNotification/);
+    expect(row.note).toMatch(/does not show why/);
+    expect(row.note).not.toMatch(/is online|is connected|credential|password/i);
+    expect(calls).toHaveLength(1); // reading it again resends nothing and writes nothing
+    expect(store.state.discoveries.get(`${ORG}/CP-1`)?.promote).toMatchObject({ delivered: true, attempts: 1 });
+    store.bootAt.set(`${ORG}/cp-1`, new Date(T0.getTime() + ACTIVATION_WAIT_MS + 60_000));
+    expect(await rowFor(store, "CP-1", new Date(T0.getTime() + ACTIVATION_WAIT_MS + 120_000).toISOString())).toBeUndefined();
+  });
+  it("an undelivered or failed signal keeps its own state however old it is (only a DELIVERED one times out)", async () => {
+    const store = world();
+    store.seedDiscovery(`${ORG}/CP-1`);
+    await saveAt(store);
+    const old = new Date(T0.getTime() + 3 * ACTIVATION_WAIT_MS).toISOString();
+    expect((await rowFor(store, "CP-1", old))!.activation).toBe("undelivered");
   });
   it("saved is not online: the row never claims the charger is connected", async () => {
     const store = world();

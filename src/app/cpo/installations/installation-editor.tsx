@@ -23,6 +23,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { structuralStore } from "@/lib/sync/structural-singleton";
 import type { Route } from "next";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { chargerAddress, cpoAddress } from "@/lib/installations/address";
@@ -470,6 +471,7 @@ export function InstallationEditor({ initial, directory, initialDraft = null, op
         keyRef.current = null;
         setMessage({ kind: "ok", text: next.unchanged ? "Nothing had changed." : next.replayed ? "Already saved." : `Saved as revision ${next.installation.revision}.` });
         if (!view) window.history.replaceState(null, "", `${LIST_HREF}?id=${next.installation.id}`);
+        structuralStore().localMutation(next.installation.id); // the shared overview/detail caches drop this installation now, not after a cooldown
         router.refresh(); // Own writes bypass the short navigation cache immediately.
       } else if (res.status === 409 && body.error === "stale_revision") {
         keyRef.current = null;

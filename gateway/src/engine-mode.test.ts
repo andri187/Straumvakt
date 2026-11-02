@@ -91,7 +91,10 @@ const negotiate = (offer: string | null) => (offer && !/ocpp1\.6/i.test(offer) ?
 let engineCalls: { body: { action: string; payload: unknown } }[];
 let engineMode: "ok" | "down" | "reject";
 let batchCalls = 0;
+// The missing-boot probe has its own suite below; every other suite runs with it switched off so its exact alarm and
+// write expectations do not depend on it.
 const env = {
+  OCPP_ACTIVATION_PROBE: "false",
   ENGINE: {
     callBatchV1: async (bodies: { messageId: string; action: string; payload: unknown }[]) => {
       batchCalls++;
@@ -578,6 +581,293 @@ describe("engine mode: RemoteStopTransaction command", () => {
   });
 });
 
+describe("engine mode: a registered connection that never sends a BootNotification", () => {
+  const BOOT = { chargePointVendor: "Zaptec", chargePointModel: "Pro" };
+  const bootEnv = {
+    ...env,
+    OCPP_ACTIVATION_PROBE: "true",
+    ENGINE: {
+      ...env.ENGINE,
+      call: async (body: { action: string; payload: unknown }) => {
+        engineCalls.push({ body });
+        const payload = body.action === "BootNotification" ? { status: "Accepted", currentTime: new Date(clock).toISOString(), interval: 300 } : {};
+        return { kind: "answer" as const, answer: { kind: "result" as const, payload } };
+      },
+    },
+  } as unknown as typeof env;
+  const pm = (s = state) => new EngineMode(s as unknown as DurableObjectState, bootEnv, negotiate, () => clock);
+  const marker = () => state.storage.get<Record<string, unknown> & { probe?: { uniqueId: string; reply?: string } }>("engine:activation");
+  const calls = (s: FakeSocket) => s.sent.map((x) => JSON.parse(x)).filter((f) => f[0] === 2);
+  const T0 = 1_000_000;
+  const PROBE_AT = T0 + 10_000;
+  const DEADLINE = T0 + 60_000;
+
+  it("the probe switch is a real rollback: with it off nothing is recorded, armed or sent", async () => {
+    const m = mode(); // default test env: switched off
+    const a = await connect(m);
+    clock = PROBE_AT;
+    await m.onAlarm();
+    expect(await marker()).toBeUndefined();
+    expect(calls(a.sock)).toEqual([]);
+  });
+
+  it("a silent charger gets exactly ONE TriggerMessage(BootNotification) on the same socket, after the grace period, persisted first", async () => {
+    const m = pm();
+    const a = await connect(m);
+    expect(await marker()).toMatchObject({ phase: "waiting", placementId: "p1", generation: 1, probeAt: PROBE_AT, deadline: DEADLINE });
+    expect(state.storage.alarm).toBe(PROBE_AT); // the grace period is the earliest wake-up; no polling
+    clock = PROBE_AT - 1;
+    await m.onAlarm();
+    expect(calls(a.sock)).toEqual([]); // too early
+    let atSend: unknown = null;
+    const realSend = a.sock.send.bind(a.sock);
+    a.sock.send = (d: string) => { atSend = state.storage.m.get("engine:activation"); realSend(d); }; // snapshot at the instant of the send
+    clock = PROBE_AT;
+    await m.onAlarm();
+    const sent = calls(a.sock);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]![2]).toBe("TriggerMessage");
+    expect(sent[0]![3]).toEqual({ requestedMessage: "BootNotification" });
+    const stored = await marker();
+    expect(stored).toMatchObject({ phase: "probing", probe: { uniqueId: sent[0]![1] } });
+    expect(atSend).toMatchObject({ phase: "probing", probe: { uniqueId: sent[0]![1] } }); // the intent was already durable when the frame went out
+    expect(state.storage.alarm).toBe(DEADLINE);
+    await m.onAlarm(); // a repeated tick or a recreated instance never sends it again
+    await pm().onAlarm();
+    expect(calls(a.sock)).toHaveLength(1);
+    expect(engineCalls).toHaveLength(0); // no engine/database call for the probe itself
+  });
+
+  it("a trigger reply, even Accepted, is only recorded: it is not an accepted boot and not a stop reply", async () => {
+    const m = pm();
+    const a = await connect(m);
+    clock = PROBE_AT;
+    await m.onAlarm();
+    const id = calls(a.sock)[0]![1] as string;
+    await m.message(a.ws, a.tag, JSON.stringify([3, id, { status: "Accepted" }]));
+    expect(await marker()).toMatchObject({ phase: "probing", probe: { uniqueId: id, reply: "accepted" } });
+    expect(engineCalls).toHaveLength(0);
+    await m.message(a.ws, a.tag, JSON.stringify([3, id, { status: "Rejected" }])); // duplicate: first reply stands
+    expect((await marker())!.probe!.reply).toBe("accepted");
+    expect(a.sock.sent.filter((x) => JSON.parse(x)[0] !== 2)).toEqual([]); // nothing answered, nothing mistaken for an engine frame
+  });
+
+  it("Rejected, NotImplemented and CALLERROR are recorded honestly and the attempt still ends as incomplete at its deadline", async () => {
+    for (const [reply, expected] of [[[3, "ID", { status: "Rejected" }], "rejected"], [[3, "ID", { status: "NotImplemented" }], "rejected"], [[4, "ID", "NotSupported", "no", {}], "error"]] as const) {
+      state = new FakeState();
+      const m = pm();
+      const a = await connect(m);
+      clock = PROBE_AT;
+      await m.onAlarm();
+      const id = calls(a.sock)[0]![1] as string;
+      await m.message(a.ws, a.tag, JSON.stringify(reply.map((x) => (x === "ID" ? id : x))));
+      expect((await marker())!.probe!.reply).toBe(expected);
+      clock = DEADLINE;
+      await m.onAlarm();
+      expect(await marker()).toMatchObject({ phase: "incomplete", reason: "no_boot_after_probe" });
+      expect(engineCalls).toHaveLength(0);
+      clock = T0;
+    }
+  });
+
+  it("only an Accepted BootNotification committed by the engine completes it; a boot before the trigger reply works too", async () => {
+    const m = pm();
+    const a = await connect(m);
+    clock = PROBE_AT;
+    await m.onAlarm();
+    const id = calls(a.sock)[0]![1] as string;
+    await m.message(a.ws, a.tag, call("b1", "BootNotification", BOOT)); // the boot arrives BEFORE the trigger reply
+    expect(engineCalls.map((c) => c.body.action)).toEqual(["BootNotification"]);
+    expect(frames(a.sock).find((f) => f[1] === "b1")![2].status).toBe("Accepted");
+    expect(await marker()).toMatchObject({ phase: "done", doneAt: clock });
+    await m.message(a.ws, a.tag, JSON.stringify([3, id, { status: "Accepted" }])); // late reply: consumed, changes nothing
+    expect(await marker()).toMatchObject({ phase: "done" });
+    clock = DEADLINE;
+    await m.onAlarm(); // a stale alarm after completion does nothing
+    expect(await marker()).toMatchObject({ phase: "done" });
+    expect(calls(a.sock)).toHaveLength(1);
+  });
+
+  it("a charger that boots by itself within the grace period is never probed", async () => {
+    const m = pm();
+    const a = await connect(m);
+    await m.message(a.ws, a.tag, call("b1", "BootNotification", BOOT));
+    expect(await marker()).toMatchObject({ phase: "done" });
+    clock = PROBE_AT;
+    await m.onAlarm();
+    expect(calls(a.sock)).toEqual([]);
+  });
+
+  it("a boot the engine could not commit completes nothing", async () => {
+    const down = { ...bootEnv, ENGINE: { ...bootEnv.ENGINE, call: async () => { throw new Error("network"); } } } as unknown as typeof env;
+    const m = new EngineMode(state as unknown as DurableObjectState, down, negotiate, () => clock);
+    const a = await connect(m);
+    await m.message(a.ws, a.tag, call("b1", "BootNotification", BOOT));
+    expect(frames(a.sock).find((f) => f[1] === "b1")![0]).toBe(4); // CALLERROR, never a fabricated Accepted
+    expect(await marker()).toMatchObject({ phase: "waiting" });
+  });
+
+  it("a late accepted boot clears an attempt that had already given up", async () => {
+    const m = pm();
+    const a = await connect(m);
+    clock = DEADLINE;
+    await m.onAlarm();
+    expect(await marker()).toMatchObject({ phase: "incomplete", reason: "no_boot" }); // deadline passed before any probe tick: nothing is sent late
+    expect(calls(a.sock)).toEqual([]);
+    await m.message(a.ws, a.tag, call("b1", "BootNotification", BOOT));
+    expect(await marker()).toMatchObject({ phase: "done" });
+  });
+
+  it("survives hibernation: a recreated instance sends the probe from storage and the deadline closes it without any frame", async () => {
+    const a = await connect(pm());
+    clock = PROBE_AT;
+    await pm().onAlarm();
+    expect(calls(a.sock)).toHaveLength(1);
+    clock = DEADLINE;
+    await pm().onAlarm();
+    expect(await marker()).toMatchObject({ phase: "incomplete", reason: "no_boot_after_probe" });
+    expect(calls(a.sock)).toHaveLength(1);
+  });
+
+  it("a disconnect before the probe abandons the attempt; the next connection starts its own, once", async () => {
+    const m = pm();
+    const a = await connect(m);
+    state.sockets = [];
+    expect(await m.closed(a.ws, a.tag)).toBe(true);
+    expect(await marker()).toMatchObject({ phase: "incomplete", reason: "disconnected" });
+    clock = PROBE_AT;
+    await m.onAlarm();
+    expect(calls(a.sock)).toEqual([]); // nothing to probe, nothing sent into a dead socket
+    const b = await connect(m);
+    expect(await marker()).toMatchObject({ phase: "waiting", generation: 2, probeAt: clock + 10_000 });
+    clock += 10_000;
+    await m.onAlarm();
+    expect(calls(b.sock)).toHaveLength(1);
+  });
+
+  it("a replacement connection supersedes the attempt: the old probe's reply is ignored and only the new socket is probed", async () => {
+    const m = pm();
+    const a = await connect(m);
+    clock = PROBE_AT;
+    await m.onAlarm();
+    const oldId = calls(a.sock)[0]![1] as string;
+    const b = await connect(m); // same placement, higher generation
+    expect(await marker()).toMatchObject({ phase: "waiting", generation: 2 });
+    await m.message(b.ws, b.tag, JSON.stringify([3, oldId, { status: "Accepted" }]));
+    expect((await marker())!.probe).toBeUndefined();
+    clock += 10_000;
+    await m.onAlarm();
+    expect(calls(b.sock)).toHaveLength(1);
+    expect(calls(a.sock)).toHaveLength(1); // the superseded socket received nothing more
+  });
+
+  it("a placement change ends the old attempt as superseded", async () => {
+    const m = pm();
+    await connect(m, ctx("p1"));
+    const owner = await state.storage.get<{ generation: number; context: EngineContext }>("engine:owner");
+    await state.storage.put("engine:owner", { ...owner!, context: { ...owner!.context, placementId: "p2" } }); // the device was re-placed under the same generation
+    clock = PROBE_AT;
+    await pm().onAlarm(); // a recreated instance: the first one still caches the old owner
+    expect(await marker()).toMatchObject({ phase: "incomplete", reason: "superseded" });
+  });
+
+  it("a send that throws gives up that attempt and is not retried", async () => {
+    const m = pm();
+    const a = await connect(m);
+    a.sock.send = () => { throw new Error("closed"); };
+    clock = PROBE_AT;
+    await m.onAlarm();
+    expect(await marker()).toMatchObject({ phase: "incomplete", reason: "send_failed" });
+    clock = DEADLINE;
+    await m.onAlarm();
+    expect(await marker()).toMatchObject({ phase: "incomplete", reason: "send_failed" });
+  });
+
+  it("an operational device that already booted is not asked again on reconnect, and nothing blocks its normal traffic", async () => {
+    const m = pm();
+    const a = await connect(m);
+    await m.message(a.ws, a.tag, call("b1", "BootNotification", BOOT));
+    const b = await connect(m); // a later reconnect
+    expect(await marker()).toMatchObject({ phase: "done" });
+    clock = PROBE_AT;
+    await m.onAlarm();
+    expect(calls(b.sock)).toEqual([]);
+    await m.message(b.ws, b.tag, call("hb", "Heartbeat", {}));
+    expect(frames(b.sock)[0]![0]).toBe(3);
+  });
+
+  it("re-addition under a new placement requires its own boot, while same-placement reconnects stay activated", async () => {
+    const original = pm();
+    const a = await connect(original);
+    await original.message(a.ws, a.tag, call("old-boot", "BootNotification", BOOT));
+    expect(await marker()).toMatchObject({ phase: "done", placementId: "p1" });
+    a.sock.close(1000, "removed");
+    await original.closed(a.ws, a.tag);
+
+    // Reconstruct the DO handler, as after hibernation, and reconnect the SAME device under its new placement.
+    clock += 1_000;
+    const returned = pm();
+    const b = await connect(returned, ctx("p2"));
+    expect(await marker()).toMatchObject({ phase: "waiting", placementId: "p2", generation: b.tag.generation });
+    const countBeforeStaleBoot = engineCalls.length;
+    await returned.message(a.ws, a.tag, call("late-old-boot", "BootNotification", BOOT));
+    expect(engineCalls).toHaveLength(countBeforeStaleBoot);
+    expect(await marker()).toMatchObject({ phase: "waiting", placementId: "p2" });
+    clock += 10_000;
+    await returned.onAlarm();
+    expect(calls(b.sock)).toHaveLength(1);
+    expect(calls(b.sock)[0]![2]).toBe("TriggerMessage");
+    await returned.message(b.ws, b.tag, call("new-boot", "BootNotification", BOOT));
+    expect(await marker()).toMatchObject({ phase: "done", placementId: "p2" });
+
+    const reconnect = pm();
+    const c = await connect(reconnect, ctx("p2"));
+    clock += 10_000;
+    await reconnect.onAlarm();
+    expect(calls(c.sock)).toEqual([]);
+  });
+
+  it("outbox flushing and stop expiry keep their earlier alarms while activation is waiting", async () => {
+    const m = pm();
+    const a = await connect(m);
+    const stop = m.requestStop({ transactionNo: 42, attemptId: "alarm:42:1", requestId: "alarm", placementId: "p1", deadlineMs: clock + 3000 }, 3000);
+    await vi.waitFor(() => expect(calls(a.sock)).toHaveLength(1));
+    await m.message(a.ws, a.tag, call("status", "StatusNotification", { connectorId: 1, status: "Available", errorCode: "NoError" }));
+    expect(state.storage.alarm).toBe(T0 + 3000);
+    clock = T0 + 3000; state.storage.alarm = null;
+    await m.onAlarm();
+    expect((await stop).outcome).toBe("timeout");
+    expect(await marker()).toMatchObject({ phase: "waiting" });
+    expect(state.storage.alarm).toBe(T0 + STATUS_FLUSH_DELAY_MS);
+    clock = T0 + STATUS_FLUSH_DELAY_MS; state.storage.alarm = null;
+    await m.onAlarm();
+    expect(batchCalls).toBe(1);
+    expect(await m.outboxForTests.stats()).toMatchObject({ live: 0 });
+    expect(state.storage.alarm).toBe(PROBE_AT);
+    clock = PROBE_AT; state.storage.alarm = null;
+    await m.onAlarm();
+    expect(calls(a.sock).map(f => f[2])).toEqual(["RemoteStopTransaction", "TriggerMessage"]);
+    expect(state.storage.alarm).toBe(DEADLINE);
+    clock = DEADLINE; state.storage.alarm = null;
+    await m.onAlarm();
+    expect(await marker()).toMatchObject({ phase: "incomplete", reason: "no_boot_after_probe" });
+    expect(calls(a.sock)).toHaveLength(2);
+    expect(engineCalls.map(c => c.body.action)).toEqual(["StatusNotification"]);
+  });
+
+  it("a stop reply still reaches its own command while an activation probe is open", async () => {
+    const m = pm();
+    const a = await connect(m);
+    const p = m.requestStop({ transactionNo: 42, attemptId: "r:42:1", requestId: "r", placementId: "p1", deadlineMs: clock + 60_000 }, 500);
+    await vi.waitFor(() => expect(calls(a.sock)).toHaveLength(1));
+    const stopId = calls(a.sock)[0]![1] as string;
+    expect(calls(a.sock)[0]![2]).toBe("RemoteStopTransaction");
+    await m.message(a.ws, a.tag, JSON.stringify([3, stopId, { status: "Accepted" }]));
+    expect((await p).outcome).toBe("accepted");
+    expect(await marker()).toMatchObject({ phase: "waiting" }); // the probe was untouched
+  });
+});
+
 describe("independent connection liveness", () => {
   it("coalesces a burst into one latest-value publication, retries after recreation and never calls the database path", async () => {
     const published: unknown[] = [];
@@ -595,6 +885,31 @@ describe("independent connection liveness", () => {
     expect(published[1]).toEqual(published[0]);
     expect(await state.storage.get("engine:live-projection")).toMatchObject({ due: null });
     expect(engineCalls).toHaveLength(0);
+  });
+  it("a lost FINAL offline transition is republished by the alarm alone: no further charger frame, no other trigger", async () => {
+    const published: { online: boolean; revision: number }[] = [];
+    let available = true;
+    const realtimeEnv = { ...env, OCPP_REALTIME_ENABLED: "true", ENGINE: { ...env.ENGINE, publishLiveV1: async (v: { online: boolean; revision: number }) => { published.push(v); return { ok: available }; } } };
+    const realtimeMode = () => new EngineMode(state as unknown as DurableObjectState, realtimeEnv, negotiate, () => clock);
+    const m = realtimeMode(); const c = await connect(m);
+    await m.message(c.ws, c.tag, call("hb0", "Heartbeat", {}));
+    clock += 1000; state.storage.alarm = null; await m.onAlarm();
+    expect(published.at(-1)).toMatchObject({ online: true });
+    // The charger falls silent for good (half-open socket: no close event, no frame). Publication is also failing.
+    available = false;
+    clock += 4 * 3_600_000; state.storage.alarm = null;
+    await realtimeMode().onAlarm(); // liveness deadline passed: marked offline and staged
+    expect(await state.storage.get("engine:live-projection")).toMatchObject({ value: { online: false }, due: expect.any(Number) });
+    let guard = 0;
+    while (!published.some((p) => !p.online) && guard++ < 5) { clock += 1000; state.storage.alarm = null; await realtimeMode().onAlarm(); }
+    expect(published.at(-1)).toMatchObject({ online: false }); // attempted, and failed
+    const failedAt = published.length;
+    // Back off, retry on the alarm alone, and succeed once the publication path works again.
+    available = true;
+    for (let i = 0; i < 12 && (await state.storage.get<{ due: number | null }>("engine:live-projection"))!.due !== null; i++) { clock += 60_000; state.storage.alarm = null; await realtimeMode().onAlarm(); }
+    expect(published.length).toBeGreaterThan(failedAt);
+    expect(await state.storage.get("engine:live-projection")).toMatchObject({ due: null, value: { online: false } });
+    expect(engineCalls).toHaveLength(0); // no frame reached the engine at any point
   });
   it("repair rejects wrong scope and replays only selected IDs with original evidence and audit retained", async () => {
     const m = mode(); await connect(m);

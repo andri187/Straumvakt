@@ -27,6 +27,9 @@ function fakeDeps() {
       return snapshot ? { snapshot, routingId: store.state.orgs.get(snapshot.installation.orgId)?.routing ?? null, history: [] } : null;
     },
     list: async () => [],
+    listChargers: async () => [],
+    revisions: async () => ({}),
+    getTree: async () => null,
     directory: async () => ({ organisations: [], sites: [] }),
     contextDirectory: async () => null,
     listIncoming: async () => [],

@@ -89,12 +89,46 @@ export async function callEngine(env: EngineEnv, body: EngineCallBody, timeoutMs
   }
 }
 
-/** Missing/old bindings and uncertain replies leave ALL original events retryable.
- * Never fall back to individual calls after a timeout: those commits may still finish.
+/**
+ * The RPC runtime rejects a call to a method the receiving entrypoint does not have with a message of this shape. It is
+ * the one failure that PROVES the batch never ran (so nothing can have committed); every other failure is uncertain.
  */
-export async function callEngineBatch(env: EngineEnv, bodies: EngineCallBody[], timeoutMs = ENGINE_TIMEOUT_MS): Promise<EngineOutcome[]> {
+const METHOD_MISSING = /does not implement|is not a function|no such method/i;
+/** After such a proof, skip the doomed call for this long, then probe again (the shell may have been upgraded meanwhile). */
+export const BATCH_REPROBE_MS = 60_000;
+let batchUnsupportedUntil = 0;
+export function resetBatchCapability(): void {
+  batchUnsupportedUntil = 0;
+}
+
+/**
+ * Per-event delivery on the established `call` contract, used ONLY while the shell has no batch method (a staged rollout
+ * where the gateway is released first, or a rollback of the shell). Order is kept per device: the first unavailable event
+ * stops the run and the rest are left untouched for the next drain instead of being delivered ahead of it.
+ */
+async function deliverIndividually(env: EngineEnv, bodies: EngineCallBody[], timeoutMs: number): Promise<EngineOutcome[]> {
+  const out: EngineOutcome[] = [];
+  let halted = false;
+  for (const body of bodies) {
+    if (halted) { out.push({ kind: "unavailable" }); continue; }
+    const outcome = await callEngine(env, body, timeoutMs);
+    out.push(outcome);
+    if (outcome.kind === "unavailable") halted = true;
+  }
+  return out;
+}
+
+/**
+ * Bulk delivery with a safe compatibility path.
+ *  - Batch method present: one RPC. A timeout, a thrown transport error, a short or reordered reply leaves ALL original
+ *    events retryable and is NEVER retried as individual calls: those commits may still finish.
+ *  - Batch method definitively absent (property missing, or the runtime says the receiver does not implement it): nothing
+ *    ran, so events are delivered one by one on the older contract. The absence is remembered for BATCH_REPROBE_MS.
+ */
+export async function callEngineBatch(env: EngineEnv, bodies: EngineCallBody[], timeoutMs = ENGINE_TIMEOUT_MS, now: () => number = Date.now): Promise<EngineOutcome[]> {
   const unavailable = (): EngineOutcome[] => bodies.map(() => ({ kind: "unavailable" }));
-  if (!env.ENGINE?.callBatchV1 || bodies.length < 1 || bodies.length > 20) return unavailable();
+  if (!env.ENGINE || bodies.length < 1 || bodies.length > 20) return unavailable();
+  if (typeof env.ENGINE.callBatchV1 !== "function" || now() < batchUnsupportedUntil) return deliverIndividually(env, bodies, timeoutMs);
   try {
     const out = await withTimeout(env.ENGINE.callBatchV1(bodies), timeoutMs);
     if (!Array.isArray(out) || out.length !== bodies.length) return unavailable();
@@ -103,7 +137,11 @@ export async function callEngineBatch(env: EngineEnv, bodies: EngineCallBody[], 
       return item?.messageId === bodies[index]?.messageId && v && (v.kind === "unavailable" || (v.kind === "answer" && isAnswer(v.answer)) || (v.kind === "rejected" && typeof v.status === "number"));
     })) return unavailable();
     return out.map(item => item.outcome);
-  } catch { return unavailable(); }
+  } catch (error) {
+    if (!(error instanceof Error) || !METHOD_MISSING.test(error.message)) return unavailable();
+    batchUnsupportedUntil = now() + BATCH_REPROBE_MS;
+    return deliverIndividually(env, bodies, timeoutMs);
+  }
 }
 
 export const INTERNAL_ERROR: CallAnswer = { kind: "error", code: "InternalError", description: "backend unavailable; retry" };

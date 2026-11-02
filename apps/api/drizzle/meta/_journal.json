@@ -78,6 +78,13 @@
       "when": 1793483062473,
       "tag": "0010_lifecycle_recovery_cursor",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1793578454322,
+      "tag": "0011_driver_open_session_index",
+      "breakpoints": true
     }
   ]
 }

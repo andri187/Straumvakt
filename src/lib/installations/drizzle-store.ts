@@ -214,6 +214,12 @@ export async function listChargers(x: Executor, opts: { limit: number; offset: n
   }));
 }
 
+/** The structure revision of every non-archived installation - the domain `sync` checks report on (access.visible + versions). */
+export async function loadRevisions(x: Executor): Promise<Record<string, number>> {
+  const rows = await x.select({ id: installations.id, revision: installations.revision }).from(installations).where(isNull(installations.archivedAt)).limit(51);
+  return Object.fromEntries(rows.map((r) => [r.id, r.revision]));
+}
+
 export type HistoryEntry = {
   id: string;
   revision: number;

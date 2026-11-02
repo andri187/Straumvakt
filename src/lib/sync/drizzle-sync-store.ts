@@ -91,6 +91,18 @@ export function drizzleSyncRepo(x: Executor): SyncRepo {
         .map((r): ChargerView => ({ id: r.deviceId, circuitId: r.circuitId as string, label: r.label ?? "", chargePointId: r.chargePointId ?? r.identity ?? "", vendor: r.vendor, model: r.model, serialNumber: r.serialNumber }));
     },
 
+    async operationalMany(ids) {
+      const out = new Map<string, DeviceStateView[]>();
+      if (ids.length === 0) return out;
+      const rows = await x.select().from(deviceOperationalState).where(inArray(deviceOperationalState.installationId, ids)).orderBy(asc(deviceOperationalState.installationId), asc(deviceOperationalState.seq));
+      for (const r of rows) {
+        const list = out.get(r.installationId);
+        if (list) list.push(deviceState(r));
+        else out.set(r.installationId, [deviceState(r)]);
+      }
+      return out;
+    },
+
     async operationalSince(id, afterSeq, limit) {
       const rows = await x
         .select()

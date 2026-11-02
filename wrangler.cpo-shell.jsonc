@@ -39,6 +39,13 @@
     { "binding": "OCPP_PENDING", "service": "straumvakt-ocpp-s1", "entrypoint": "CommandEntrypoint" },
     { "binding": "GATEWAY", "service": "straumvakt-ocpp-s1", "entrypoint": "CommandEntrypoint" }
   ],
+  // NOT ACTIVE. Stage B/C of the staged release (see docs/agent-runs/2026-11-01/2026-11-01-remaining-core-completion-handoff.md).
+  // Adding these CREATES the VersionHub Durable Object namespace (a cloud change that needs the one consolidated release approval):
+  //   "durable_objects": { "bindings": [{ "name": "VERSION_HUB", "class_name": "VersionHub" }] },
+  //   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["VersionHub"] }],
+  // Stage B (hub bound, push still off) makes the check cooldown, read limits and repair lease shared across isolates.
+  // Stage C additionally sets "CPO_SHELL_REALTIME_ENABLED": "true" here, OCPP_REALTIME_ENABLED=true on the gateway, and (for the
+  // driver app only) the secret DRIVER_AUTH_SECRET = the driver API's AUTH_SECRET. Rollback of C: set the flags back to "false".
   "ratelimits": [{
     "name": "SHELL_LOGIN_LIMITER",
     "namespace_id": "2026102701",

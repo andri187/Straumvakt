@@ -31,6 +31,7 @@ import { requirePermission as realRequirePermission } from "../../../lib/auth/re
 
 import { resolveOrgScope } from "../../../lib/auth/org-scope";
 import {
+  ISSUANCE_NOT_IMPLEMENTED,
   BillingRequestError,
   assertOrgInScope,
   requestHashOf,
@@ -347,11 +348,16 @@ export function makeBillingPeriodsRouter(deps: BillingRouterDeps) {
         if (state !== "priced") {
           throw new BillingRequestError("period_not_priced", 409, `period is ${state}`);
         }
-        // The allocation is transactional with the issue INSIDE the port —
-        // a number allocated without a document is a hole in a sequence that
-        // Icelandic law requires to be unbroken, and there is no release.
+        // The port, not this route, decides whether a document can exist. A
+        // number allocated without a document is a hole in a sequence that
+        // Icelandic law requires to be unbroken, so a port that cannot finish
+        // an issue must refuse before allocating anything.
         const out = await port.issueDocument({ period, idempotencyKey: key, actorUserId: actorOf(c) });
         if (out.kind === "refused") {
+          // The period is priced, so period_not_priced would misreport it.
+          if (out.reason === ISSUANCE_NOT_IMPLEMENTED) {
+            throw new BillingRequestError(ISSUANCE_NOT_IMPLEMENTED, 501, out.reason);
+          }
           throw new BillingRequestError("period_not_priced", 409, out.reason);
         }
         await port.applyPeriodEvent({

@@ -8,6 +8,7 @@ import { drizzleCostingStore } from "@/lib/costing/drizzle-costing-store";
 import { costPending } from "@/lib/costing/service";
 import { DatabaseUnavailableError } from "@/lib/installations/api";
 import { openDb, readDatabaseUrl, type ShellDbEnv } from "@/lib/installations/db";
+import type { LiveRoomsClient } from "@/lib/sync/live";
 import type { LifecycleApiDeps } from "./api";
 import { drizzleLifecycleStore } from "./drizzle-store";
 import type { StopPort } from "./service";
@@ -18,7 +19,12 @@ import type { StopPort } from "./service";
  * may carry a diagnostic `reason`; only `outcome` is used.
  */
 export type GatewayCommandBinding = {
-  requestStop(i: { deviceId: string; transactionNo: number; requestId: string; attemptId: string; placementId: string; deadlineMs: number }): Promise<{ outcome: "accepted" | "rejected" | "offline" | "timeout" | "unavailable"; reason?: string }>;
+  /**
+   * Contract version 1: durable and keyed by `attemptId`. Deliberately NOT the unversioned `requestStop` an older gateway
+   * also has (non-durable, no attempt record): against that gateway this name does not exist, the call rejects, and
+   * `stopPortFrom` reports "unavailable", so removal stays pending instead of sending an unrecorded command.
+   */
+  requestStopV1(i: { deviceId: string; transactionNo: number; requestId: string; attemptId: string; placementId: string; deadlineMs: number }): Promise<{ outcome: "accepted" | "rejected" | "offline" | "timeout" | "unavailable"; reason?: string }>;
 };
 
 export function stopPortFrom(binding: GatewayCommandBinding | undefined | null): StopPort | null {
@@ -26,7 +32,7 @@ export function stopPortFrom(binding: GatewayCommandBinding | undefined | null):
   return {
     async requestStop(i) {
       try {
-        const r = await binding.requestStop(i);
+        const r = await binding.requestStopV1(i);
         return r.outcome;
       } catch {
         return "unavailable";
@@ -35,7 +41,7 @@ export function stopPortFrom(binding: GatewayCommandBinding | undefined | null):
   };
 }
 
-export function liveLifecycleDeps(env: ShellDbEnv, bindings: { GATEWAY?: GatewayCommandBinding } = {}, now: () => Date = () => new Date()): LifecycleApiDeps {
+export function liveLifecycleDeps(env: ShellDbEnv, bindings: { GATEWAY?: GatewayCommandBinding } = {}, now: () => Date = () => new Date(), rooms: LiveRoomsClient | null = null): LifecycleApiDeps {
   return {
     env,
     async withLifecycle(fn) {
@@ -49,6 +55,7 @@ export function liveLifecycleDeps(env: ShellDbEnv, bindings: { GATEWAY?: Gateway
           costing: { runFor: async (transactionId) => void (await costPending(drizzleCostingStore(db), { limit: 1, onlyId: transactionId })) },
           authorise: () => false, // replaced per request by the handler with the verified actor
           now,
+          ...(rooms ? { onPlacementClosed: (i) => rooms.remove(i.installationId, i.deviceId, i.placementId) } : {}),
         });
       } finally {
         await close();

@@ -8,9 +8,11 @@ import {
   createCpoOrganisation,
   createSite,
   drizzleStore,
+  listChargers,
   listInstallations,
   loadDirectory,
   loadHistory,
+  loadRevisions,
   loadRoutingId,
   loadSnapshot,
 } from "./drizzle-store";
@@ -18,16 +20,26 @@ import { bootCaptureFor, incomingChargers, signalAttached } from "./discovery";
 import type { PendingGateway } from "./pending-gateway";
 import { discardDraft, getDraft, listDrafts, saveDraft } from "./drafts";
 import { saveInstallation } from "./service";
+import { isolateChecker } from "@/lib/sync/check";
+import { isolateFlight } from "@/lib/sync/single-flight";
+import { hubBackedGate, isolateGate } from "@/lib/sync/gate";
 import { notifyCommitted, type HubClient } from "@/lib/sync/hub";
+import type { LiveRoomsClient } from "@/lib/sync/live";
 
-export function repoFor(db: Db, hub: HubClient | null = null, gateway: PendingGateway | null = null): Repo {
+export function repoFor(db: Db, hub: HubClient | null = null, gateway: PendingGateway | null = null, rooms: LiveRoomsClient | null = null): Repo {
   const store = drizzleStore(db);
   return {
     async save(input, actor) {
       const result = await saveInstallation(store, input, actor);
       // After the commit, never inside it. A replay or an unchanged save wrote nothing, so nothing to announce.
       // A failed notification is recovered by the hub's age bound; it never fails the save.
-      if (!result.replayed && !result.unchanged) await notifyCommitted(hub, result.snapshot.installation.id, { rev: result.snapshot.installation.revision });
+      if (!result.replayed && !result.unchanged) {
+        // Fold the commit into this isolate's remembered check answers first, so a deferred (cooldown) answer can never hide it.
+        isolateChecker.noteCommit(result.snapshot.installation.id, result.snapshot.installation.revision);
+        await notifyCommitted(hub, result.snapshot.installation.id, { rev: result.snapshot.installation.revision });
+        // A charger that left this installation must stop showing a live value. After the commit, best effort (see LiveRoomsClient).
+        if (rooms) await rooms.reconcile(result.snapshot.installation.id, result.snapshot.chargers.map((c) => c.id)).catch(() => undefined);
+      }
       // Same rule for a charger that was waiting: only after the commit, and a failed signal never fails the save.
       // The intent was committed WITH the attach (service.ts); this is the first delivery attempt, recorded either way.
       if (gateway && result.attachedChargePointIds?.length) await signalAttached(store, gateway, result.snapshot.installation.orgId, result.attachedChargePointIds);
@@ -40,6 +52,9 @@ export function repoFor(db: Db, hub: HubClient | null = null, gateway: PendingGa
       return { snapshot, routingId, history };
     },
     list: (limit, offset) => listInstallations(db, { limit, offset }),
+    listChargers: (limit) => listChargers(db, { limit, offset: 0 }),
+    revisions: () => loadRevisions(db),
+    getTree: (id) => loadSnapshot(db, id),
     directory: () => loadDirectory(db),
     async contextDirectory(orgId) {
       const all = await loadDirectory(db);
@@ -60,16 +75,18 @@ export function repoFor(db: Db, hub: HubClient | null = null, gateway: PendingGa
   };
 }
 
-export function liveDeps(env: ShellDbEnv = process.env, hub: HubClient | null = null, gateway: PendingGateway | null = null): ApiDeps {
+export function liveDeps(env: ShellDbEnv = process.env, hub: HubClient | null = null, gateway: PendingGateway | null = null, rooms: LiveRoomsClient | null = null): ApiDeps {
   return {
     env,
     contextOrgId: readContextOrgId(env),
+    flight: isolateFlight,
+    gate: hubBackedGate(hub, isolateGate),
     async withRepo(fn) {
       const url = readDatabaseUrl(env);
       if (!url) throw new DatabaseUnavailableError();
       const { db, close } = openDb(url);
       try {
-        return await fn(repoFor(db, hub, gateway));
+        return await fn(repoFor(db, hub, gateway, rooms));
       } finally {
         await close();
       }

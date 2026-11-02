@@ -14,12 +14,19 @@
 import { authenticate, DatabaseUnavailableError } from "@/lib/installations/api";
 import type { Actor } from "@/lib/installations/actor";
 import type { ShellEnv } from "@/lib/cpo-shell-session";
-import { readChanges, readSnapshot, type SyncDeps } from "./service";
+import { permissionPartition } from "@/lib/installations/actor";
+import type { Gate } from "./gate";
+import { ScopeChecker, readCheck } from "./check";
+import { readChanges, readSnapshot, readStatus, type SyncDeps } from "./service";
 
 export type SyncApiDeps = {
   env?: ShellEnv;
   /** Opens request-scoped access + repository + the process cache. Throws DatabaseUnavailableError when unconfigured. */
   withSync<T>(fn: (d: SyncDeps<Actor>) => Promise<T>): Promise<T>;
+  /** Process-wide cooldown/probe state for ?check=1. Absent = checks are refused (501) rather than run unthrottled. */
+  checker?: ScopeChecker;
+  /** Shared admission (hub-backed, isolate fallback). Absent = the checker's own isolate-local cooldown only. */
+  gate?: Gate;
 };
 
 const j = (body: unknown, status: number, extra: Record<string, string> = {}) =>
@@ -30,8 +37,29 @@ export async function handleSync(request: Request, deps: SyncApiDeps): Promise<R
   const actor = await authenticate(request, deps.env);
   if (!actor) return j({ error: "unauthorized" }, 401, { "cache-control": "no-store" });
 
-  const since = new URL(request.url).searchParams.get("since");
+  const params = new URL(request.url).searchParams;
+  const since = params.get("since");
   try {
+    if (params.has("check")) {
+      const checker = deps.checker;
+      if (!checker) return j({ error: "not_implemented" }, 501, { "cache-control": "no-store" });
+      return await deps.withSync(async (d) => {
+        const r = await readCheck(d, actor, checker, permissionPartition(actor), deps.gate);
+        if (r.kind === "forbidden") return j({ error: "forbidden" }, 403, { "cache-control": "no-store" });
+        if (r.kind === "too_many") return j({ error: "scope_too_large" }, 413, { "cache-control": "no-store" });
+        return j(r.body, 200, { "cache-control": "no-store" });
+      });
+    }
+    if (params.get("view") === "status") {
+      return await deps.withSync(async (d) => {
+        const r = await readStatus(d, actor, request.headers.get("if-none-match"));
+        if (r.kind === "forbidden") return j({ error: "forbidden" }, 403, { "cache-control": "no-store" });
+        if (r.kind === "too_many") return j({ error: "scope_too_large" }, 413, { "cache-control": "no-store" });
+        const headers = { etag: r.etag, "cache-control": "private, no-cache", vary: "cookie", "x-straumvakt-realtime": deps.env?.CPO_SHELL_REALTIME_ENABLED === "true" ? "1" : "0" };
+        if (r.kind === "not_modified") return new Response(null, { status: 304, headers });
+        return j(r.body, 200, headers);
+      });
+    }
     return await deps.withSync(async (d) => {
       if (since !== null) {
         const r = await readChanges(d, actor, since);

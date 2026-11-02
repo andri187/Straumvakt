@@ -3,7 +3,7 @@
 // constraints and partial unique indexes are NOT exercised.
 
 import type { LifecycleRequest } from "../model";
-import { OpenRequestConflict, SessionOpenError, type ActorRef, type DeviceView, type LifecycleStore, type LifecycleTx } from "../service";
+import { OpenRequestConflict, PlacementAlreadyClosed, SessionOpenError, type ActorRef, type DeviceView, type LifecycleStore, type LifecycleTx } from "../service";
 import type { Observed, ObservedSession } from "../plan";
 
 type Tx = { transactionNo: number; transactionId: string; deviceId: string; stoppedReceivedAt: Date | null; authorized: boolean; costingState: string; superseded?: boolean };
@@ -94,6 +94,7 @@ export function memoryLifecycle(init: Partial<World> = {}, opts: { serialize?: b
           hooks.beforeClose?.();
           if (hooks.failCloseOnce) { hooks.failCloseOnce = false; throw new Error("close failed"); }
           if (w.txs.some((t) => t.deviceId === req.deviceId && t.stoppedReceivedAt === null)) throw new SessionOpenError();
+          if (!w.placements.has(req.deviceId)) throw new PlacementAlreadyClosed(); // closed by another worker while this one waited on the lock
           w.placements.delete(req.deviceId);
           w.closed.push({ deviceId: req.deviceId, at, requestId: req.id });
           w.revisionBumps++;

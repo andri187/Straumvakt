@@ -28,6 +28,9 @@ function fakeDeps(store = new MemoryStore()) {
       return snapshot ? { snapshot, routingId: store.state.orgs.get(snapshot.installation.orgId)?.routing ?? null, history: loadHistoryForTest(store, id) } : null;
     },
     list: async () => [],
+    listChargers: async () => [],
+    revisions: async () => ({}),
+    getTree: async () => null,
     directory: async () => ({ organisations: [{ id: ORG, displayName: "Nordic Charge", routingId: null }], sites: [] }),
     contextDirectory: async () => null,
     listIncoming: async () => [],

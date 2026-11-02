@@ -22,14 +22,17 @@
 import { mayAdminister, type Actor } from "./actor";
 import { incomingVisible } from "./incoming-window";
 import type { BootCaptureRow, Store } from "./store";
+import { ACTIVATION_WAIT_MS } from "@/lib/ocpp-engine/pending";
 
 /**
  * What happened to the "you are registered now" signal for a charger that was attached while it was waiting.
  *   waiting      delivered; the charger has not yet sent an accepted BootNotification since the save.
  *   undelivered  the gateway could not be told yet; it is re-sent when this list is read (bounded).
  *   failed       still undelivered after MAX_PROMOTE_ATTEMPTS; no more retries, the charger connects when it next reconnects.
+ *   incomplete   delivered, but no accepted BootNotification within ACTIVATION_WAIT_MS of the save. Computed at read time from the
+ *                retained promotion timestamp (no timer, no write). It does not say why; a later accepted boot clears the row.
  */
-export type Activation = "waiting" | "undelivered" | "failed";
+export type Activation = "waiting" | "undelivered" | "failed" | "incomplete";
 
 export type IncomingCharger = {
   chargePointId: string;
@@ -84,7 +87,9 @@ export const activationNote = (a: Activation): string =>
     ? "Saved to a circuit. Waiting for the charger to reconnect and send its BootNotification. Saving does not mean it is online."
     : a === "undelivered"
       ? "Saved to a circuit, but the connection signal has not reached the gateway yet. It is re-sent whenever this list is read. The charger also connects by itself when it next reconnects."
-      : "Saved to a circuit, but the connection signal could not be delivered after several tries. The charger connects the next time it reconnects by itself.";
+      : a === "failed"
+        ? "Saved to a circuit, but the connection signal could not be delivered after several tries. The charger connects the next time it reconnects by itself."
+        : "Saved to a circuit and the gateway was told, but no accepted BootNotification has arrived since. This does not show why: the charger may not have reconnected, may have been refused, or may be offline. A later accepted BootNotification clears this.";
 
 /** `reconnect_requested` (a waiting socket was told) and `not_connected` (nothing is waiting; normal admission applies) both mean nothing is left to deliver. */
 export const promotionDelivered = (outcome: string): boolean => outcome === "reconnect_requested" || outcome === "not_connected";
@@ -156,7 +161,7 @@ export async function incomingChargers(
       if (credentialActive) out.push({ ...base, state: "recovery", note: RECOVERY_NOTE[r.reason!]! });
       else if (r.reason && !credential) out.push({ ...base, state: "recovery", note: RECOVERY_NOTE[r.reason] ?? "Known charger. Not available to attach." });
       else if (waiting && r.promote) {
-        const activation: Activation = r.promote.delivered ? "waiting" : r.promote.attempts >= MAX_PROMOTE_ATTEMPTS ? "failed" : "undelivered";
+        const activation: Activation = r.promote.delivered ? (nowMs - r.promote.at.getTime() >= ACTIVATION_WAIT_MS ? "incomplete" : "waiting") : r.promote.attempts >= MAX_PROMOTE_ATTEMPTS ? "failed" : "undelivered";
         const row: IncomingCharger = { ...base, state: "recovery", note: activationNote(activation), activation };
         out.push(row);
         if (activation === "undelivered" && nowMs - r.promote.at.getTime() >= PROMOTE_RETRY_MIN_AGE_MS) retryable.push({ row, promote: r.promote });

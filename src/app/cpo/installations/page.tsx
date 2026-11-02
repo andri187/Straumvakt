@@ -12,7 +12,7 @@ import { ContextBar } from "../workspace-ui";
 import { OverviewRefresh } from "../overview-refresh";
 import { enabledVendors } from "@/lib/installations/vendor-onboarding";
 import { InstallationEditor, RequiredNote } from "./installation-editor";
-import { InstallationTree } from "./installation-tree";
+import { InstallationsOverview } from "./installations-overview";
 import { VendorOnboarding } from "./vendor-onboarding";
 
 export const metadata = { title: "Installations" };
@@ -137,17 +137,9 @@ export default async function Page({ searchParams }: { searchParams: Search }) {
         }
       }
     } else {
-      const rows = await deps.withRepo((r) => r.list(50, 0));
-      const attachQuery = toAttachQuery(attachParams);
-      body =
-        rows.length === 0 ? (
-          <State title="No installations yet">None have been added. This describes the database, not any charger connection.</State>
-        ) : (
-          <>
-            <InstallationTree key={Date.now()} rows={rows} attachQuery={attachQuery} />
-            {rows.length === 50 ? <p className="ws-muted">Showing the 50 most recently changed installations; a site may list only some of its installations, and counts are of those shown.</p> : null}
-          </>
-        );
+      // The list is not read here: the shell renders at once and the list loads through the shared structural store, which keeps
+      // it across navigation (see installations-overview.tsx). Nothing in this branch touches the database.
+      body = <InstallationsOverview attachQuery={toAttachQuery(attachParams)} />;
       if (attachParams.length > 0) body = <><p className="ws-note" role="note">Assign {attachParams.map((a, i) => <span key={a}>{i > 0 ? ", " : ""}<code>{a}</code></span>)}: choose the installation, then drag each charger to a circuit. Nothing is registered until you save. Any id the server no longer lists as incoming is reported and left out.</p>{body}</>;
     }
   } catch (error) {

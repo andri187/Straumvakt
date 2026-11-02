@@ -49,7 +49,7 @@ export function GroupedChargers({ rows }: { rows: ChargerListRow[] }) {
                     </td>
                     <td>{[r.vendor, r.model].filter(Boolean).join(" ") || "Not recorded"}</td>
                     <td>
-                      <LiveConnection deviceId={r.deviceId} />
+                      <LiveConnection deviceId={r.deviceId} installationId={r.installationId} />
                     </td>
                   </tr>
                 ))}

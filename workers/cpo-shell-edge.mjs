@@ -35,11 +35,17 @@ export function createShellEdge(application) {
       return Response.redirect(url.toString(), 308);
     }
     const { pathname } = url;
-    if (pathname === '/api/cpo/sync' && request.headers.get('upgrade')?.toLowerCase() === 'websocket') {
-      if (env.CPO_SHELL_REALTIME_ENABLED !== 'true' || !env.VERSION_HUB) return new Response('Not found', { status: 404 });
-      // Keep the optional runtime out of the plain-Node asset preparation import.
-      const { realtimeUpgrade } = await import('./cpo-shell-realtime.mjs');
-      return realtimeUpgrade(request, env);
+    if (pathname === '/api/cpo/sync') {
+      const socket = request.headers.get('upgrade')?.toLowerCase() === 'websocket';
+      // A driver app authenticates with a bearer token, not the browser cookie. Such a GET (the follow-list, or a socket) is
+      // answered by the realtime module only; without a cookie the application would have refused it anyway.
+      const driver = request.method === 'GET' && /^Bearer\s/i.test(request.headers.get('authorization') ?? '');
+      if (socket || driver) {
+        if (env.CPO_SHELL_REALTIME_ENABLED !== 'true' || !env.VERSION_HUB) return new Response('Not found', { status: 404 });
+        // Keep the optional runtime out of the plain-Node asset preparation import.
+        const { realtimeUpgrade } = await import('./cpo-shell-realtime.mjs');
+        return realtimeUpgrade(request, env);
+      }
     }
     const asset = assets.has(pathname) || pathname.startsWith('/_next/static/');
     if (!asset && !pages.has(pathname) && !api.has(pathname) && !appPublic.has(pathname)) {

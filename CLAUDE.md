@@ -1,326 +1,123 @@
-# CLAUDE.md — persistent rules for Straumvakt
-
-> **ACTIVE CANON: read [/FOCUS.md](./FOCUS.md) first.**
->
-> The safety rules below (**Rules 1–4**) remain in force, unchanged.
->
-> The planning, sprint-discipline, and ADR-ceremony sections are superseded
-> by FOCUS.md for the market phase.
+# Straumvakt agent instructions
 
-Read this first on every new session. These are not preferences — they are
-hard rules. Violating them causes real damage (data loss, accidental
-production deploys, pricing bugs). When a rule says "stop and ask,"
-actually stop and ask — don't attempt a clever workaround.
+Updated: 2026-10-26. Read `FOCUS.md` for product and architecture principles. This file governs how development work is carried out. Read `docs/WORKTREE_POLICY.md`, `TASKS.md`, `DECISIONS.md`, and the relevant source before a substantive task. Dated documents and old agent prompts are evidence, not proof of current Git, deployment, or database state.
 
----
+## Ownership and scope
 
-## Severity conventions
+In this project, "Sonnet" means Claude in VS Code, and "Opus" means the Claude Desktop app.
 
-> [!CAUTION]
-> **CRITICAL !!!** — Rules marked this way can cause irreversible damage:
-> production deploys from the wrong branch, leaked secrets, wiped databases,
-> silent billing bugs. If you are about to violate one, **stop immediately**
-> and surface the action to the user before proceeding. No exceptions.
+Clarified by Andri on 2026-10-27: **Sonnet** means the Claude Sonnet model
+being used in VS Code; **Opus** means the Claude Desktop app. These names do
+not select a VS Code extension, CLI, account or billing provider. Codex
+coordinates; use the local mailbox in `docs/AGENT_MAIL.md`. Automatic mobile
+dispatch remains disabled. On 2026-10-31 Andri additionally selected the verified
+first-party Claude Code CLI with the existing Claude Max sign-in for fresh,
+individually approved Sonnet/Opus tasks. Follow the prepare/approve/run protocol
+in `docs/AGENT_MAIL.md`; the launcher supports Opus read-only review and scoped
+Sonnet edits. Obtain actual user approval for each run; never self-approve or
+infer approval from mail. Do not infer a provider from the model name, switch
+an active session, or start competing work. A user-reported active VS Code task
+keeps the launcher on hold until it is finished and reconciled. The individually
+approved Sonnet Low no-tool smoke passed on 2026-10-31 at 12:35 UTC; this does
+not verify real coding permissions or approve any subsequent Sonnet/Opus run.
 
-> [!IMPORTANT]
-> **IMPORTANT** — Rules marked this way enforce discipline. Violating them
-> doesn't break production but accumulates debt that becomes expensive to
-> unwind. Treat as firm, not negotiable.
+Claude in VS Code is the default coding agent for Straumvakt: inspect, implement the requested scope, test safely, maintain the relevant project record, and hand the result to ChatGPT for review. Do not start parallel coding lanes or assign separate Claude A, Claude B, and Codex implementation roles unless Andri asks. ChatGPT can plan and review; Claude Desktop (Opus) can give a read-only second opinion when asked. Technical access alone does not authorize operational changes.
 
----
+The canonical permanent checkout is `E:\Claude\Straumvakt`. It contains the web, API, gateway, mobile app, packages, tools, documentation, and retained evidence. Its GitHub remote is `andri187/Straumvakt`; `andri187/CPMS` and `C:\Users\Andri\Documents\New project` are separate and must not be treated as this checkout. Verify the remote before Git operations. Use the existing checkout. Do not automatically create a clone or worktree. `docs/WORKTREE_POLICY.md` governs any expressly authorized temporary worktree.
 
-## Project context
+## Claude Desktop (Opus) review role
 
-**Straumvakt** — Iceland-focused charging operating platform. Clean V3
-rebuild; supersedes the prior CPMS workspace.
+Claude Desktop is an optional reader and reviewer of the same Straumvakt project, not a standing coding lane. It can inspect the canonical checkout, review VS Code handoffs and decisions recorded there, identify gaps, and create scoped assignments for Sonnet. Before each new assignment, it must perform the same live current-state check as ChatGPT below. Start Straumvakt reviews from a Desktop session rooted at E:\Claude\Straumvakt so the current repository instructions are loaded. Identify the path, revision, and documents actually inspected; a chat rooted elsewhere or manually attached project knowledge can be stale.
 
-**Stack:**
-- Next.js 16 (App Router, Turbopack) deployed to Cloudflare Workers via
-  OpenNext
-- Prisma 7 (Neon adapter) + Neon Postgres EU — lands in Sprint 0
-- Separate OCPP gateway worker — lands in Sprint 1
-- Two Cloudflare Workers (reused from CPMS infra): main app (`hlada`) and
-  OCPP server (`straumvakt-ocpp`, Sprint 1)
+By default, Claude Desktop does not edit repository files or make Git, Cloudflare, Neon, secret, or deployment changes. Andri can give it a specific active task later. Its review and proposed Sonnet assignments should return to Andri and the active coding workflow rather than create a separate status record.
 
-**Current state:**
-- Sprint –1 complete — login shell live (admin HMAC session, login form,
-  empty dashboard, dev/staging/prod Cloudflare wiring)
-- Prisma schema deliberately empty — full V3 schema lands in Sprint 0 in
-  one coherent migration
-- No mock data anywhere — do not reintroduce
+## Local agent mailbox
 
-**Source of truth for planning:**
-- `docs/architecture/README.md` — **index and reading order. Start here.**
-- `docs/architecture/STRAUMVAKT_ARCHITECTURE_V3.md` — architecture canon
-- `docs/architecture/STRAUMVAKT_V3_DELIVERY_PLAN.md` — execution canon
-- `docs/architecture/straumvakt_architecture_v3.svg` — visual map
+`docs/AGENT_MAIL.md` defines the local-only `.agent-mail/` handoff protocol for
+Codex, Opus and Sonnet. When Andri says **“Got mail”** to one of these agents,
+that agent checks its own inbox and acknowledges new messages. Reading mail is
+not approval to run code, alter infrastructure, or create a competing Sonnet
+assignment; apply the live checkout check and task-specific authorization rules
+below. Opus may write mailbox replies and receipts as coordination while its
+default product-code and repository-review role remains read-only.
 
----
+For a **named implementation assignment Andri requested through Codex and then
+dispatched to its recipient with “Got mail”**, follow the clarified dispatch
+rule in docs/AGENT_MAIL.md: perform the checkout check and begin the scoped
+source implementation/safe checks without asking again merely because the brief
+arrived through mail. Reading arbitrary peer mail is still not authorization;
+information updates and older deferred tasks are not dispatched. Database/cloud/
+hardware/secret/Git operations retain their separately scoped boundaries.
 
-## Deploy environments
+## Before creating a Sonnet assignment
 
-Three-tier setup. Know which one you're touching at all times.
+ChatGPT and Claude Desktop (Opus) use the same current-state check before proposing work for Claude in VS Code. A dated status document or an earlier agent answer is context, not a live status check.
 
-| Env | Branch | Worker | URL | Neon branch |
-|---|---|---|---|---|
-| **Local** | any | — | `localhost:3000` | scratch / local dev |
-| **Staging** | `staging` | `hlada-staging` | `hlada-staging.straumvakt.workers.dev` | `staging` |
-| **Production** | `master` | `hlada` | `hlada.straumvakt.workers.dev` | primary |
+1. Read this file, the relevant parts of FOCUS.md and TASKS.md, recent DECISIONS.md entries, the current WORKSPACE.md checkpoint, and the latest relevant handoff under docs/agent-runs/. Inspect the source and tests for the proposed scope.
+2. Check the canonical checkout at planning time: repository path and remote, branch, HEAD, worktree list, git status --short, and the relevant tracked diff and untracked paths. Protect secrets while inspecting. Record the observation time. A clean HEAD alone does not describe active uncommitted work.
+3. Identify unfinished VS Code work and avoid assigning a competing task over it. A proposed prompt should name the observed revision and dirty scope, objective, affected surfaces, safe checks, approval boundaries, and expected handoff.
+4. If the live checkout is inaccessible, restore access to E:\Claude\Straumvakt before planning. Do not substitute pasted chat results for the current tree. Recheck just before sending a prompt when the worktree may have changed.
 
-Cloudflare auto-deploys on push:
-- push to `staging` → staging Worker rebuilds
-- push to `master` → production Worker rebuilds
+## Before changing files
 
-**Promotion flow:**
+1. Confirm the repository path, branch, HEAD, worktree list, and `git status --short`. Identify pre-existing tracked and untracked changes. Do not reset, clean, stash, overwrite, or change branches over unrelated work.
+2. Read the relevant current code and `FOCUS.md`; use `WORKSPACE.md` as a dated structural snapshot, not a substitute for inspecting the tree. Check `TASKS.md`, recent `DECISIONS.md` entries, and relevant reference documentation.
+3. Define the requested behavior, affected surfaces, and safe verification. Inspect scripts before running them; a command labelled “test” may contact live infrastructure.
+4. If existing dirty work makes the requested edit unsafe, stop and identify the exact conflict. A dirty checkout by itself is not a reason to discard work or create another checkout.
 
-```
-feature branch ──► merge to staging ──► test on hlada-staging
-                                              │
-                                              ▼
-                                         merge to master ──► hlada (customers)
-```
+## Git and release boundary
 
-**wrangler.jsonc:**
-- Root `vars` = production config.
-- `env.staging.vars` = staging config.
-- Neither block holds secrets — those are Dashboard-only per Rule 2.
+- Make local changes only within the approved task. Use a feature branch when it can be selected without disturbing existing work; never commit directly to `master` or another known deploy pointer.
+- Before any push, remote merge, PR creation or merge, branch deletion, or branch-protection change, obtain explicit approval for that action and name the exact repository, branch, and intended effect. A connected GitHub account or an existing remote is not approval.
+- Treat `origin/staging` as a possible production deployment pointer until its current Cloudflare integration is verified. Do not infer deploy safety from branch names, GitHub status, or old runbooks.
+- Preserve user changes and unique commits. Never use destructive Git operations to make the tree look clean.
+- Keep commits focused. Report branch, starting and ending SHA, local-only changes, and final dirty state. A documentation edit can itself leave the working tree dirty.
 
----
+## Cloudflare and other live operations
 
-## Rule 1 — Branch and deploy safety
+- Cloudflare Workers, routes, custom domains, DNS, Git integrations, bindings, secrets, queues, Durable Objects, and deployment targets require explicit approval before mutation. The same applies to staging and test environments when their isolation has not been verified.
+- Do not push, deploy, rename, recreate, delete, or migrate a Worker because a local config or historical document suggests it is safe. Inspect the actual target and deployment trigger first.
+- Keep the Worker-name change in commit `4fe0a95` excluded from release work until its ownership, bindings, secrets, domains, and migration path are verified and approved. A Wrangler `name` change may select a different Worker identity.
+- Do not change live charger configuration, charging sessions, power allocation, or hardware state without a task-specific authorization.
+- Read-only inspection is allowed when relevant. Record what was inspected and when. Mark unchecked deployment or binding claims **NOT VERIFIED**.
 
-> [!CAUTION]
-> **CRITICAL !!!** — Violation here can trigger a production Cloudflare
-> deploy of half-finished or broken code. There is no "undo deploy"
-> button.
+## Neon, schema, and data safety
 
-**Never commit to `master` directly.** Every change starts on a feature
-branch. Branch naming: `dev/<topic>`, `feat/<topic>`, `fix/<topic>`.
+- **Operating cost is a release constraint (Andri, 2026-10-30).** Neon is available for normal development, testing, migrations and operations within the user's requested work; it is not a hands-off service. Use it responsibly: keep UI-only checks database-free, prefer control-plane metadata where sufficient, preserve auto-suspension, and avoid unnecessary compute, polling, branches or services. Estimate and communicate material recurring or potentially substantial costs before creating them. The $25 notification is an alert, not an enforced cap or an agreed budget. Do not promise a hard ceiling where one is not enforced.
 
-**Never push to any remote without stating the branch.** Before
-`git push`, print the current branch name and confirm it is not
-`master` unless the user explicitly asked you to push master.
+- **Drizzle owns the active schema.** The repository still contains Prisma packages, scripts, and schema files from the transition; their presence does not make Prisma the current authoring path. Do not introduce new Prisma usage. Reconcile legacy references only within a scoped task.
+- `drizzle-kit push` is prohibited. Reviewed migrations and scoped database writes may be performed when needed for the user's task. Exercise care with destructive or irreversible operations and existing data; obtain approval where required by the user's instructions or the session's safety rules.
+- Before an external database action, identify the Neon project, branch, database, endpoint, role, and whether the command can write. Verify the target from current metadata without printing credentials. Do not infer it from an environment label or a filename.
+- Do not run legacy Prisma migration or reset commands. Do not run raw SQL or a script against a cloud database merely because it is called a test or uses a “dev” URL. Read-only queries may be used when scoped and safe; never expose secret values or unnecessary customer data.
+- Preserve data integrity and tenant isolation. Do not silently alter billing, identity, OCPP, charging control, or migration behavior beyond the requested task.
 
-**Never open or merge a PR.** That is a user action. You propose, the
-user decides.
+## Secrets and fragile files
 
----
+- Never print, commit, copy into documentation, or expose secret values, connection strings, or tokens. Report secret names and non-secret metadata only when needed.
+- Treat `.env*`, `.dev.vars*`, `wrangler.jsonc`, `open-next.config.ts`, `middleware.ts`, authentication code, Drizzle schema/config/migrations, and retained Prisma migration files as fragile. Edit them only when the requested task specifically requires that surface. Do not change a secret value or an external binding as a side effect of a documentation or code cleanup.
+- If a task expressly authorizes a non-secret `.env*` substitution, change only the named value and verify without displaying the file or credentials. Secret rotation and insertion remain operator actions unless specifically authorized.
 
-## Rule 2 — Environment and secrets
+## Product and code integrity
 
-> [!CAUTION]
-> **CRITICAL !!!** — Leaking a connection string or secret into git
-> history is irreversible.
+- **Low OPEX is project-wide product intent (Andri, 2026-10-30).** Apply the operating-cost principle in `FOCUS.md` to every implementation and architecture choice. For changes with material recurring impact, include expected idle/load/retry costs and human maintenance implications in the handoff, with assumptions and unverified estimates clearly marked. Reuse the smallest sufficient existing capability; do not add services or generic frameworks without a demonstrated application need and cost justification. Preserve necessary safety, integrity and session evidence. This does not authorize a broad rewrite or new infrastructure.
 
-**Never modify** `.env.local`, `.env`, `.env.*`, or any file containing
-connection strings, API keys, or secrets.
+- Use the current implementation and `FOCUS.md` as the product baseline. Preserve proven behavior and avoid parallel frameworks, money engines, state stores, or vendor coupling without a demonstrated need.
+- Keep tenant scope in data access and enforce permissions on the server. Do not fabricate product data or imply that a preview has working auth, billing, hardware control, or persistence when it does not.
+- For material changes to OCPP semantics, charging state, site power allocation, money calculation, identity/access, or database integrity, explain the behavior and risk before implementation and obtain approval for the material deviation. Routine implementation choices within an approved task do not need a new gate.
 
-**Never echo** the contents of a connection string, Neon URL, OCPP
-webhook secret, or any Cloudflare environment value to the chat.
+## Verification, records, and ChatGPT handoff
 
-**Never add entries to `wrangler.jsonc` `vars`** for anything sensitive.
-Production environment values live in the Cloudflare dashboard.
+### Lean verification and token use — Andri, 2026-11-01
 
-### Carve-out A — deterministic non-secret substitution
+- Use risk-based verification, not exhaustive repeated local checks. Before substantive work, select the smallest relevant local regression tests and type/build checks; identify broader suites that can run once in working CI. Do not write tests for simple copy/style changes or tests that merely mirror implementation.
+- Run affected tests locally while editing. Reserve full suites, production builds and packaging for the integrated checkpoint or CI; do not repeat them after unrelated documentation or styling changes. Repeat a successful check only for relevant source/dependency/config changes, a failure or a concrete unresolved concern. Record the reason briefly.
+- Carry forward evidence tied to the actual tested source/artifact (including dirty content), command and result. HEAD alone is insufficient. Codex reviews Claude's evidence and relevant diff instead of automatically rerunning everything; independently reproduce critical behavior or questionable results only where warranted.
+- Push is not a test or deployment approval. Before moving checks to CI, verify workflow triggers, current Drizzle/root/gateway coverage, isolated fixtures, required secrets and any auto-deployment side effects. Repair obsolete CI in the authorized source scope. Do not assume a configured workflow passed, skip required checks, or call the task verified before its designated CI results arrive. Commit/push authorization remains separate.
+- Keep targeted correctness checks for authorization/isolation, command/lifecycle races, financial idempotency, migration integrity and retained evidence before any live rollout. These can run in isolated local or verified CI environments; the real installation must never be the first regression test. Actual hardware/manual acceptance follows the complete implementation.
+- Reuse existing test harnesses and fixtures. Add runtime/database/browser harnesses only for an identified gap; avoid redundant benchmark variations and repeated artifact builds. A waiting CI run is a verification dependency, not a reason to start unrelated work or an automated progress monitor.
+- Keep tool output and handoffs compact: inspect targeted paths/diffs, print test summaries rather than passing-test logs, do not repeatedly read unchanged documents or publish long status recaps. No Claude progress heartbeats. Use the approved model/effort; extra/max effort and new model runs retain their approval requirements. These are working rules, not a technical hard token cap.
 
-Claude **may** modify `.env.local` / `.env*` files via a non-interactive
-in-place substitution (`sed -i`, single-key Edit, or equivalent) when
-**all** of the following hold:
-
-1. **Both** the search and replace operands are non-secret values
-   (hostnames, port numbers, path prefixes, schema names, branch IDs,
-   endpoint IDs — values that already appear in chat or in public
-   documentation).
-2. The command does **not** print the file's contents to stdout
-   (no `cat`, `head`, `tail`, `grep` of secret-containing lines).
-3. The operator has named the substitution explicitly in the current
-   message (e.g., "swap `ep-A-pooler` for `ep-B-pooler` in the
-   DATABASE_URL host").
-4. After the substitution, Claude verifies via the redacting grep
-   pattern already permitted: `grep <KEY>= .env.local | sed -E
-   's|(://)[^@]+@|\1<creds>@|'`.
-
-This carve-out **does not** permit:
-
-- Inserting or replacing a secret value (passwords, tokens, keys).
-- Reading or echoing the password component of a connection string.
-- Writing a freshly-generated secret to disk via this path
-  (regenerated `AUTH_SECRET` / `OCPP_INGEST_SECRET` etc. remain
-  operator-only).
-
-If a swap requires changing both a non-secret component and a secret
-component (e.g., Neon branches with different role passwords), Carve-out
-A covers only the non-secret half — the operator handles the secret
-half.
-
----
-
-## Rule 3 — Database operations
-
-> [!CAUTION]
-> **CRITICAL !!!** — A wrong `DATABASE_URL` combined with `migrate
-> reset --force` wipes the target database with no confirmation.
-
-**Never run `prisma migrate deploy`** unless the user explicitly names
-that command in their current message.
-
-**Never run `prisma migrate reset`** without first stating which
-database it will target (host extracted from `DATABASE_URL`) and
-waiting for go-ahead.
-
-**Never run raw SQL** (`prisma db execute`, `psql`, `pg_dump`, etc.)
-against a connection string that does not clearly resolve to
-`localhost` or a user-confirmed dev branch.
-
----
-
-## Rule 4 — Fragile-infrastructure files
-
-> [!IMPORTANT]
-> **IMPORTANT** — Edit-with-instruction files.
-
-The following files require an explicit instruction naming the file
-before you edit them:
-
-- `middleware.ts`
-- `wrangler.jsonc`
-- `open-next.config.ts`
-- `src/lib/admin-session.ts`
-- `prisma/schema.prisma` — additive changes only, no renames, no drops,
-  no reshaping existing models
-
-"While I was in there" is not a valid reason to edit any of these.
-
----
-
-## Rule 5 — Fundamental-logic stops
-
-> [!CAUTION]
-> **CRITICAL !!!** — Silent changes to billing math, tariff resolution,
-> or access precedence can corrupt closed sessions, mis-invoice drivers,
-> or leak data across tenants.
-
-Before writing code for any change that would alter:
-
-- OCPP handler semantics
-- Billing math or cost computation
-- Tariff resolution (CustomerPlan, ChargerServicePlan)
-- Access-grant resolution or routing precedence
-- Issue Engine routing precedence
-- OCPI tariff / CDR translation
-- Any rule in `docs/architecture/STRAUMVAKT_ARCHITECTURE_V3.md`
-
-...stop and summarise what the change does, what breaks, and why you
-think it's correct. Wait for approval before writing code.
-
----
-
-## Rule 6 — No mock data, ever
-
-> [!IMPORTANT]
-
-- No fixture arrays in `src/`.
-- No `isMock ? mockData : realQuery()` branches.
-- No `([] as T[]).find(() => false)` stand-ins.
-- No in-memory stores on `globalThis`.
-- No hardcoded placeholder strings in pages. Empty state = empty state.
-
----
-
-## Rule 7 — Repository + mapper pattern
-
-> [!IMPORTANT]
-
-Pages and API routes **do not use Prisma types directly**. All data
-access goes through `src/lib/repositories/*.ts` with mappers to UI
-types.
-
-- Every repository function takes tenant (`org_id`) as its first
-  argument.
-- Every repository function has a typed return.
-- Page components consume the UI types, not Prisma types.
-
----
-
-## Rule 8 — Commit discipline
-
-> [!IMPORTANT]
-
-- One logical change per commit.
-- Commit message format: `[Sprint NN] concise summary`
-  (e.g. `[Sprint 0] V3 foundation schema + tenant-scoped repositories`).
-- Never bundle unrelated changes into one commit.
-- Never commit while `npx tsc --noEmit` is red, except where a sprint
-  milestone explicitly says "may leave tsc red, fixed in next milestone"
-  — in those cases the commit message must say "intentional WIP — next
-  milestone follows."
-- Never commit generated files (`.open-next/*`, `.next/*`, `.prisma/*`).
-
----
-
-## Rule 9 — Pre-session verification
-
-> [!IMPORTANT]
-
-At the start of any non-trivial session, before writing code, run:
-
-```powershell
-git status                # confirm clean starting point
-git branch --show-current # confirm feature branch, not master
-npx tsc --noEmit          # baseline type-check
-npx prisma validate       # baseline schema check (once Sprint 0 lands)
-```
-
-Do not start from a dirty working tree or a broken baseline.
-
----
-
-## Rule 10 — End-of-session verification
-
-> [!IMPORTANT]
-
-Before calling any non-trivial session "done":
-
-```powershell
-npx tsc --noEmit          # must be clean
-npm run build             # must succeed
-git status                # confirm expected files changed
-git diff --stat           # confirm expected scope
-```
-
-If anything fails, do not commit. Fix first.
-
----
-
-## Rule 11 — Sprint discipline
-
-> [!IMPORTANT]
-
-- Do not start Sprint N+1 until Sprint N's exit criterion in
-  `STRAUMVAKT_V3_DELIVERY_PLAN.md` is met.
-- Scope changes require an ADR in `docs/adr/NNNN-title.md` AND an edit
-  to the delivery plan.
-- End-of-sprint retrospective in `docs/retros/sprint-NN.md` is mandatory.
-
----
-
-## If you're unsure
-
-> [!CAUTION]
-> **CRITICAL !!!** — When a rule's application is ambiguous, the
-> default is always stop-and-ask. Never guess your way through a
-> **CRITICAL !!!** rule.
-
----
-
-## Quick reference
-
-| Rule | Severity | What breaks if violated |
-|------|----------|--------------------------|
-| 1 — Branch and deploy safety | **CRITICAL !!!** | Unintended production deploy |
-| 2 — Environment and secrets | **CRITICAL !!!** | Leaked credentials in git |
-| 3 — Database operations | **CRITICAL !!!** | Wiped production DB |
-| 5 — Fundamental-logic stops | **CRITICAL !!!** | Silent billing / access corruption |
-| If unsure | **CRITICAL !!!** | Guessing through a critical rule |
-
-Rules 4, 6, 7, 8, 9, 10, 11 are **IMPORTANT** — firm discipline.
+- Run applicable local checks and tests that cannot mutate live state. Record exact commands, results, failures, skipped checks, and what remains unverified. Compilation alone does not prove behavior.
+- Keep `WORKSPACE.md` as the structural snapshot, `TASKS.md` as the task tracker, `DECISIONS.md` as the decision log, and `docs/agent-runs/` as dated execution evidence. Update the relevant existing record at meaningful checkpoints; do not create a competing status or diff log. Mark historical measurements and external state with their observation date.
+- At the end of a substantive task, inspect the final diff and provide a self-contained **ChatGPT Review Handoff**: objective; implementation; changed files; repository path, branch, starting and ending SHA, and dirty/local-only state; relevant diff evidence; tests and skipped tests; architecture impact; risks and unresolved issues; external inspections or approved mutations; and recommended next step. A partial or failed task also needs a truthful handoff.
+- Distinguish **VERIFIED**, **INFERRED**, and **UNKNOWN**. Never invent a test result, Git state, deployment, database state, or approval.

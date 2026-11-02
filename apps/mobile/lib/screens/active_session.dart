@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../api/auth_storage.dart';
 import '../api/client.dart';
 import '../api/types.dart';
+import '../live/live_client.dart';
 import '../theme/palette.dart';
 import 'session_detail.dart';
 
@@ -18,6 +19,8 @@ class ActiveSessionScreen extends StatefulWidget {
     this.onDoneWithSessions,
     this.pollingEnabled = true,
     this.pollInterval = const Duration(seconds: 3),
+    this.liveApiPollInterval = const Duration(seconds: 30),
+    this.live,
     this.api,
     this.storage,
   });
@@ -29,6 +32,13 @@ class ActiveSessionScreen extends StatefulWidget {
   final ValueChanged<List<ActiveSession>>? onDoneWithSessions;
   final bool pollingEnabled;
   final Duration pollInterval;
+
+  /// While live data is flowing the API is read this often (completion, energy and cost still come from it); the
+  /// established fast cadence resumes as soon as live data is unavailable. Unused without a live client.
+  final Duration liveApiPollInterval;
+
+  /// The shared live adapter. Null = built from the build-time STRAUMVAKT_LIVE_URL, which is empty (disabled) by default.
+  final DriverLiveClient? live;
   final StraumvaktApi? api;
   final SessionStorage? storage;
 
@@ -41,6 +51,9 @@ class _ActiveSessionScreenState extends State<ActiveSessionScreen> {
   late final SessionStorage _storage = widget.storage ?? AuthStorage();
   late final bool _ownsApi = widget.api == null;
   Timer? _poll;
+  late final DriverLiveClient? _live = widget.live ?? _defaultLive();
+  late final bool _ownsLive = widget.live == null && _live != null;
+  int _skippedTicks = 0;
   ActiveSession? _session;
   Future<DriverSessionDetail>? _detailFuture;
   bool _hasSeenSession = false;
@@ -54,6 +67,17 @@ class _ActiveSessionScreenState extends State<ActiveSessionScreen> {
       widget.initialSession?.sessionId ??
       widget.sessionId;
 
+  static const _liveUrl = String.fromEnvironment('STRAUMVAKT_LIVE_URL');
+
+  DriverLiveClient? _defaultLive() {
+    if (_liveUrl.isEmpty || !widget.pollingEnabled) return null;
+    return DriverLiveClient(baseUrl: _liveUrl, tokenProvider: _storage.readAccessToken);
+  }
+
+  void _onLive() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void initState() {
     super.initState();
@@ -61,13 +85,24 @@ class _ActiveSessionScreenState extends State<ActiveSessionScreen> {
     _hasSeenSession = _session != null;
     if (widget.pollingEnabled) {
       _tick();
-      _poll = Timer.periodic(widget.pollInterval, (_) => _tick());
+      _poll = Timer.periodic(widget.pollInterval, (_) {
+        // Live data is flowing: the API is only a slower cross-check (every N ticks). Otherwise the established cadence applies.
+        final live = _live;
+        final every = (widget.liveApiPollInterval.inMicroseconds ~/ widget.pollInterval.inMicroseconds).clamp(1, 1 << 20);
+        if (live != null && live.enabled && live.isLive && !live.degraded && ++_skippedTicks < every) return;
+        _skippedTicks = 0;
+        _tick();
+      });
+      _live?.addListener(_onLive);
+      if (_live?.enabled ?? false) unawaited(_live!.start());
     }
   }
 
   @override
   void dispose() {
     _poll?.cancel();
+    _live?.removeListener(_onLive);
+    if (_ownsLive) _live!.dispose();
     if (_ownsApi) _api.close();
     super.dispose();
   }
@@ -189,6 +224,18 @@ class _ActiveSessionScreenState extends State<ActiveSessionScreen> {
     );
   }
 
+  /// Live power when a fresh measured value exists for THIS charge; the API value (normally a placeholder) otherwise. An expired
+  /// observation says so - it means nothing recent was heard, not that the charger is disconnected.
+  String _powerLabel(ActiveSession? session) {
+    final live = _live;
+    if (live != null && live.enabled) {
+      final kw = live.observedPowerKw(session?.connectorId);
+      if (kw != null) return '${kw.toStringAsFixed(1)} kW (live)';
+      if (live.isOutdated(session?.connectorId)) return 'Outdated';
+    }
+    return session?.powerKw == null ? 'Unavailable' : '${session!.powerKw!.toStringAsFixed(1)} kW';
+  }
+
   Widget _activeBody() {
     final session = _session;
     final textScale = MediaQuery.textScalerOf(context).scale(1);
@@ -255,9 +302,7 @@ class _ActiveSessionScreenState extends State<ActiveSessionScreen> {
             ),
             _Metric(
               label: 'Observed power',
-              value: session?.powerKw == null
-                  ? 'Unavailable'
-                  : '${session!.powerKw!.toStringAsFixed(1)} kW',
+              value: _powerLabel(session),
               color: BrandPalette.cyan,
             ),
             _Metric(

@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from "vitest";
 import { decideAdmission, type AdmissionLookup, type AdmissionStore } from "./admission";
-import { buildBootCapture, payloadHash, pendingBootResponse, pendingRetrySeconds, PENDING_RETRY_SECONDS, MAX_PENDING_FRAME_BYTES } from "./pending";
+import { buildBootCapture, payloadHash, pendingBootResponse, pendingRetrySeconds, PENDING_RETRY_SECONDS, MAX_PENDING_FRAME_BYTES, ACTIVATION_CONNECTION_WINDOW_MS, ACTIVATION_PROBE_AFTER_MS, ACTIVATION_WAIT_MS } from "./pending";
 import { classifyRegistration, rpcPending, type PendingStore, type RegistrationState } from "./pending-service";
 import { parseRoute } from "./route";
 import { rpcAdmit, rpcPendingOp, type EngineRpcDeps } from "./rpc";
@@ -55,6 +55,12 @@ describe("pending policy", () => {
     expect(await payloadHash({ a: 1, b: { c: 2, d: 3 } })).toBe(await payloadHash({ b: { d: 3, c: 2 }, a: 1 }));
     expect(await payloadHash({ a: 1 })).not.toBe(await payloadHash({ a: 2 }));
   });
+  it("activation timing: a short grace before ONE probe inside a finite connection window; the operator wait covers the charger's own reconnect delay", () => {
+    expect(ACTIVATION_PROBE_AFTER_MS).toBeGreaterThan(0);
+    expect(ACTIVATION_PROBE_AFTER_MS).toBeLessThan(ACTIVATION_CONNECTION_WINDOW_MS);
+    expect(ACTIVATION_CONNECTION_WINDOW_MS).toBeLessThanOrEqual(5 * 60_000); // finite and short: no indefinite resend or open attempt
+    expect(ACTIVATION_WAIT_MS).toBeGreaterThan(6 * 60_000); // the first real trial reconnected about six minutes after the save
+    expect(ACTIVATION_WAIT_MS).toBeGreaterThan(ACTIVATION_CONNECTION_WINDOW_MS);  });
 });
 
 describe("admission: pending is an explicit, narrow outcome", () => {

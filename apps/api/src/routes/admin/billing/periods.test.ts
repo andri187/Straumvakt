@@ -33,6 +33,7 @@ vi.mock("../../../lib/auth/org-scope", () => ({
 
 import { makeBillingPeriodsRouter } from "./periods";
 import { makeFixtureOperationsPort } from "../../../lib/billing/fixture-operations-port";
+import { ISSUANCE_NOT_IMPLEMENTED } from "../../../lib/billing/operations-port";
 import {
   FLAT_FEE_CAP_CODE,
   FLAT_FEE_CONNECTOR_CODE,
@@ -397,5 +398,52 @@ describe("assertions through the API — delta 9.7", () => {
     );
     expect(res.status).toBe(409);
     expect((await body(res)).error).toBe("period_closed");
+  });
+});
+
+describe("a port that refuses to issue", () => {
+  const unavailable = (h: ReturnType<typeof harness>) => {
+    const applyPeriodEvent = vi.fn(h.port.applyPeriodEvent.bind(h.port));
+    const port = {
+      ...h.port,
+      applyPeriodEvent,
+      issueDocument: vi.fn(async () => ({
+        kind: "refused" as const,
+        reason: ISSUANCE_NOT_IMPLEMENTED,
+      })),
+    };
+    const app = makeBillingPeriodsRouter({ makePort: () => port, now: () => NOW });
+    return { app, port, applyPeriodEvent };
+  };
+
+  it("answers 501 with a stable code and leaves the period priced", async () => {
+    const h = harness();
+    await driveToPriced(h);
+    const u = unavailable(h);
+
+    const res = await u.app.request(`http://x/${ORG}/billing/periods/2026/3/issue`, post("i1") as RequestInit);
+    expect(res.status).toBe(501);
+    const refusal = await body(res);
+    expect(refusal.error).toBe("invoice_issuance_not_implemented");
+    expect(refusal.documentNumber).toBeUndefined();
+
+    expect(u.applyPeriodEvent).not.toHaveBeenCalledWith(
+      expect.objectContaining({ event: "issue_invoice" }),
+    );
+    expect(await h.port.periodState({ orgId: ORG, year: 2026, month: 3 })).toBe("priced");
+    expect(h.state.effects.filter((e) => e.startsWith("issue:"))).toEqual([]);
+  });
+
+  it("records no receipt, so a retry is refused afresh rather than replayed as success", async () => {
+    const h = harness();
+    await driveToPriced(h);
+    const u = unavailable(h);
+
+    for (const key of ["i1", "i1", "i2"]) {
+      const res = await u.app.request(`http://x/${ORG}/billing/periods/2026/3/issue`, post(key) as RequestInit);
+      expect(res.status, key).toBe(501);
+      expect((await body(res)).replayed).toBeUndefined();
+    }
+    expect(u.port.issueDocument).toHaveBeenCalledTimes(3);
   });
 });

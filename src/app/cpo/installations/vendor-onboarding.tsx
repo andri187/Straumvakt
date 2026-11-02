@@ -16,6 +16,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { structuralStore } from "@/lib/sync/structural-singleton";
 import type { Route } from "next";
 import { useEffect, useRef, useState } from "react";
 import { Req, SITE_CREATE, SiteCreate } from "./installation-editor";
@@ -314,6 +315,7 @@ export function VendorOnboarding({ directory, vendors }: { directory: Directory;
         if (r.status === 200 && typeof savedId === "string") {
           // Invalidate cached overviews after our own successful write. Client
           // form state is retained by the router's RSC merge.
+          structuralStore().localMutation(savedId); // the shared overview/detail caches drop this installation now, not after a cooldown
           router.refresh();
           const equipment = equipmentOf(r.json.equipment);
           const warnings = Array.isArray(r.json.warnings) ? (r.json.warnings as string[]) : [];

@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useReducer, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { Route } from "next";
 import type { InstallationListRow } from "@/lib/installations/drizzle-store";
-import { buildCircuitTree, countCircuitChargers, createDetailLoader, groupSites, type CircuitNode, type DetailView } from "@/lib/installations/tree";
+import { buildCircuitTree, countCircuitChargers, groupSites, type CircuitNode, type DetailView } from "@/lib/installations/tree";
+import { useStructural } from "../structural-react";
 import "./installation-tree.css";
 
 type Detail = DetailView;
@@ -18,6 +19,7 @@ const ERRORS = {
   denied: "Access to this installation was lost. Sign in again; nothing is shown because nothing could be read.",
   gone: "This installation no longer exists.",
   failed: "The details could not be read.",
+  limited: "Too many reads just now. Wait a moment, then retry.",
 } as const;
 
 function Arrow({ open }: { open: boolean }) {
@@ -82,42 +84,32 @@ function DetailBody({ view }: { view: Detail }) {
 
 /**
  * Site -> installation -> circuit -> charger, from the overview list plus, on first explicit expansion of an installation,
- * the existing single-installation read. Sites, installations and circuits all start collapsed. No polling, no mutation.
+ * its tree read through the shared structural store. Sites, installations and circuits all start collapsed; which are open,
+ * and every detail already read, are kept in the store so leaving and coming back costs no request. No polling, no mutation.
  */
-export function InstallationTree({ rows, attachQuery = "", fetchImpl }: { rows: InstallationListRow[]; attachQuery?: string; fetchImpl?: typeof fetch }) {
-  const [, redraw] = useReducer((n: number) => n + 1, 0);
-  const [open, setOpen] = useState<Record<string, boolean>>({});
-  const [closedSites, setClosedSites] = useState<Record<string, boolean>>({});
-  const fetchRef = useRef(fetchImpl);
-  fetchRef.current = fetchImpl;
-  const loader = useRef<ReturnType<typeof createDetailLoader> | null>(null);
+export function InstallationTree({ rows, attachQuery = "" }: { rows: InstallationListRow[]; attachQuery?: string }) {
+  const store = useStructural();
+  const openKey = [...store.ui.openInstallations].filter((id) => rows.some((r) => r.id === id)).join("|");
+  // A row left open whose detail is not held (dropped as stale, or never finished) is read now - only rows on screen.
   useEffect(() => {
-    const l = createDetailLoader((...a) => (fetchRef.current ?? fetch)(...a), redraw);
-    loader.current = l;
-    return () => {
-      l.dispose();
-      loader.current = null;
-    };
-  }, []);
+    for (const id of openKey ? openKey.split("|") : []) void store.ensureDetail(id);
+  }, [store, openKey]);
 
-  // The ref, not the rendered state, decides what a click does, so two clicks before a re-render still alternate.
-  const openRef = useRef<Record<string, boolean>>({});
   const toggle = (id: string) => {
-    const next = !openRef.current[id];
-    openRef.current = { ...openRef.current, [id]: next };
-    setOpen(openRef.current);
-    if (next) loader.current?.load(id);
+    const next = !store.ui.openInstallations.has(id);
+    store.setInstallationOpen(id, next);
+    if (next) void store.ensureDetail(id);
   };
   const sites = groupSites(rows);
   return (
     <div className="it-tree">
       <ul className="it-list">
         {sites.map((s) => {
-          const siteOpen = closedSites[s.siteId] === false;
+          const siteOpen = store.ui.openSites.has(s.siteId);
           return (
             <li key={s.siteId} className="it-site">
               <div className="it-line it-siteline">
-                <button type="button" className="it-toggle" aria-expanded={siteOpen} aria-controls={`it-s-${s.siteId}`} onClick={() => setClosedSites({ ...closedSites, [s.siteId]: siteOpen })}>
+                <button type="button" className="it-toggle" aria-expanded={siteOpen} aria-controls={`it-s-${s.siteId}`} onClick={() => store.setSiteOpen(s.siteId, !siteOpen)}>
                   <Arrow open={siteOpen} />
                   <span className="it-name it-sitename">{s.siteName}</span>
                 </button>
@@ -127,8 +119,9 @@ export function InstallationTree({ rows, attachQuery = "", fetchImpl }: { rows: 
               {siteOpen ? (
                 <ul id={`it-s-${s.siteId}`} className="it-list it-sitebody">
                   {s.installations.map((r) => {
-                    const isOpen = !!open[r.id];
-                    const st = isOpen ? loader.current?.get(r.id) : undefined;
+                    const isOpen = store.ui.openInstallations.has(r.id);
+                    const slot = isOpen ? store.detail(r.id) : null;
+                    const view = slot && (slot.status === "ready" ? slot.data.view : slot.status === "loading" || slot.status === "error" ? slot.previous?.view ?? null : null);
                     const href = `/cpo/installations?id=${r.id}${attachQuery}` as Route;
                     return (
                       <li key={r.id} className="it-installation">
@@ -137,10 +130,10 @@ export function InstallationTree({ rows, attachQuery = "", fetchImpl }: { rows: 
                             <Arrow open={isOpen} />
                           </button>
                           <Link className="it-name it-link" href={href} prefetch={false}>{r.displayName}</Link>
-                          {st?.status === "ready" ? (
+                          {view ? (
                             <>
-                              {st.view.installation.mainGridType ? <span className="it-badge">{st.view.installation.mainGridType}</span> : null}
-                              <span className="it-elec">{electrical(st.view.installation.mainRatingAmps, st.view.installation.mainPhaseCount)}</span>
+                              {view.installation.mainGridType ? <span className="it-badge">{view.installation.mainGridType}</span> : null}
+                              <span className="it-elec">{electrical(view.installation.mainRatingAmps, view.installation.mainPhaseCount)}</span>
                             </>
                           ) : null}
                           <span className="it-right">
@@ -149,16 +142,17 @@ export function InstallationTree({ rows, attachQuery = "", fetchImpl }: { rows: 
                           </span>
                         </div>
                         {isOpen ? (
-                          <div id={`it-i-${r.id}`} className="it-body" aria-busy={st?.status === "loading"}>
-                            {!st || st.status === "loading" ? (
-                              <p className="it-empty" role="status">Loading details…</p>
-                            ) : st.status === "error" ? (
+                          <div id={`it-i-${r.id}`} className="it-body" aria-busy={slot?.status === "loading"}>
+                            {slot?.status === "error" && slot.kind !== "failed" && slot.kind !== "limited" ? (
+                              <p className="it-empty it-error" role="alert">{ERRORS[slot.kind]}</p>
+                            ) : slot?.status === "error" && !view ? (
                               <p className="it-empty it-error" role="alert">
-                                {ERRORS[st.kind]}{" "}
-                                {st.kind !== "denied" ? <button type="button" className="it-retry" onClick={() => loader.current?.retry(r.id)}>Retry</button> : null}
+                                {slot.kind === "limited" ? ERRORS.limited : ERRORS.failed} <button type="button" className="it-retry" onClick={() => void store.ensureDetail(r.id, true)}>Retry</button>
                               </p>
+                            ) : view ? (
+                              <DetailBody view={view} />
                             ) : (
-                              <DetailBody view={st.view} />
+                              <p className="it-empty" role="status">Loading details…</p>
                             )}
                           </div>
                         ) : null}

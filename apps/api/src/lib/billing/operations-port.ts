@@ -135,8 +135,12 @@ export interface BillingOperationsPort {
   fetchDocument(period: BillingPeriodRef): Promise<IssuedDocument | null>;
 }
 
+/** Why the real adapter refuses to issue. Stable: callers and tests match it. */
+export const ISSUANCE_NOT_IMPLEMENTED = "invoice_issuance_not_implemented";
+
 /** Why a billing request was refused. Every one is named; none is a bare 400. */
 export type BillingRefusal =
+  | "invoice_issuance_not_implemented"
   | "idempotency_key_required"
   | "idempotency_key_reused_with_different_request"
   | "org_not_in_scope"

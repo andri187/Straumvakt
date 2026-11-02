@@ -358,6 +358,9 @@ export const ocppTransactions = chargingSchema.table(
     index().on(t.installationId, t.startedReceivedAt),
     // The costing consumer's claim: only rows that still need costing.
     index("ocpp_transactions_costing_needed_index").on(t.startedReceivedAt).where(sql`${t.costingState} = 'needed'`),
+    // A driver's open sessions, for the live-access grant (src/lib/sync/driver-live.ts): partial, so it holds only sessions in
+    // progress and stays tiny, and the grant read is one indexed lookup instead of a scan of every transaction.
+    index("ocpp_transactions_open_by_user_index").on(t.userId).where(sql`${t.stoppedReceivedAt} IS NULL AND ${t.userId} IS NOT NULL`),
   ],
 );
 

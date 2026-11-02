@@ -4,6 +4,12 @@
 **Scope:** AC vendor-managed chargers (`credential_scope = installation` per architecture §10). DC adapters (Kempower, Tritium, ABB) will land here in Phase 4 with `credential_scope = identity`.
 **Used by:** the production adapter modules (forthcoming) and the **Technical Read** tab in the admin UI (Sprint 1.5 detour) which iframes the `zaptec-test/` scratch app.
 
+**2026-10-26 scope correction:** These V3 adapter patterns are reference
+material, not requirements for the first charger flow. The initial Zaptec
+OCPP Cloud journey is manually configured in Zaptec Portal and needs no
+Zaptec API credential. Optional vendor inventory/configuration integration
+comes later; see [Zaptec §0](zaptec.md#0-current-scope-and-october-2026-corrections).
+
 ---
 
 ## Adapter docs
@@ -61,14 +67,14 @@ The shared docs avoid restating spec material in every vendor file. Each vendor 
 
 ## Common shape
 
-All AC vendor-managed adapters in V3 share the same skeleton — credentials at the installation row, REST + push channel, OCPP 1.6J as a parallel control plane:
+The historical V3 vendor-adapter skeleton put credentials at the installation row and combined REST/push with OCPP as a parallel control plane. The OCPP-first path can operate without those vendor credentials:
 
 ```
 Org (CPO)
  └─ ChargerHost
      └─ Property
          └─ Site
-             └─ Installation        ← credentials live here  (`credential_scope = installation`)
+             └─ Installation        ← optional vendor credentials can live here
                  ├─ Circuit         ← load-balancing group
                  └─ SiteAsset (Charger)
                      └─ OCPPIdentity

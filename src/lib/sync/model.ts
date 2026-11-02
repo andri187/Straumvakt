@@ -51,6 +51,28 @@ export type SnapshotResponse = {
   installations: { structure: Structure; devices: DeviceStateView[] }[];
 };
 
+/** Lean operational snapshot: device states plus the cursor to continue from, with NO structure. A page that already holds its
+ * own structure reads this instead of the full snapshot, so it never re-reads the tree just to look up a status badge. */
+export type StatusResponse = {
+  schema: typeof SYNC_SCHEMA;
+  projection: Projection;
+  cursor: string;
+  installations: { id: string; devices: DeviceStateView[] }[];
+};
+
+/** Answer to a structural check: the current revision per visible installation, how fresh that is, and whether the server
+ * declined to look again yet. `deferred` means "this is what was known at `checkedAt`", never "nothing changed". */
+export type CheckResponse = {
+  schema: typeof SYNC_SCHEMA;
+  scope: string;
+  revisions: Record<string, number>;
+  checkedAt: number;
+  /** How old this answer is on the server, so a client on a different clock can still say "checked N s ago". */
+  ageMs: number;
+  deferred: boolean;
+  retryAfterMs: number;
+};
+
 export type ResetReason = "scope_changed" | "cursor_expired" | "cursor_invalid" | "too_many_installations";
 
 export type ChangesResponse =

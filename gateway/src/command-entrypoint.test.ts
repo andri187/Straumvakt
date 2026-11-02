@@ -43,6 +43,13 @@ describe("CommandEntrypoint", () => {
     const e = new CommandEntrypoint({} as never, env({ outcome: "rejected" }));
     expect(await e.requestStop(stopInput())).toEqual({ outcome: "rejected" });
   });
+  it("the versioned durable method is the same implementation, so a v1 caller reaches the attempt-keyed stop path", async () => {
+    const seen: { name?: string; url?: string; body?: string }[] = [];
+    const e = new CommandEntrypoint({} as never, env({ outcome: "accepted" }, seen));
+    expect(await e.requestStopV1(stopInput())).toEqual({ outcome: "accepted" });
+    expect(seen[0]).toMatchObject({ name: `device:${DEV}`, url: "https://do.internal/command/stop" });
+    expect(JSON.parse(seen[0]!.body!)).toMatchObject({ attemptId: "req-1:5:1", placementId: "pl-1" });
+  });
 });
 
 describe("pending charger commands", () => {

@@ -7,11 +7,13 @@
 // Outside the Workers runtime both are absent and everything degrades to plain database reads.
 
 import { workerBindings } from "@/lib/sync/bindings";
-import { hubFromNamespace, type SyncBindings } from "@/lib/sync/live";
+import { hubFromNamespace, liveRoomsFromNamespace, type SyncBindings } from "@/lib/sync/live";
 import { pendingGatewayFrom, type PendingGatewayBinding } from "./pending-gateway";
 import { liveDeps } from "./repo";
 
 export function shellDeps() {
   const b = workerBindings() as SyncBindings & { OCPP_PENDING?: PendingGatewayBinding };
-  return liveDeps(process.env, hubFromNamespace(b.VERSION_HUB), pendingGatewayFrom(b.OCPP_PENDING));
+  // The live room exists only where realtime is enabled AND the hub is bound; otherwise nothing is called.
+  const realtime = (b.CPO_SHELL_REALTIME_ENABLED ?? process.env.CPO_SHELL_REALTIME_ENABLED) === "true";
+  return liveDeps(process.env, hubFromNamespace(b.VERSION_HUB), pendingGatewayFrom(b.OCPP_PENDING), realtime ? liveRoomsFromNamespace(b.VERSION_HUB) : null);
 }

@@ -19,6 +19,14 @@ export class SessionOpenError extends Error {
   constructor() { super("session open"); }
 }
 /**
+ * Thrown by the port when the placement it was asked to close is already closed: another worker closed it first (this one
+ * waited on the installation lock and then found it done). Not a failure and not a second close: the service rolls back this
+ * attempt and resumes from the winner's result, exactly as for any other lost race.
+ */
+export class PlacementAlreadyClosed extends Error {
+  constructor() { super("placement is no longer open"); }
+}
+/**
  * Thrown by the port when a concurrent request won a uniqueness race (one open request per device, or the
  * request key). PostgreSQL aborts the failed transaction, so the caller must NOT re-read inside it: the
  * service rolls back, then resumes in a NEW transaction after re-authorising.
@@ -89,6 +97,12 @@ export type Deps = {
   authorise: (actor: ActorRef, orgId: string, action: "remove" | "retire" | "return") => boolean;
   now: () => Date;
   newId?: () => string;
+  /**
+   * AFTER the commit that closed the placement, never inside it: tell live consumers the device left this installation (the
+   * shared live room drops it and refuses its old placement). A failure is swallowed: the structure it reflects is already
+   * durable, and the room reconciles on the next structure commit and disposes obsolete devices on its own.
+   */
+  onPlacementClosed?: (i: { installationId: string; deviceId: string; placementId: string }) => Promise<void>;
 };
 
 export type Refusal = "not_found" | "forbidden" | "reason_required" | "stop_unavailable" | "conflict" | "placed_elsewhere" | "not_detached" | "retired_needs_return" | "identity_in_use" | "bad_request";
@@ -277,7 +291,11 @@ export async function progressRemoval(deps: Deps, requestId: string): Promise<Re
 
   // 3. record outcomes and (if due) close, atomically, re-checking the world
   try {
-    return await advanceInTx(deps, req, plan, stopResults, now);
+    const out = await advanceInTx(deps, req, plan, stopResults, now);
+    if (out.ok && out.value.identityClosed && !req.identityClosed && deps.onPlacementClosed) {
+      await deps.onPlacementClosed({ installationId: out.value.installationId, deviceId: out.value.deviceId, placementId: out.value.placementId }).catch(() => undefined);
+    }
+    return out;
   } catch (e) {
     if (!(e instanceof LostRace)) throw e;
     // Another worker advanced the request first and this attempt's effects were rolled back: resume from their result.
@@ -346,6 +364,7 @@ async function advanceInTx(deps: Deps, req: LifecycleRequest, plan: ReturnType<t
           merged.serviceEndedAt = now.toISOString();
           after = planNext(merged, { ...seen, placementOpen: false }, now);
         } catch (e) {
+          if (e instanceof PlacementAlreadyClosed) throw new LostRace(); // another worker closed it while we waited: resume from theirs
           if (!(e instanceof SessionOpenError)) throw e; // a session slipped in: leave the placement open and re-plan next step
         }
       }
